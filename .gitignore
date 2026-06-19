@@ -1,3 +1,7 @@
 .claude/locale/*.so
 .git_ignored_dir/
 porting_plan.md
+
+# Local environment (real addresses / IPs / paths / tokens) — never commit
+.envrc
+.envrc.local
