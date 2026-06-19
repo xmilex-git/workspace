@@ -1,0 +1,3 @@
+.claude/locale/*.so
+.git_ignored_dir/
+porting_plan.md
