@@ -80,3 +80,17 @@ own fix suggestions — it only prints them.
 - The locale `*.so` artifacts and `.git_ignored_dir/` are git-ignored and must never be committed.
 - Read `.agents/AGENTS.md` (and the longer `.claude/CLAUDE.md`) before making code changes —
   they encode the behavioral guidelines this repo's owner expects.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as GitHub issues in `xmilex-git/cubrid` (always `gh ... --repo xmilex-git/cubrid`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
