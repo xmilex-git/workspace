@@ -89,6 +89,11 @@ OPTIONS:
   --locale-dir <dir>   Dir with a prebuilt libcubrid_all_locales.so (+ optional early-exit
                        make_locale.sh). Injected into every shard so CTP skips the slow per-shard
                        locale compile. Falls back to compiling if a build tree already ships the .so.
+  --env NAME=VALUE     Extra env var passed to every shard container (repeatable). Reaches the
+                       in-container cub_server process via normal fork/exec inheritance (entrypoint.sh
+                       execs ctp.sh sql without clearing the environment) — use this for the
+                       CUBRID_WM_SCAN_NEW/SORT_NEW/HASHJOIN_NEW work-mem gate env vars (server-process
+                       scoped, csql client env has no effect) or any other passthrough need.
   --no-webconsole      Do NOT merge per-shard results into \$CTP_HOME/sql/result. By default the
                        run is merged into one schedule dir viewable via 'ctp.sh webconsole start'.
   --merge-only <dir>   Merge an ALREADY-FINISHED run's --out <dir> into \$CTP_HOME/sql/result for
@@ -126,6 +131,7 @@ ARG_DRYRUN=0
 ARG_VALIDATE_ONLY=0
 VO_ASSIGN=""
 VO_SQL=""
+declare -a ARG_ENV=()   # repeatable --env NAME=VALUE, passed through to every shard container
 
 parse_args() {
   while [ $# -gt 0 ]; do
@@ -149,6 +155,12 @@ parse_args() {
       --no-webconsole) ARG_WEBCONSOLE=0; shift ;;
       --merge-only)  ARG_MERGE_ONLY="${2:-}"; shift 2 ;;
       --label)       ARG_LABEL="${2:-}"; shift 2 ;;
+      --env)
+        case "${2:-}" in
+          [A-Za-z_]*=*) : ;;
+          *) usage; die "--env expects NAME=VALUE (got: '${2:-}')" ;;
+        esac
+        ARG_ENV+=("$2"); shift 2 ;;
       --dry-run)     ARG_DRYRUN=1; shift ;;
       # Hidden self-test seam: run ONLY the offline split-validator against the
       # given assignment.tsv + .sql list (used by run_tests.sh on synthetic data).
@@ -627,6 +639,8 @@ print_plan_summary() {
   [ -r "$COLO_GIDS" ] && grpn=$(awk -F'\t' '{c[$2]++} END{m=0; for(g in c) if(c[g]>1) m++; print m+0}' "$COLO_GIDS" 2>/dev/null)
   printf '  colocate:           %d dir(s), %d multi-dir group(s) pinned  (keep-whole active only with --by-case)\n' "${kwn:-0}" "${grpn:-0}"
   printf '  shards:             %d\n' "$NSHARDS"
+  printf '  env passthrough (fixed): CUBRID CTP_HOME CUBRID_DATABASES TZ LC_ALL\n'
+  printf '  env passthrough (--env, %d): %s\n' "${#ARG_ENV[@]}" "${ARG_ENV[*]:-<none>}"
   printf '  %-7s %-10s %s\n' "shard" "sql" "weight$([ -n "$WEIGHTS_FILE" ] && echo '(s)')"
   local i
   for (( i=0; i<NSHARDS; i++ )); do
@@ -754,13 +768,25 @@ launch_shard() {
   # No --network=host, no published ports: each shard's localhost is private.
   # --ipc=private: private SysV SHM space so the fixed SHM IDs never collide.
   # --ulimit core=-1: unlimited core size so a real cub_server core is not truncated.
+  local -a envs=(
+    -e "CUBRID=${C_CUBRID}" -e "CTP_HOME=${C_CTP}" -e "CUBRID_DATABASES=${C_DB}"
+    -e "TZ=Asia/Seoul" -e "LC_ALL=en_US"
+  )
+  # --env passthrough (#108): podman sets these in the container's PID 1 env: since
+  # entrypoint.sh execs `ctp.sh sql` without clearing the environment, and every
+  # descendant down to cub_server is a plain fork/exec, they reach the server process
+  # for free — no engine-side change needed.
+  if [ "${#ARG_ENV[@]}" -gt 0 ]; then
+    for kv in "${ARG_ENV[@]}"; do
+      envs+=( -e "$kv" )
+    done
+  fi
   podman run -d --name "$name" \
     --ipc=private \
     --cgroupns="$CGROUPNS" \
     --shm-size="$SHM_SIZE" \
     --ulimit core=-1 \
-    -e "CUBRID=${C_CUBRID}" -e "CTP_HOME=${C_CTP}" -e "CUBRID_DATABASES=${C_DB}" \
-    -e "TZ=Asia/Seoul" -e "LC_ALL=en_US" \
+    "${envs[@]}" \
     "${mounts[@]}" \
     "$ARG_IMAGE" >/dev/null
 }

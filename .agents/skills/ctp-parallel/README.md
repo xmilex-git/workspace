@@ -94,7 +94,21 @@ scripts/ctp_parallel.sh --dry-run --testcases ~/cubrid-testcases --out ./plan
 
 Run `scripts/ctp_parallel.sh --help` for all flags (`--ctp`, `--image`, `--out`,
 `--overlay`, `--by-category`, `--by-dir`, `--by-case`, `--weights`, `--no-weights`,
-`--colocate`, `--no-colocate`, `--keep`).
+`--colocate`, `--no-colocate`, `--keep`, `--env NAME=VALUE`).
+
+**Env passthrough (`--env`, repeatable):** extra vars for every shard container, e.g.
+to run a gates-ON sharded suite:
+
+```bash
+scripts/ctp_parallel.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
+  --env CUBRID_WM_SCAN_NEW=1 --env CUBRID_WM_SORT_NEW=1 --env CUBRID_WM_HASHJOIN_NEW=1
+```
+
+These reach the in-container `cub_server` process for free: `entrypoint.sh` execs
+`ctp.sh sql` without clearing the environment, and every descendant down to the server
+is a plain fork/exec, so no engine-side or entrypoint change was needed — see the
+`--dry-run` plan summary's `env passthrough` lines and the Manual e2e QA section below
+for how this is verified.
 
 **Time balancing is automatic.** A bundled `baseline_weights.tsv` (real per-case seconds
 from a green run) is loaded by default, so bulks are packed by measured time with no extra
@@ -173,12 +187,27 @@ done
 # 4. Inspect a shard's artifacts:
 ls ./ctp-parallel-out/shard_0/           # console.log, exclusions.txt, sql.conf, out/
 cat ./ctp-parallel-out/shard_0/console.log
+
+# 5. --env passthrough (#108): prove a gate env var set on the HOST invocation is
+#    visible in the environ of the actual cub_server PROCESS inside a shard, not
+#    just at the container's PID 1. Run one shard with a marker var, find the
+#    server pid inside it, and grep its /proc/<pid>/environ:
+./ctp_parallel.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
+  --image ctp-parallel:local --shards 1 --keep --out ./ctp-env-check \
+  --env CUBRID_WM_SORT_NEW=1
+c="$(podman ps -q --filter 'name=ctp_shard_' | head -1)"
+pid="$(podman exec "$c" pgrep -f cub_server | head -1)"
+podman exec "$c" tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep '^CUBRID_WM_SORT_NEW=1$' \
+  && echo "PASS: gate env reached the cub_server process (pid $pid)" \
+  || echo "FAIL: gate env NOT in cub_server's environ"
 ```
 
 **Deferred (no podman on this dev host):** real container launch, port/SHM
-non-collision with 2 live shards, and "aggregate pass/fail == single-CTP-run
-pass/fail". Everything else (split, validator, exclusions merge, invariants,
-config generation, lint) is fully verified by `test/run_tests.sh`.
+non-collision with 2 live shards, "aggregate pass/fail == single-CTP-run
+pass/fail", and the `--env`-reaches-`cub_server`-environ check above (step 5).
+Everything else (split, validator, exclusions merge, invariants, config generation,
+lint, and the `--env` flag's own parsing/plan-summary behavior) is fully verified
+by `test/run_tests.sh` without podman.
 
 ## Decision log
 
@@ -202,3 +231,8 @@ config generation, lint) is fully verified by `test/run_tests.sh`.
   overrides, `--no-weights` reverts to count. With atomic bulks the slowest shard is
   bounded by the heaviest single bulk — accepted, in exchange for CI-parity / no
   isolation-induced failures. `--by-dir` trades that isolation for finer balance.
+- **D8** (#108) `--env NAME=VALUE` is a **generic, repeatable passthrough**, not a
+  `CUBRID_WM_*`-specific flag — the orchestrator has no engine-gate-specific logic,
+  it only appends `-e` to `podman run`. It reaches `cub_server` via plain fork/exec
+  inheritance (no entrypoint.sh change needed), so the fix is purely host-side
+  argument plumbing.

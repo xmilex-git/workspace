@@ -48,7 +48,10 @@ ports/SHM IDs; only each shard's `exclusions.txt` and output dirs differ.
    `--out <dir>`, `--image <ref>`, `--keep`, `--by-dir` (finer: outermost `cases/` dir —
    better balance, weaker isolation), `--by-case` (finest: per-`.sql`, NOT order-safe),
    `--overlay` (overlay the build instead of copying — experimental). `colocate.tsv`
-   (`--colocate`/`--no-colocate`) aids `--by-case` only.
+   (`--colocate`/`--no-colocate`) aids `--by-case` only. `--env NAME=VALUE` (repeatable)
+   passes extra env vars into every shard container — they reach the in-container
+   `cub_server` process for free via normal fork/exec inheritance, so this is how to run
+   a gates-ON sharded suite (e.g. `--env CUBRID_WM_SORT_NEW=1 --env CUBRID_WM_SCAN_NEW=1`).
 
 3. **Validate the split without running anything** (no podman needed):
 

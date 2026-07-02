@@ -314,6 +314,40 @@ else
 fi
 
 #-------------------------------------------------------------------
+# (l) --env passthrough (#108): parsed values reach the launch-plan summary
+#     (mechanical proof without podman; real container/environ check is
+#     manual e2e QA — see README.md).
+#-------------------------------------------------------------------
+echo; echo "## (l) --env passthrough"
+OUTE="$SCRATCH/oute"; rm -rf "$OUTE"
+bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards 3 --no-weights \
+  --env CUBRID_WM_SORT_NEW=1 --env CUBRID_WM_SCAN_NEW=1 --out "$OUTE" >"$OUTE.log" 2>&1
+if grep -qF 'env passthrough (--env, 2): CUBRID_WM_SORT_NEW=1 CUBRID_WM_SCAN_NEW=1' "$OUTE.log"; then
+  ok "--env: both values reach the launch-plan summary verbatim, in order"
+else
+  bad "--env: passthrough summary missing or wrong"; grep -i 'env passthrough' "$OUTE.log" >&2
+fi
+# default (no --env) must still report the fixed 5 and an explicit empty list.
+OUTE0="$SCRATCH/oute0"; rm -rf "$OUTE0"
+bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards 3 --no-weights --out "$OUTE0" >"$OUTE0.log" 2>&1
+if grep -qF 'env passthrough (--env, 0): <none>' "$OUTE0.log"; then
+  ok "--env: default (no flag) reports an explicit empty list (no regression)"
+else
+  bad "--env: default-case summary missing or wrong"; grep -i 'env passthrough' "$OUTE0.log" >&2
+fi
+# malformed NAME=VALUE must be rejected before any work dir is created.
+OUTEBAD="$SCRATCH/outebad_should_not_exist"; rm -rf "$OUTEBAD"
+if bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --env NOEQUALSSIGN --out "$OUTEBAD" >"$SCRATCH/outebad.log" 2>&1; then
+  bad "--env: malformed NAME=VALUE was NOT rejected"
+else
+  if grep -qi 'expects NAME=VALUE' "$SCRATCH/outebad.log" && [ ! -e "$OUTEBAD" ]; then
+    ok "--env: malformed value rejected before any work dir is created"
+  else
+    bad "--env: malformed value rejection wrong (missing message or work dir leaked)"; cat "$SCRATCH/outebad.log" >&2
+  fi
+fi
+
+#-------------------------------------------------------------------
 # Summary
 #-------------------------------------------------------------------
 echo
