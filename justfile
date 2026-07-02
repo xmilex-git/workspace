@@ -125,16 +125,36 @@ install-locale dest=env_var_or_default("CUBRID", ""):
     if [ -f "$so" ]; then cp -f "$so" "$dest/lib/" && echo "locale: libcubrid_all_locales.so -> $dest/lib/"; else echo "locale: $so missing (skipped)"; fi
     if [ -f "$sh" ]; then cp -f "$sh" "$dest/bin/" && echo "locale: make_locale.sh -> $dest/bin/";          else echo "locale: $sh missing (skipped)"; fi
 
-# Apply campaign test conf to $CUBRID/conf/cubrid.conf (idempotent; from build_cubrid.sh defaults).
+# Apply campaign test conf to $CUBRID/conf/cubrid.conf (idempotent).
+# Key insight: develop uses shared data_buffer (512M) so hash-join build tables
+# get cache hits even for 60M-row relations.  The redesign uses per-worker
+# work_mem for hash tables — work_mem must be large enough (≥1G) for a fair
+# comparison, otherwise every PHJ goes through the partition-split path and
+# the parallel-probe path is never exercised.
 conf:
     #!/usr/bin/env bash
     set -eu
     [ -n "${CUBRID:-}" ] || { echo "ERROR: \$CUBRID not set." >&2; exit 1; }
     f="$CUBRID/conf/cubrid.conf"
     [ -f "$f" ] || { echo "ERROR: $f not found (build/install first)." >&2; exit 1; }
+    # --- helper: set KEY=VALUE idempotently (update existing or append) ---
+    _set() {
+      local key="$1" val="$2"
+      if grep -q "^${key}=" "$f"; then
+        sed -i "s|^${key}=.*|${key}=${val}|" "$f"
+      else
+        echo "${key}=${val}" >> "$f"
+      fi
+    }
+    # --- campaign parameters ---
     grep -q '^server=' "$f" || sed -i -e 's/^#server=foo,bar/server=demodb/' "$f"
-    grep -q '^thread_worker_timeout_seconds=' "$f" || echo 'thread_worker_timeout_seconds=4' >> "$f"
-    grep -q '^double_write_buffer_size=' "$f"      || echo 'double_write_buffer_size=0'      >> "$f"
+    _set data_buffer_size           512M
+    _set work_mem                   1G
+    _set parallelism                8
+    _set max_parallel_workers       8
+    _set stored_procedure           no
+    _set thread_worker_timeout_seconds 4
+    _set double_write_buffer_size   0
     echo "applied campaign conf to $f"
 
 # Full local refresh: stop server (if any) -> build -> conf.
