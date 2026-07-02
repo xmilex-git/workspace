@@ -168,3 +168,10 @@ csql.access
 3. **보존 유지(6건)**: §1a #109 증적 3건 + §1b 신규 재채증 `core.parallel-query.*` 3건 — 삭제 금지.
 4. **DB 처리 별도 결정**: §4 `wmg003` 볼륨셋(활성/폐기 여부 owner 판단).
 5. **`.gitignore` 보강**: §6 제안 반영 여부 결정.
+
+---
+
+## 처분 기록 (2026-07-02 밤)
+
+supervisor 승인에 따라 **삭제가능 10건 삭제 완료**(≈3.3GiB 회수): tpch 코어 5 + wmg003 csql 코어 2 + csql.err/csql.access/mutex.
+보존 6건(#109 원본 3 + fail-before-fix 3) 및 보류 16건(wmloc 코어 7 + wmg003 볼륨 9)은 그대로 유지.
