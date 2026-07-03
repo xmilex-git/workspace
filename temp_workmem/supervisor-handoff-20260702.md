@@ -11,7 +11,7 @@
 | 항목 | 값 |
 |---|---|
 | 이슈 트래커 | `gh ... --repo xmilex-git/cubrid` |
-| 엔진 체크아웃 | `~/dev/cubrid-workmem`, 브랜치 `wm-integ-7173-develop`, 원격 `xmilex`. **tip @ 이 문서 시점 = `fcc4aac81`(#125). 단 .33이 #127 develop 머지를 진행 중 — 인수 시 fetch로 재확인** |
+| 엔진 체크아웃 | `~/dev/cubrid-workmem`, 브랜치 `wm-integ-7173-develop`, 원격 `xmilex`. **tip @ 이 문서 시점 = `1dfcef7a7`(#126). 단 .33이 #127 develop 머지를 진행 중 — 인수 시 fetch로 재확인** |
 | 툴링 레포 | `~/dev/workspace` — 워커 착수 시 `git -C ~/dev/workspace pull` 필수 |
 | SSOT | 이슈 **#75 본문**(append 금지, 본문 편집+로컬 미러 `temp_workmem/issue65_ssot.md` 동기화) |
 | Evidence | 이슈 #76 + 로컬 미러 `issue65_evidence.md` (최신 K-11까지) |
@@ -49,7 +49,7 @@
   → #74 Phase3 진입 재상신 (사람 승인 — 자율 진행 금지)
 
 [병행/가드 트랙]
-#126 병렬 outer × raw-fd build 동시 스캔 오염 — 가드-우선 (.32, 진행 중; 근본 수정 금지, Phase3가 기판 삭제)
+~~#126 raw-fd 동시 스캔 가드~~ ✅ 착지(`1dfcef7a7`, 리뷰 통과·close — 가드 제거는 #74 이관 완료)
 ~~#125 BufFile fd 위생~~ ✅ 착지(`fcc4aac81`, 리뷰 통과·close 2026-07-03 저녁)
 
 [사람 판단 대기]
@@ -64,7 +64,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 ## 3. 착지 이력 (2026-07-03분 — 전부 supervisor 리뷰 통과·close)
 
-`ceb8997e8` #80 게이트 기본 ON → `c447d929b` #117 → `b78578bad` #118 → `9232882ef` #119(+#112) → `c1044fd5c` #120a → `61e65c18e` #122 → `475e0ad6d` #101(HYBRID 해제, pread 0.15~0.76/probe — D2 재론 불요 판정) → `712c7243c` #124(픽스처 3종 — 함정⑩ 해제; develop 대비 관찰 = K-11) → `2fafae2be` **#120b**(overflow 번역, R1 핵 — #120a "overflow 생산 불가" 오판 정정 = K-10, census 카운터 `Num_qfile_client_fetch_serve/materialize` 신설) → `0a4ea9ca9` **#121**(캐시 copy-out Tapeset-source, 이중→단일 복사; **#110 동반 close**) → `6b3d5775a` **#123**(accountant+`hls_spill`, #126 발견 부산물) → `ab3052e2b` **#111**(holdable zero-copy reparent, ADR 0001 개정 `8fb828a`) → `fcc4aac81` **#125**(BufFile fd 위생 — EMFILE/ENFILE 매핑+RLIMIT 부트점검, VFD 계층 기각 D4). 부수: `127abc87c` #113 cherry-pick, `a8bfe6813`/`8e70769b0` #115/#116.
+`ceb8997e8` #80 게이트 기본 ON → `c447d929b` #117 → `b78578bad` #118 → `9232882ef` #119(+#112) → `c1044fd5c` #120a → `61e65c18e` #122 → `475e0ad6d` #101(HYBRID 해제, pread 0.15~0.76/probe — D2 재론 불요 판정) → `712c7243c` #124(픽스처 3종 — 함정⑩ 해제; develop 대비 관찰 = K-11) → `2fafae2be` **#120b**(overflow 번역, R1 핵 — #120a "overflow 생산 불가" 오판 정정 = K-10, census 카운터 `Num_qfile_client_fetch_serve/materialize` 신설) → `0a4ea9ca9` **#121**(캐시 copy-out Tapeset-source, 이중→단일 복사; **#110 동반 close**) → `6b3d5775a` **#123**(accountant+`hls_spill`, #126 발견 부산물) → `ab3052e2b` **#111**(holdable zero-copy reparent, ADR 0001 개정 `8fb828a`) → `fcc4aac81` **#125**(BufFile fd 위생 — EMFILE/ENFILE 매핑+RLIMIT 부트점검, VFD 계층 기각 D4) → `1dfcef7a7` **#126**(raw-fd 동시 스캔 직렬 강등 가드 — NEW 무접촉, 제거는 #74 이관). 부수: `127abc87c` #113 cherry-pick, `a8bfe6813`/`8e70769b0` #115/#116.
 
 ## 4. 재론 금지 판단 기록 (근거는 각 이슈 코멘트)
 
@@ -81,7 +81,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
 | `fable` | **유휴** (#111 착지·close) | Fable | #127 착지 후 #81 sweep 경량 재실행 후보 |
-| `.32` | **#126** 병렬 outer raw-fd 가드 (직계 후속, 세션 재사용) | Fable | 가드-우선, 근본 수정 금지, 반복 20회 무오차 |
+| `.32` | **유휴** (#126 착지 `1dfcef7a7`·close) | Fable | 다음 dispatch 대기 |
 | `.33` | **#127** develop 47fcc321f 머지 (새 세션) | opus | merge-only·rebase 금지, P1~P5, push 직전 fetch --all |
 | `.30` | **유휴** (#125 착지 `fcc4aac81`·close) | Opus 4.8 | 다음 dispatch 대기 |
 
