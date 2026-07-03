@@ -44,8 +44,10 @@
 
 ```
 [크리티컬 패스 → #74 재상신]
-#127 upstream develop 47fcc321f 머지 (.33, 진행 중) — 충돌 생사 원칙 P1~P5 = #127 supervisor 코멘트가 정본
-  → #81 sweep 경량 재실행 (read-only, 머지 후 트리 기준 — 유휴 슬롯: fable 후보)
+#127 develop 머지 — .33이 머지 완료했으나 **gate-ON 병렬 outer_join 회귀(비결정 행유실)로 P4 stop-and-report, push 보류**.
+  판별 확정: pre-merge/remote-tip PASS, 머지 FAIL, gate=OFF PASS ⇒ 47fcc321f 흡수가 트리거(squash #7173 × 우리 incremental+재설계 auto-merge 합성).
+  보류 머지 = `wm-127-merge-hold`(`6f6af319d`). 처분 (a) 채택: on-path 4파일(query_aggregate/px_scan_result_handler/xasl_generation/thread_manager) ours-되돌림 bisect → P2/P3 수동 재조정 → 20회 검증 → push. **fable dispatch됨**(task_127_followup.md). (b) 직렬 가드 push는 기각(sweep/#74 증거 오염).
+  → #81 sweep 경량 재실행 (read-only, 머지 후 트리 기준 — .30/.32 유휴 슬롯 후보)
   → #74 Phase3 진입 재상신 (사람 승인 — 자율 진행 금지)
 
 [병행/가드 트랙]
@@ -80,9 +82,9 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **유휴** (#111 착지·close) | Fable | #127 착지 후 #81 sweep 경량 재실행 후보 |
+| `fable` | **#127 후속** — outer_join 회귀 bisect+재조정 (task_127_followup.md) | Fable | wm-127-merge-hold 기반, P4면 stop-and-report |
 | `.32` | **유휴** (#126 착지 `1dfcef7a7`·close) | Fable | 다음 dispatch 대기 |
-| `.33` | **#127** develop 47fcc321f 머지 (새 세션) | opus | merge-only·rebase 금지, P1~P5, push 직전 fetch --all |
+| `.33` | **유휴** (#127 P4 stop-and-report 완료 — 프로세스 리뷰 통과) | opus | 로컬에 M/M2/fix 보존, wm-127-merge-hold로 push됨 |
 | `.30` | **유휴** (#125 착지 `fcc4aac81`·close) | Opus 4.8 | 다음 dispatch 대기 |
 
 *상태 확인*: `tmux capture-pane -t fable -p | tail -30` + `for h in 30 32 33; do ssh cubrid@192.168.6.$h 'tmux capture-pane -t claude -p | tail -25'; done` + `git -C ~/dev/cubrid-workmem fetch --all && git log --oneline -8 xmilex/wm-integ-7173-develop` + `gh issue list --repo xmilex-git/cubrid --state open`
