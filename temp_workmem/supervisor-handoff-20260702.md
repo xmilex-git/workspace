@@ -88,7 +88,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **유휴** (#130 착지·close) | Fable | 다음: (c′) coherence 설계 리뷰 dispatch 예정. 5h 93% 주의 |
+| `fable` | **(c′) coherence 설계** (kill 후 새 세션, task_c2c_design.md — 설계 전용, #74 보고) | Fable | 5h 96% — 소진 시 사용자 계정 전환 대기 |
 | `.32` | **유휴** (#129 착지 `635eec6e2`·close) | Opus | 다음 후보: (c′) coherence 설계 리뷰는 Fable 몫 — #130 착지 후 fable에. .32는 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **#128 Phase3-1 C1 교체** (새 세션, `~/task_128.md`) | **Sonnet 5** | rc_tok 인라인 기동(--model sonnet) |
