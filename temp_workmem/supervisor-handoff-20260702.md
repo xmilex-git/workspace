@@ -47,8 +47,13 @@
 [크리티컬 패스 → #74 재상신]
 ~~#127 develop 머지~~ ✅ 착지·close(`1dfcef7a7..62fc99923` = M/M2/fix + race-fix). 귀속 정정 = K-12(#123 latent race, merge 무혐의). wm-127-merge-hold 원격 브랜치 삭제 완료.
   ~~#81 sweep 경량 재실행~~ ✅ 완료(.32) — 판정 **조건부 CLEAR**(C1 connect_list 신규 소비처 교체 선행 / C2 raw-fd 순수 삭제 불가·OLD 티어 스필 백킹 대체 결정 / C3 OLD-입력 병렬 정렬 직렬 폴백 / C4 fhs_hash 제외). 정정 3건(first_vpid 보존, materialize 부분 삭제, #113 폴백 존치) + #110 가드 신규 등재. **#74 개정 코멘트로 편입 완료.**
-  ~~런타임 검증(62fc99923)~~ ✅ 전 항목 PASS(#127 기록 코멘트 — outer_join 누적 13회 무오차, G1~G22·selftest·회귀세트 green)
-  → **#74 재상신 완료(2026-07-03 저녁)** — 사람 승인 + C2 백킹 방향 지정 대기. **승인 전 Phase3 dispatch 금지.**
+  ~~런타임 검증(62fc99923)~~ ✅ 전 항목 PASS → ~~#74 재상신~~ ✅ **사람 승인 접수(2026-07-03 밤): Phase3 진행, 모델별 dispatch. 단 C2는 (a)(b) 기각 — (c) BufFile 백킹 타당성 분석 지시(사용자 원안)**
+
+[Phase3 실행 트랙 (진행 중)]
+#128 Phase3-1 C1 connect_list 소비처 교체 (.30 sonnet, task_128.md)
+#129 Phase3-2 fhs 삭제·C4 절단선 (.32 opus, task_129.md)
+C2-(c) BufFile 백킹 타당성 분석 (fable, task_c2c.md — 분석 전용, #74 보고)
+  → 착지 후: sector 삭제(C3) → raw-fd 절단(C2 결정 반영) → EXIT 재측정(K-11 픽스처 3종)
 
 [병행/가드 트랙]
 ~~#126 raw-fd 동시 스캔 가드~~ ✅ 착지(`1dfcef7a7`, 리뷰 통과·close — 가드 제거는 #74 이관 완료)
@@ -82,10 +87,10 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **유휴** (#127 잔여 검증 완료 — 전 항목 PASS, 정리까지 완료) | Fable | 다음 dispatch 대기 |
-| `.32` | **유휴** (#81 재실행 완료 — 검수 통과) | 기본 | 다음 dispatch 대기 |
-| `.33` | **유휴** (#127 P4 stop-and-report 완료 — 프로세스 리뷰 통과) | opus | 로컬에 M/M2/fix 보존, wm-127-merge-hold로 push됨. **주의**: .33의 `/home/cubrid/dev/cubrid` 워크트리는 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 **추적 결과 미커밋 작업물 아님** — #105 세션(7/2) 종료 시 트리 원복 누락으로 남은 `b9081226a` 시점 파일 잔상(pseudo-diff, #127 코멘트에 판독 기록). 다음 .33 정리 때 ref 삭제+워크트리 재정렬 |
-| `.30` | **유휴** (#125 착지 `fcc4aac81`·close) | Opus 4.8 | 다음 dispatch 대기 |
+| `fable` | **C2-(c) 타당성 분석** (분석 전용, #74에 보고) | Fable | /clear 후 새 컨텍스트, task_c2c.md |
+| `.32` | **#129 Phase3-2 fhs 삭제** (새 세션, `~/task_129.md`) | Opus | C4 절단선 — fhs_hash 계열은 리네임 이동 |
+| `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
+| `.30` | **#128 Phase3-1 C1 교체** (새 세션, `~/task_128.md`) | **Sonnet 5** | rc_tok 인라인 기동(--model sonnet) |
 
 *상태 확인*: `tmux capture-pane -t fable -p | tail -30` + `for h in 30 32 33; do ssh cubrid@192.168.6.$h 'tmux capture-pane -t claude -p | tail -25'; done` + `git -C ~/dev/cubrid-workmem fetch --all && git log --oneline -8 xmilex/wm-integ-7173-develop` + `gh issue list --repo xmilex-git/cubrid --state open`
 
