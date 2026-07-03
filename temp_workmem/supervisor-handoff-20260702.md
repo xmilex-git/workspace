@@ -81,8 +81,8 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **#81 sweep 경량 재실행** dispatch 예정 (#127 착지·close) | Fable | preflight = #127 잔여 검증 1회 포함. 새 작업 = 새 세션 |
-| `.32` | **유휴** (#126 착지 `1dfcef7a7`·close) | Fable | 다음 dispatch 대기 |
+| `fable` | **#127 잔여 검증**(debug×5·회귀세트·G1~G22·selftest, sonnet 위임 백그라운드) — 완료 시 #127에 기록 코멘트 | Fable | 세션 재사용(직계 후속). FAIL 시 즉시 보고 |
+| `.32` | **#81 sweep 경량 재실행** (새 세션, `~/task_81.md`) | 기본 | READ-ONLY. 신규 관점 = upstream 13건 CBRD 픽스의 OLD 경로 유실 위험 3분류 |
 | `.33` | **유휴** (#127 P4 stop-and-report 완료 — 프로세스 리뷰 통과) | opus | 로컬에 M/M2/fix 보존, wm-127-merge-hold로 push됨. **주의**: .33의 `/home/cubrid/dev/cubrid` 워크트리는 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 **추적 결과 미커밋 작업물 아님** — #105 세션(7/2) 종료 시 트리 원복 누락으로 남은 `b9081226a` 시점 파일 잔상(pseudo-diff, #127 코멘트에 판독 기록). 다음 .33 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **유휴** (#125 착지 `fcc4aac81`·close) | Opus 4.8 | 다음 dispatch 대기 |
 
