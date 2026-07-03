@@ -52,8 +52,9 @@
 [Phase3 실행 트랙 (진행 중)]
 #128 Phase3-1 C1 connect_list 소비처 교체 (.30 sonnet, task_128.md)
 #129 Phase3-2 fhs 삭제·C4 절단선 (.32 opus, task_129.md)
-C2-(c) BufFile 백킹 타당성 분석 (fable, task_c2c.md — 분석 전용, #74 보고)
-  → 착지 후: sector 삭제(C3) → raw-fd 절단(C2 결정 반영) → EXIT 재측정(K-11 픽스처 3종)
+#130 Phase3-3 sector 삭제·C3 직렬 폴백 (fable, task_130.md — 3작업 파일 무겹침 병행)
+~~C2-(c) 분석~~ ✅ **(c′) 채택**(#74 처분 코멘트): buffile 클래스 직접 백킹은 하드 블로커 2건(append-only·페이지캐시 부재)으로 불가 → 파일 기판 공유 + random-page 변종 + per-tfile 캐시. 조건 ①병존 게이트 후 절체 ②#126 가드는 재현 PASS 채증 후 제거 ③coherence 설계 리뷰 선행. 옵션4(축소판) = 2순위 보존. `qmgr_list_has_raw_fd_segments` 11사이트는 존속·개명으로 정정.
+  → 착지 후: (c′) coherence 설계 리뷰 → (c′) 병존 구현 → 절체·raw-fd 삭제 → EXIT 재측정(K-11 픽스처 3종)
 
 [병행/가드 트랙]
 ~~#126 raw-fd 동시 스캔 가드~~ ✅ 착지(`1dfcef7a7`, 리뷰 통과·close — 가드 제거는 #74 이관 완료)
@@ -87,7 +88,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **C2-(c) 타당성 분석** (분석 전용, #74에 보고) | Fable | /clear 후 새 컨텍스트, task_c2c.md |
+| `fable` | **#130 Phase3-3 sector 삭제·C3 폴백** (kill 후 새 세션, task_130.md) | Fable | P2 심장부(external_sort) — 불도달 전제 애매하면 stop-and-report |
 | `.32` | **#129 Phase3-2 fhs 삭제** (새 세션, `~/task_129.md`) | Opus | C4 절단선 — fhs_hash 계열은 리네임 이동 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **#128 Phase3-1 C1 교체** (새 세션, `~/task_128.md`) | **Sonnet 5** | rc_tok 인라인 기동(--model sonnet) |
