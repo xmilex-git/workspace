@@ -46,8 +46,8 @@
 ```
 [크리티컬 패스 → #74 재상신]
 ~~#127 develop 머지~~ ✅ 착지·close(`1dfcef7a7..62fc99923` = M/M2/fix + race-fix). 귀속 정정 = K-12(#123 latent race, merge 무혐의). wm-127-merge-hold 원격 브랜치 삭제 완료.
-  → **#81 sweep 경량 재실행** (다음 dispatch — read-only + preflight로 #127 잔여 검증 1회: debug outer_join×5, DISTINCT/CTE/agg-DISTINCT/gate=0, G1~G22, selftest)
-  → #74 Phase3 진입 재상신 (사람 승인 — 자율 진행 금지; 자료에 K-11·K-12·readkeys 하네스 가드 제안 포함)
+  ~~#81 sweep 경량 재실행~~ ✅ 완료(.32) — 판정 **조건부 CLEAR**(C1 connect_list 신규 소비처 교체 선행 / C2 raw-fd 순수 삭제 불가·OLD 티어 스필 백킹 대체 결정 / C3 OLD-입력 병렬 정렬 직렬 폴백 / C4 fhs_hash 제외). 정정 3건(first_vpid 보존, materialize 부분 삭제, #113 폴백 존치) + #110 가드 신규 등재. **#74 개정 코멘트로 편입 완료.**
+  → **#74 Phase3 진입 재상신** (fable의 62fc99923 런타임 검증 완료 대기 → 재상신 코멘트 작성. 사람 승인 — 자율 진행 금지; 자료에 K-11·K-12·readkeys 하네스 가드 제안 포함)
 
 [병행/가드 트랙]
 ~~#126 raw-fd 동시 스캔 가드~~ ✅ 착지(`1dfcef7a7`, 리뷰 통과·close — 가드 제거는 #74 이관 완료)
@@ -82,7 +82,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
 | `fable` | **#127 잔여 검증**(debug×5·회귀세트·G1~G22·selftest, sonnet 위임 백그라운드) — 완료 시 #127에 기록 코멘트 | Fable | 세션 재사용(직계 후속). FAIL 시 즉시 보고 |
-| `.32` | **#81 sweep 경량 재실행** (새 세션, `~/task_81.md`) | 기본 | READ-ONLY. 신규 관점 = upstream 13건 CBRD 픽스의 OLD 경로 유실 위험 3분류 |
+| `.32` | **유휴** (#81 재실행 완료 — 검수 통과) | 기본 | 다음 dispatch 대기 |
 | `.33` | **유휴** (#127 P4 stop-and-report 완료 — 프로세스 리뷰 통과) | opus | 로컬에 M/M2/fix 보존, wm-127-merge-hold로 push됨. **주의**: .33의 `/home/cubrid/dev/cubrid` 워크트리는 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 **추적 결과 미커밋 작업물 아님** — #105 세션(7/2) 종료 시 트리 원복 누락으로 남은 `b9081226a` 시점 파일 잔상(pseudo-diff, #127 코멘트에 판독 기록). 다음 .33 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **유휴** (#125 착지 `fcc4aac81`·close) | Opus 4.8 | 다음 dispatch 대기 |
 
