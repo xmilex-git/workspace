@@ -45,9 +45,8 @@
 
 ```
 [크리티컬 패스 → #74 재상신]
-#127 develop 머지 — .33이 머지 완료했으나 **gate-ON 병렬 outer_join 회귀(비결정 행유실)로 P4 stop-and-report, push 보류**.
-  판별 확정: pre-merge/remote-tip PASS, 머지 FAIL, gate=OFF PASS ⇒ 47fcc321f 흡수가 트리거(squash #7173 × 우리 incremental+재설계 auto-merge 합성).
-  보류 머지 = `wm-127-merge-hold`(`6f6af319d`). 처분 (a) 채택: on-path 4파일(query_aggregate/px_scan_result_handler/xasl_generation/thread_manager) ours-되돌림 bisect → P2/P3 수동 재조정 → 20회 검증 → push. **fable dispatch됨**(task_127_followup.md). (b) 직렬 가드 push는 기각(sweep/#74 증거 오염).
+#127 develop 머지 — **원인 재귀속 완료(fable 판별)**: 머지 무혐의. 진범 = **#123(`6b3d5775a`) hls_spill 병렬 probe 공유 커서 race**(latent). fable 재판별에서 pre-merge FAIL·**remote tip `1dfcef7a7` FAIL 3/3**(.33의 PASS는 단회 실행 위음성) ⇒ **공유 브랜치 tip에 gate-ON 병렬 outer_join 비결정 오답 현존**. 메커니즘: 8워커가 HLS_SPILL 포인터 공유(union pun) → 공유 커서/버퍼 동시 변경 → match ~95% miss → NULL-extended 재배치(총행수는 보존돼 겉으로 안 보임). **주의: LEFT OUTER는 이 버그 불가시 — readkeys 대조 필수.**
+  보류 머지 = `wm-127-merge-hold`(`6f6af319d`). 처분: per-context probe cursor 분리 정공 수정(fable HANDOFF D2, P2 소유 구역) → merge-hold 3커밋+fix 커밋 함께 push(D3). **fable 진행 중**(세션 유지, 5h 리셋 후 재개; 사용자 지시 = fable은 분석·방향만, 구현은 sonnet agent 위임). 상세 = `task_127_followup_HANDOFF.md`.
   → #81 sweep 경량 재실행 (read-only, 머지 후 트리 기준 — .30/.32 유휴 슬롯 후보)
   → #74 Phase3 진입 재상신 (사람 승인 — 자율 진행 금지)
 
@@ -83,7 +82,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **#127 후속** — outer_join 회귀 bisect+재조정 (task_127_followup.md) | Fable | wm-127-merge-hold 기반, P4면 stop-and-report |
+| `fable` | **#127 후속** — hls_spill probe 커서 race 정공 수정 (HANDOFF §5 재개) | Fable | 분석·방향만(구현은 sonnet agent 위임 — 사용자 지시). 로컬 `wm-127f-work`, 부분 구현 patch 보존 |
 | `.32` | **유휴** (#126 착지 `1dfcef7a7`·close) | Fable | 다음 dispatch 대기 |
 | `.33` | **유휴** (#127 P4 stop-and-report 완료 — 프로세스 리뷰 통과) | opus | 로컬에 M/M2/fix 보존, wm-127-merge-hold로 push됨. **주의**: .33의 `/home/cubrid/dev/cubrid` 워크트리는 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 **추적 결과 미커밋 작업물 아님** — #105 세션(7/2) 종료 시 트리 원복 누락으로 남은 `b9081226a` 시점 파일 잔상(pseudo-diff, #127 코멘트에 판독 기록). 다음 .33 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **유휴** (#125 착지 `fcc4aac81`·close) | Opus 4.8 | 다음 dispatch 대기 |
