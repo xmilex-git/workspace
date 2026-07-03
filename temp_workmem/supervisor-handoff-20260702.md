@@ -84,7 +84,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 |---|---|---|---|
 | `fable` | **#127 후속** — outer_join 회귀 bisect+재조정 (task_127_followup.md) | Fable | wm-127-merge-hold 기반, P4면 stop-and-report |
 | `.32` | **유휴** (#126 착지 `1dfcef7a7`·close) | Fable | 다음 dispatch 대기 |
-| `.33` | **유휴** (#127 P4 stop-and-report 완료 — 프로세스 리뷰 통과) | opus | 로컬에 M/M2/fix 보존, wm-127-merge-hold로 push됨. **주의**: .33의 `/home/cubrid/dev/cubrid` 워크트리는 detach 상태, 그 안에 있던 미커밋 OLD-삭제 changeset(19파일)은 backup ref `backup/wm-integ-leftover-20260702`(`6345752a6`)로 보존 |
+| `.33` | **유휴** (#127 P4 stop-and-report 완료 — 프로세스 리뷰 통과) | opus | 로컬에 M/M2/fix 보존, wm-127-merge-hold로 push됨. **주의**: .33의 `/home/cubrid/dev/cubrid` 워크트리는 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 **추적 결과 미커밋 작업물 아님** — #105 세션(7/2) 종료 시 트리 원복 누락으로 남은 `b9081226a` 시점 파일 잔상(pseudo-diff, #127 코멘트에 판독 기록). 다음 .33 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **유휴** (#125 착지 `fcc4aac81`·close) | Opus 4.8 | 다음 dispatch 대기 |
 
 *상태 확인*: `tmux capture-pane -t fable -p | tail -30` + `for h in 30 32 33; do ssh cubrid@192.168.6.$h 'tmux capture-pane -t claude -p | tail -25'; done` + `git -C ~/dev/cubrid-workmem fetch --all && git log --oneline -8 xmilex/wm-integ-7173-develop` + `gh issue list --repo xmilex-git/cubrid --state open`
