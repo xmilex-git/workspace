@@ -11,7 +11,7 @@
 | 항목 | 값 |
 |---|---|
 | 이슈 트래커 | `gh ... --repo xmilex-git/cubrid` |
-| 엔진 체크아웃 | `~/dev/cubrid-workmem`, 브랜치 `wm-integ-7173-develop`, 원격 `xmilex`. **tip @ 이 문서 시점 = `1dfcef7a7`(#126). 단 .33이 #127 develop 머지를 진행 중 — 인수 시 fetch로 재확인** |
+| 엔진 체크아웃 | `~/dev/cubrid-workmem`, 브랜치 `wm-integ-7173-develop`, 원격 `xmilex`. **tip @ 이 문서 시점 = `62fc99923`(#127 머지+race fix). develop 47fcc321f 흡수 완료** |
 | 툴링 레포 | `~/dev/workspace` — 워커 착수 시 `git -C ~/dev/workspace pull` 필수 |
 | SSOT | 이슈 **#75 본문**(append 금지, 본문 편집+로컬 미러 `temp_workmem/issue65_ssot.md` 동기화) |
 | Evidence | 이슈 #76 + 로컬 미러 `issue65_evidence.md` (최신 K-11까지) |
@@ -45,10 +45,9 @@
 
 ```
 [크리티컬 패스 → #74 재상신]
-#127 develop 머지 — **원인 재귀속 완료(fable 판별)**: 머지 무혐의. 진범 = **#123(`6b3d5775a`) hls_spill 병렬 probe 공유 커서 race**(latent). fable 재판별에서 pre-merge FAIL·**remote tip `1dfcef7a7` FAIL 3/3**(.33의 PASS는 단회 실행 위음성) ⇒ **공유 브랜치 tip에 gate-ON 병렬 outer_join 비결정 오답 현존**. 메커니즘: 8워커가 HLS_SPILL 포인터 공유(union pun) → 공유 커서/버퍼 동시 변경 → match ~95% miss → NULL-extended 재배치(총행수는 보존돼 겉으로 안 보임). **주의: LEFT OUTER는 이 버그 불가시 — readkeys 대조 필수.**
-  보류 머지 = `wm-127-merge-hold`(`6f6af319d`). 처분: per-context probe cursor 분리 정공 수정(fable HANDOFF D2, P2 소유 구역) → merge-hold 3커밋+fix 커밋 함께 push(D3). **fable 진행 중**(세션 유지, 5h 리셋 후 재개; 사용자 지시 = fable은 분석·방향만, 구현은 sonnet agent 위임). 상세 = `task_127_followup_HANDOFF.md`.
-  → #81 sweep 경량 재실행 (read-only, 머지 후 트리 기준 — .30/.32 유휴 슬롯 후보)
-  → #74 Phase3 진입 재상신 (사람 승인 — 자율 진행 금지)
+~~#127 develop 머지~~ ✅ 착지·close(`1dfcef7a7..62fc99923` = M/M2/fix + race-fix). 귀속 정정 = K-12(#123 latent race, merge 무혐의). wm-127-merge-hold 원격 브랜치 삭제 완료.
+  → **#81 sweep 경량 재실행** (다음 dispatch — read-only + preflight로 #127 잔여 검증 1회: debug outer_join×5, DISTINCT/CTE/agg-DISTINCT/gate=0, G1~G22, selftest)
+  → #74 Phase3 진입 재상신 (사람 승인 — 자율 진행 금지; 자료에 K-11·K-12·readkeys 하네스 가드 제안 포함)
 
 [병행/가드 트랙]
 ~~#126 raw-fd 동시 스캔 가드~~ ✅ 착지(`1dfcef7a7`, 리뷰 통과·close — 가드 제거는 #74 이관 완료)
@@ -66,7 +65,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 ## 3. 착지 이력 (2026-07-03분 — 전부 supervisor 리뷰 통과·close)
 
-`ceb8997e8` #80 게이트 기본 ON → `c447d929b` #117 → `b78578bad` #118 → `9232882ef` #119(+#112) → `c1044fd5c` #120a → `61e65c18e` #122 → `475e0ad6d` #101(HYBRID 해제, pread 0.15~0.76/probe — D2 재론 불요 판정) → `712c7243c` #124(픽스처 3종 — 함정⑩ 해제; develop 대비 관찰 = K-11) → `2fafae2be` **#120b**(overflow 번역, R1 핵 — #120a "overflow 생산 불가" 오판 정정 = K-10, census 카운터 `Num_qfile_client_fetch_serve/materialize` 신설) → `0a4ea9ca9` **#121**(캐시 copy-out Tapeset-source, 이중→단일 복사; **#110 동반 close**) → `6b3d5775a` **#123**(accountant+`hls_spill`, #126 발견 부산물) → `ab3052e2b` **#111**(holdable zero-copy reparent, ADR 0001 개정 `8fb828a`) → `fcc4aac81` **#125**(BufFile fd 위생 — EMFILE/ENFILE 매핑+RLIMIT 부트점검, VFD 계층 기각 D4) → `1dfcef7a7` **#126**(raw-fd 동시 스캔 직렬 강등 가드 — NEW 무접촉, 제거는 #74 이관). 부수: `127abc87c` #113 cherry-pick, `a8bfe6813`/`8e70769b0` #115/#116.
+`ceb8997e8` #80 게이트 기본 ON → `c447d929b` #117 → `b78578bad` #118 → `9232882ef` #119(+#112) → `c1044fd5c` #120a → `61e65c18e` #122 → `475e0ad6d` #101(HYBRID 해제, pread 0.15~0.76/probe — D2 재론 불요 판정) → `712c7243c` #124(픽스처 3종 — 함정⑩ 해제; develop 대비 관찰 = K-11) → `2fafae2be` **#120b**(overflow 번역, R1 핵 — #120a "overflow 생산 불가" 오판 정정 = K-10, census 카운터 `Num_qfile_client_fetch_serve/materialize` 신설) → `0a4ea9ca9` **#121**(캐시 copy-out Tapeset-source, 이중→단일 복사; **#110 동반 close**) → `6b3d5775a` **#123**(accountant+`hls_spill`, #126 발견 부산물) → `ab3052e2b` **#111**(holdable zero-copy reparent, ADR 0001 개정 `8fb828a`) → `fcc4aac81` **#125**(BufFile fd 위생 — EMFILE/ENFILE 매핑+RLIMIT 부트점검, VFD 계층 기각 D4) → `1dfcef7a7` **#126**(raw-fd 동시 스캔 직렬 강등 가드 — NEW 무접촉, 제거는 #74 이관) → `62fc99923` **#127**(develop 47fcc321f 머지 M/M2/fix + #123 latent race 정공 수정 — 귀속 정정 K-12, per-context HLS_SPILL_CURSOR). 부수: `127abc87c` #113 cherry-pick, `a8bfe6813`/`8e70769b0` #115/#116.
 
 ## 4. 재론 금지 판단 기록 (근거는 각 이슈 코멘트)
 
@@ -82,7 +81,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **#127 후속** — hls_spill probe 커서 race 정공 수정 (HANDOFF §5 재개) | Fable | 분석·방향만(구현은 sonnet agent 위임 — 사용자 지시). 로컬 `wm-127f-work`, 부분 구현 patch 보존 |
+| `fable` | **#81 sweep 경량 재실행** dispatch 예정 (#127 착지·close) | Fable | preflight = #127 잔여 검증 1회 포함. 새 작업 = 새 세션 |
 | `.32` | **유휴** (#126 착지 `1dfcef7a7`·close) | Fable | 다음 dispatch 대기 |
 | `.33` | **유휴** (#127 P4 stop-and-report 완료 — 프로세스 리뷰 통과) | opus | 로컬에 M/M2/fix 보존, wm-127-merge-hold로 push됨. **주의**: .33의 `/home/cubrid/dev/cubrid` 워크트리는 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 **추적 결과 미커밋 작업물 아님** — #105 세션(7/2) 종료 시 트리 원복 누락으로 남은 `b9081226a` 시점 파일 잔상(pseudo-diff, #127 코멘트에 판독 기록). 다음 .33 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **유휴** (#125 착지 `fcc4aac81`·close) | Opus 4.8 | 다음 dispatch 대기 |

@@ -1,0 +1,9 @@
+@ cubrid master start
+++ cubrid master start: success
+@ cubrid server start: tpch_sf10
+
+This may take a long time depending on the amount of recovery works to do.
+
+CUBRID 11.5.0
+
+++ cubrid server start: success

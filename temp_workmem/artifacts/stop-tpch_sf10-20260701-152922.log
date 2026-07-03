@@ -1,0 +1,5 @@
+@ cubrid server stop: tpch_sf10
+
+Server tpch_sf10 notified of shutdown.
+This may take several minutes. Please wait.
+++ cubrid server stop: success

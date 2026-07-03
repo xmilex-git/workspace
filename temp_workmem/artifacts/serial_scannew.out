@@ -1,0 +1,9 @@
+
+=== <Result of SELECT Command in Line 1> ===
+
+              count(*)
+======================
+                200360
+
+1 row selected. (132.376996 sec) Committed. (0.000000 sec) 
+EXIT=0

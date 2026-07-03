@@ -1,0 +1,33 @@
+
+=== <Result of SELECT Command in Line 1> ===
+
+              count(*)
+======================
+                200360
+
+1 row selected. (124.550995 sec) Committed. (0.000000 sec) 
+
+=== <Result of SELECT Command in Line 2> ===
+
+              count(*)
+======================
+                200360
+
+1 row selected. (12.789000 sec) Committed. (0.000000 sec) 
+
+=== <Result of SELECT Command in Line 3> ===
+
+              count(*)
+======================
+                200360
+
+1 row selected. (141.778995 sec) Committed. (0.000000 sec) 
+
+=== <Result of SELECT Command in Line 4> ===
+
+              count(*)
+======================
+                200360
+
+1 row selected. (119.370996 sec) Committed. (0.000000 sec) 
+EXIT=0

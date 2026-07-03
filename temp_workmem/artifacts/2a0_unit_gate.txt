@@ -1,0 +1,24 @@
+########## issue #68 measurement-hook gate: tapeset_scan (mode=debug) ##########
+----- configure + build test_tapeset_scan -----
+----- run synthetic N-Tape + measurement gate -----
+G1 forward / terminal / S_END-on-last PASS
+G2 backward from S_AFTER PASS
+G3 save + jump (same-tape / cross-tape / boundary) PASS
+G4 copy-mode retrieve PASS
+G5 QFILE_LIST_SCAN_ID bridge + mirror PASS
+G6 empty-only Tapeset PASS
+G7 measurement hooks (pgbuf-bypass=0, op counters) PASS
+G8 file-backed Tape robust parity (forward/backward/jump) PASS
+G9 tiny result stays in-memory (no spill) PASS
+G10 multi-Tape spill+tiny mix, producer pgbuf-bypass PASS
+G11 holdable reparent (MOVE) zero-copy + parity + orphan-zero PASS
+G12 tiny all-RAM reparent (zero disk touch, RAM orphan-zero) PASS
+G13 borrow (SKIP) does not free owner's Tapes PASS
+G14 R2 offset-range work-stealing (coverage + CoV <= 15%) PASS
+G15 migration no-mixed-backing discriminates (old+new shape) PASS
+G16 backing-kind entry guard discriminates + A~E counter PASS
+G17 overflow run reassembly across a Chunk boundary (R1+R2) PASS
+G18 N-reader concurrent file read (re-entrant, pgbuf-bypass) PASS
+ALL TESTS PASSED
+tapeset_scan_gate            PASS
+PASS: tapeset_scan measurement gate green — synthetic N-Tape + op counters + pgbuf-bypass(scan side)=0

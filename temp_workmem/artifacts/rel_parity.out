@@ -1,0 +1,37 @@
+
+=== Query Trace ===
+
+trace on text
+
+
+=== <Result of SELECT Command in Line 2> ===
+
+              count(*)  sum( cast(o.o_orderkey as numeric(38,0)))
+============================================
+                200360  20005106070         
+
+1 row selected. (204.732993 sec) Committed. (0.000000 sec) 
+
+=== Auto Trace ===
+
+Query Plan:
+  HASH JOIN (left outer join)
+    INDEX SCAN (o.pk_orders_o_orderkey) (key range: (o.o_orderkey< ?:0 ), covered: true)
+    TABLE SCAN (l)
+
+  rewritten query: select /*+ USE_HASH(o, l) PARALLEL(8) */ count(*), sum( cast(o.o_orderkey as numeric(38,0))) from [dba.orders] o left outer join [dba.lineitem] l on o.o_orderkey=l.l_orderkey where (o.o_orderkey< ?:0 )
+
+Trace Statistics:
+  SELECT (time: 204729, fetch: 181828565, fetch_time: 102999, ioread: 8241104)
+    SCAN (temp time: 17, fetch: 0, ioread: 0, readrows: 200360, rows: 200360)
+      HASHJOIN (time: 204646, fetch: 181828565, fetch_time: 102999, ioread: 8241104)
+        BUILD (time: 174304, fetch: 180716320, ioread: 7450181, rows: 59986052, method: file)
+        PROBE (time: 502, fetch: 350357, ioread: 42138, readrows: 49999, readkeys: 200360, rows: 200360)
+        SUBQUERY (uncorrelated)
+                 (parallel workers: 2, time: 29623, fetch: 761867, fetch_time: 5690, ioread: 748778)
+          SELECT (time: 5, fetch: 64, fetch_time: 1, ioread: 55)
+            SCAN (index: dba.orders.pk_orders_o_orderkey), (btree time: 5, fetch: 62, ioread: 54, readkeys: 50001, filteredkeys: 49999, rows: 49999, covered: true)
+                 (parallel workers: 7, index time: 5..5, readkeys: 0..9650, filteredkeys: 0..9650, rows: 0..9650, covered: true, gather: mergeable list)
+          SELECT (time: 29623, fetch: 761803, fetch_time: 5689, ioread: 748723)
+            SCAN (table: dba.lineitem), (heap time: 17333, fetch: 761802, ioread: 748723, readrows: 59986052, rows: 59986052)
+
