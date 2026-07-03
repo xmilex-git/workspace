@@ -52,7 +52,7 @@
 [Phase3 실행 트랙 (진행 중)]
 #128 Phase3-1 C1 connect_list 소비처 교체 (.30 sonnet, task_128.md)
 ~~#129 Phase3-2 fhs 삭제~~ ✅ 착지(`635eec6e2`, -2,586줄, 리뷰 통과·close)
-#130 Phase3-3 sector 삭제·C3 직렬 폴백 (fable, task_130.md — 3작업 파일 무겹침 병행)
+~~#130 Phase3-3 sector 삭제~~ ✅ 착지(`88a9b46f7`, -1,275줄, 리뷰 통과·close — C3 폴백이 #99 가드 대체)
 ~~C2-(c) 분석~~ ✅ **(c′) 채택**(#74 처분 코멘트): buffile 클래스 직접 백킹은 하드 블로커 2건(append-only·페이지캐시 부재)으로 불가 → 파일 기판 공유 + random-page 변종 + per-tfile 캐시. 조건 ①병존 게이트 후 절체 ②#126 가드는 재현 PASS 채증 후 제거 ③coherence 설계 리뷰 선행. 옵션4(축소판) = 2순위 보존. `qmgr_list_has_raw_fd_segments` 11사이트는 존속·개명으로 정정.
   → 착지 후: (c′) coherence 설계 리뷰 → (c′) 병존 구현 → 절체·raw-fd 삭제 → EXIT 재측정(K-11 픽스처 3종)
 
@@ -88,7 +88,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **#130 Phase3-3 sector 삭제·C3 폴백** (kill 후 새 세션, task_130.md) | Fable | P2 심장부(external_sort) — 불도달 전제 애매하면 stop-and-report |
+| `fable` | **유휴** (#130 착지·close) | Fable | 다음: (c′) coherence 설계 리뷰 dispatch 예정. 5h 93% 주의 |
 | `.32` | **유휴** (#129 착지 `635eec6e2`·close) | Opus | 다음 후보: (c′) coherence 설계 리뷰는 Fable 몫 — #130 착지 후 fable에. .32는 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **#128 Phase3-1 C1 교체** (새 세션, `~/task_128.md`) | **Sonnet 5** | rc_tok 인라인 기동(--model sonnet) |
