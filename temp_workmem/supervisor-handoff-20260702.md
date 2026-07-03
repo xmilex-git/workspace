@@ -27,7 +27,7 @@
 - **원격 claude 기동은 반드시 `cd ~/dev/workspace` 후**(tmux `-c`로 지정) — 아니면 프로젝트 설정/스킬/CLAUDE.md를 못 읽는다.
 - **tmux 주입**: C-u → `send-keys -l "<프롬프트>"` → Enter → capture로 소화 확인(ctx 증가/esc to interrupt), 유실 시 재주입. .30은 긴 프롬프트를 scp 파일(`~/task_NNN.md`)로 올리고 "파일 읽고 수행" 단문 주입(`~/rc_claude_launch.sh`로 기동, 토큰 파일 `~/.rc_tok`). .33은 `claude --dangerously-skip-permissions` 직접 기동 가능.
 - **401 트러블슈팅(.30)**: stale `~/.claude/.credentials.json`이 env 토큰을 덮음 → `.bak` 치우기 / tmux kill-server 재기동 / 진단은 `claude -p "say ok"`.
-- **세션 정책**: 새 작업 = 새 세션(kill 후 재기동, 자족 프롬프트). 직계 후속만 세션 재사용(#111←#120b, #126←#123 선례). 모델: 명세 실행형=sonnet / 가드·계약·triage=opus / 불변식·R1급=Fable.
+- **세션 정책(2026-07-03 사용자 지시로 강화)**: 새 작업 = **세션 kill 후 재기동**(자족 프롬프트) — `/clear` 재사용 금지, tmux kill-session(또는 kill 후 new-session)으로 컨텍스트 완전 격리. 직계 후속만 세션 재사용(#111←#120b, #126←#123, #127잔여검증←#127 선례). supervisor가 워커 컨텍스트 관리를 능동 수행(장기 세션 ctx 비대 감지 시에도 자연 경계에서 kill+핸드오프 재기동). 모델: 명세 실행형=sonnet / 가드·계약·triage=opus / 불변식·R1급=Fable.
 - 입력창의 미전송 텍스트는 사용자 것이 아님 — supervisor가 지우고 관리(실사례: .33 "#110 close" 지시문 제거 후 supervisor 직접 처리).
 - **로컬 fable 슬롯의 토큰 소진 시 계정 전환은 사용자가 직접 수행**(2026-07-03 사용자 지시) — supervisor는 자동 회전 시도 금지, 소진 감지 시 보고만.
 
