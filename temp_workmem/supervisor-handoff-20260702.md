@@ -58,7 +58,8 @@
 ~~#136 soak~~ ✅ 통과·close(gate ON/OFF 대조 FAIL 집합 바이트 동일 — spill 귀속 0, 17,420케이스×2런 코어 0)
 ~~#137 커밋 B~~ ✅ 착지(`1c1299a6c`, 순감 -3,256줄, 리뷰 통과·close — raw-fd 기판 소멸, PHJ 전략 개선 18.6s→7.4s 관측=EXIT 긍정 신호)
 ~~#138 Phase3-10~~ ✅ 착지(`f9f4d2f8e`+`945f1058c`, 리뷰 통과·close — 삭제 집합 전량 완료, 죽은 스위치 실증)
-#139 Phase3-EXIT 재측정 (.30 sonnet, task_139.md — K-11 대비+EXIT 기준, 판정은 supervisor) → #74/#78 최종 상신(사람 승인)
+#139 Phase3-EXIT 재측정 ✅ 데이터 수집 완료(.30 — K-11 회수 2.99→2.07×/1.44→1.25×, heavy DISTINCT 1.018× 충족, group_wide 0.953× 충족, **order_wide 1.17×·write 1.94× 미분리** + 하네스 정리 `9146b2dd6`)
+#140 order_wide 원인 분해 (fable, task_140.md — 분석 전용: 스필 기계 vs #65 w5 노출. EXIT 상신이 이 결론에 의존) → 판정 확정 → #74/#78 최종 상신(사람 승인)
 ~~#134 Phase3-5fix~~ ✅ 착지(`17d95dbda`, +10줄, 리뷰 통과·close — product 무결함, selftest env-coupling. #133은 TEMPMOVE c-leg만 재실행 + env 위생 경고 전달됨)
 ~~#129 Phase3-2 fhs 삭제~~ ✅ 착지(`635eec6e2`, -2,586줄, 리뷰 통과·close)
 ~~#130 Phase3-3 sector 삭제~~ ✅ 착지(`88a9b46f7`, -1,275줄, 리뷰 통과·close — C3 폴백이 #99 가드 대체)
@@ -98,10 +99,10 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **유휴** (#138 착지·close) | Fable | 다음: #139 결과로 최종 상신 자료 작성 |
+| `fable` | **#140 order_wide 분해** (kill 후 새 세션, task_140.md) | Fable | 분석 전용, 계측 원복 필수 |
 | `.32` | **유휴** (#136 통과·close) | Opus | 다음 dispatch 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
-| `.30` | **#139 EXIT 재측정** (새 세션, `~/task_139.md`) | Sonnet 5 | K-11 방법론 재현, 측정 전용 |
+| `.30` | **유휴** (#139 측정+보강 완료 — 보고 2건) | Sonnet 5 | wmloc `t` 테이블 존치(재측정용) |
 
 *상태 확인*: `tmux capture-pane -t fable -p | tail -30` + `for h in 30 32 33; do ssh cubrid@192.168.6.$h 'tmux capture-pane -t claude -p | tail -25'; done` + `git -C ~/dev/cubrid-workmem fetch --all && git log --oneline -8 xmilex/wm-integ-7173-develop` + `gh issue list --repo xmilex-git/cubrid --state open`
 
