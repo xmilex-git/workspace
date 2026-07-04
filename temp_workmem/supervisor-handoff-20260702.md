@@ -53,7 +53,8 @@
 ~~#128 Phase3-1 C1 소비처 교체~~ ✅ 착지(`39166b84b`, 리뷰 통과·close)
 ~~#131 Phase3-4 connect_list 본체 삭제~~ ✅ 착지(`9f8e54c80`, -233줄, 리뷰 통과·close)
 ~~#132 Phase3-5 (c′) 병존 착지~~ ✅ 착지(`ad351c91a`..`a8c68e633` 3커밋, 리뷰 통과·close — RAWFD/NONCE selftest 선재FAIL은 record-only 처분, 캠페인 의존 금지)
-#133 Phase3-6 절체 채증 캠페인 (.30 sonnet, task_133.md — 코드 무변경, PASS 시 커밋 A). **캠페인이 실결함 1건 포착 → #134**
+~~#133 Phase3-6 채증 캠페인~~ ✅ 통과·close(절체 판정 게이트 4종 충족 — #126 재현 25회 무오차 = 커밋 C 전제 증거 확보)
+#135 Phase3-7 커밋 A: spill 게이트 기본 ON 반전 (fable, task_135.md) → 이후 커밋 B(raw-fd 삭제)·C(#126 가드 제거)·게이트 3종 제거·EXIT 재측정
 ~~#134 Phase3-5fix~~ ✅ 착지(`17d95dbda`, +10줄, 리뷰 통과·close — product 무결함, selftest env-coupling. #133은 TEMPMOVE c-leg만 재실행 + env 위생 경고 전달됨)
 ~~#129 Phase3-2 fhs 삭제~~ ✅ 착지(`635eec6e2`, -2,586줄, 리뷰 통과·close)
 ~~#130 Phase3-3 sector 삭제~~ ✅ 착지(`88a9b46f7`, -1,275줄, 리뷰 통과·close — C3 폴백이 #99 가드 대체)
@@ -93,10 +94,10 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **유휴** (#134 착지·close) | Fable | 다음: #133 PASS 후 커밋 A |
+| `fable` | **#135 커밋 A** (kill 후 새 세션, task_135.md) | Fable | 기본 반전만, B/C 접촉 금지 |
 | `.32` | **유휴** (#131 착지 `9f8e54c80`·close) | Opus | 다음 dispatch 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
-| `.30` | **#133 Phase3-6 채증 캠페인** (새 세션, `~/task_133.md`) | Sonnet 5 | 코드 무변경, FAIL 시 계속 채증 후 보고 |
+| `.30` | **유휴** (#133 완료·close) | Sonnet 5 | 다음 dispatch 대기 |
 
 *상태 확인*: `tmux capture-pane -t fable -p | tail -30` + `for h in 30 32 33; do ssh cubrid@192.168.6.$h 'tmux capture-pane -t claude -p | tail -25'; done` + `git -C ~/dev/cubrid-workmem fetch --all && git log --oneline -8 xmilex/wm-integ-7173-develop` + `gh issue list --repo xmilex-git/cubrid --state open`
 
