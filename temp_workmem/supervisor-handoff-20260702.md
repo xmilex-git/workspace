@@ -51,7 +51,7 @@
 
 [Phase3 실행 트랙 (진행 중)]
 ~~#128 Phase3-1 C1 소비처 교체~~ ✅ 착지(`39166b84b`, 리뷰 통과·close)
-#131 Phase3-4 connect_list 본체+dependent_list_id 삭제 (.32 opus, task_131.md)
+~~#131 Phase3-4 connect_list 본체 삭제~~ ✅ 착지(`9f8e54c80`, -233줄, 리뷰 통과·close)
 ~~#129 Phase3-2 fhs 삭제~~ ✅ 착지(`635eec6e2`, -2,586줄, 리뷰 통과·close)
 ~~#130 Phase3-3 sector 삭제~~ ✅ 착지(`88a9b46f7`, -1,275줄, 리뷰 통과·close — C3 폴백이 #99 가드 대체)
 ~~(c′) coherence 설계~~ ✅ 리뷰 통과(#74 정본 — 옵션4 강하 불요, 구현 착수 승인). #132 Phase3-5 병존 착지 dispatch(fable).
@@ -91,7 +91,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
 | `fable` | **#132 Phase3-5 (c′) 병존 착지** (kill 후 새 세션, task_132.md) | Fable | 커밋 3분리(기판/page_spill/selftest), 게이트 기본 0, 절체 금지 |
-| `.32` | **#131 Phase3-4 connect_list 본체 삭제** (새 세션, `~/task_131.md`) | Opus | C1(#128) 해소로 착수 |
+| `.32` | **유휴** (#131 착지 `9f8e54c80`·close) | Opus | 다음 dispatch 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **유휴** (#128 착지 `39166b84b`·close) | Sonnet 5 | 다음 dispatch 대기 |
 
