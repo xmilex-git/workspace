@@ -53,7 +53,8 @@
 ~~#128 Phase3-1 C1 소비처 교체~~ ✅ 착지(`39166b84b`, 리뷰 통과·close)
 ~~#131 Phase3-4 connect_list 본체 삭제~~ ✅ 착지(`9f8e54c80`, -233줄, 리뷰 통과·close)
 ~~#132 Phase3-5 (c′) 병존 착지~~ ✅ 착지(`ad351c91a`..`a8c68e633` 3커밋, 리뷰 통과·close — RAWFD/NONCE selftest 선재FAIL은 record-only 처분, 캠페인 의존 금지)
-#133 Phase3-6 절체 채증 캠페인 (.30 sonnet, task_133.md — 코드 무변경, PASS 시 커밋 A)
+#133 Phase3-6 절체 채증 캠페인 (.30 sonnet, task_133.md — 코드 무변경, PASS 시 커밋 A). **캠페인이 실결함 1건 포착 → #134**
+#134 Phase3-5fix page_spill_file 소멸자 assert(TEMPMOVE c-leg 간헐) — fable 수정 중. 착지 시 #133 해당 leg 재실행 필요
 ~~#129 Phase3-2 fhs 삭제~~ ✅ 착지(`635eec6e2`, -2,586줄, 리뷰 통과·close)
 ~~#130 Phase3-3 sector 삭제~~ ✅ 착지(`88a9b46f7`, -1,275줄, 리뷰 통과·close — C3 폴백이 #99 가드 대체)
 ~~(c′) coherence 설계~~ ✅ 리뷰 통과(#74 정본 — 옵션4 강하 불요, 구현 착수 승인). #132 Phase3-5 병존 착지 dispatch(fable).
@@ -92,7 +93,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **유휴** (#132 착지·close) | Fable | 다음: 커밋 A~C는 #133 PASS 후 |
+| `fable` | **#134 소멸자 assert 수정** (kill 후 새 세션, task_134.md) | Fable | .30 캠페인 무접촉, INV 위반이면 stop-and-report |
 | `.32` | **유휴** (#131 착지 `9f8e54c80`·close) | Opus | 다음 dispatch 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **#133 Phase3-6 채증 캠페인** (새 세션, `~/task_133.md`) | Sonnet 5 | 코드 무변경, FAIL 시 계속 채증 후 보고 |
