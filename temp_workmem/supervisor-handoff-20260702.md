@@ -55,7 +55,8 @@
 ~~#132 Phase3-5 (c′) 병존 착지~~ ✅ 착지(`ad351c91a`..`a8c68e633` 3커밋, 리뷰 통과·close — RAWFD/NONCE selftest 선재FAIL은 record-only 처분, 캠페인 의존 금지)
 ~~#133 Phase3-6 채증 캠페인~~ ✅ 통과·close(절체 판정 게이트 4종 충족 — #126 재현 25회 무오차 = 커밋 C 전제 증거 확보)
 ~~#135 커밋 A~~ ✅ 착지(`dc59b4789`, ±13줄, 리뷰 통과·close — 기본 세계 = page_spill, opt-out escape hatch 실증)
-#136 Phase3-8 soak: CTP SQL 회귀 전체(새 기본 세계) (.32 opus, task_136.md) → green 시 커밋 B(raw-fd 삭제)·C(#126 가드 제거)·게이트 3종 제거·EXIT 재측정
+~~#136 soak~~ ✅ 통과·close(gate ON/OFF 대조 FAIL 집합 바이트 동일 — spill 귀속 0, 17,420케이스×2런 코어 0)
+#137 Phase3-9 커밋 B: raw-fd 기계 삭제·비가역 (fable, task_137.md) → 이후 커밋 C(#126 가드 제거)·게이트 3종 제거·EXIT 재측정
 ~~#134 Phase3-5fix~~ ✅ 착지(`17d95dbda`, +10줄, 리뷰 통과·close — product 무결함, selftest env-coupling. #133은 TEMPMOVE c-leg만 재실행 + env 위생 경고 전달됨)
 ~~#129 Phase3-2 fhs 삭제~~ ✅ 착지(`635eec6e2`, -2,586줄, 리뷰 통과·close)
 ~~#130 Phase3-3 sector 삭제~~ ✅ 착지(`88a9b46f7`, -1,275줄, 리뷰 통과·close — C3 폴백이 #99 가드 대체)
@@ -95,8 +96,8 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **유휴** (#135 착지·close) | Fable | 다음: #136 green 후 커밋 B |
-| `.32` | **#136 soak: CTP SQL 회귀** (새 세션, `~/task_136.md`) | Opus | ctp-parallel, 신규 FAIL 0 판정 |
+| `fable` | **#137 커밋 B: raw-fd 삭제** (kill 후 새 세션, task_137.md) | Fable | 비가역 — 심볼 grep 전수 정본, #126 가드 무접촉 |
+| `.32` | **유휴** (#136 통과·close) | Opus | 다음 dispatch 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **유휴** (#133 완료·close) | Sonnet 5 | 다음 dispatch 대기 |
 
