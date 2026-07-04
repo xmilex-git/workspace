@@ -54,6 +54,7 @@
 #131 Phase3-4 connect_list 본체+dependent_list_id 삭제 (.32 opus, task_131.md)
 ~~#129 Phase3-2 fhs 삭제~~ ✅ 착지(`635eec6e2`, -2,586줄, 리뷰 통과·close)
 ~~#130 Phase3-3 sector 삭제~~ ✅ 착지(`88a9b46f7`, -1,275줄, 리뷰 통과·close — C3 폴백이 #99 가드 대체)
+~~(c′) coherence 설계~~ ✅ 리뷰 통과(#74 정본 — 옵션4 강하 불요, 구현 착수 승인). #132 Phase3-5 병존 착지 dispatch(fable).
 ~~C2-(c) 분석~~ ✅ **(c′) 채택**(#74 처분 코멘트): buffile 클래스 직접 백킹은 하드 블로커 2건(append-only·페이지캐시 부재)으로 불가 → 파일 기판 공유 + random-page 변종 + per-tfile 캐시. 조건 ①병존 게이트 후 절체 ②#126 가드는 재현 PASS 채증 후 제거 ③coherence 설계 리뷰 선행. 옵션4(축소판) = 2순위 보존. `qmgr_list_has_raw_fd_segments` 11사이트는 존속·개명으로 정정.
   → 착지 후: (c′) coherence 설계 리뷰 → (c′) 병존 구현 → 절체·raw-fd 삭제 → EXIT 재측정(K-11 픽스처 3종)
 
@@ -89,7 +90,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **(c′) coherence 설계** (kill 후 새 세션, task_c2c_design.md — 설계 전용, #74 보고) | Fable | 5h 96% — 소진 시 사용자 계정 전환 대기 |
+| `fable` | **#132 Phase3-5 (c′) 병존 착지** (kill 후 새 세션, task_132.md) | Fable | 커밋 3분리(기판/page_spill/selftest), 게이트 기본 0, 절체 금지 |
 | `.32` | **#131 Phase3-4 connect_list 본체 삭제** (새 세션, `~/task_131.md`) | Opus | C1(#128) 해소로 착수 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **유휴** (#128 착지 `39166b84b`·close) | Sonnet 5 | 다음 dispatch 대기 |
