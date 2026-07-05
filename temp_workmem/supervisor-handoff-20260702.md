@@ -101,10 +101,10 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
 | `fable` | **유휴** (#143 설계 완료 — 검수 통과) | Fable | 다음: S2(이동) 후보 |
-| — | **#143 진행 상태**: 설계✅ → 결정 확정(R1 rename승인·R2 통일·R5 spill_file 유지·R7 주석 영어화+이슈번호 제거=S5 신설·R8 **PGBUF**) → **S1+S1b 실행 중(.30 sonnet, task_143_s1.md)** → S2~S5 대기 | — | 게이트 6종/슬라이스, #142가 성능 기준선 |
-| `.32` | **유휴** (#136 통과·close) | Opus | 다음 dispatch 대기 |
+| — | **#143 진행 상태**: 설계✅ → 결정 확정(R1 rename승인·R2 통일·R5 spill_file 유지·R7 주석 영어화+이슈번호 제거=S5 신설·R8 **PGBUF**) → ~~S1+S1b~~ ✅ 착지(`c58f6d159`+`8b66a43aa`, 게이트 6종 green — A/B 1.003×/1.002×) → **S2 실행 중(.32 opus)** → S3~S5 대기 | — | 게이트 6종/슬라이스, #142가 성능 기준선 |
+| `.32` | **#143 S2 이동(M1~M5,M7)** (새 세션, `~/task_143_s2.md`) | Opus | 커밋 5분리, 무변경 이동만 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
-| `.30` | **#143 S1+S1b rename** (새 세션, `~/task_143_s1.md`) | Sonnet 5 | word-boundary 표 기반, R8=PGBUF |
+| `.30` | **유휴** (S1/S1b 착지 `c58f6d159`+`8b66a43aa` — 리뷰 통과) | Sonnet 5 | 게이트5 = 동일호스트 A/B 비율로 확정 |
 
 *상태 확인*: `tmux capture-pane -t fable -p | tail -30` + `for h in 30 32 33; do ssh cubrid@192.168.6.$h 'tmux capture-pane -t claude -p | tail -25'; done` + `git -C ~/dev/cubrid-workmem fetch --all && git log --oneline -8 xmilex/wm-integ-7173-develop` + `gh issue list --repo xmilex-git/cubrid --state open`
 
