@@ -4,6 +4,8 @@ status: accepted
 
 # Overflow tuples are a contiguous page run with an offset back-pointer, reassembled by the first-page owner
 
+> Terminology revised in #143; identifiers herein are historical. See CONTEXT.md appendix.
+
 ## Context
 
 A tuple larger than one 16 KB page is an **overflow tuple**. In the old backing

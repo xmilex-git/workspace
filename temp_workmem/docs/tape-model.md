@@ -98,15 +98,15 @@ the ADRs and `../CONTEXT.md`:
 
 ## Mapping to old structure and to PostgreSQL
 
-| concept            | old (e21917cfd)                              | new model                              | PostgreSQL                            |
-|--------------------|----------------------------------------------|----------------------------------------|---------------------------------------|
-| connect lists      | `qfile_connect_list` (page-header next/prev VPID) | ordered Tape vector (Tapeset)          | `LogicalTapeSet` import               |
-| one worker's output | spliced into a shared list via VPID chain   | one frozen Tape per (worker, key)      | one materialized tape per worker      |
-| backing            | global raw-fd registry / pgbuf temp          | per-worker private file, pgbuf-bypassed | `BufFile`                             |
-| tuple address      | `{vpid,offset}` or `{raw_fd_segment_id,…}`   | `(tape_idx, page_offset, tuple_offset)` | `(tape, block, offset)`               |
-| parallel-read unit | 64-page sector + per-sector bitmap           | 64-page offset range (no bitmap)       | `chunk` (SharedTuplestore)            |
-| hash-join partition | shared list + `part_mutexes` append-copy    | per-worker Tapes imported into Tapeset | per-participant files per batch       |
-| backward/jump      | physical `prev_vpid` walk                    | `page_offset ± 1` arithmetic           | (logtape block chain — not used here) |
+| concept            | old (e21917cfd)                              | new model                              | PostgreSQL                            | 현행 이름(#143)                          |
+|--------------------|----------------------------------------------|----------------------------------------|---------------------------------------|-------------------------------------------|
+| connect lists      | `qfile_connect_list` (page-header next/prev VPID) | ordered Tape vector (Tapeset)          | `LogicalTapeSet` import               | `QFILE_BACKING_TAPESET`, `qfile::tapeset` |
+| one worker's output | spliced into a shared list via VPID chain   | one frozen Tape per (worker, key)      | one materialized tape per worker      | `qfile::tape`                             |
+| backing            | global raw-fd registry / pgbuf temp          | per-worker private file, pgbuf-bypassed | `BufFile`                             | `QFILE_BACKING_PGBUF` (pgbuf-temp path, name unchanged), `qfile::buffile` (per-worker private file) |
+| tuple address      | `{vpid,offset}` or `{raw_fd_segment_id,…}`   | `(tape_idx, page_offset, tuple_offset)` | `(tape, block, offset)`               | unchanged (struct field names)            |
+| parallel-read unit | 64-page sector + per-sector bitmap           | 64-page offset range (no bitmap)       | `chunk` (SharedTuplestore)            | `qfile::chunk_distributor`                |
+| hash-join partition | shared list + `part_mutexes` append-copy    | per-worker Tapes imported into Tapeset | per-participant files per batch       | `QFILE_BACKING_TAPESET`                   |
+| backward/jump      | physical `prev_vpid` walk                    | `page_offset ± 1` arithmetic           | (logtape block chain — not used here) | unchanged                                 |
 
 > Note: PR #7173 extends the old sector + per-sector-bitmap work-stealing on the
 > pgbuf/sector backing. The new model uses offset-range distribution on the per-worker

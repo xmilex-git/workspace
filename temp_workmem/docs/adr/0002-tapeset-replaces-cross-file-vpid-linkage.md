@@ -4,6 +4,8 @@ status: accepted
 
 # Worker outputs are joined by a logical Tapeset addressed by Tape-relative positions, not cross-file VPID linkage
 
+> Terminology revised in #143; identifiers herein are historical. See CONTEXT.md appendix.
+
 ## Context
 
 The old design connects worker output lists two ways, both keyed on physical page

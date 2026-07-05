@@ -4,6 +4,8 @@ status: accepted
 
 # Partition and per-column outputs are per-worker Tapes imported into a Tapeset, not a shared list assembled under a mutex
 
+> Terminology revised in #143; identifiers herein are historical. See CONTEXT.md appendix.
+
 ## Context
 
 A parallel operation can emit several output lists keyed by a semantic dimension:

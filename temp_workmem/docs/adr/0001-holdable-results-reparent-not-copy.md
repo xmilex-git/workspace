@@ -4,6 +4,8 @@ status: accepted
 
 # Holdable cursor results are reparented to the session, not copied
 
+> Terminology revised in #143; identifiers herein are historical. See CONTEXT.md appendix.
+
 ## Context
 
 A WITH HOLD cursor must keep reading its result after the producing transaction

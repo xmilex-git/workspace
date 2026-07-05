@@ -4,6 +4,8 @@ status: accepted
 
 # Spill backing: per-worker private file, pgbuf-bypassed, addressed by page offset
 
+> Terminology revised in #143; identifiers herein are historical. See CONTEXT.md appendix.
+
 ## Context
 
 ADR 0002 makes worker outputs a logical Tapeset addressed by Tape-relative positions.

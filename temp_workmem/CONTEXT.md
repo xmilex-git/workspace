@@ -78,6 +78,9 @@ _Avoid_: raw-fd (the removed global-registry backing), spill file, temp volume p
 Writing data that overflowed the work buffer (work_mem) out to a BufFile on disk. The file
 itself is a BufFile, not a "spill file".
 _Avoid_: (use as a verb only)
+> Exception (#143, user decision): the C++ class name `qfile::spill_file` (the fd+path+TDE
+> file substrate under BufFile / page-spill backing) keeps its name — an approved one-off
+> exception to this principle, not a precedent.
 
 **SharedFileSet**:
 The shared namespace under which Participants' BufFiles live so the leader can Import them
@@ -95,3 +98,32 @@ _Avoid_: sector (the old shared-volume 64-page allocation unit), page band, occu
 Names *only* the abandoned e21917cfd backing — a server-global page registry with a
 per-tuple dirty-mark lock. Never used for the new per-Tape backing.
 _Avoid_: (do not apply to the new design; use BufFile)
+
+## Appendix — pre-#143 identifier names → current names (#143)
+
+Issue #143 renamed the internal "migration-relative" identifiers (`OLD`/`NEW`, keyed to the
+raw-fd → Tapeset migration) to backing-substance names. Historical text (old commits, old
+issue comments, `results/*` benchmark artifacts) still uses the left-hand column below;
+current source uses the right-hand column.
+
+| pre-#143 (old) | current (#143) |
+|---|---|
+| `QFILE_BACKING_OLD` | `QFILE_BACKING_PGBUF` |
+| `QFILE_BACKING_NEW` | `QFILE_BACKING_TAPESET` |
+| `qfile_list_has_old_backing()` | `qfile_list_has_pgbuf_backing()` |
+| `qfile_list_has_new_backing()` | `qfile_list_has_tapeset()` |
+| `QFILE_GUARD_OLD_MECHANISM` | `QFILE_GUARD_PGBUF_MECHANISM` |
+| `QFILE_GUARD_NEW_MECHANISM` | `QFILE_GUARD_TAPESET_MECHANISM` |
+| `qfile_list_make_new_backed()` | `qfile_list_make_tapeset_backed()` |
+| `suppress_new_backing` | `suppress_tapeset_backing` |
+| `qfile_new_backed_record_create/create_count/reset_*` | `qfile_tapeset_backed_record_create/…` |
+| `qfile_ae_record_old_touch/…` | `qfile_ae_record_pgbuf_touch/…` |
+| `new_contains_overflow_` / `QFILE_LIST_ID_NEW_CONTAINS_OVERFLOW` | `tapeset_contains_overflow_` / `QFILE_LIST_ID_TAPESET_CONTAINS_OVERFLOW` |
+| `is_new_backing` / `m_new_tuple_source` | `has_tapeset` / `m_tapeset_source` |
+| `Num_qfile_new_backed_create` (statdump) | `Num_qfile_tapeset_create` |
+| `Num_qfile_old_touch_on_new` (statdump) | `Num_qfile_pgbuf_touch_on_tapeset` |
+| `CUBRID_BUFFILE_SELFTEST` / `CUBRID_HELDTAPE_SELFTEST` / `CUBRID_TAPEREAD_SELFTEST` / `CUBRID_PRODUCER_SELFTEST` (debug env) | `CUBRID_WM_BUFFILE_SELFTEST` / `CUBRID_WM_HELDTAPE_SELFTEST` / `CUBRID_WM_TAPEREAD_SELFTEST` / `CUBRID_WM_PRODUCER_SELFTEST` (`CUBRID_TEMPMOVE_SELFTEST` / `CUBRID_SEGPOS_SELFTEST` unchanged — out of #143's scope) |
+| `qmgr_temp_backing::SPILL_OVERFLOW` | `qmgr_temp_backing::PAGE_SPILL` |
+
+`raw-fd` (the abandoned e21917cfd backing, see "raw-fd" above) is **not** part of this
+rename — it keeps its historical name; #143 did not touch it.

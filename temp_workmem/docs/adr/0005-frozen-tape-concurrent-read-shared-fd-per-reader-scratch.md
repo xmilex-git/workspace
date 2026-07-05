@@ -4,6 +4,8 @@ status: accepted
 
 # Frozen Tapes are read concurrently via a shared fd with per-reader scratch, not per-reader file handles
 
+> Terminology revised in #143; identifiers herein are historical. See CONTEXT.md appendix.
+
 ## Context
 
 R2 (SSOT #75 §3.2 B2) requires that when a frozen Tapeset feeds N downstream
