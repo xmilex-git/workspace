@@ -100,7 +100,7 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **유휴** (#140 close) | Fable | 캠페인 상신 대기 국면 |
+| `fable` | **#143 리팩토링 설계** (kill 후 새 세션, task_143_design.md — 설계 전용) | Fable | fable 주간쿼터 89% 주의. 산출물 리뷰 = supervisor+사람(취향 항목) |
 | `.32` | **유휴** (#136 통과·close) | Opus | 다음 dispatch 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
 | `.30` | **유휴** (#139 측정+보강 완료 — 보고 2건) | Sonnet 5 | wmloc `t` 테이블 존치(재측정용) |
