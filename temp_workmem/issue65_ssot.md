@@ -1,6 +1,8 @@
 # temp-workmem 전면 개편 SSOT (단일 진실원)
 
-Last updated: 2026-07-03 오후 KST (SYNC — Phase3 blocker 2종 해소(#117/#118/#119, #120a/#120b) 반영. 역사·측정·정정 기록은 #76 evidence 담당.)
+Last updated: 2026-07-06 KST (SYNC — #143 리팩토링 에픽 S1~S5 착지 반영. 역사·측정·정정 기록은 #76 evidence 담당.)
+
+> **용어 개정 노트(#143, 2026-07-06)**: 코드의 이행기 어휘가 개정됐다 — OLD→`PGBUF`, NEW→`TAPESET`(`QFILE_BACKING_PGBUF/TAPESET`, `qfile_list_has_tapeset`, `qfile_list_has_pgbuf_backing`), 카운터 `Num_qfile_tapeset_create`/`Num_qfile_pgbuf_touch_on_tapeset`, selftest env `CUBRID_WM_*` 접두 통일, 태그 `PAGE_SPILL`. **이 문서의 역사 서술(NEW/OLD 표기)은 당시 용어 그대로 유지** — 현행 코드 대조 시 CONTEXT.md의 신구 대응 부록 참조. `spill_file` 클래스명은 승인된 예외(R5).
 **이 본문이 정본**이며 로컬 미러 = `~/dev/workspace/temp_workmem/issue65_ssot.md` (수정 시 둘 다 갱신). 모든 구현 이슈는 이 본문 기준.
 우선순위(충돌 시): SSOT > evidence > 그 외. 상세 버그 좌표·재현 절차는 각 구현 이슈 본문이 자족적으로 담는다.
 

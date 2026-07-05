@@ -100,11 +100,11 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **#143 S5 주석 정규화** (kill 후 새 세션, task_143_s5.md — 마지막 슬라이스) | Fable | diff = 주석·공백만, 불변식 주석 보존 |
-| — | **#143 진행 상태**: 설계✅ → 결정 확정(R1 rename승인·R2 통일·R5 spill_file 유지·R7 주석 영어화+이슈번호 제거=S5 신설·R8 **PGBUF**) → ~~S1+S1b~~ ✅ 착지(`c58f6d159`+`8b66a43aa`, 게이트 6종 green — A/B 1.003×/1.002×) → ~~S2~~ ✅ 착지(4커밋 `893184160`..`0c6233cf1`, M7 드랍 승인) → ~~S3~~ ✅ → ~~S4~~ ✅ 착지(`9844ab476`+`f9361321d`, H3 일부 드랍 승인) → **S5 실행 중(fable — 마지막)** → 착지 시 에픽 완료 상신 | — | 게이트 6종/슬라이스, #142가 성능 기준선 |
+| `fable` | **유휴** (S5 착지 `7b2149c33` — 리뷰 통과) | Fable | 에픽 마감 대기 |
+| — | **#143 진행 상태**: 설계✅ → 결정 확정(R1 rename승인·R2 통일·R5 spill_file 유지·R7 주석 영어화+이슈번호 제거=S5 신설·R8 **PGBUF**) → ~~S1+S1b~~ ✅ 착지(`c58f6d159`+`8b66a43aa`, 게이트 6종 green — A/B 1.003×/1.002×) → ~~S2~~ ✅ 착지(4커밋 `893184160`..`0c6233cf1`, M7 드랍 승인) → ~~S1~S5~~ ✅ 전체 착지(S5 `7b2149c33` — 주석 정규화, comment-only 기계검증). 마감: 문서 동기화(.30 진행) + SSOT 용어 노트(완료) → 사용자 확인 후 close | — | 게이트 6종/슬라이스, #142가 성능 기준선 |
 | `.32` | **유휴** (S4 착지 `9844ab476`+`f9361321d` — 리뷰 통과) | Opus | 다음 dispatch 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
-| `.30` | **유휴** (S3 착지 `ab5ce81a9` — 리뷰 통과) | Sonnet 5 | 다음 dispatch 대기 |
+| `.30` | **#143 문서 동기화** (새 세션, `~/task_143_docs.md` — docs-only) | Sonnet 5 | CONTEXT 부록+tape-model 열+ADR 노트 |
 
 *상태 확인*: `tmux capture-pane -t fable -p | tail -30` + `for h in 30 32 33; do ssh cubrid@192.168.6.$h 'tmux capture-pane -t claude -p | tail -25'; done` + `git -C ~/dev/cubrid-workmem fetch --all && git log --oneline -8 xmilex/wm-integ-7173-develop` + `gh issue list --repo xmilex-git/cubrid --state open`
 
