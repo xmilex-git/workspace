@@ -102,11 +102,11 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
 | `fable` | **유휴** (S5 착지 `7b2149c33` — 리뷰 통과) | Fable | 에픽 마감 대기 |
-| — | **#143 진행 상태**: 설계✅ → 결정 확정(R1 rename승인·R2 통일·R5 spill_file 유지·R7 주석 영어화+이슈번호 제거=S5 신설·R8 **PGBUF**) → ~~S1+S1b~~ ✅ 착지(`c58f6d159`+`8b66a43aa`, 게이트 6종 green — A/B 1.003×/1.002×) → ~~S2~~ ✅ 착지(4커밋 `893184160`..`0c6233cf1`, M7 드랍 승인) → ~~S1~S5~~ ✅ 전체 착지. 마감: 문서 동기화(.30 진행)·SSOT 노트 완료 → 사용자 확인 후 close
+| — | **#143 진행 상태**: 설계✅ → 결정 확정(R1 rename승인·R2 통일·R5 spill_file 유지·R7 주석 영어화+이슈번호 제거=S5 신설·R8 **PGBUF**) → ~~S1+S1b~~ ✅ 착지(`c58f6d159`+`8b66a43aa`, 게이트 6종 green — A/B 1.003×/1.002×) → ~~S2~~ ✅ 착지(4커밋 `893184160`..`0c6233cf1`, M7 드랍 승인) → **에픽 완료·close(2026-07-06)** — 엔진 c58f6d159..7b2149c33 + 문서 0cd058a@workspace. 후속 선택: 문자열 이슈번호 13건, M7
 **#144 생성(2026-07-06)**: 성능 회수 로드맵(P1 read-back CPU~P5 규약, opus 실행용 — 사용자 지시. #141은 P2/P3으로 편입). 착수는 사람 지시 대기 | — | 게이트 6종/슬라이스, #142가 성능 기준선 |
 | `.32` | **#144 성능 회수 실행(P1-1 프로파일부터)** (새 세션, `~/task_144.md`) | Opus | 장기 — 항목당 보고, P3은 설계 승인 대기, close 금지 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
-| `.30` | **#143 문서 동기화** (새 세션, `~/task_143_docs.md` — docs-only) | Sonnet 5 | CONTEXT 부록+tape-model 열+ADR 노트 |
+| `.30` | **유휴** (#143 문서 동기화 완료 `0cd058a`) | Sonnet 5 | 다음 dispatch 대기 |
 
 *상태 확인*: `tmux capture-pane -t fable -p | tail -30` + `for h in 30 32 33; do ssh cubrid@192.168.6.$h 'tmux capture-pane -t claude -p | tail -25'; done` + `git -C ~/dev/cubrid-workmem fetch --all && git log --oneline -8 xmilex/wm-integ-7173-develop` + `gh issue list --repo xmilex-git/cubrid --state open`
 
