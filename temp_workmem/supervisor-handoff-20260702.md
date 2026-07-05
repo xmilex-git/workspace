@@ -100,10 +100,11 @@ Phase3 본체(#74 승인 후): #81 sweep 삭제 집합 + membuf 강제OFF(H-4) +
 
 | 슬롯 | 작업 | 모델 | 유의 |
 |---|---|---|---|
-| `fable` | **#143 리팩토링 설계** (kill 후 새 세션, task_143_design.md — 설계 전용) | Fable | fable 주간쿼터 89% 주의. 산출물 리뷰 = supervisor+사람(취향 항목) |
+| `fable` | **유휴** (#143 설계 완료 — 검수 통과) | Fable | 다음: S2(이동) 후보 |
+| — | **#143 진행 상태**: 설계✅ → 결정 확정(R1 rename승인·R2 통일·R5 spill_file 유지·R7 주석 영어화+이슈번호 제거=S5 신설·R8 **PGBUF**) → **S1+S1b 실행 중(.30 sonnet, task_143_s1.md)** → S2~S5 대기 | — | 게이트 6종/슬라이스, #142가 성능 기준선 |
 | `.32` | **유휴** (#136 통과·close) | Opus | 다음 dispatch 대기 |
 | `.33` | **유휴** | opus | **주의**: `/home/cubrid/dev/cubrid` 워크트리 detach 상태. backup ref `backup/wm-integ-leftover-20260702`는 미커밋 작업물 아님(#105 트리 원복 누락 잔상 — #127 코멘트 판독 기록). 다음 정리 때 ref 삭제+워크트리 재정렬 |
-| `.30` | **유휴** (#139 측정+보강 완료 — 보고 2건) | Sonnet 5 | wmloc `t` 테이블 존치(재측정용) |
+| `.30` | **#143 S1+S1b rename** (새 세션, `~/task_143_s1.md`) | Sonnet 5 | word-boundary 표 기반, R8=PGBUF |
 
 *상태 확인*: `tmux capture-pane -t fable -p | tail -30` + `for h in 30 32 33; do ssh cubrid@192.168.6.$h 'tmux capture-pane -t claude -p | tail -25'; done` + `git -C ~/dev/cubrid-workmem fetch --all && git log --oneline -8 xmilex/wm-integ-7173-develop` + `gh issue list --repo xmilex-git/cubrid --state open`
 
