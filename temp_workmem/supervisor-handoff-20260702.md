@@ -60,7 +60,7 @@
 ~~#138 Phase3-10~~ ✅ 착지(`f9f4d2f8e`+`945f1058c`, 리뷰 통과·close — 삭제 집합 전량 완료, 죽은 스위치 실증)
 #139 Phase3-EXIT 재측정 ✅ 데이터 수집 완료(.30 — K-11 회수 2.99→2.07×/1.44→1.25×, heavy DISTINCT 1.018× 충족, group_wide 0.953× 충족, **order_wide 1.17×·write 1.94× 미분리** + 하네스 정리 `9146b2dd6`)
 ~~#140 order_wide 분해~~ ✅ 귀속 (b) 확정·close(K-13 — 스필 기계 무결, cap 64MiB 고정 발견)
-**→ #74/#78 최종 close 상신 게시 완료(2026-07-05) — 사람 승인 대기(요청①: close, 요청②: order_wide w5 트랙 이관). 승인 전 supervisor close 금지.**
+**→ 캠페인 종결(2026-07-05): 사람 승인(①②) → #74/#78 close. w5 이관=#141, 성능 종합=#142. 4슬롯 유휴 — 다음 dispatch는 사람 지시 대기(잔여: #141, #33~35/58, #113 upstream, #52~56/59).**
 ~~#134 Phase3-5fix~~ ✅ 착지(`17d95dbda`, +10줄, 리뷰 통과·close — product 무결함, selftest env-coupling. #133은 TEMPMOVE c-leg만 재실행 + env 위생 경고 전달됨)
 ~~#129 Phase3-2 fhs 삭제~~ ✅ 착지(`635eec6e2`, -2,586줄, 리뷰 통과·close)
 ~~#130 Phase3-3 sector 삭제~~ ✅ 착지(`88a9b46f7`, -1,275줄, 리뷰 통과·close — C3 폴백이 #99 가드 대체)
