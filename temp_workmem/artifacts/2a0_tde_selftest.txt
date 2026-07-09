@@ -1,5 +1,0 @@
-TAPEREAD_SELFTEST algo=1 result=0 (0=PASS)
-TAPEREAD_SELFTEST result=0 (0=PASS)
-
-ERROR: Unable to restart/initialize the database server. PL server can not be started: wmg003.
-

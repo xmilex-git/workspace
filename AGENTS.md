@@ -14,6 +14,7 @@ looking for engine code, you are in the wrong directory.
 .
 ├── AGENTS.md                 # this file (the repo guide; CLAUDE.md is a symlink to it)
 ├── CLAUDE.md -> AGENTS.md     # so Claude, Codex, and other harnesses all read the same guide
+├── cubrid.conf               # campaign cubrid.conf — single source of truth; `just conf` copies it
 ├── justfile                  # build/test/dev recipes (uses $HOME, ~/CUBRID, ~/cubrid-testtools/CTP)
 ├── .agents/
 │   ├── AGENTS.md             # behavioral guidelines (think-before-coding, surgical changes, …)
