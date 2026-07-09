@@ -52,12 +52,3 @@ For multi-step tasks, state a brief plan:
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
 These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
-
-
-### Scratch / temporary file location
-- **NEVER write scratch files under `/tmp`.** The user's `/tmp` is tmpfs-backed and causing OOM. This applies to extracted git blobs, analysis dumps, intermediate outputs, build artifacts, downloaded archives — anything you would otherwise drop in `/tmp`.
-- Also avoid: `/var/tmp`, `$TMPDIR`, `mktemp` without an explicit `-p` to a disk-backed dir, and shell redirections like `>/tmp/foo`.
-- **Use the project directory's `.not_git_tracking/scratch` instead.** Create it on demand (`mkdir -p .claude/scratch`). If no project directory applies (cross-project work), use `~/.claude/scratch/`.
-- Do NOT use `.omc/scratch/` anymore — the user has standardized on `.not_git_tracking/scratch` across all machines.
-- When inspecting a different git ref, prefer `git show <ref>:<path>` piped directly into Read/grep (no file), or `git worktree add` rather than dumping to `/tmp` or `.not_git_tracking/scratch`.
-- Tools and subagents you spawn must follow the same rule — if you delegate work, mention this constraint in the prompt.

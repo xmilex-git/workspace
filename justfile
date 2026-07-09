@@ -24,7 +24,7 @@
 #   WORKSPACE=<src> just debug | just release              aliases (default version)
 #   just use   [debug|release] [version]                   only repoint ~/CUBRID to an already-installed dir
 #   WORKSPACE=<src> just rebuild [mode] [version]          fresh configure + build + install + repoint
-#   just conf                                              apply campaign test conf to $CUBRID/conf/cubrid.conf (idempotent)
+#   just conf                                              copy repo-root cubrid.conf -> $CUBRID/conf/cubrid.conf
 #   just install-locale [dest]                             copy prebuilt locale files (lib+bin); auto-run by build/rebuild
 #   WORKSPACE=<src> just deploy [mode] [version]           stop server (if any) -> build -> conf
 #   WORKSPACE=<src> just ctest [mode]                      ctest against the build tree
@@ -125,37 +125,20 @@ install-locale dest=env_var_or_default("CUBRID", ""):
     if [ -f "$so" ]; then cp -f "$so" "$dest/lib/" && echo "locale: libcubrid_all_locales.so -> $dest/lib/"; else echo "locale: $so missing (skipped)"; fi
     if [ -f "$sh" ]; then cp -f "$sh" "$dest/bin/" && echo "locale: make_locale.sh -> $dest/bin/";          else echo "locale: $sh missing (skipped)"; fi
 
-# Apply campaign test conf to $CUBRID/conf/cubrid.conf (idempotent).
-# Key insight: develop uses shared data_buffer (512M) so hash-join build tables
-# get cache hits even for 60M-row relations.  The redesign uses per-worker
-# work_mem for hash tables — work_mem must be large enough (≥1G) for a fair
-# comparison, otherwise every PHJ goes through the partition-split path and
-# the parallel-probe path is never exercised.
+# Apply campaign test conf to $CUBRID/conf/cubrid.conf.
+# Copies the canonical cubrid.conf from this repo (single source of truth for campaign
+# parameters) into the active CUBRID install.  Edit cubrid.conf at the repo root to
+# change parameters — no more sed/grep patching.
 conf:
     #!/usr/bin/env bash
     set -eu
     [ -n "${CUBRID:-}" ] || { echo "ERROR: \$CUBRID not set." >&2; exit 1; }
-    f="$CUBRID/conf/cubrid.conf"
-    [ -f "$f" ] || { echo "ERROR: $f not found (build/install first)." >&2; exit 1; }
-    # --- helper: set KEY=VALUE idempotently (update existing or append) ---
-    _set() {
-      local key="$1" val="$2"
-      if grep -q "^${key}=" "$f"; then
-        sed -i "s|^${key}=.*|${key}=${val}|" "$f"
-      else
-        echo "${key}=${val}" >> "$f"
-      fi
-    }
-    # --- campaign parameters ---
-    grep -q '^server=' "$f" || sed -i -e 's/^#server=foo,bar/server=demodb/' "$f"
-    _set data_buffer_size           512M
-    _set work_mem                   1G
-    _set parallelism                8
-    _set max_parallel_workers       8
-    _set stored_procedure           no
-    _set thread_worker_timeout_seconds 4
-    _set double_write_buffer_size   0
-    echo "applied campaign conf to $f"
+    dest="$CUBRID/conf/cubrid.conf"
+    src="{{justfile_directory()}}/cubrid.conf"
+    [ -f "$src" ] || { echo "ERROR: $src not found." >&2; exit 1; }
+    [ -d "$CUBRID/conf" ] || { echo "ERROR: $CUBRID/conf/ not found (build/install first)." >&2; exit 1; }
+    cp -f "$src" "$dest"
+    echo "copied $src -> $dest"
 
 # Full local refresh: stop server (if any) -> build -> conf.
 # `cubrid service stop` output is detached to avoid the known pipe-hang under captured shells.
