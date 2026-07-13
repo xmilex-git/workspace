@@ -40,8 +40,8 @@ if it were a separate copy. To add a skill, create it under `.agents/skills/` an
 matching relative symlink under `.claude/skills/`.
 
 Bundled skills: caveman, ctp-parallel, cubrid-build, cubrid-deps-check, cubrid-jira-issue-write,
-cubrid-manual, cubrid-pr-create, cubrid-pr-review, cubrid-server-control, cubrid-shell-run,
-design-an-interface, grill-me, grill-with-docs, improve-codebase-architecture, jira,
+cubrid-manual, cubrid-pr-create, cubrid-pr-review, cubrid-pr-sync, cubrid-server-control,
+cubrid-shell-run, design-an-interface, grill-me, grill-with-docs, improve-codebase-architecture, jira,
 md-to-presentation, obsidian-vault, remote-claude, remote-codex, setup-matt-pocock-skills,
 to-issues, to-prd, triage, write-a-skill.
 
