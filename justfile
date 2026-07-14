@@ -21,6 +21,8 @@
 #
 # Usage:
 #   WORKSPACE=<src> just build [debug|release] [version]   build + install to ~/<mode>/CUBRID-<version>, repoint ~/CUBRID
+#   INSTALL_PREFIX=<dir> WORKSPACE=<src> just build [mode] [ver]   install to <dir> instead; ~/CUBRID symlink is NOT repointed
+#                                                          (for isolated builds while another session uses ~/CUBRID)
 #   WORKSPACE=<src> just debug | just release              aliases (default version)
 #   just use   [debug|release] [version]                   only repoint ~/CUBRID to an already-installed dir
 #   WORKSPACE=<src> just rebuild [mode] [version]          fresh configure + build + install + repoint
@@ -61,7 +63,7 @@ configure mode="debug" version=ver: _submodules
     ws="{{workspace}}"
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
-    ( cd "$ws" && cmake --preset {{mode}} -DCMAKE_INSTALL_PREFIX="$HOME/{{mode}}/CUBRID-{{version}}" )
+    ( cd "$ws" && cmake --preset {{mode}} -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX:-$HOME/{{mode}}/CUBRID-{{version}}}" )
 
 # Build + install to ~/<mode>/CUBRID-<version>, copy locale files, then repoint ~/CUBRID -> there
 # (mirrors build_cubrid.sh + set_cubrid_ver.sh install-path + locale behavior).
@@ -72,14 +74,18 @@ build mode="debug" version=ver: _submodules
     ws="{{workspace}}"
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
-    dest="$HOME/{{mode}}/CUBRID-{{version}}"
+    dest="${INSTALL_PREFIX:-$HOME/{{mode}}/CUBRID-{{version}}}"
     mkdir -p "$dest"
     ( cd "$ws" && cmake --preset {{mode}} -DCMAKE_INSTALL_PREFIX="$dest" \
                 && cmake --build "build_preset_{{mode}}" -j {{jobs}} --target install )
     just install-locale "$dest"
-    ln -sfn "$dest" "$HOME/CUBRID"
     echo "installed {{mode}} ($ws) -> $dest"
-    echo "~/CUBRID -> $(readlink "$HOME/CUBRID")"
+    if [ -n "${INSTALL_PREFIX:-}" ]; then
+        echo "INSTALL_PREFIX set — ~/CUBRID symlink left untouched"
+    else
+        ln -sfn "$dest" "$HOME/CUBRID"
+        echo "~/CUBRID -> $(readlink "$HOME/CUBRID")"
+    fi
 
 # Convenience aliases (default version).
 debug: (build "debug")
@@ -102,14 +108,19 @@ rebuild mode="debug" version=ver: _submodules
     ws="{{workspace}}"
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
-    dest="$HOME/{{mode}}/CUBRID-{{version}}"
+    dest="${INSTALL_PREFIX:-$HOME/{{mode}}/CUBRID-{{version}}}"
     ( cd "$ws" && rm -rf "build_preset_{{mode}}" )
     mkdir -p "$dest"
     ( cd "$ws" && cmake --preset {{mode}} -DCMAKE_INSTALL_PREFIX="$dest" \
                 && cmake --build "build_preset_{{mode}}" -j {{jobs}} --target install )
     just install-locale "$dest"
-    ln -sfn "$dest" "$HOME/CUBRID"
-    echo "~/CUBRID -> $(readlink "$HOME/CUBRID")"
+    echo "installed {{mode}} ($ws) -> $dest"
+    if [ -n "${INSTALL_PREFIX:-}" ]; then
+        echo "INSTALL_PREFIX set — ~/CUBRID symlink left untouched"
+    else
+        ln -sfn "$dest" "$HOME/CUBRID"
+        echo "~/CUBRID -> $(readlink "$HOME/CUBRID")"
+    fi
 
 # Copy the prebuilt locale files into an install's lib/ & bin/ (build_cubrid.sh behavior).
 # Sourced from THIS repo's .claude/locale/ (resolved absolutely, so cwd does not matter).
