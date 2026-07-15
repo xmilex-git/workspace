@@ -75,9 +75,11 @@ build mode="debug" version=ver: _submodules
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
     dest="${INSTALL_PREFIX:-$HOME/{{mode}}/CUBRID-{{version}}}"
+    echo "install dest: $dest${INSTALL_PREFIX:+  (INSTALL_PREFIX override — ~/CUBRID untouched)}"
     mkdir -p "$dest"
     ( cd "$ws" && cmake --preset {{mode}} -DCMAKE_INSTALL_PREFIX="$dest" \
                 && cmake --build "build_preset_{{mode}}" -j {{jobs}} --target install )
+    [ -x "$dest/bin/cubrid" ] || { echo "ERROR: install did not land in $dest (bin/cubrid missing) — stale justfile copy or preset prefix override?" >&2; exit 1; }
     just install-locale "$dest"
     echo "installed {{mode}} ($ws) -> $dest"
     if [ -n "${INSTALL_PREFIX:-}" ]; then
@@ -109,10 +111,12 @@ rebuild mode="debug" version=ver: _submodules
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
     dest="${INSTALL_PREFIX:-$HOME/{{mode}}/CUBRID-{{version}}}"
+    echo "install dest: $dest${INSTALL_PREFIX:+  (INSTALL_PREFIX override — ~/CUBRID untouched)}"
     ( cd "$ws" && rm -rf "build_preset_{{mode}}" )
     mkdir -p "$dest"
     ( cd "$ws" && cmake --preset {{mode}} -DCMAKE_INSTALL_PREFIX="$dest" \
                 && cmake --build "build_preset_{{mode}}" -j {{jobs}} --target install )
+    [ -x "$dest/bin/cubrid" ] || { echo "ERROR: install did not land in $dest (bin/cubrid missing) — stale justfile copy or preset prefix override?" >&2; exit 1; }
     just install-locale "$dest"
     echo "installed {{mode}} ($ws) -> $dest"
     if [ -n "${INSTALL_PREFIX:-}" ]; then
