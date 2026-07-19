@@ -185,3 +185,26 @@ CSS_CONN_ENTRY.client_capabilities 필드, log_writer의 소비자 검사/발행
 검증(재빌드 release+debug green): 오라클/매트릭스4/OV3 9/9/R4/R7/R10/churn 전부 PASS, diag
 8케이스(emission 케이스는 장치 삭제로 폐기) FAILURES=0, 20G 새니티 174.1s. JIRA 본문·분석서·
 검증 시나리오 갱신.
+
+## 17. marker가 왜 클라이언트를 "통해서" 발급되나? xbtree_load_index에서 발급하면 안 되나?
+
+오해 정정부터: marker 발급 주체는 서버다. 발급 지점은 xlocator_force 내부(locator_sr.c:7563),
+발행 topop 안이며, parent_lsa도 그 sysop에서 캡처한다(:7558). 클라이언트는 marker를 발급하지
+않고 "이번 flush가 그 인덱스의 발행"이라는 신호+identity 힌트(descriptor)만 보태며, 서버는
+pending 등록부(빌드 시 등록, btree_load.c:1641)와 파일 descriptor의 create LSA 대조를 통과한
+경우에만 발급한다.
+
+xbtree_load_index에서 발급할 수 없는 이유(의도된 설계):
+1. marker는 발행 구간의 끝이어야 한다 — restore 청소는 marker_prev_lsa→parent_lsa 구간을
+   역재생하는데, parent_lsa는 발행 topop의 부모다. 빌드 시점엔 발행이 없어 한정할 구간이 없다.
+2. 빌드~커밋 사이는 클라이언트 주도 다중 요청 구간이라(계층 flush, 통계 등) "발행 완결" 순간을
+   아는 서버측 유일 지점이 BTID를 클래스 레코드에 묶는 그 FORCE다.
+3. 빌드 시점 발급은 "문장 실패+savepoint rollback 후 marker만 잔존" 창을 만들어 fail-safe
+   불변식(발행과 marker는 같은 sysop, marker 없는 pending은 커밋 불가)을 깨뜨린다.
+
+복잡도의 실체는 발급이 아니라 "어느 flush가 발행인지"의 배선(descriptor 코덱 + flush-deferral +
+P1-10 가드)이고, 근원은 클라이언트 주도 DDL이라는 기존 아키텍처 비용이다. commit 시점 발급은
+sysop 경계 추적을 옮길 뿐이고, 꼬리 없는 서버 자동 감지(모든 FORCE에서 property list 파싱)는
+deferral이 그대로 필요해 순감이 아니다. 실질 슬림화 여지 하나: descriptor의 constraint/owner
+이름 2필드는 서버가 FORCE 시점 클래스 레코드에서 자체 해석 가능 — 꼬리를 (BTID, create LSA,
+클래스 집합)으로 줄일 수 있다.
