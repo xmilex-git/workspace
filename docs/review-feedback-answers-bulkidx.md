@@ -173,3 +173,15 @@ wire 협상 제거 후 유일한 소비자는 marker 발행 직전의 log 소비
 복제 붕괴) 또는 무조건 미발행(기능 사장)뿐이다. version_string 비교로 대체하지 않는 이유:
 게이트는 비트 AND rel_is_log_compatible 둘 다 보며, 버전 문자열은 특정 레코드 타입 지원 여부를
 표현할 수 없다(초기의 version-string 접미사 핵을 리뷰에서 이 정식 필드로 교체).
+
+## 조치 결과 2 (커밋 7d0a58740, push 완료) — HA 게이트 전면 삭제
+
+"ha에 이걸 넘겨야 해?"의 답: 넘겨도 아무 일도 일어나지 않는다는 것이 구버전 코드로 증명됐다
+(applylogdb la_log_record_process는 rectype 분기뿐이고 REDO_DATA 케이스가 없어 default 통과,
+레코드 스킵은 forw_lsa 기반; copylogdb는 페이지 복사만; standby는 WAL 물리 재생 없음). 게이트의
+전제("비호환 소비자가 깨진다")가 거짓이므로 장치 전체를 삭제했다: capability 비트+광고 2줄,
+CSS_CONN_ENTRY.client_capabilities 필드, log_writer의 소비자 검사/발행 재검증 3함수, 요청 시점
+강등+NOTIFICATION. marker는 일반 redo 레코드로 append된다(-111줄). ADR-0004는 superseded 표기.
+검증(재빌드 release+debug green): 오라클/매트릭스4/OV3 9/9/R4/R7/R10/churn 전부 PASS, diag
+8케이스(emission 케이스는 장치 삭제로 폐기) FAILURES=0, 20G 새니티 174.1s. JIRA 본문·분석서·
+검증 시나리오 갱신.
