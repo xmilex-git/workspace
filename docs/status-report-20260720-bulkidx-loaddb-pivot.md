@@ -35,6 +35,9 @@ CBRD-27071 no-redo 병렬 인덱스 빌드의 스펙 축소 피벗(ADR-0006) 구
 - 재기동: 빌드 중 kill -9(흔적 0·재시도 성공) / 완료 후 kill -9(barrier 무해 통과·인덱스 생존).
 - 복원: full replay 거부(전용 메시지, barrier LSA 포함) / -d 시점복원 성공(인덱스 부재="문장
   미실행", 데이터 보존) / loaddb 이후 백업 full 복원 성공. checkdb 전부 0.
+- 실패 주입(loaddb 재구성): 빌드 중 client kill -9 → 서버 트랜잭션 잔존 0·카탈로그 잔재 0·
+  재시도 성공 / mid-sort 실패(temp_file_max_size_in_pages=16) → 즉시 깨끗한 오류(rc=3, 0초,
+  hang 없음)·잔존 0·재시도 성공·checkdb 0.
 - 빌드 게이트: release+debug green (커밋 A·B 각각).
 
 ## 성능 (20GB, 3.41억 행 flat key, loaddb 인덱스 로드 단계, cold 교대)
