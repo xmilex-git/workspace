@@ -1,6 +1,6 @@
 # Mixed-version clusters auto-fall back to the logged index build
 
-- Status: Accepted (boss decision 2026-07-18)
+- Status: Superseded by ADR-0006 (2026-07-20 — the loaddb-only pivot; the consumer gate itself was already deleted by 7d0a58740 after the old-consumer analysis). Was: Accepted (boss decision 2026-07-18)
 - Date: 2026-07-18
 
 ## Context

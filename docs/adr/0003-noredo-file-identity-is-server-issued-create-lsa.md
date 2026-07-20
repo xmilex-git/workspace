@@ -1,6 +1,6 @@
 # No-redo bulk-index file identity is a server-issued create LSA
 
-- Status: Accepted (boss decision 2026-07-18; supersedes the time_creation token and the client-supplied provenance descriptor)
+- Status: Superseded by ADR-0006 (2026-07-20 — the loaddb-only pivot removed the create-LSA identity machinery entirely). Was: Accepted (boss decision 2026-07-18; supersedes the time_creation token and the client-supplied provenance descriptor)
 - Date: 2026-07-18
 
 ## Context

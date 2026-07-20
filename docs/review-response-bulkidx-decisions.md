@@ -47,3 +47,33 @@ grill 세션에서 확정된 결정과 이행 대기 작업. 리뷰 15건의 사
 - 커밋 전 관문은 전역 flush로 단순화 — **별도 커밋**(성능 회귀 시 단독 revert 계약).
 - JIRA: 티켓 Summary를 "support no logging-per-page parallel index build"로 변경 + 본문/자료
   전면 재작성 포함.
+
+## ADR-0006 이행 (2026-07-20)
+
+- [x] **커밋 A `587c8236e`** — loaddb-한정 피벗 + 기계 전체 삭제(32파일 +221/−5,059).
+      merge-base 대비 잔존 17파일(+4,211/−926): 빌드 경로 + boot.h 매크로 + 서버 술어 +
+      barrier 레코드 + 복구 거부 + msgcat. client/wire/connection/locator/schema_manager/
+      execute_schema/file_manager/log_2pc/vacuum/log_writer = diff 0 감사 통과.
+- [x] **커밋 B `88f74c4a2`** — scoped barrier 삭제, 전역 flush 승격(+37/−310; page_buffer는
+      PR 7487 3-hunk만 잔존). 워커 write-through는 `pgbuf_flush_with_wal`(fixed-page flush)로
+      대체. 단독 revert 계약 유지.
+- [x] **PIT 판별 교정** — 시간 기반 stop은 완결 레코드에서만 멈추므로 redo가 차단벽을
+      물리적으로 지나간다. 거부 기준을 "조우"에서 "빌드 트랜잭션이 replay 창 안에서 완결"로
+      교정(analysis가 완결 트랜잭션을 테이블에서 제거하는 불변식 사용). -d 시점복원은 성공하고
+      undo가 인덱스 파일을 제거해 "문장 미실행 상태"가 된다.
+- [x] **운영자 메시지 교정** — `er_set(ER_GENERIC_ERROR)`가 포맷 인자를 버리던 결함 제거,
+      fatal 포맷에 안내문+barrier LSA 직접 탑재(콘솔/에러로그 양쪽 실측 확인).
+- [x] **검증 (release, 커밋 A/B 각각)** — utility/compat loaddb 발화(marker=1, 빌드 txn
+      COPYPAGE=root뿐), csql/SA 비발화, kill-9 재기동 무해 통과, full-replay 거부(메시지 노출),
+      -d 시점복원 성공(인덱스 부재·데이터 보존·checkdb 0), post-barrier 백업 full 복원 성공.
+      debug 빌드 green.
+- [x] **계측 사고 2건 규명** — 이전 세션의 LOADDB_MARKER=0은 ① diagdb 로그 덤프가 중간
+      레코드에서 조용히 죽는 upstream 결함(develop 바이너리 동일 재현, rc=254) + ② `just
+      build`가 설치본 conf를 리셋해 `parallel_sort_page_threshold` 소실 → 직렬 강등. 코드
+      결함 아님. 계수는 역방향 tail 덤프로 교정, conf는 빌드 후 재적용 절차화.
+- [x] 20G 성능(3-way: dev / 커밋 A / 커밋 B, loaddb 주도, cold 교대): dev 669.2s / A 231.6s /
+      B 196.0s — **B가 A보다 15% 빠름, B 유지 확정(revert 불요)**, develop 대비 3.41×.
+- [x] push 완료(xmilex, 7d0a58740..88f74c4a2) + JIRA 갱신 완료 — Summary
+      "Support no logging-per-page parallel index build", 본문 교체, 첨부 3종 교체(analysis/
+      verification/tc-bundle v2 — TC는 loaddb 주도로 전면 재작성·실행 검증), 코멘트 4775284.
+      최종 보고: `docs/status-report-20260720-bulkidx-loaddb-pivot.md`.
