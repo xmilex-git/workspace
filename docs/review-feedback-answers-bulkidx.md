@@ -237,3 +237,26 @@ descriptor와 대조)이라, 위 감지 문제를 풀지 못하는 한 회신만
 (a) descriptor에서 constraint/owner 이름 2필드 제거(서버가 FORCE 시점 클래스 레코드에서 해석),
 (b) 요청 플래그를 "스키마 매니저 DDL 경로" 표식 1비트로 유지·문서화, 두 가지다. 근본 단순화는
 DDL 카탈로그 갱신 자체의 서버화가 선행조건이며 이 브랜치 범위를 넘는다.
+
+## 19. marker 필요 여부는 어디서 무슨 근거로 판단하나
+
+결정(4단) -> 기록(1곳) -> 소비(5곳) 구조이고 단일 진실원천은 서버의 pending 등록부다.
+
+빌드 모드 결정: (1) 클라 부류 필터 sm_bulk_index_provenance_is_eligible(schema_manager.c:10699,
+새 BTID+heap 로드+인스턴스 존재+비온라인+서버모드) -> 요청 eligible 표시, (2) sbtree_load_index
+unpack, (3) btree_load.c:1244 load_args->no_redo = eligible_no_redo, (4) 정렬 계층 강등 2곳
+(sort_listfile 단일 프로세스 분기, sort_px_construct_index_leaf n_shards<2 ->
+bt_load_demote_to_logged): 병렬 실제 관여 빌드만 no_redo 생존.
+
+필요의 탄생: btree_load.c:1634 `if (load_args->no_redo && built_bulk_tree)` — no-redo로 실제
+완주한 경우에만, 파일 descriptor의 create LSA/class_oid/attr_id 재대조 후
+btree_bulk_pending_register(:1641)가 (tran_index, trid) 키로 등록. 이 등록이 "커밋 전 marker
+필수" 선언이다.
+
+강제 지점(btree_bulk_pending_requires_marker 조회 5곳): locator_sr.c:7299(pending 있는데
+descriptor 없는 FORCE 거부), locator_sr.c:7563/7568(정확 일치 검증 후 marker 발급+pending 소비),
+log_manager.c:5232(로컬 커밋 차단), log_2pc.c:631/785/1321(2PC prepare/commit 차단). 풀 abort는
+btree_bulk_pending_discard로 등록부 소거.
+
+복구 쪽은 등록부와 무관하게 "로그에 marker가 실제 존재하는가"만이 근거다(수집 -> (VFID, create
+LSA) 정확 일치 -> 재기동은 트랜잭션 완료 여부, restoredb는 발행 창 오염 여부로 분기).
