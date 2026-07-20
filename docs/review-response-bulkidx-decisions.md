@@ -34,3 +34,16 @@ grill 세션에서 확정된 결정과 이행 대기 작업. 리뷰 15건의 사
 - [x] 복원 가용성: churn 창은 walk 생략 + 운영자 안내(영/한), restoredb 항상 완료. no-redo는
       병렬 관여 시에만(직렬은 logged 강등, marker 미발행). 커밋 `86d581d4f` push, JIRA 본문·
       분석서·검증 시나리오 교체 완료. 근거: `docs/adr/0005-...md`.
+
+## 스펙 피벗: ADR-0006 (2026-07-20, grilling 세션 확정)
+
+- no-redo 빌드는 **CS loaddb 한정**(client type 3종: LOADDB_UTILITY + COMPAT_UNDER_11_2/11_4 —
+  compat은 구버전 unload 이관 모드), UNIQUE/PK 포함, online 제외, SA 구조 배제, 옵션 신설 없음.
+- 판정 전부 서버측(`logtb_find_client_type`) → **클라이언트·wire·connection diff 0으로 원복**.
+- marker = payload 없는 **replay 차단벽**(빌드 관문 직후 서버 단독 발급). identity·pending·
+  발행 결합·청소 walk·suppression·repair **전부 삭제**. ADR-0003/0004/0005 대체.
+- restoredb는 차단벽에서 전용 에러(영/한)로 즉시 실패(시점 복원·백업 자체 복원은 정상,
+  재기동은 무해 통과). "불완전 인덱스가 남는 상태"는 도달 불가.
+- 커밋 전 관문은 전역 flush로 단순화 — **별도 커밋**(성능 회귀 시 단독 revert 계약).
+- JIRA: 티켓 Summary를 "support no logging-per-page parallel index build"로 변경 + 본문/자료
+  전면 재작성 포함.
