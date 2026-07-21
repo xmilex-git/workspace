@@ -23,11 +23,11 @@ Create GitHub pull requests for the CUBRID project in the author's hand-written 
 ### Title
 
 ```
-[CBRD-XXXXX] Short English description
+[CBRD-XXXXX] <JIRA ticket title, verbatim>
 ```
 
 - JIRA ticket number **required**. Extract from branch name (e.g., `cbrd-26583-oos-compact` → `CBRD-26583`) or ask.
-- Title is **always English**, concise (<60 chars after the tag), imperative mood: "Fix", "Add", "Support", not "Fixed", "Adding".
+- Description = the **JIRA ticket title as-is**. Do not compose a new one. Get it via `/jira CBRD-XXXXX`; if the ticket cannot be fetched, ask the user for the ticket title.
 
 ### Body
 
