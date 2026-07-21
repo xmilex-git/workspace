@@ -51,4 +51,14 @@ For multi-step tasks, state a brief plan:
 3. [Step] → verify: [check]
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+5. Check Capabilities Before Claiming They Are Missing
+Never assert that a tool, permission, or integration is unavailable without probing the environment first.
+
+Before saying "I can't" or "no permission":
+
+Check installed CLIs and their auth state (e.g. `command -v gh`, `gh auth status`), credentials, git remotes, and SSH access.
+An authenticated CLI is a capability: GitHub comments/reviews/issues go through `gh` (logged in as xmilex-git, repo scope) — do not declare them impossible.
+If a capability is genuinely absent, say what was checked and what would enable it.
+Incident (2026-07-18): claimed "no GitHub comment permission" on a PR review while `gh` was installed and authenticated the whole time.
+
 These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
