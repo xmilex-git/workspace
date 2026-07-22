@@ -6,6 +6,7 @@
 #   - repoints the ~/CUBRID symlink to it     (so $CUBRID reflects the active build)
 #   - debug and release live in SEPARATE dirs; switch the active one with `just use <mode>`
 #     (or by building it) — no clobbering between modes.
+#   NOTE: mode "debug" is remapped to the optdebug preset — plain debug builds are retired.
 # The prebuilt locale files (this repo's .claude/locale/) are copied into EVERY build — the
 # all-locales lib is needed for CTP execution and rebuilding it via make_locale is slow.
 # No machine-local scripts (~/bin/*.sh) or CMakeUserPresets.json required.
@@ -60,28 +61,30 @@ _submodules:
 configure mode="debug" version=ver: _submodules
     #!/usr/bin/env bash
     set -eu
+    mode="{{mode}}"; if [ "$mode" = debug ]; then mode=optdebug; fi
     ws="{{workspace}}"
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
-    ( cd "$ws" && cmake --preset {{mode}} -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX:-$HOME/{{mode}}/CUBRID-{{version}}}" )
+    ( cd "$ws" && cmake --preset $mode -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX:-$HOME/$mode/CUBRID-{{version}}}" )
 
 # Build + install to ~/<mode>/CUBRID-<version>, copy locale files, then repoint ~/CUBRID -> there
 # (mirrors build_cubrid.sh + set_cubrid_ver.sh install-path + locale behavior).
 build mode="debug" version=ver: _submodules
     #!/usr/bin/env bash
     set -eu
+    mode="{{mode}}"; if [ "$mode" = debug ]; then mode=optdebug; fi
     [ -n "${HOME:-}" ] || { echo "ERROR: \$HOME not set." >&2; exit 1; }
     ws="{{workspace}}"
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
-    dest="${INSTALL_PREFIX:-$HOME/{{mode}}/CUBRID-{{version}}}"
+    dest="${INSTALL_PREFIX:-$HOME/$mode/CUBRID-{{version}}}"
     echo "install dest: $dest${INSTALL_PREFIX:+  (INSTALL_PREFIX override — ~/CUBRID untouched)}"
     mkdir -p "$dest"
-    ( cd "$ws" && cmake --preset {{mode}} -DCMAKE_INSTALL_PREFIX="$dest" \
-                && cmake --build "build_preset_{{mode}}" -j {{jobs}} --target install )
+    ( cd "$ws" && cmake --preset $mode -DCMAKE_INSTALL_PREFIX="$dest" \
+                && cmake --build "build_preset_$mode" -j {{jobs}} --target install )
     [ -x "$dest/bin/cubrid" ] || { echo "ERROR: install did not land in $dest (bin/cubrid missing) — stale justfile copy or preset prefix override?" >&2; exit 1; }
     just install-locale "$dest"
-    echo "installed {{mode}} ($ws) -> $dest"
+    echo "installed $mode ($ws) -> $dest"
     if [ -n "${INSTALL_PREFIX:-}" ]; then
         echo "INSTALL_PREFIX set — ~/CUBRID symlink left untouched"
     else
@@ -99,7 +102,8 @@ optdebug: (build "optdebug")
 use mode="debug" version=ver:
     #!/usr/bin/env bash
     set -eu
-    dest="$HOME/{{mode}}/CUBRID-{{version}}"
+    mode="{{mode}}"; if [ "$mode" = debug ]; then mode=optdebug; fi
+    dest="$HOME/$mode/CUBRID-{{version}}"
     [ -d "$dest" ] || { echo "ERROR: not installed: $dest (build it first)" >&2; exit 1; }
     ln -sfn "$dest" "$HOME/CUBRID"
     echo "~/CUBRID -> $(readlink "$HOME/CUBRID")"
@@ -108,18 +112,19 @@ use mode="debug" version=ver:
 rebuild mode="debug" version=ver: _submodules
     #!/usr/bin/env bash
     set -eu
+    mode="{{mode}}"; if [ "$mode" = debug ]; then mode=optdebug; fi
     ws="{{workspace}}"
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
-    dest="${INSTALL_PREFIX:-$HOME/{{mode}}/CUBRID-{{version}}}"
+    dest="${INSTALL_PREFIX:-$HOME/$mode/CUBRID-{{version}}}"
     echo "install dest: $dest${INSTALL_PREFIX:+  (INSTALL_PREFIX override — ~/CUBRID untouched)}"
-    ( cd "$ws" && rm -rf "build_preset_{{mode}}" )
+    ( cd "$ws" && rm -rf "build_preset_$mode" )
     mkdir -p "$dest"
-    ( cd "$ws" && cmake --preset {{mode}} -DCMAKE_INSTALL_PREFIX="$dest" \
-                && cmake --build "build_preset_{{mode}}" -j {{jobs}} --target install )
+    ( cd "$ws" && cmake --preset $mode -DCMAKE_INSTALL_PREFIX="$dest" \
+                && cmake --build "build_preset_$mode" -j {{jobs}} --target install )
     [ -x "$dest/bin/cubrid" ] || { echo "ERROR: install did not land in $dest (bin/cubrid missing) — stale justfile copy or preset prefix override?" >&2; exit 1; }
     just install-locale "$dest"
-    echo "installed {{mode}} ($ws) -> $dest"
+    echo "installed $mode ($ws) -> $dest"
     if [ -n "${INSTALL_PREFIX:-}" ]; then
         echo "INSTALL_PREFIX set — ~/CUBRID symlink left untouched"
     else
@@ -168,10 +173,11 @@ deploy mode="debug" version=ver:
 ctest mode="debug":
     #!/usr/bin/env bash
     set -eu
+    mode="{{mode}}"; if [ "$mode" = debug ]; then mode=optdebug; fi
     ws="{{workspace}}"
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
     cd "$ws"
-    ctest --test-dir "build_preset_{{mode}}" --output-on-failure
+    ctest --test-dir "build_preset_$mode" --output-on-failure
 
 # Run one or a limited range of CTP shell tests against the local build.
 # Powers the `cubrid-shell-run` skill. CTP's stock shell_ci.conf runs *everything*

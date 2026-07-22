@@ -30,7 +30,7 @@
 ### 실수 6: 검증 수단의 한계를 모른 채 "clean"을 선언한다
 - release 빌드는 `er_log_debug`가 no-op → release 로그로 신경로 발동 실증 불가(debug 로그 또는 카운터로).
 - release는 NDEBUG라 heap corruption이 silent SIGSEGV + 0-byte coredump → gdb attach batch로 스택 확보가 정석.
-- resource_tracker(alloc/pgbuf) 누수 검출은 **CS(server) 모드 per-request에서만** 동작. SA(`csql -S`) selftest·bootless unit test는 누수를 못 잡는다 — selftest PASS인데 라이브 쿼리가 서버 크래시한 실사례. **라이브 검증은 반드시 CS 모드 debug 서버로.**
+- resource_tracker(alloc/pgbuf) 누수 검출은 **CS(server) 모드 per-request에서만** 동작. SA(`csql -S`) selftest·bootless unit test는 누수를 못 잡는다 — selftest PASS인데 라이브 쿼리가 서버 크래시한 실사례. **라이브 검증은 반드시 CS 모드 optdebug 서버로.**
 - 64bit libasan을 사용할 수 없는 환경에서는 ASAN 게이트를 **valgrind memcheck**(`--leak-check=full --track-origins=yes`)로 대체한다.
 - 디버거 line-bp는 편집으로 라인이 밀리면 죽은 줄을 짚을 수 있다. 함수-bp 또는 **카운터(statdump)로 하네스-단언 가능하게** 만드는 편이 안전하다.
 
@@ -53,13 +53,13 @@
 ## 3. 환경·운영 — 착수 함정 목록
 
 1. **stale 바이너리**: 검증 proof에 `cubrid_rel`(빌드 sha/timestamp) 기록. install sha == HEAD sha 확인.
-2. **빌드는 `just build release|debug`만** (`WORKSPACE` 명시). raw cmake는 설치와 symlink 갱신을 누락하므로 사용하지 않는다. **debug + release 둘 다 풀빌드 green**이 기본 게이트다. 캠페인/브랜치 빌드는 공용 기본 설치본을 덮어쓰지 않도록 반드시 `just build <mode> <전용버전명>`으로 실행한다.
+2. **빌드는 `just build release|debug`만** (`WORKSPACE` 명시). raw cmake는 설치와 symlink 갱신을 누락하므로 사용하지 않는다. **(2026-07-22) plain debug 빌드 금지 — justfile이 mode `debug`를 `optdebug` preset으로 리맵한다(설치처 `~/optdebug/`). assert/FI 검증도 optdebug로 수행한다.** **optdebug + release 둘 다 풀빌드 green**이 기본 게이트다. 캠페인/브랜치 빌드는 공용 기본 설치본을 덮어쓰지 않도록 반드시 `just build <mode> <전용버전명>`으로 실행한다.
 3. **재빌드·재설치가 conf를 리셋한다** — `stored_procedure`, `parallelism`, `max_parallel_workers`, `data_buffer_size` 등 필요한 설정을 빌드 후 다시 확인하고 적용한다.
 4. **서버 제어는 `cubrid-server-ctl.sh` 래퍼만**. raw `cubrid server start|stop`은 파이프 hang. skill:cubrid-server-control 활용.
 5. **`cubrid server stop <db>`는 master를 안 내린다** — 재빌드 바이너리가 포트 바인드 실패하면 stray `cub_master`부터 정리.
 6. **kill-9된 서버는 master가 자동 재기동할 수 있다** — 재기동 후 프로세스와 환경이 검증 전제와 같은지 다시 확인한다.
 7. **기능 env는 서버 프로세스 기준** — csql 클라이언트에만 설정한 env는 서버 동작을 바꾸지 않는다. 래퍼 호출 시 서버에 전달한다.
-8. **debug 빌드에서 대형 DB 금지** — 대형 검증과 성능 측정은 release 빌드로 수행하고, debug는 FI·assert 검출과 소형 스모크에 사용한다.
+8. **optdebug 빌드에서 대형 DB 금지** — 대형 검증과 성능 측정은 release 빌드로 수행하고, optdebug는 FI·assert 검출과 소형 스모크에 사용한다.
 9. 서브모듈(cubrid-cci)·untracked 결과 디렉토리는 건드리지 않는다. 작업 종료 시 **트리 원상복구 + 데몬(서버/master) 정리**.
 10. **대화형 CUBRID 유틸리티를 stdin 없이 자동화에서 실행 금지** — EOF 입력으로 프롬프트가 반복되면 로그가 무한히 커져 디스크를 고갈시킬 수 있다. 응답을 명시적으로 전달하거나 비대화형 플래그를 사용하고, 자동화 로그에는 크기 상한과 디스크 여유 점검을 둔다. 전량 덤프보다 statdump 카운터·파일 크기 delta 같은 유계(bounded) 증거를 우선한다.
 11. **공유 디스크 주의** — 대형 evidence, backup, DB는 생성 전에 예상 크기를 계산하고 상한을 둔다.
@@ -91,8 +91,8 @@
 
 ## 6. 최소 검증 체크리스트 (신규 경로/수정 착지 시)
 
-- [ ] debug + release 풀빌드 green
+- [ ] optdebug + release 풀빌드 green
 - [ ] fail-before-fix 채증 → 수정 후 동일 방법 PASS
-- [ ] CS 모드 debug 서버에서 라이브 실행(assert/crash/tracker leak 0)
+- [ ] CS 모드 optdebug 서버에서 라이브 실행(assert/crash/tracker leak 0)
 - [ ] orphan-zero(정상/비정상 종료 + kill-9 후 임시파일 잔존 0)
 - [ ] 트리 원상복구 + 데몬 정리 + proof에 `cubrid_rel` 기록
