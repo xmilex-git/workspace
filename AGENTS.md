@@ -61,8 +61,9 @@ on an unattended remote run. The skills that hard-require `$WORKSPACE` are exact
 
 - **obsidian-vault** — operates on `"$WORKSPACE"/.claude/vault/`.
 - **cubrid-server-control** — starts/stops the CUBRID server living in `$WORKSPACE`.
-- **cubrid-shell-run** — writes its scratch conf under `"$WORKSPACE/.claude/scratch/"`.
 
+`cubrid-shell-run` stores throwaway CTP conf and exclusion files in this tooling repository's
+`.git_ignored_dir/scratch/`; it requires `WORKSPACE` only for source builds such as `just optdebug`.
 `cubrid-deps-check` also takes the workspace as its first argument (it diagnoses a checkout's
 build/test dependencies). The other skills are workspace-agnostic or operate on fixed
 infrastructure and take no `$WORKSPACE`.
@@ -76,8 +77,7 @@ own fix suggestions — it only prints them.
 ## House rules
 
 - **Never write scratch to `/tmp` or `$TMPDIR`** (the host's `/tmp` is tmpfs-backed and OOMs).
-  Use the workspace's own `.claude/scratch/` for workspace-scoped temp files, or `~/.claude/scratch/`
-  otherwise. See `.agents/AGENTS.md` / `.claude/CLAUDE.md` for the full policy.
+  Use this tooling repository's `.git_ignored_dir/scratch/` for CTP and other local tooling artifacts. See `.agents/AGENTS.md` / `.claude/CLAUDE.md` for the full policy.
 - The locale `*.so` artifacts and `.git_ignored_dir/` are git-ignored and must never be committed.
 - Read `.agents/AGENTS.md` (and the longer `.claude/CLAUDE.md`) before making code changes —
   they encode the behavioral guidelines this repo's owner expects.

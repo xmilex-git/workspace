@@ -15,8 +15,8 @@
 # tooling repo, NOT inside a CUBRID checkout, so there is NO cwd default. Pass it explicitly:
 #   WORKSPACE=/path/to/cubrid just build           (env var)
 #   just workspace=/path/to/cubrid build           (just variable)
-# Source-touching recipes (build/configure/rebuild/ctest/deploy) operate on $WORKSPACE;
-# shell-debug also needs it (its scratch conf lives in $WORKSPACE/.git_ignored_dir/scratch).
+# Source-touching recipes (build/configure/rebuild/ctest/deploy) operate on $WORKSPACE.
+# Shell-debug scratch files stay in this tooling repo's .git_ignored_dir/scratch/.
 # Run `just` from THIS repo's root (so it finds this justfile and the bundled locale files).
 #
 # Usage:
@@ -30,7 +30,7 @@
 #   just install-locale [dest]                             copy prebuilt locale files (lib+bin); auto-run by build/rebuild
 #   WORKSPACE=<src> just deploy [mode] [version]           stop server (if any) -> build -> conf
 #   WORKSPACE=<src> just ctest [mode]                      ctest against the build tree
-#   WORKSPACE=<src> just shell-debug <TEST_DIR>            run one CTP shell test (or subtree) via ~/cubrid-testtools/CTP
+#   just shell-debug <TEST_DIR>                            run one CTP shell test (or subtree) via ~/cubrid-testtools/CTP
 #
 # Campaign: debug install for D1/D2/D3, release install for D4 — switch via `just use <mode>`.
 
@@ -92,6 +92,7 @@ build mode="debug" version=ver: _submodules
 # Convenience aliases (default version).
 debug: (build "debug")
 release: (build "release")
+optdebug: (build "optdebug")
 
 # Only repoint ~/CUBRID to an already-installed versioned dir (set_cubrid_ver.sh equivalent).
 # Operates purely on the install tree under $HOME — no CUBRID source needed.
@@ -179,8 +180,8 @@ ctest mode="debug":
 # CTP runs against the install on PATH (not the build tree) — rebuild/reinstall first
 # if you changed src/.
 #
-# The rewritten conf goes under $WORKSPACE/.git_ignored_dir/scratch (NOT /tmp — host /tmp is tmpfs);
-# shell-debug therefore also requires WORKSPACE (the CUBRID checkout).
+# Throwaway CTP files always live in this tooling workspace's
+# .git_ignored_dir/scratch/ (NOT /tmp and not the target engine checkout).
 #
 # ARG SHAPE
 #   TEST_DIR must be the directory that *contains* `cases/<name>.sh`, NOT the .sh itself.
@@ -191,16 +192,14 @@ ctest mode="debug":
 shell-debug TEST_DIR:
     #!/usr/bin/env bash
     set -euo pipefail
-    ws="{{workspace}}"
-    [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID checkout whose .git_ignored_dir/scratch/ holds the temp conf (e.g. 'WORKSPACE=/path/to/cubrid just shell-debug <TEST_DIR>')." >&2; exit 1; }
     # CTP requires these in the environment (vimkim's .envrc exports the same two).
     # `just` recipes run in a non-login shell that does not source the profile, so
     # set them here to keep the recipe self-contained.
-    export CTP_HOME=~/cubrid-testtools/CTP
-    export init_path="$CTP_HOME/shell/init_path"
+    export CTP_HOME="${CTP_HOME:-$HOME/cubrid-testtools/CTP}"
+    export init_path="${init_path:-$CTP_HOME/shell/init_path}"
     SRC="$CTP_HOME/conf/shell_ci.conf"
     [ -f "$SRC" ] || { echo "ERROR: CTP conf not found: $SRC (is CTP installed?)" >&2; exit 1; }
-    SCRATCH="$ws/.git_ignored_dir/scratch"
+    SCRATCH="{{justfile_directory()}}/.git_ignored_dir/scratch"
     mkdir -p "$SCRATCH"
     CONF=$(mktemp "$SCRATCH/shell_single.XXXXXX.conf")
     cp "$SRC" "$CONF"
@@ -216,6 +215,114 @@ shell-debug TEST_DIR:
 
 # Semantic alias for shell-debug — signals "run a whole bucket" at the call site.
 shell-debug-many SUBTREE: (shell-debug SUBTREE)
+
+# Run explicit, non-contiguous test directories in one CTP session.
+# Every argument must be a leaf test directory containing cases/<dirname>.sh,
+# and all directories must belong to the same shell testcase checkout.
+shell-debug-selected +TEST_DIRS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export CTP_HOME="${CTP_HOME:-$HOME/cubrid-testtools/CTP}"
+    export init_path="${init_path:-$CTP_HOME/shell/init_path}"
+    SRC="$CTP_HOME/conf/shell_ci.conf"
+    [ -f "$SRC" ] || { echo "ERROR: CTP conf not found: $SRC (is CTP installed?)" >&2; exit 1; }
+    dirs=( {{TEST_DIRS}} )
+    first="${dirs[0]}"
+    first="$(realpath "$first")"
+    tc_root="$(git -C "$first" rev-parse --show-toplevel)"
+    shell_root="$tc_root/shell"
+    selected=()
+    for dir in "${dirs[@]}"; do
+        dir="$(realpath "$dir")"
+        [ "$(git -C "$dir" rev-parse --show-toplevel)" = "$tc_root" ] || {
+            echo "ERROR: all test directories must belong to the same testcase checkout." >&2
+            exit 1
+        }
+        name="$(basename "$dir")"
+        [ -f "$dir/cases/$name.sh" ] || {
+            echo "ERROR: expected test script: $dir/cases/$name.sh" >&2
+            exit 1
+        }
+        selected+=("$dir")
+    done
+    SCRATCH="{{justfile_directory()}}/.git_ignored_dir/scratch"
+    mkdir -p "$SCRATCH"
+    EXCLUDES=$(mktemp "$SCRATCH/shell_selected_excludes.XXXXXX.conf")
+    python3 - "$shell_root" "$EXCLUDES" "${selected[@]}" <<'PY'
+    import os
+    import sys
+
+    shell_root, output, *selected = sys.argv[1:]
+    selected = {os.path.realpath(path) for path in selected}
+    home = os.path.realpath(os.environ.get("CTP_EXEC_HOME", os.path.expanduser("~")))
+    excluded = []
+    for root, dirs, files in os.walk(shell_root):
+        if os.path.basename(root) != "cases":
+            continue
+        test_dir = os.path.realpath(os.path.dirname(root))
+        test_name = os.path.basename(test_dir) + ".sh"
+        if test_name in files and test_dir not in selected:
+            excluded.append(os.path.relpath(test_dir, home))
+    with open(output, "w", encoding="utf-8") as stream:
+        for path in sorted(excluded):
+            stream.write(path + "\n")
+    PY
+    CONF=$(mktemp "$SCRATCH/shell_selected.XXXXXX.conf")
+    cp "$SRC" "$CONF"
+    sed -i "s|^scenario=.*|scenario=$shell_root|" "$CONF"
+    sed -i "s|^testcase_update_yn=.*|testcase_update_yn=false|" "$CONF"
+    sed -i "s|^testcase_exclude_from_file=.*|testcase_exclude_from_file=$EXCLUDES|" "$CONF"
+    echo "[shell-debug-selected] scenario=$shell_root"
+    echo "[shell-debug-selected] selected=${#selected[@]}"
+    printf '[shell-debug-selected] test=%s\n' "${selected[@]}"
+    echo "[shell-debug-selected] conf=$CONF"
+    script -qefc "$CTP_HOME/bin/ctp.sh shell -c $CONF" /dev/null
+
+# Run selected tests against the local OptDebug install used by CircleCI shell jobs.
+# Build it first with: WORKSPACE=<src> just optdebug
+shell-debug-optdebug +TEST_DIRS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source_workspace="{{workspace}}"
+    install="${OPTDEBUG_CUBRID:-$HOME/optdebug/CUBRID-{{ver}}}"
+    [ -x "$install/bin/cubrid_rel" ] || {
+        echo "ERROR: OptDebug install not found: $install" >&2
+        echo "Build it with: WORKSPACE=${source_workspace:-<cubrid-src>} just optdebug" >&2
+        exit 1
+    }
+    install="$(realpath "$install")"
+    real_home="$HOME"
+    export CUBRID="$install"
+    export PATH="$CUBRID/bin:$PATH"
+    export LD_LIBRARY_PATH="$CUBRID/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export SHLIB_PATH="$CUBRID/lib${SHLIB_PATH:+:$SHLIB_PATH}"
+    export LIBPATH="$CUBRID/lib${LIBPATH:+:$LIBPATH}"
+    export CTP_HOME="${CTP_HOME:-$real_home/cubrid-testtools/CTP}"
+    export init_path="${init_path:-$CTP_HOME/shell/init_path}"
+    version="$("$CUBRID/bin/cubrid_rel")"
+    printf '%s\n' "$version"
+    [[ "${version,,}" == *"optdebug build"* ]] || {
+        echo "ERROR: $install is not an OptDebug install." >&2
+        exit 1
+    }
+    scratch="{{justfile_directory()}}/.git_ignored_dir/scratch"
+    mkdir -p "$scratch"
+    runtime_home=$(mktemp -d "$scratch/ctp_optdebug_home.XXXXXX")
+    trap 'rm -rf "$runtime_home"' EXIT
+    profile="$runtime_home/.bash_profile"
+    {
+        printf 'export HOME=%q\n' "$real_home"
+        printf 'export CUBRID=%q\n' "$CUBRID"
+        printf 'export PATH=%q\n' "$PATH"
+        printf 'export LD_LIBRARY_PATH=%q\n' "$LD_LIBRARY_PATH"
+        printf 'export SHLIB_PATH=%q\n' "$SHLIB_PATH"
+        printf 'export LIBPATH=%q\n' "$LIBPATH"
+        printf 'export CTP_HOME=%q\n' "$CTP_HOME"
+        printf 'export init_path=%q\n' "$init_path"
+    } > "$profile"
+    export CTP_EXEC_HOME="$real_home"
+    export HOME="$runtime_home"
+    just shell-debug-selected {{TEST_DIRS}}
 
 # Interactive picker against the UNMODIFIED conf (testcase_update_yn=true still git-pulls).
 shell-debug-interactive:
