@@ -1,8 +1,9 @@
 # PR #7504 최소 브랜치 성능 게이트 재집행 (2026-07-25, 확정 — 재게이트 PASS · 로컬 merge 완료)
 
 **결론: 07-24 게이트 FAIL은 검정력 부재로 무효, 동일 기준 16쌍 재게이트는 PASS(paired median
-−0.19%, CI 상한 +2.28%), 작업량은 head/base = 1.0000. 계약대로 로컬 r304 WIP에 `--ff-only`
-merge 완료(3ffeab793 → 12de99b47), push 없음.**
+−0.19%, CI 상한 +2.28%), 작업량은 head/base = 1.0000. 계약대로 r304 WIP에 `--ff-only` merge하고,
+주석/스타일 정리 후 `xmilex/bulkidx/noredo-parallel-r304-wip`에 `3ffeab793..9dd0f4f25`
+fast-forward push 완료(2026-07-26).**
 
 이슈 #164 "남은 것 1·2"(성능 회귀 커밋 단위 귀속 / merge 재결정)의 후속. 원격(192.168.6.33)
 귀속 캠페인은 안전계약 위반으로 중단된 상태이므로 **로컬 자산만으로** 판정했다. 새 빌드·새 픽스처·
@@ -140,15 +141,45 @@ ABBA 순서균형 valid 4쌍, 전 런 rc=0 · idx_exists=1):
 | `cub_server` 실기록 MB | 114,144.5 | 114,232.0 | 1.0008 |
 | flush 사이클 | 125,443 | 126,783 | 1.0107 (배칭 차이 — 페이지 수는 동일) |
 
-## 6. 결정 — **merge 수행** (로컬 `--ff-only`, push 없음)
+## 6. 결정 — merge 수행 후 **2026-07-26 스타일 정리 + push 완료**
 
-사전 고정 계약("성능 게이트 PASS일 때만 로컬 r304 WIP에 `--ff-only` merge, push 금지")대로 실행했다.
+사전 고정 계약("성능 게이트 PASS일 때만 r304 WIP에 `--ff-only` merge")대로 07-25에 로컬 merge하고,
+07-26에 코드 스타일·주석 정리를 거쳐 원격에 push했다.
 
-- `bulkidx/noredo-parallel-r304-wip`: `3ffeab793` → **`12de99b47`** (fast-forward, 9파일 +154/-37)
-- 원격 `xmilex/bulkidx/noredo-parallel-r304-wip`은 `3ffeab793` 그대로 — **push 없음**
-- 백업 ref 전부 생존: `pr-7504-minimal`(12de99b47), `pr-7504-redesign`(68945f328),
-  `backup/pr-7504-redesign-final`, `backup/pr-7504-redesign-20260724`, 태그 `backup-pr7504-pre-reorg`
-- 되돌리려면 `git -C ~/dev/worktrees/r304-bulkidx reset --hard 3ffeab793` 한 줄로 충분하다.
+### 6.1 push 전 스타일 정리 (주석/문구만, 동작 불변)
+
+외부 독자에게 이 변경은 **CBRD-27071 하나**여야 하므로, 내부 문서·프로세스 흔적을 걷어내고 장황한
+주석을 줄였다. 커밋 4개를 rebase로 다시 쓴 결과 **9파일 +130/-36** (기존 +154/-37).
+
+| 파일 | 정리 내용 |
+|---|---|
+| `log_recovery.c` | `see the CBRD-27071 ADR` 문구 삭제(리포에 없는 문서 참조), 파일-정적 플래그·함수 헤더 주석 4줄→2줄, `log_recovery ()` 종료 직전 무의미 공백줄 제거 |
+| `external_sort.c` | 6줄 주석→3줄, cleanup 경로의 **죽은 대입**(`file_sysop_open = false;` 직후 return) 삭제 |
+| `btree_load.c` | durability barrier 설명 9줄→4줄, vacuum 직접 append 주석 4줄→3줄 |
+| `px_parallel.cpp` / `network_interface_sr.cpp` | 각각 4줄→2줄, 3줄→2줄 |
+| 커밋 메시지 | `Review blocking fixes for…` → `Two fixes for…` (프로세스 언급 제거). 나머지 3개는 그대로 |
+
+`CBRD-27071` 태그 자체는 코드베이스 관용(주석 내 `CBRD-xxxxx` 71곳)이라 유지했다.
+검사: 추가 라인 중 120열 초과 0, 트레일링 공백 0, 내부 용어(campaign/evidence/ADR/workspace/issue) 0.
+
+### 6.2 게이트 바이너리와의 차이 및 재검증
+
+`git diff 12de99b47 9dd0f4f25`의 **비주석 변경은 죽은 대입 1줄 삭제뿐**이다. 그래도 재검증했다.
+
+- release 풀빌드 rc=0 · optdebug 풀빌드 rc=0 (`11.5.0.2416-9dd0f4f`), 변경 파일발 **신규 경고 0**
+  (남은 9건은 전부 무관 파일의 기존 `-Wmaybe-uninitialized`)
+- optdebug `od-smoke` 3레인 PASS (병렬 10k / 함수 인덱스 10k / 직렬 강등 100)
+- release TC 3종 PASS: `tc-replay-barrier`(restoredb 거부 경로 = 재작성한 복구 함수 직접 커버),
+  `tc-loaddb-basic`, `tc-crash-restart`
+
+### 6.3 push 결과
+
+- 재작성 SHA: `3ffeab793` + `8e31d4879` → `c975214d0` → `4196e11d0` → **`9dd0f4f25`**
+  (구 `c448b3a2e`/`278a2d283`/`dc22f2228`/`12de99b47`)
+- `xmilex/bulkidx/noredo-parallel-r304-wip`: `3ffeab793..9dd0f4f25` **fast-forward push 완료**
+  (upstream `CUBRID/cubrid`에는 push하지 않음 — remote push URL이 차단되어 있다)
+- 백업 ref 전부 생존: `pr-7504-redesign`(68945f328), `backup/pr-7504-redesign-final`,
+  `backup/pr-7504-redesign-20260724`, 태그 `backup-pr7504-pre-reorg`. 구 tip `12de99b47`도 로컬 유지.
 
 근거 3중:
 1. **07-24 FAIL은 무효**(§1) — 검정력 없음. merge 보류의 근거였을 뿐 회귀 실재의 근거가 아니다.
@@ -159,6 +190,6 @@ ABBA 순서균형 valid 4쌍, 전 런 rc=0 · idx_exists=1):
 
 - **1. 커밋 단위 귀속**: 귀속 대상 효과가 존재하지 않는다(§1·§2·§5). **불필요로 종결.**
   원격(192.168.6.33) 캠페인은 재개하지 않았고 안전계약 재합의도 불필요해졌다.
-- **2. merge 재결정**: 완료(§6). 남은 것은 사용자 판단의 push/PR 갱신뿐.
+- **2. merge 재결정**: 완료 — 로컬 ff-only merge 후 스타일 정리, 원격 push까지 완료(§6).
 - **3. 원격 잔재 정리**: 미착수(사용자 지시 대기 — `perf20gattr`의 t10g, `~/bkx-attr/*`).
 - **4. JIRA 첨부**: 미착수(수동). 번들은 최소 브랜치 기준 개정 검토 필요.
