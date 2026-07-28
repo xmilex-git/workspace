@@ -1,0 +1,17 @@
+--- /home/cubrid/dev/workspace/tpch-sspq/queries/q11-cubrid.sql	2026-07-28 17:35:50.952613396 +0900
++++ /home/cubrid/dev/workspace/tpch-sspq/queries/q11-pg.sql	2026-07-28 17:35:50.954613396 +0900
+@@ -1,7 +1,7 @@
+ -- TPC-H Query 11: Important Stock Identification
+ select
+ 	ps_partkey,
+-	sum(ps_supplycost * ps_availqty) as [value]
++	sum(ps_supplycost * ps_availqty) as "value"
+ from
+ 	partsupp,
+ 	supplier,
+@@ -25,4 +25,4 @@
+ 				and n_name = 'GERMANY'
+ 		)
+ order by
+-	[value] desc;
++	"value" desc;

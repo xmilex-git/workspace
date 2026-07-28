@@ -1,0 +1,11 @@
+--- /home/cubrid/dev/workspace/tpch-sspq/queries/q12-cubrid.sql	2026-07-28 17:35:50.961613396 +0900
++++ /home/cubrid/dev/workspace/tpch-sspq/queries/q12-pg.sql	2026-07-28 17:35:50.963613395 +0900
+@@ -22,7 +22,7 @@
+ 	and l_commitdate < l_receiptdate
+ 	and l_shipdate < l_commitdate
+ 	and l_receiptdate >= date '1994-01-01'
+-	and l_receiptdate < DATE_ADD(DATE '1994-01-01', INTERVAL 1 YEAR)
++	and l_receiptdate < date '1994-01-01' + interval '1' year
+ group by
+ 	l_shipmode
+ order by

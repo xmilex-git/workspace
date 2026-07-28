@@ -1,0 +1,10 @@
+--- /home/cubrid/dev/workspace/tpch-sspq/queries/q15_create_view-cubrid.sql	2026-07-28 17:35:51.062613392 +0900
++++ /home/cubrid/dev/workspace/tpch-sspq/queries/q15_create_view-pg.sql	2026-07-28 17:35:51.064613392 +0900
+@@ -7,6 +7,6 @@
+ 		lineitem
+ 	where
+ 		l_shipdate >= date '1996-01-01'
+-		and l_shipdate < DATE_ADD(DATE '1996-01-01', INTERVAL 3 MONTH)
++		and l_shipdate < date '1996-01-01' + interval '3' month
+ 	group by
+ 		l_suppkey;

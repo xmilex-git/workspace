@@ -115,7 +115,9 @@ cold 진단 트랙(ADR 0006)은 OS page cache를 버려야 하고, `/proc/sys/vm
 ## 5. 남은 pending
 
 - TPC-H kit 미확보 — `dbgen`/`qgen` SHA-256과 spec/kit 버전은 **여전히 확정 불가**(ADR 0004에서 한계 수용).
-- PG 데이터 적재와 PG용 스키마·쿼리 파생 — 얇은 경로 G1이 양쪽 22개 쿼리를 요구하므로 **G1의 선행 조건**이다.
+- ~~PG 데이터 적재와 PG용 스키마·쿼리 파생~~ → **해결**(2026-07-28, `docs/report-g1-assets-20260728.md`):
+  양쪽 8테이블 적재(합계 86,586,077행) + q1~q22 양쪽 방언 확보. 측정 DB는 CUBRID `tpch_sf10_q1`
+  (`.git_ignored_dir/tpch-sspq/cubrid-databases`, 20G) ↔ PG `tpch_sspq` (port 5442, PGDATA 20G).
 - 양측 파라미터 공정 대응 규칙(`data_buffer_size`/`sort_buffer_size` ↔ `shared_buffers`/`work_mem`).
 - ~~cold/warm 캐시 레짐 고정 방식~~ → **해결**(ADR 0006): WARM 주 레짐(세트마다 warmup 1회 미집계,
   AB/BA 엔진 전환 직후 재수행, 물리 read 카운터로 warm 검증, 실패 런 무효), cold는 I/O 진단 트랙

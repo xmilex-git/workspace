@@ -1,0 +1,8 @@
+--- /home/cubrid/dev/workspace/tpch-sspq/queries/q14-cubrid.sql	2026-07-28 17:35:50.979613395 +0900
++++ /home/cubrid/dev/workspace/tpch-sspq/queries/q14-pg.sql	2026-07-28 17:35:50.982613395 +0900
+@@ -11,4 +11,4 @@
+ where
+ 	l_partkey = p_partkey
+ 	and l_shipdate >= date '1995-09-01'
+-	and l_shipdate < DATE_ADD(DATE '1995-09-01', INTERVAL 1 MONTH);
++	and l_shipdate < date '1995-09-01' + interval '1' month;

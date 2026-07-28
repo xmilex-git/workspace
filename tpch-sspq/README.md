@@ -9,8 +9,8 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 
 ## 상태
 
-**Q1 파일럿 통과 / G1 미시작.** 양쪽 엔진에서 Q1을 실제로 돌려 첫 wall time 실측치를 얻었고
-측정 경로가 끝-끝으로 동작함을 확인했다.
+**G1 선행 조건 완료 / G1 미시작.** 양쪽 엔진에 8개 테이블이 모두 적재됐고 q1~q22가 양쪽
+방언으로 준비됐다. 측정은 아직 시작하지 않았다.
 
 - 인벤토리 조사 완료(2026-07-28, 읽기 전용) → `ENVIRONMENT.md`.
 - CUBRID `f30f1c260` release 빌드 설치 완료 — `~/tpch-sspq-install/cubrid-f30f1c260`,
@@ -23,8 +23,13 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   양쪽 목표 DOP 6 실제 적용 확인(CUBRID `parallel workers: 6` / PG `Workers Launched: 6`).
 - **`tpch_sf10_v2`는 pin 빌드로 열리지 않는다** — CBRD-26956(`a9fca9002`)의 CHAR/VARCHAR
   저장 포맷 revert 때문이다. DB를 은퇴시키고 pin 빌드로 재적재한다. (ADR 0007)
-- 남은 것: **G1(R0 재현)이 다음 행동**이다. 선행 조건은 이제 **양쪽 8개 테이블 적재**
-  (PG 신규 + CUBRID 재적재)다. 아래 pending 중 게이트 진행을 막는 항목만 그 전에 닫는다.
+- **G1 자산 완성(2026-07-28)** → `docs/report-g1-assets-20260728.md`. 나머지 7테이블을
+  양쪽에 적재(8테이블 행수 3자 일치, 합계 86,586,077), 인덱스는 양쪽 PK 8개만(FK 0),
+  통계 양쪽 갱신, q2~q22 PG 방언 파생(11파일 11줄 변경, 22개 전부 `EXPLAIN` 통과).
+  자료형 파리티는 `schema/README-type-parity.md`, 쿼리 방언은
+  `queries/README-q2-q22-dialect.md`.
+- 남은 것: **G1(R0 재현)이 다음 행동**이고 선행 조건은 모두 닫혔다. 아래 pending 중
+  게이트 진행을 막는 항목만 그 전에 닫는다.
 
 ## 확정 결정
 
@@ -104,9 +109,11 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 - 측정 격리 — `taskset`+`numactl` 바인딩으로 확정. Q1 파일럿에서 `taskset -c 0-15`(node0 16코어)가
   PG 7개 프로세스·CUBRID 7개 스레드를 worker 부족 없이 수용했다. stray `cub_master`는 **0개**였고
   `ENVIRONMENT.md`의 4개는 stale이다. 상주 프로세스 정리 범위만 남았다.
-- PG 데이터 적재와 PG판 쿼리 파생 규칙 — **lineitem/q1은 완료**(`schema/lineitem-pg.sql`,
-  `queries/q1-pg.sql`, `queries/README-q1-dialect.md`). 나머지 7개 테이블과 q2~q22가 **G1 선행 조건**으로
-  남았고, CUBRID 8개 테이블 재적재(ADR 0007)가 여기에 추가됐다.
+- ~~PG 데이터 적재와 PG판 쿼리 파생 규칙~~ → **해결**(2026-07-28,
+  `docs/report-g1-assets-20260728.md`). 양쪽 8테이블 적재 완료, q1~q22 양쪽 방언 확보.
+  잔여로 넘어간 것은 **Q14/Q17/Q22의 결과 비교 시 십진 스케일 정규화**뿐이다 —
+  CUBRID의 나눗셈/`AVG`이 PG `numeric`보다 소수 자릿수를 더 많이 남긴다
+  (`schema/README-type-parity.md` §3).
 
 ## 산출물 배치 원칙
 

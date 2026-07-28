@@ -1,0 +1,11 @@
+--- /home/cubrid/dev/workspace/tpch-sspq/queries/q5-cubrid.sql	2026-07-28 17:35:50.897613398 +0900
++++ /home/cubrid/dev/workspace/tpch-sspq/queries/q5-pg.sql	2026-07-28 17:35:50.900613398 +0900
+@@ -18,7 +18,7 @@
+ 	and n_regionkey = r_regionkey
+ 	and r_name = 'ASIA'
+ 	and o_orderdate >= date '1994-01-01'
+-	and o_orderdate < DATE_ADD(DATE '1994-01-01', INTERVAL 1 YEAR)
++	and o_orderdate < date '1994-01-01' + interval '1' year
+ group by
+ 	n_name
+ order by
