@@ -39,3 +39,14 @@ _Avoid_: 실험 환경, 측정 조건 (범위가 불명확)
 다음 게이트의 대상 범위를 좁히고, 통과 조건을 채우지 못하면 다음 게이트를 열지 않는다. 게이트를
 건너뛰거나 여러 게이트를 동시에 여는 진행은 유효한 진행으로 세지 않는다(ADR 0005).
 _Avoid_: 단계, 페이즈 (통과 조건 없이 시간 순서만 뜻함)
+
+**SUT Boundary**:
+CPU를 계정할 때 "측정 대상"으로 세는 프로세스 집합이며, **플랜을 실행하는 프로세스**로
+정의한다. CUBRID는 `cub_server`, PostgreSQL은 backend + parallel workers다. CUBRID의
+클라이언트측 질의 처리(파싱·플랜 생성·결과 마샬링 — CCI/JDBC 경로에서는 `cub_cas`,
+csql 경로에서는 `csql` 자신)는 **주 지표에서 빼되 `broker+CAS` 열로 항상 같이 기록**한다.
+PostgreSQL에는 이에 대응하는 별개 프로세스가 없으므로 그 열은 `N/A (backend 내부)`로
+적는다 — 이 비대칭은 제거 대상이 아니라 기록 대상이다. 두 열을 합산한 단일 숫자는
+내지 않는다. **wall time에는 적용되지 않는다**: wall time은 계속 end-to-end이며,
+worker 합산 CPU를 wall time에서 감산하거나 직접 비교하지 않는다. (ADR 0009)
+_Avoid_: 서버 CPU, 엔진 CPU (어느 프로세스까지인지 불명확)

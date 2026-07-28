@@ -58,6 +58,17 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   **기본 설정 CUBRID의 성능이 아니다.** ADR 0002의 PG 단서(개발 스냅샷이므로 릴리스
   PostgreSQL 성능 아님)와 **둘 다** 붙는다. 즉 어느 엔진에 대해서도 "출시 제품의
   성능"으로 인용할 수 없다. (ADR 0008)
+- **Q1 DOP6 재측정 — CUBRID 재현 안 됨 (2026-07-28)** →
+  `docs/report-q1-dop6-reproduction-20260728.md`. warm 3회 AB/BA 교차:
+  **CUBRID 31.511 s (sd 0.301) / PG 8.908 s (sd 0.008) = 3.537x**.
+  PG는 파일럿 대비 −0.74 %로 재현됐고, **CUBRID는 −9.19 %(파일럿 sd의 26.6배)로
+  재현되지 않았다** — 비율이 3.867x → 3.537x로 내려갔다. 플랜 형상은 양쪽 다 파일럿과
+  동일하고 worker도 6/6이며, 바뀐 것은 CUBRID 추정 카디널리티뿐이다
+  (`sel 0.1 → 0.9868`, `card 5,998,605 → 59,194,236`, 실제 59,142,609). 4행 결과는
+  양쪽 다 파일럿과 바이트 단위 동일, 집계 6런 물리 read 전부 0.0 MiB.
+  파일럿 이후 달라진 것은 7테이블 적재·히스토그램 활성화·**서버 코어핀 실제 적용**·
+  배경 부하 차이다. **원인은 지목하지 않는다**(ADR 0005).
+  DOP 스윕(1/2/3/4)은 취소됐다.
 - 남은 것: **G1(R0 재현)이 다음 행동**이고 선행 조건은 모두 닫혔다. 아래 pending 중
   게이트 진행을 막는 항목만 그 전에 닫는다.
 
@@ -105,6 +116,17 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
     `UPDATE HISTOGRAM WITH FULLSCAN`으로 한다(전자는 버킷을 4로 클램프하고
     `WITH FULLSCAN`을 버린다). **이 구성의 수치는 기본 설정 CUBRID의 성능으로 인용할
     수 없다.** (ADR 0008)
+12. **Comparison Contract — SUT CPU 경계는 "플랜을 실행하는 프로세스"** —
+    주 지표는 CUBRID `cub_server` ↔ PG backend + parallel workers다. CUBRID의
+    클라이언트측 질의 처리(파싱·플랜 생성·결과 마샬링)는 **주 지표에서 빼되
+    `broker+CAS` 열로 항상 같이 기록**하며, PG는 그 열이 `N/A (backend 내부)`다
+    (CUBRID 옵티마이저는 클라이언트측 — `src/optimizer/AGENTS.md:3,55`). 두 열을
+    합산한 단일 숫자는 내지 않는다. 하네스·수집기(perf/VTune/모니터링)는 SUT와 다른
+    cpuset. **wall time은 종전대로 end-to-end이고 이 변경의 영향을 받지 않는다** —
+    worker 합산 CPU를 wall time에서 감산·직접 비교하지 않는 규칙도 유지된다.
+    현재 하네스에는 broker/CAS가 **존재하지 않는다**(`csql -C`는 `cub_server` 직결,
+    `cubrid broker status` → not running)이므로 그 열은 `csql` 자신을 뜻한다.
+    코어핀 변경은 **미적용, 형님 결정 대기**. (ADR 0009)
 
 ## 실행 전략(얇은 경로)
 
