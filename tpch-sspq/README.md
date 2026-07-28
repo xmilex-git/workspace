@@ -53,11 +53,17 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   도메인 min/max(최저 버킷이 `(-inf, hi]`로 열림), `attr op attr` 히스토그램 경로
   (`query_planner.c:10523-10525`, 상수 0.1 유지). 버킷 수도 미정렬(CUBRID 300 vs
   PG 100, 의미도 다름 — 정렬 비용 3.2s로 값싸게 가역적).
-- **대외 인용 단서 (필수)**: 이 프로젝트의 CUBRID 수치는
-  `update_statistics_update_histogram=yes`(기본값 `no`) 구성에서 나온 것이므로
-  **기본 설정 CUBRID의 성능이 아니다.** ADR 0002의 PG 단서(개발 스냅샷이므로 릴리스
-  PostgreSQL 성능 아님)와 **둘 다** 붙는다. 즉 어느 엔진에 대해서도 "출시 제품의
-  성능"으로 인용할 수 없다. (ADR 0008)
+- **대외 인용 단서 (필수, 3개)**: 이 프로젝트 수치는 **어느 엔진에 대해서도 "출시 기본
+  설정 제품의 성능"이 아니다.**
+  1. **PostgreSQL은 개발 스냅샷 핀**(`5713b437`, `20devel`) — 릴리스 PostgreSQL 성능이
+     아니다. (ADR 0002)
+  2. **CUBRID는 `update_statistics_update_histogram=yes`**(기본값 `no`) — 기본 설정
+     CUBRID가 아니다. (ADR 0008)
+  3. **PostgreSQL은 `dynamic_shared_memory_type=mmap`**(기본값 `posix`) — 호스트
+     `/dev/shm`이 64000k 고정이고 확장 권한이 없어 Parallel Hash 쿼리가 기본값에서
+     실행되지 않았기 때문이다. 전환 비용 실측은 PG가 **1.40 % 빨라진** 것이었고(예상된
+     보수적 방향과 반대), 무변경 CUBRID 대조군의 −0.72 % 드리프트를 감안하면 mmap
+     귀속분은 최대 ~0.7 %p다. (ADR 0015)
 - **Q1 DOP6 재측정 — CUBRID 재현 안 됨 (2026-07-28)** →
   `docs/report-q1-dop6-reproduction-20260728.md`. warm 3회 AB/BA 교차:
   **CUBRID 31.511 s (sd 0.301) / PG 8.908 s (sd 0.008) = 3.537x**.
@@ -131,6 +137,23 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   **배제**: DECIMAL 산술이 주 동인이라는 설명(1.77x, PG 비중이 42.43 %로 더 큼),
   메모리 할당(0.82x로 CUBRID가 **적다**, 기여 −1.5 %), 버퍼·래치(양쪽 0.2 % 미만),
   정렬(양쪽 0 %). ADR 0005 해제 범위대로 근거 숫자를 붙인 원인 후보 3개를 냈다.
+- **G2 완주 (2026-07-28)** → `docs/report-g2-stream-20260728.md`. 단위 파리티 트랙,
+  AB/BA 3블록 10스트림. **Q1은 대표가 아니다** — 격차의 **43.5 %가 Q21 단독**(12.72x),
+  Q1은 15.3 %(2.87x)로 2위이고 배수 중앙값은 2.15x다. **Q2는 CUBRID가 이긴다**(0.10x,
+  signed 기여 −2.00 %). **PG-only Parallel subset은 비어 있다** — 완주 19개 전부 CUBRID가
+  병렬을 타고, 유일한 비대칭은 반대 방향인 **Q13(CUBRID 6단위 / PG 완전 직렬, 1.03x)**.
+  **CUBRID의 6단위는 단일 스캔 쿼리에서만 유지된다** — 다중 조인 쿼리는 노드 대부분이
+  2워커(Q21 `4×2 1×3 1×6`, Q5·Q8·Q11 동일 양상)이고 PG는 모든 노드가 leader+5로 균일하다.
+  timeout 3개: Q17·Q20 양쪽 초과, **Q22는 CUBRID만**(PG 0.971 s, 1500 s 프로브도 미완주 →
+  하한 ≥309x). positive_pareto 80 %는 상위 6쿼리(Q21·Q1·Q9·Q8·Q18·Q15). 결과 19개 행수
+  완전 일치, 수치 차이는 전부 기존 등재된 십진 스케일 범주.
+- **PG DSM 백엔드를 `mmap`으로 이탈 (ADR 0015)** — 호스트 `/dev/shm`이 64000k 고정이고
+  uid 340001에 확장 권한이 없어 Parallel Hash 쿼리(Q5·Q8·Q10)가 기본값 `posix`에서
+  실행되지 않았다(피크 48,412k/64,000k, 결정론적). 전환 후 3개 전부 정상.
+  **전환 비용 실측: PG가 1.40 % 빨라졌다** — 예상된 "mmap이 느려 배수를 축소한다"는
+  보수적 방향은 **성립하지 않았다**. 무변경 CUBRID 대조군이 같은 세션쌍에서 −0.72 %
+  드리프트했으므로 mmap 귀속분은 최대 ~0.7 %p, 배수 영향 3.049x → 3.070x.
+  **대외 인용 단서가 3개로 늘었다.**
 - 남은 것: **G1(R0 재현)이 다음 행동**이고 선행 조건은 모두 닫혔다. 아래 pending 중
   게이트 진행을 막는 항목만 그 전에 닫는다.
 

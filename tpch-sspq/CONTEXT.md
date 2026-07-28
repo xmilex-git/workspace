@@ -107,3 +107,18 @@ PG는 실제로 7단위) — 과 **(2) 단위 파리티 통제값** — 양쪽 �
 나란히 낸다. **헤드라인 배수는 (2)를 쓴다.** natural-plan / plan-family-controlled
 2트랙 규칙과 같은 구조이며, 두 트랙을 섞은 단일 숫자는 내지 않는다. (ADR 0014)
 _Avoid_: 배수, 격차 (어느 트랙인지 불명확)
+
+**쿼리 timeout 비대칭 (engine asymmetry, 계약 사실)**:
+300초 쿼리 timeout 규칙(ADR 0005)은 **두 엔진에서 같은 방식으로 집행되지 않는다.**
+PostgreSQL은 세션 GUC `statement_timeout='300s'`로 **문장을 실제로 취소**하고
+스트림은 다음 쿼리로 계속된다(`ERROR: canceling statement due to statement timeout`).
+CUBRID에는 **쿼리 단위 timeout 기제가 없다** — `query_timeout` 파라미터가 존재하지
+않고, `lock_timeout`은 락 대기 전용이며, broker의 `QUERY_TIMEOUT`은 ADR 0011이 정한
+정본 경로(`csql -C` 직결)에 broker가 없으므로 적용되지 않는다. 따라서 CUBRID는
+**클라이언트를 외부 `timeout 300`으로 감싸 경계를 건다.** 그 결과 두 가지가 다르다:
+(1) PG는 300초에서 잘린 값이고 CUBRID는 클라이언트가 죽은 시점이며 서버 측 질의는
+클라이언트 단절을 감지할 때까지 이어질 수 있다, (2) 단일 세션 스트림 안에서는 외부
+timeout이 세션 전체를 끊으므로 **CUBRID의 timeout 채증은 쿼리별 개별 호출 패스에서만**
+가능하다. timeout에 걸린 쿼리는 어느 엔진에서든 **값 대체·보간 없이** timeout으로
+기록하고 Pareto에서 제외한다.
+_Avoid_: timeout (어느 엔진의 어느 기제인지 불명확)
