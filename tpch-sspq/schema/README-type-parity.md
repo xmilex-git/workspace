@@ -41,13 +41,28 @@ They are recorded here so no later report mistakes them for a setup error.
 * **`DECIMAL` storage.** CUBRID stores `DECIMAL(15,2)` as a fixed-width packed
   value. PostgreSQL `numeric` is variable-length arbitrary precision. Declared
   precision and scale match; per-value storage width and arithmetic cost do not.
-* **Statistics fidelity.** `UPDATE STATISTICS … WITH FULLSCAN` scans every row, so
-  CUBRID's cardinalities are exact. PostgreSQL `ANALYZE` samples (30,000 rows per
-  table here), so `reltuples` is an estimate — e.g. lineitem `reltuples` =
-  59,988,188 against an actual 59,986,052, and orders 15,001,073 against
-  15,000,000. Both sides were refreshed at the same point in the same state; the
-  fidelity difference is the engines'. This matters for G4's statistics-parity
-  step and is not a defect of this load.
+* **Statistics information content — the asymmetry is large.** Corrected
+  2026-07-28 after `docs/report-cubrid-statistics-content-20260728.md`; the earlier
+  wording here framed this as a mere sampling-vs-fullscan fidelity gap, which
+  understated it. Measured facts:
+  * CUBRID's per-column optimizer statistics are **NDV only** — no min/max, no null
+    fraction, no frequency distribution, no MCV list
+    (`src/storage/statistics.h:87-95`). Per index it also has key counts, partial
+    key counts, pages, leaf pages and height.
+  * The histogram/MCV subsystem exists in this pin but is gated behind
+    `update_statistics_update_histogram`, default `n`, which we did not set.
+    `db_histogram` holds **0 rows** in `tpch_sf10_q1`.
+  * CUBRID's *table* cardinality is exact (59,986,052); its *per-column NDV* is
+    sample-extrapolated even under `WITH FULLSCAN` (e.g. `l_shipdate` 2,525 against
+    an exact 2,526; `o_clerk` 10,056 against an exact 10,000 — the error is
+    two-sided, magnitudes sub-1 %).
+  * PostgreSQL `ANALYZE` samples the heap, so `reltuples` is an estimate
+    (lineitem 59,988,188 against an actual 59,986,052), but it stores `null_frac`,
+    `n_distinct`, an MCV list with frequencies, a 100-bucket histogram,
+    `correlation` and `avg_width` per column.
+  Both sides were refreshed at the same point in the same state, so this is
+  **freshness parity, not information parity**. G4 must state it as a precondition
+  of its plan/row-estimate comparison. It is not a defect of this load.
 
 ## 3. Empirically verified, not asserted
 

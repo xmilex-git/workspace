@@ -28,6 +28,17 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   통계 양쪽 갱신, q2~q22 PG 방언 파생(11파일 11줄 변경, 22개 전부 `EXPLAIN` 통과).
   자료형 파리티는 `schema/README-type-parity.md`, 쿼리 방언은
   `queries/README-q2-q22-dialect.md`.
+- **CUBRID 통계에는 히스토그램·MCV·min/max·null 비율이 없다 (사실, 2026-07-28 채증)** →
+  `docs/report-cubrid-statistics-content-20260728.md`. 컬럼당 저장되는 것은 **NDV 하나**뿐이고
+  (`src/storage/statistics.h:87-95`), 인덱스당 keys/부분키/pages/leafs/height가 추가된다.
+  히스토그램 서브시스템은 이 pin에 **존재하지만**(`src/optimizer/histogram/`, `_db_histogram`,
+  CBRD-26202 이후) `update_statistics_update_histogram` 기본값이 `n`이라 2단계
+  `UPDATE STATISTICS ... WITH FULLSCAN`은 히스토그램을 **0개** 만들었다(`db_histogram` 0행).
+  따라서 2단계의 "통계 파리티"는 **"양쪽 다 stale이 아니다"(freshness)로만** 읽어야 하며
+  정보량 동등을 뜻하지 않는다. 히스토그램이 없을 때 `<`/`<=`/`>`/`>=`는 상수
+  `DEFAULT_COMP_SELECTIVITY 0.1`, `BETWEEN`은 `DEFAULT_BETWEEN_SELECTIVITY 0.01`을 쓰고
+  (`query_planner.c:10624`, `10645`), 등식만 `1/NDV`로 데이터에 반응한다. **G4는 이 비대칭을
+  자기 산출물의 전제로 명시해야 한다.**
 - 남은 것: **G1(R0 재현)이 다음 행동**이고 선행 조건은 모두 닫혔다. 아래 pending 중
   게이트 진행을 막는 항목만 그 전에 닫는다.
 
@@ -78,7 +89,7 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 | **G1** | R0 재현 — 기존 하네스를 그대로 쓰고, 새 pinned 빌드 2개(CUBRID `f30f1c260`, PG `5713b437a`) 위에서 AB/BA interleaved 3회. **세트 시작 전과 엔진 전환 직후마다 warmup 스트림 1회(미집계)** | 양쪽 22개 쿼리 완주(또는 `timeout` 상태 기록), 집계 런 전부 warm 검증 통과, paired 차이의 sd 실측치 확보 |
 | **G2** | 절대격차 Pareto + 22개 쿼리 양쪽 plan **병렬 여부 분류표** | **PG-only Parallel subset 식별이 최우선 통과 조건**, 절대격차 상위 목록 확정 |
 | **G3** | top5만 DOP 1 vs 목표 DOP(6) 분해 | 쿼리별 병렬 이득/무이득 구분, 필요한 쿼리에만 DOP sweep 1~6 |
-| **G4** | top3~5 plan diff + actual rows | **선행 조건: 통계 파리티**(CUBRID 통계 갱신 ↔ PG `ANALYZE`)를 먼저 맞춘 뒤 비교. plan 형상 차이와 추정/실측 행수 괴리를 기록 |
+| **G4** | top3~5 plan diff + actual rows | **선행 조건: 통계 freshness 파리티**(CUBRID 통계 갱신 ↔ PG `ANALYZE`) — 이미 충족. 단 **정보량은 동등하지 않다**: CUBRID는 컬럼당 NDV뿐이고 히스토그램·MCV·min/max·null 비율이 없다(위 상태 절). 이 비대칭을 산출물에 **전제로 명기**한 뒤 plan 형상 차이와 추정/실측 행수 괴리를 기록 |
 | **G5** | 증거가 가리키는 **한 트랙만** 오픈 — optimizer 트랙 또는 VTune DIAG-PREFIX 트랙 | 증거로 확정된 영역에만 계측 패치. 두 트랙 동시 오픈 금지 |
 
 **원인 후보는 측정 증거에서만 도출한다.** 어떤 연산자·코드 경로·서브시스템도 게이트를 통과하기 전에
@@ -90,6 +101,13 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 
 ## Pending decisions
 
+- **CUBRID 히스토그램을 켤지 여부 — 미결정, 형님 판단 사항.**
+  `update_statistics_update_histogram=yes` + `default_histogram_bucket_count`
+  (기본 300, PG는 100 버킷)로 재실행하면 CUBRID도 히스토그램·MCV·null 비율을 갖는다.
+  그러나 이는 **측정 대상 시스템의 설정을 CUBRID 기본값에서 벗어나게 바꾸는 행위**다.
+  선택지는 (a) 기본값 유지 — "기본 설정 CUBRID"를 측정하고 비대칭을 전제로 명기,
+  (b) 켜고 재실행 — 옵티마이저 정보량을 맞추되 기본값이 아닌 구성을 측정,
+  (c) 둘 다 측정. 아무것도 바꾸지 않았다.
 - 양측 파라미터 공정 대응 규칙(CUBRID `data_buffer_size`/`sort_buffer_size` ↔ PG `shared_buffers`/`work_mem`).
   Q1 파일럿은 **잠정으로 buffer 8G ↔ 8GB**를 썼다 — `tpch_sf10_v2`를 운용한 실측값
   (`paramdump`: `data_buffer_size=8.0G`)을 PG `shared_buffers`에 그대로 미러링했다. 규칙 자체는 미확정.

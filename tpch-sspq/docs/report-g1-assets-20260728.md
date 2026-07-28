@@ -127,7 +127,7 @@ Two divergences found, both recorded rather than patched:
   bit for bit. This reaches Q14, Q17 and Q22's output/threshold, so **G1's result
   comparison for those three must compare at a fixed scale, not as raw text.**
 
-## 5. Statistics parity
+## 5. Statistics freshness parity
 
 | | CUBRID | PostgreSQL |
 |---|---|---|
@@ -154,12 +154,29 @@ orders    15000000                    orders       15001073
 lineitem  59986052                    lineitem     59988188
 ```
 
-CUBRID's numbers are exact because `WITH FULLSCAN` scans every row; PostgreSQL's
-are sampled estimates. **The wall-time gap (57 s vs 2.4 s) is a difference in what
-the two commands do, not a performance observation** — it is full-scan versus
-30,000-row sample and must not be quoted as an engine comparison. The fidelity
-difference is the substantive part and is G4's problem, recorded in
-`schema/README-type-parity.md` §2.
+The index cardinalities above are exact on the CUBRID side because they come from
+the B+tree key count; PostgreSQL's `reltuples` are sampled estimates. **The
+wall-time gap (57 s vs 2.4 s) is a difference in what the two commands do, not a
+performance observation** — it is a full heap scan versus a 30,000-row sample and
+must not be quoted as an engine comparison.
+
+> **CORRECTION (2026-07-28, same day).** The heading of this section originally
+> read "Statistics parity" and that was an overstatement. A follow-up
+> investigation — `docs/report-cubrid-statistics-content-20260728.md` — established
+> from the pinned source and from a live dump that CUBRID's per-column optimizer
+> statistics here are **NDV only**: no min/max, no null fraction, no frequency
+> distribution and no MCV list. The histogram subsystem exists in this build but is
+> gated behind `update_statistics_update_histogram`, which defaults to `n` and was
+> not set, so `db_histogram` holds **0 rows**. Per-column NDV is also
+> sample-extrapolated rather than exact even under `WITH FULLSCAN`.
+>
+> What this section may be read as claiming is only **statistics freshness
+> parity**: each engine's own standard command was run on the same data at the same
+> point in the load sequence, so neither side is stale and neither was given a
+> non-default statistics configuration. It does **not** claim that the two engines
+> hold comparable statistics, nor that their optimizers have comparable information
+> for selectivity estimation. G4 must treat that asymmetry as a stated precondition
+> of its own output; see that report's §6 and §8.
 
 ## 6. Query dialect — q2 through q22
 
