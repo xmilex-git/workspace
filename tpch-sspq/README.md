@@ -9,15 +9,22 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 
 ## 상태
 
-**환경 세팅 완료 / 측정 미시작.** Grill 종료, 양쪽 엔진 설치와 pin 채증까지 끝났다.
+**Q1 파일럿 통과 / G1 미시작.** 양쪽 엔진에서 Q1을 실제로 돌려 첫 wall time 실측치를 얻었고
+측정 경로가 끝-끝으로 동작함을 확인했다.
 
 - 인벤토리 조사 완료(2026-07-28, 읽기 전용) → `ENVIRONMENT.md`.
 - CUBRID `f30f1c260` release 빌드 설치 완료 — `~/tpch-sspq-install/cubrid-f30f1c260`,
   `cubrid_rel` = `11.5.0 (11.5.0.2374-f30f1c2)`. `~/CUBRID` 심링크 불변.
 - PostgreSQL `5713b437a`(20devel) 빌드·설치 완료 — `~/pg/pg20devel-5713b437`,
-  `initdb -D ~/pg/pgdata-tpch-sspq` 성공. **서버는 아직 띄우지 않았다.**
+  `initdb -D ~/pg/pgdata-tpch-sspq` 성공. **기동 완료**(port 5442), `shared_buffers=8GB`.
 - `-g` 무해성 `.text` 검증 통과(ADR 0003).
-- 남은 것: **G1(R0 재현)이 다음 행동**이다. 아래 pending 중 게이트 진행을 막는 항목만 그 전에 닫는다.
+- **Q1 한정 파일럿 완료(2026-07-28)** → `docs/report-g1-q1-pilot-20260728.md`.
+  warm 3회 평균 **CUBRID 34.699 s vs PostgreSQL 8.974 s (3.867x)**, 양쪽 4행 결과 일치,
+  양쪽 목표 DOP 6 실제 적용 확인(CUBRID `parallel workers: 6` / PG `Workers Launched: 6`).
+- **`tpch_sf10_v2`는 pin 빌드로 열리지 않는다** — CBRD-26956(`a9fca9002`)의 CHAR/VARCHAR
+  저장 포맷 revert 때문이다. DB를 은퇴시키고 pin 빌드로 재적재한다. (ADR 0007)
+- 남은 것: **G1(R0 재현)이 다음 행동**이다. 선행 조건은 이제 **양쪽 8개 테이블 적재**
+  (PG 신규 + CUBRID 재적재)다. 아래 pending 중 게이트 진행을 막는 항목만 그 전에 닫는다.
 
 ## 확정 결정
 
@@ -32,10 +39,14 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 4. **release 단일 빌드로 절대 성능과 VTune을 함께 측정** — CUBRID `release`(RelWithDebInfo,
    `-O2 -g -DNDEBUG`), PG `--enable-debug`(→ `-g -O2`, cassert off, JIT off). `--enable-debug`가
    `-g`만 추가한다는 것과 `.text` 코드 동일성은 실측으로 확인했다. (ADR 0003)
-5. **데이터·쿼리는 기존 자산 재사용** — `~/databases/tpch_sf10_v2`(SF10)와
-   `scale10/queries/q1~q22`(CUBRID 정본). TPC-H kit 부재로 dbgen seed·kit 버전은 확정 불가이며
-   그 한계를 수용한다. PG 적재·PG판 쿼리 파생은 ADR 0004 시점에는 범위 밖이었고, ADR 0005에서
-   **G1 선행 조건으로 승격**됐다. (ADR 0004, 0005)
+5. **쿼리·스키마 정본은 기존 자산 재사용, CUBRID 데이터는 pin 빌드로 재적재** —
+   `scale10/queries/q1~q22`와 `create_tpch_{table,index}.sql`이 CUBRID 정본이다.
+   TPC-H kit 부재로 dbgen seed·kit 버전은 확정 불가이며 그 한계를 수용한다(ADR 0004).
+   반면 `~/databases/tpch_sf10_v2`는 **pin 빌드로 열리지 않아 은퇴**시켰다 — CBRD-26956
+   (`a9fca9002`)이 CHAR/VARCHAR on-disk 포맷을 revert했고 그 DB는 revert 이전 빌드
+   `4cfc837`이 썼다. 데이터는 `scale10/load_data/*.load`에서 pin 빌드로 다시 적재하며
+   전용 `databases.txt`를 쓴다(공용 `~/databases` 불변). PG 적재·PG판 쿼리 파생과 함께
+   **G1 선행 조건**이다. (ADR 0004, 0005, 0007)
 6. **`perf`/`numactl`은 사용자가 직접 sudo 설치** — 정확한 `dnf` 명령은 `ENVIRONMENT.md` 4절.
 7. **실행 전략은 얇은 경로(게이트 기반)** — R1~R8 전체 매트릭스를 순서대로 돌지 않고 G1~G5를
    차례로 통과시키며, 각 게이트의 증거로 다음 게이트의 대상 범위를 좁힌다. multi-seed(R4)와
@@ -75,18 +86,27 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 ## Pending decisions
 
 - 양측 파라미터 공정 대응 규칙(CUBRID `data_buffer_size`/`sort_buffer_size` ↔ PG `shared_buffers`/`work_mem`).
+  Q1 파일럿은 **잠정으로 buffer 8G ↔ 8GB**를 썼다 — `tpch_sf10_v2`를 운용한 실측값
+  (`paramdump`: `data_buffer_size=8.0G`)을 PG `shared_buffers`에 그대로 미러링했다. 규칙 자체는 미확정.
+  `sort_buffer_size`/`work_mem`은 기본값이며 Q1에서는 무의미했다(CUBRID `GROUPBY … page: 0, ioread: 0`,
+  PG 4행 quicksort 26kB).
 - 병렬 여부 분류표의 라벨 규칙 — 목표 DOP(6)와 채증 수단(CUBRID `;trace on`의 `parallel workers: N`,
   PG `EXPLAIN (ANALYZE, VERBOSE)`의 Workers Launched)은 확정됐다. 플랜 일부만 병렬인 경우의 라벨과
-  `Workers Launched < 목표 DOP`의 처리만 G1 산출물을 보고 정한다.
+  `Workers Launched < 목표 DOP`의 처리만 G1 산출물을 보고 정한다. Q1에서는 양쪽 다 목표 DOP 6을
+  그대로 확보해 이 케이스가 발생하지 않았다.
 - 게이트 마진 — 판정 방식은 paired AB/BA + 신뢰구간으로 확정됐고, G2 절대격차 컷 마진 수치만
-  G1의 paired sd 실측치로 정한다.
+  G1의 paired sd 실측치로 정한다. Q1 파일럿의 sd(CUBRID 0.120s / PG 0.018s)는 **엔진 내부 반복 노이즈**일
+  뿐 paired AB/BA sd가 아니므로 마진 근거로 쓰지 않는다.
 - ~~cold/warm 캐시 레짐 고정 방식~~ → **해결**: WARM 주 레짐 + cold 진단 트랙(ADR 0006). 잔여는
   컨테이너 안에서 `sudo /home/cubrid/bin/drop_caches.sh`가 동작하는지 **1회 실측**뿐이며, cold 트랙을
-  여는 시점에 확인한다. warm 검증 문턱(1% / 100MiB)은 G1 실측 분포로 확정한다.
-- 측정 격리 — `taskset`+`numactl` 바인딩으로 확정. 핀 집합 크기(목표 DOP 6 기준), 상주 프로세스
-  정리 범위, stray `cub_master` 4개 처리만 남았다.
-- PG 데이터 적재와 PG판 쿼리 파생 규칙 — G1이 양쪽 22개 쿼리를 요구하므로 **G1의 선행 조건**이며
-  다음 스코프의 첫 항목이다.
+  여는 시점에 확인한다. warm 검증 문턱(1% / 100MiB)은 G1 실측 분포로 확정한다. Q1 파일럿의 집계 6개
+  스트림은 최악값이 11.8MiB(스캔 대상의 0.13%)로 잠정 문턱을 충족했다(표본 6개로는 확정 불가).
+- 측정 격리 — `taskset`+`numactl` 바인딩으로 확정. Q1 파일럿에서 `taskset -c 0-15`(node0 16코어)가
+  PG 7개 프로세스·CUBRID 7개 스레드를 worker 부족 없이 수용했다. stray `cub_master`는 **0개**였고
+  `ENVIRONMENT.md`의 4개는 stale이다. 상주 프로세스 정리 범위만 남았다.
+- PG 데이터 적재와 PG판 쿼리 파생 규칙 — **lineitem/q1은 완료**(`schema/lineitem-pg.sql`,
+  `queries/q1-pg.sql`, `queries/README-q1-dialect.md`). 나머지 7개 테이블과 q2~q22가 **G1 선행 조건**으로
+  남았고, CUBRID 8개 테이블 재적재(ADR 0007)가 여기에 추가됐다.
 
 ## 산출물 배치 원칙
 
