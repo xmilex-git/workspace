@@ -38,6 +38,8 @@
 | install prefix | `~/tpch-sspq-install/cubrid-f30f1c260` (714M) |
 | 채증 | `bin/cubrid_rel` → `CUBRID 11.5.0 (11.5.0.2374-f30f1c2) (64bit release build for Linux) (Jul 28 2026 13:24:29)` |
 | 불가침 확인 | `~/CUBRID` → `jdbc-direct-poc-release/CUBRID-jdbc-direct-v3-r1` (변경 없음) |
+| 설정 이탈 | `conf/cubrid.conf`에 `update_statistics_update_histogram=yes` (출시 기본값 `no`) — 2026-07-28, ADR 0008. `paramdump` → `[C*]`/`[S*]` 양쪽 `y`. `default_histogram_bucket_count`는 미설정(기본 300 적용). **이 구성의 수치는 기본 설정 CUBRID의 성능으로 인용 불가** |
+| 통계 재구축 절차 | `UPDATE STATISTICS`가 아니라 테이블별 `ANALYZE TABLE <t> DROP HISTOGRAM` → `UPDATE HISTOGRAM WITH FULLSCAN` (`.git_ignored_dir/g1-assets/scratch/rebuild-hist.sh`, 8테이블 39.7s). 전자는 버킷을 4로 클램프하고 `WITH FULLSCAN`을 버린다 |
 
 ### PostgreSQL (pin `5713b437abed7085e7d59849c6e9e0f4f469633d`)
 

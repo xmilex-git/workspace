@@ -41,28 +41,36 @@ They are recorded here so no later report mistakes them for a setup error.
 * **`DECIMAL` storage.** CUBRID stores `DECIMAL(15,2)` as a fixed-width packed
   value. PostgreSQL `numeric` is variable-length arbitrary precision. Declared
   precision and scale match; per-value storage width and arithmetic cost do not.
-* **Statistics information content — the asymmetry is large.** Corrected
-  2026-07-28 after `docs/report-cubrid-statistics-content-20260728.md`; the earlier
-  wording here framed this as a mere sampling-vs-fullscan fidelity gap, which
-  understated it. Measured facts:
-  * CUBRID's per-column optimizer statistics are **NDV only** — no min/max, no null
-    fraction, no frequency distribution, no MCV list
-    (`src/storage/statistics.h:87-95`). Per index it also has key counts, partial
-    key counts, pages, leaf pages and height.
-  * The histogram/MCV subsystem exists in this pin but is gated behind
-    `update_statistics_update_histogram`, default `n`, which we did not set.
-    `db_histogram` holds **0 rows** in `tpch_sf10_q1`.
-  * CUBRID's *table* cardinality is exact (59,986,052); its *per-column NDV* is
-    sample-extrapolated even under `WITH FULLSCAN` (e.g. `l_shipdate` 2,525 against
-    an exact 2,526; `o_clerk` 10,056 against an exact 10,000 — the error is
-    two-sided, magnitudes sub-1 %).
-  * PostgreSQL `ANALYZE` samples the heap, so `reltuples` is an estimate
-    (lineitem 59,988,188 against an actual 59,986,052), but it stores `null_frac`,
-    `n_distinct`, an MCV list with frequencies, a 100-bucket histogram,
-    `correlation` and `avg_width` per column.
-  Both sides were refreshed at the same point in the same state, so this is
-  **freshness parity, not information parity**. G4 must state it as a precondition
-  of its plan/row-estimate comparison. It is not a defect of this load.
+* **Statistics information content — narrowed, but not closed.** This bullet was
+  rewritten twice on 2026-07-28. First it framed the gap as a mere
+  sampling-vs-fullscan fidelity difference, which understated it
+  (`docs/report-cubrid-statistics-content-20260728.md`). Then CUBRID's optimizer
+  histogram was deliberately enabled (ADR 0008,
+  `docs/report-cubrid-histogram-enabled-20260728.md`). Current measured state:
+  * **CUBRID now has** per-column histograms (300 equi-depth buckets), an MCV list
+    with frequencies, and `null_frequency` — for **61 of 61** columns across the 8
+    tables, all built `WITH FULLSCAN`. This is a **departure from the CUBRID
+    default**: `update_statistics_update_histogram` ships as `no`.
+  * **CUBRID still lacks** physical `correlation` and `avg_width` (neither concept
+    exists in the source), and an exact domain min/max — the lowest bucket is an
+    open `(-inf, hi]`, so the minimum is unrecoverable, and the maximum is not
+    always exact (`l_shipdate` tops out at 1998-11-29 against an actual
+    1998-12-01). PostgreSQL's `histogram_bounds` endpoints *are* the observed
+    min/max.
+  * MCV values live inside the opaque `_db_histogram.histogram_values` BIT VARYING
+    blob, readable only via `SHOW HISTOGRAM <t>`; PostgreSQL exposes them as
+    ordinary `pg_stats` array columns.
+  * Bucket counts are **not aligned**: CUBRID `default_histogram_bucket_count=300`
+    vs PostgreSQL `default_statistics_target=100`, and the two parameters do not
+    mean the same thing (PG's target also sets the 300×target sample size).
+  * Per-column NDV remains sample-extrapolated on both engines. CUBRID's *table*
+    cardinality is exact (59,986,052); PostgreSQL's `reltuples` is an estimate
+    (59,988,188).
+  Both sides were refreshed at the same point in the same state. This is now
+  **freshness parity plus the same information class for range/equality
+  estimation**, but not full information parity. G4 must state the four remaining
+  gaps and the bucket-count asymmetry as preconditions of its plan/row-estimate
+  comparison.
 
 ## 3. Empirically verified, not asserted
 

@@ -39,6 +39,25 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   `DEFAULT_COMP_SELECTIVITY 0.1`, `BETWEEN`은 `DEFAULT_BETWEEN_SELECTIVITY 0.01`을 쓰고
   (`query_planner.c:10624`, `10645`), 등식만 `1/NDV`로 데이터에 반응한다. **G4는 이 비대칭을
   자기 산출물의 전제로 명시해야 한다.**
+- **CUBRID 히스토그램 활성화 완료 — 기본값 이탈 (2026-07-28, ADR 0008)** →
+  `docs/report-cubrid-histogram-enabled-20260728.md`. 측정 install `cubrid.conf`에
+  `update_statistics_update_histogram=yes`를 넣고 래퍼로 재기동, `paramdump`에서
+  `[C*]`/`[S*]` 양쪽 `y` 채증. `db_histogram` **0 → 283행**, 8테이블 **61컬럼 전부**
+  300버킷·`full scan`. 히스토그램이 실제로 소비된다 — `l_shipdate < date` 추정이
+  실제의 **0.232배 → 1.004배**로 교정됐다. **함정**: `UPDATE STATISTICS ... WITH FULLSCAN`
+  만으로는 안 된다(`bucket_count=-1`이 기본값 300 대신 **최소 4**로 클램프되고
+  `ON ALL CLASSES`가 `WITH FULLSCAN`을 버린다). 테이블별
+  `ANALYZE TABLE <t> DROP HISTOGRAM` → `UPDATE HISTOGRAM WITH FULLSCAN`을 쓴다
+  (`.git_ignored_dir/g1-assets/scratch/rebuild-hist.sh`, 8테이블 39.7s).
+  **그래도 여전히 없는 것**: 물리 correlation, avg_width(소스에 개념 없음), 정확한
+  도메인 min/max(최저 버킷이 `(-inf, hi]`로 열림), `attr op attr` 히스토그램 경로
+  (`query_planner.c:10523-10525`, 상수 0.1 유지). 버킷 수도 미정렬(CUBRID 300 vs
+  PG 100, 의미도 다름 — 정렬 비용 3.2s로 값싸게 가역적).
+- **대외 인용 단서 (필수)**: 이 프로젝트의 CUBRID 수치는
+  `update_statistics_update_histogram=yes`(기본값 `no`) 구성에서 나온 것이므로
+  **기본 설정 CUBRID의 성능이 아니다.** ADR 0002의 PG 단서(개발 스냅샷이므로 릴리스
+  PostgreSQL 성능 아님)와 **둘 다** 붙는다. 즉 어느 엔진에 대해서도 "출시 제품의
+  성능"으로 인용할 수 없다. (ADR 0008)
 - 남은 것: **G1(R0 재현)이 다음 행동**이고 선행 조건은 모두 닫혔다. 아래 pending 중
   게이트 진행을 막는 항목만 그 전에 닫는다.
 
@@ -77,6 +96,15 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
     런이 page cache를 밀어낼 수 있다). 측정 런의 물리 read 카운터로 warm임을 채증하며 **검증 실패
     런은 무효**다. cold는 주 축이 아니라 **I/O 진단 트랙 전용**이고 warm과 같은 표에 합치지 않는다.
     (ADR 0006)
+11. **CUBRID 옵티마이저 히스토그램을 활성화한다 — 기본값 이탈** —
+    `update_statistics_update_histogram=yes`(출시 기본값 `no`)를 측정 install
+    `cubrid.conf`에 넣는다. 목적은 양쪽 옵티마이저의 카디널리티 추정 정보량을 맞춘 뒤
+    **실행 엔진 차이를 보는 것**이다. 버킷 수는 각 엔진 기본값(CUBRID 300 /
+    PG `default_statistics_target` 100)을 쓰고 정렬하지 않는다. 통계 재구축은
+    `UPDATE STATISTICS`가 아니라 테이블별 `ANALYZE TABLE <t> DROP HISTOGRAM` →
+    `UPDATE HISTOGRAM WITH FULLSCAN`으로 한다(전자는 버킷을 4로 클램프하고
+    `WITH FULLSCAN`을 버린다). **이 구성의 수치는 기본 설정 CUBRID의 성능으로 인용할
+    수 없다.** (ADR 0008)
 
 ## 실행 전략(얇은 경로)
 
@@ -89,7 +117,7 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 | **G1** | R0 재현 — 기존 하네스를 그대로 쓰고, 새 pinned 빌드 2개(CUBRID `f30f1c260`, PG `5713b437a`) 위에서 AB/BA interleaved 3회. **세트 시작 전과 엔진 전환 직후마다 warmup 스트림 1회(미집계)** | 양쪽 22개 쿼리 완주(또는 `timeout` 상태 기록), 집계 런 전부 warm 검증 통과, paired 차이의 sd 실측치 확보 |
 | **G2** | 절대격차 Pareto + 22개 쿼리 양쪽 plan **병렬 여부 분류표** | **PG-only Parallel subset 식별이 최우선 통과 조건**, 절대격차 상위 목록 확정 |
 | **G3** | top5만 DOP 1 vs 목표 DOP(6) 분해 | 쿼리별 병렬 이득/무이득 구분, 필요한 쿼리에만 DOP sweep 1~6 |
-| **G4** | top3~5 plan diff + actual rows | **선행 조건: 통계 freshness 파리티**(CUBRID 통계 갱신 ↔ PG `ANALYZE`) — 이미 충족. 단 **정보량은 동등하지 않다**: CUBRID는 컬럼당 NDV뿐이고 히스토그램·MCV·min/max·null 비율이 없다(위 상태 절). 이 비대칭을 산출물에 **전제로 명기**한 뒤 plan 형상 차이와 추정/실측 행수 괴리를 기록 |
+| **G4** | top3~5 plan diff + actual rows | **선행 조건: 통계 파리티** — 충족(2.6단계, ADR 0008). 양쪽 다 히스토그램·MCV·null 비율 보유, 범위 술어 추정이 양쪽 다 데이터에 반응한다. 단 CUBRID에 **여전히 없는 4항목**(물리 correlation, avg_width, 정확한 도메인 min/max, `attr op attr` 히스토그램 경로)과 **버킷 수 미정렬**(300 vs 100)을 산출물에 **전제로 명기**한 뒤 plan 형상 차이와 추정/실측 행수 괴리를 기록 |
 | **G5** | 증거가 가리키는 **한 트랙만** 오픈 — optimizer 트랙 또는 VTune DIAG-PREFIX 트랙 | 증거로 확정된 영역에만 계측 패치. 두 트랙 동시 오픈 금지 |
 
 **원인 후보는 측정 증거에서만 도출한다.** 어떤 연산자·코드 경로·서브시스템도 게이트를 통과하기 전에
@@ -101,13 +129,11 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 
 ## Pending decisions
 
-- **CUBRID 히스토그램을 켤지 여부 — 미결정, 형님 판단 사항.**
-  `update_statistics_update_histogram=yes` + `default_histogram_bucket_count`
-  (기본 300, PG는 100 버킷)로 재실행하면 CUBRID도 히스토그램·MCV·null 비율을 갖는다.
-  그러나 이는 **측정 대상 시스템의 설정을 CUBRID 기본값에서 벗어나게 바꾸는 행위**다.
-  선택지는 (a) 기본값 유지 — "기본 설정 CUBRID"를 측정하고 비대칭을 전제로 명기,
-  (b) 켜고 재실행 — 옵티마이저 정보량을 맞추되 기본값이 아닌 구성을 측정,
-  (c) 둘 다 측정. 아무것도 바꾸지 않았다.
+- ~~CUBRID 히스토그램을 켤지 여부~~ → **해결: (b) 켜고 재실행** (2026-07-28, ADR 0008,
+  `docs/report-cubrid-histogram-enabled-20260728.md`). 잔여 판단은 **버킷 수 정렬 여부**
+  뿐이다 — CUBRID 300 vs PG 100이고 두 파라미터의 의미 범위가 다르다(PG `default_statistics_target`은
+  표본 크기 300×target까지 좌우). 지금은 각 엔진 기본값을 쓰며, 정렬 비용은 실측
+  3.2s(8테이블 재구축 39.7s → 36.5s)로 값싸게 가역적이므로 G4 증거를 보고 정한다.
 - 양측 파라미터 공정 대응 규칙(CUBRID `data_buffer_size`/`sort_buffer_size` ↔ PG `shared_buffers`/`work_mem`).
   Q1 파일럿은 **잠정으로 buffer 8G ↔ 8GB**를 썼다 — `tpch_sf10_v2`를 운용한 실측값
   (`paramdump`: `data_buffer_size=8.0G`)을 PG `shared_buffers`에 그대로 미러링했다. 규칙 자체는 미확정.
