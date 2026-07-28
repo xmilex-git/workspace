@@ -80,9 +80,14 @@ sudo dnf install -y perf
 
 - `numactl` — NUMA 바인딩(`numactl --cpunodebind/--membind`)과 `numastat`. 노드 메모리가 비대칭이라
   배치 실험에 필요하다. `numactl-devel`은 하네스가 libnuma에 링크할 경우에만 필요하다.
-- `perf` — el8 패키지는 배포 커널 기준이고 이 장비는 elrepo `6.9.4`다. 설치 후
-  `perf stat true`가 동작하는지 먼저 확인한다. 실패해도 **VTune이 이미 sep 드라이버로 동작하므로
-  프로파일링 자체는 막히지 않는다**.
+- ~~`perf`~~ → **설치 완료·동작 확인(2026-07-28)**: `/usr/bin/perf`,
+  `perf version 4.18.0-553.147.1.el8_10.x86_64`, `perf_event_paranoid=-1`.
+  `-p <pid>` 부착으로 `task-clock,cycles,instructions,LLC-load-misses,
+  LLC-store-misses,branch-misses` 6개를 멀티플렉싱 없이 수집 가능
+  (`docs/report-q1-abcd-counters-20260728.md` B절).
+  **단 시스템 와이드 모드(`-a -C`)는 신뢰 불가** — 질의 없는 idle 9초 기준선이
+  instructions 469 G, LLC-load-misses 426 M로 물리적으로 불가능한 값을 낸다.
+  el8 perf 4.18과 커널 6.9.4의 조합 문제로 보이며, **프로세스 부착 모드만 쓴다.**
 - 선택(현재 불필요): `readline-devel`(psql 줄편집), `libicu-devel`(ICU 로케일).
   둘 다 지금 configure에서 명시적으로 off 처리했다.
 
