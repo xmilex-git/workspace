@@ -62,6 +62,9 @@ G4의 통계 파리티가 선행 조건인 것도 같은 이유다. 한쪽 통�
 - **격리는 `taskset` + `numactl` 바인딩으로 한다.** cgroup v2는 컨테이너가 cgroup v1이라 불가,
   RT 우선순위는 `ulimit -r`=0이라 불가, HugePages는 `HugePages_Total`=0이고 sysctl 권한이 없어 불가.
   NUMA 노드 메모리가 비대칭(node0 128G / node1 64G)이므로 바인딩 노드를 Comparison Snapshot에 적는다.
+- **캐시 레짐은 WARM이 주 레짐이다.** 각 측정 세트 전 warmup 스트림 1회(미집계), AB/BA 엔진 전환
+  직후 warmup 재수행, 측정 런의 물리 read 카운터로 warm 검증에 성공한 런만 집계한다. cold는 주 축이
+  아니라 I/O 진단 트랙 전용이다. 절차와 검증 기준은 ADR 0006이 정한다.
 
 ### 연기
 

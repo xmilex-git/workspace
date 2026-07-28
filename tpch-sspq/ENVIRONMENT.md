@@ -91,12 +91,40 @@ numactl --hardware && numastat -m | head -20
 perf --version && perf stat -e cycles true
 ```
 
+### 4-1. page cache drop 스크립트 (사용자가 이미 세팅함)
+
+cold 진단 트랙(ADR 0006)은 OS page cache를 버려야 하고, `/proc/sys/vm/drop_caches`는 비-root로
+쓸 수 없다. 사용자가 NOPASSWD sudo 항목으로 다음을 세팅해 뒀다.
+
+| 항목 | 값 |
+|---|---|
+| 스크립트 | `/home/cubrid/bin/drop_caches.sh` (`-rwxr-xr-x cubrid`, 51 bytes) |
+| 내용 | `#!/bin/sh` / `sync` / `echo 3 > /proc/sys/vm/drop_caches` |
+| sudoers | `sudo -n -l` 출력에 `(root) NOPASSWD: /home/cubrid/bin/drop_caches.sh` — 비밀번호 없이 root로 실행 가능 |
+| 호출 | `sudo /home/cubrid/bin/drop_caches.sh` |
+
+- **경로 주의**: 지시에 등장한 `/usr/local/sbin/tpch-drop-caches`는 이 장비에 없다. 실제 등록된
+  경로는 위의 `/home/cubrid/bin/drop_caches.sh`이며, sudoers 항목은 경로 단위로 매칭되므로 다른
+  경로로 복사해 부르면 NOPASSWD가 적용되지 않는다.
+- **미검증 1건**: 컨테이너 안에서 이 스크립트가 실제로 page cache를 버리는지는 아직 실측하지 않았다.
+  `/proc`는 `rw,nosuid,nodev,noexec`로 마운트돼 있지만 컨테이너 정책이 `drop_caches` 쓰기를 막을 수
+  있다. 막혀 있으면 **호스트에서 같은 명령을 실행**한다.
+- **부작용**: 장비 전체의 page cache(현재 buff/cache 93Gi)를 버린다. 같은 장비의 다른 작업과 겹치지
+  않는 시점에만 실행한다. WARM 주 레짐에서는 호출할 일이 없다.
+
 ## 5. 남은 pending
 
 - TPC-H kit 미확보 — `dbgen`/`qgen` SHA-256과 spec/kit 버전은 **여전히 확정 불가**(ADR 0004에서 한계 수용).
 - PG 데이터 적재와 PG용 스키마·쿼리 파생 — 얇은 경로 G1이 양쪽 22개 쿼리를 요구하므로 **G1의 선행 조건**이다.
 - 양측 파라미터 공정 대응 규칙(`data_buffer_size`/`sort_buffer_size` ↔ `shared_buffers`/`work_mem`).
-- cold/warm 캐시 레짐 고정 방식.
+- ~~cold/warm 캐시 레짐 고정 방식~~ → **해결**(ADR 0006): WARM 주 레짐(세트마다 warmup 1회 미집계,
+  AB/BA 엔진 전환 직후 재수행, 물리 read 카운터로 warm 검증, 실패 런 무효), cold는 I/O 진단 트랙
+  전용(서버 재시작 + `sudo /home/cubrid/bin/drop_caches.sh` → 물리 read 카운터로 cold 검증).
+  잔여: (a) 컨테이너 내 `drop_caches` 실행 가능 여부 1회 실측, (b) warm 검증 문턱(잠정 1% / 100MiB)을
+  G1 실측 분포로 확정. 용량 근거: CUBRID 데이터 볼륨 46G(디렉터리 55G 중 로그 8.9G 제외) +
+  PG 적재 ~25G vs available ~91Gi.
+- 하네스 요구사항 추가 — 런 경계마다 `/proc/<pid>/io`의 `read_bytes`와 `iostat -x` sda1 스냅샷을
+  찍어 델타를 런 레코드에 남겨야 한다(ADR 0006). 카운터 없는 런은 집계에 쓰지 않는다.
 - 측정 격리 — cgroup v2·`chrt`(RT 우선순위)·HugePages가 불가하므로 `taskset`+`numactl` 바인딩으로
   대체 확정(ADR 0005). 남은 것은 핀 집합 크기(목표 DOP 6 기준)와 상주 프로세스 정리 범위이며,
   `numactl` 바인딩은 4절 sudo 설치가 선행 조건이다.

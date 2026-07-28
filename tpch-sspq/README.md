@@ -45,6 +45,11 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
    `max_parallel_workers`는 기본값 100이라 제약이 되지 않는다. DOP sweep 범위는 1~6. (ADR 0005)
 9. **단일 쿼리 timeout은 양쪽 300초** — 초과한 쿼리는 값을 대체하거나 보간하지 않고 **별도 상태
    `timeout`으로 기록**하며, 스트림은 다음 쿼리로 계속한다. 하네스 필수 요구사항이다. (ADR 0005)
+10. **캐시 레짐은 WARM이 주 레짐** — 측정 세트마다 warmup 스트림 1회를 돌려 집계에서 빼고, AB/BA
+    엔진 전환 직후에는 warmup을 재수행한다(CUBRID 46GB + PG ~25GB vs available ~91Gi — 상대 엔진
+    런이 page cache를 밀어낼 수 있다). 측정 런의 물리 read 카운터로 warm임을 채증하며 **검증 실패
+    런은 무효**다. cold는 주 축이 아니라 **I/O 진단 트랙 전용**이고 warm과 같은 표에 합치지 않는다.
+    (ADR 0006)
 
 ## 실행 전략(얇은 경로)
 
@@ -54,7 +59,7 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 
 | 게이트 | 하는 일 | 통과 조건 / 산출물 |
 |---|---|---|
-| **G1** | R0 재현 — 기존 하네스를 그대로 쓰고, 새 pinned 빌드 2개(CUBRID `f30f1c260`, PG `5713b437a`) 위에서 AB/BA interleaved 3회 | 양쪽 22개 쿼리 완주(또는 `timeout` 상태 기록), paired 차이의 sd 실측치 확보 |
+| **G1** | R0 재현 — 기존 하네스를 그대로 쓰고, 새 pinned 빌드 2개(CUBRID `f30f1c260`, PG `5713b437a`) 위에서 AB/BA interleaved 3회. **세트 시작 전과 엔진 전환 직후마다 warmup 스트림 1회(미집계)** | 양쪽 22개 쿼리 완주(또는 `timeout` 상태 기록), 집계 런 전부 warm 검증 통과, paired 차이의 sd 실측치 확보 |
 | **G2** | 절대격차 Pareto + 22개 쿼리 양쪽 plan **병렬 여부 분류표** | **PG-only Parallel subset 식별이 최우선 통과 조건**, 절대격차 상위 목록 확정 |
 | **G3** | top5만 DOP 1 vs 목표 DOP(6) 분해 | 쿼리별 병렬 이득/무이득 구분, 필요한 쿼리에만 DOP sweep 1~6 |
 | **G4** | top3~5 plan diff + actual rows | **선행 조건: 통계 파리티**(CUBRID 통계 갱신 ↔ PG `ANALYZE`)를 먼저 맞춘 뒤 비교. plan 형상 차이와 추정/실측 행수 괴리를 기록 |
@@ -75,7 +80,9 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   `Workers Launched < 목표 DOP`의 처리만 G1 산출물을 보고 정한다.
 - 게이트 마진 — 판정 방식은 paired AB/BA + 신뢰구간으로 확정됐고, G2 절대격차 컷 마진 수치만
   G1의 paired sd 실측치로 정한다.
-- cold/warm 캐시 레짐 고정 방식 — CUBRID DB 55G, available 91Gi로 레짐이 갈리는 구간이다.
+- ~~cold/warm 캐시 레짐 고정 방식~~ → **해결**: WARM 주 레짐 + cold 진단 트랙(ADR 0006). 잔여는
+  컨테이너 안에서 `sudo /home/cubrid/bin/drop_caches.sh`가 동작하는지 **1회 실측**뿐이며, cold 트랙을
+  여는 시점에 확인한다. warm 검증 문턱(1% / 100MiB)은 G1 실측 분포로 확정한다.
 - 측정 격리 — `taskset`+`numactl` 바인딩으로 확정. 핀 집합 크기(목표 DOP 6 기준), 상주 프로세스
   정리 범위, stray `cub_master` 4개 처리만 남았다.
 - PG 데이터 적재와 PG판 쿼리 파생 규칙 — G1이 양쪽 22개 쿼리를 요구하므로 **G1의 선행 조건**이며
