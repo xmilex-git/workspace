@@ -85,9 +85,18 @@ sudo dnf install -y perf
   `-p <pid>` 부착으로 `task-clock,cycles,instructions,LLC-load-misses,
   LLC-store-misses,branch-misses` 6개를 멀티플렉싱 없이 수집 가능
   (`docs/report-q1-abcd-counters-20260728.md` B절).
-  **단 시스템 와이드 모드(`-a -C`)는 신뢰 불가** — 질의 없는 idle 9초 기준선이
-  instructions 469 G, LLC-load-misses 426 M로 물리적으로 불가능한 값을 낸다.
-  el8 perf 4.18과 커널 6.9.4의 조합 문제로 보이며, **프로세스 부착 모드만 쓴다.**
+  **정정(2026-07-28)**: 직전 기재에서 "시스템 와이드 모드(`-a -C`)는 신뢰 불가"라고
+  적었는데 **그 판단은 내 오류였다.** 통제 워크로드 대조로 확인했다 — 코어 14에 고정한
+  busy 루프를 per-process와 `-a -C 14`로 동시에 재면 instructions
+  14,030,607,865 vs 14,013,490,579 (**0.12 % 일치**). 같은 10초 창에서
+  `-a -C 0-15`의 cycles 61.92 G(→2.7 GHz 환산 22.94 CPU-s)가 `/proc/stat` 실측
+  21.63 CPU-s와 6 % 내로 맞는다. 앞서 "idle 9초에 469 G"로 본 것은 perf 결함이 아니라
+  **그 순간 배경 부하가 실제로 그만큼 무거웠던 것**이다(배경 부하 실측 범위
+  1.9~52 G instructions/s로 변동이 크다). 따라서 `-a -C`도 쓸 수 있다.
+  **단 시스템 와이드는 SUT 밖 활동을 함께 센다** — 같은 질의 창에서 SUT 부착과 동시
+  측정한 오염률이 instructions 2.6 %(CUBRID)/4.1 %(PG), cycles 7.3 %/10.5 %,
+  branch-misses 11.7 %/11.2 %인데 **LLC-load-misses는 44.8 %/93.9 %**다. 캐시
+  이벤트는 시스템 와이드로 재면 배경에 묻히므로 **SUT 부착값을 쓴다.**
 - 선택(현재 불필요): `readline-devel`(psql 줄편집), `libicu-devel`(ICU 로케일).
   둘 다 지금 configure에서 명시적으로 off 처리했다.
 
