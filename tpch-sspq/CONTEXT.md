@@ -87,3 +87,23 @@ _Avoid_: CCI 경유, broker 경유 (현 정본이 아니다)
 않는다(회계는 프로세스 단위). 클라이언트를 SUT 코어에 두는 이유는 PostgreSQL이 파싱·
 플랜을 SUT 코어에서 하므로 경합 조건을 대칭으로 맞추는 것이다. (ADR 0012)
 _Avoid_: SUT 분리, 코어 분리 (회계 경계와 혼동)
+
+**Execution unit (실행 단위)**:
+**실제로 튜플을 처리하는 동시 실행 주체의 개수**이며, worker 수와 같지 않다. CUBRID는
+leader가 스캔에 거의 참여하지 않으므로(leader CPU가 SUT CPU의 0.24 %) **실행 단위 =
+worker 수**다. PostgreSQL은 `parallel_leader_participation`이 기본 `on`이라 leader가
+worker와 동등하게 참여하므로(leader/worker CPU 비 0.999, `Parallel Seq Scan`의
+`loops` = worker 수 + 1) **실행 단위 = worker 수 + 1**이다. 파리티는 worker 수가 아니라
+**실행 단위 수**로 맞춘다 — 확정값은 CUBRID `parallelism=6` ↔ PG
+`max_parallel_workers_per_gather=5`(+leader) = 양쪽 6단위다.
+`parallel_leader_participation`은 기본 `on`을 유지한다(끄면 PG 사용자가 실제로 쓰지 않는
+구성이 된다). 플랜의 `parallel workers: N` / `Workers Launched: N`을 파리티 근거로
+쓰지 않으며, 모든 표에 **실행 단위 수 행**을 넣는다. (ADR 0014)
+_Avoid_: DOP, worker 수, 병렬도 (실행 단위와 다를 수 있다)
+
+**Natural / unit-parity-controlled (2트랙)**:
+병렬 지표를 낼 때 **(1) 자연 구성값** — 양쪽을 같은 설정 숫자로 놓은 값(양쪽 "DOP 6",
+PG는 실제로 7단위) — 과 **(2) 단위 파리티 통제값** — 양쪽 실행 단위 수를 맞춘 값 — 을
+나란히 낸다. **헤드라인 배수는 (2)를 쓴다.** natural-plan / plan-family-controlled
+2트랙 규칙과 같은 구조이며, 두 트랙을 섞은 단일 숫자는 내지 않는다. (ADR 0014)
+_Avoid_: 배수, 격차 (어느 트랙인지 불명확)

@@ -108,6 +108,17 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   DATE +1.50, INTEGER ±0), 행 구조 오버헤드는 CUBRID가 10.96 B 작다.
   **정정**: 직전 라운드에 적은 "`perf -a -C` 신뢰 불가"는 **내 오류**였다 — 통제 워크로드
   대조로 0.12 % 일치를 확인했고, 그때 본 이상값은 배경 부하 변동(1.9~52 G instr/s)이었다.
+- **실행 단위 파리티 교정 (2026-07-28, ADR 0014)** →
+  `docs/report-q1-unit-parity-20260728.md`. "목표 DOP 6" 파리티가 실제로는 **CUBRID
+  6단위 vs PG 7단위**로 어긋나 있었다 — PG는 `parallel_leader_participation`이 기본 `on`
+  이라 leader가 worker와 동등 참여한다(leader CPU 8.870 s ≈ worker 평균 8.88 s). 병렬
+  효율은 사실상 같았고(98.8 % vs 99.1 %) 단위 수만 달랐다. **교정: CUBRID
+  `parallelism=6` ↔ PG `max_parallel_workers_per_gather=5`(+leader) = 양쪽 6단위.**
+  `parallel_leader_participation`은 기본 `on` 유지(끄면 PG 사용자가 안 쓰는 구성).
+  **결과 — 형님 예측대로 wall 비가 3.555x → 3.049x로 SUT CPU 비 3.056x와 0.2 % 차로
+  수렴**했다. PG 총 CPU는 −0.12 %로 불변이고 wall만 8.957 → 10.442 s(7/6 배 예측치
+  10.450 s와 −0.07 %). 4행 결과 양쪽 바이트 동일. **헤드라인 배수는 단위 파리티 트랙
+  3.049x**를 쓰고, 자연 구성값 3.555x를 두 번째 트랙으로 함께 낸다.
 - 남은 것: **G1(R0 재현)이 다음 행동**이고 선행 조건은 모두 닫혔다. 아래 pending 중
   게이트 진행을 막는 항목만 그 전에 닫는다.
 
@@ -136,9 +147,13 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 7. **실행 전략은 얇은 경로(게이트 기반)** — R1~R8 전체 매트릭스를 순서대로 돌지 않고 G1~G5를
    차례로 통과시키며, 각 게이트의 증거로 다음 게이트의 대상 범위를 좁힌다. multi-seed(R4)와
    POWER-SHAPED는 삭제하고, 전용 C driver와 네트워크 실험(N1~N4)은 연기한다. (ADR 0005)
-8. **목표 DOP는 양쪽 6으로 고정** — CUBRID `parallelism=6` ↔ PG `max_parallel_workers_per_gather=6`,
-   PG `max_parallel_workers`(및 `max_worker_processes`)는 6 이상을 확보한다. CUBRID 서버 풀
-   `max_parallel_workers`는 기본값 100이라 제약이 되지 않는다. DOP sweep 범위는 1~6. (ADR 0005)
+8. ~~**목표 DOP는 양쪽 6으로 고정** — CUBRID `parallelism=6` ↔ PG `max_parallel_workers_per_gather=6`~~
+   → **ADR 0014가 대체.** 그 설정은 실제로 CUBRID 6단위 vs PG 7단위였다. 파리티는
+   **실행 단위 수**로 맞추며 확정값은 CUBRID `parallelism=6` ↔ PG
+   `max_parallel_workers_per_gather=5`(+leader) = **양쪽 6단위**다. PG
+   `max_parallel_workers`(및 `max_worker_processes`)는 6 이상을 확보한다. CUBRID 서버 풀
+   `max_parallel_workers`는 기본값 100이라 제약이 되지 않는다. DOP sweep을 다시 열면
+   축은 worker 수가 아니라 **실행 단위 수**다. (ADR 0005 → 0014)
 9. **단일 쿼리 timeout은 양쪽 300초** — 초과한 쿼리는 값을 대체하거나 보간하지 않고 **별도 상태
    `timeout`으로 기록**하며, 스트림은 다음 쿼리로 계속한다. 하네스 필수 요구사항이다. (ADR 0005)
 10. **캐시 레짐은 WARM이 주 레짐** — 측정 세트마다 warmup 스트림 1회를 돌려 집계에서 빼고, AB/BA
@@ -167,10 +182,12 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
     `cubrid broker status` → not running)이므로 그 열은 `csql` 자신을 뜻한다.
     (ADR 0009. 코어핀 권고는 ADR 0012가 기각·대체했고, `broker+CAS` 열 정의와
     파싱·플랜 열 의무화는 ADR 0011이 확장했다.)
-13. **기준선 = CUBRID 31.511 s / PG 8.908 s / 3.537x** (8테이블 + 히스토그램 활성화).
+13. **기준선** (8테이블 + 히스토그램 활성화, 2트랙) —
+    **헤드라인: 단위 파리티 트랙 CUBRID 31.842 s / PG 10.442 s / 3.049x**(양쪽 6 실행 단위),
+    자연 구성 트랙 CUBRID 31.511 s / PG 8.908 s / 3.537x(PG 7 실행 단위).
     파일럿 값은 이력 보존, 인용 시 구성 단서 필수. 9.19 % 드리프트는 원인 미규명 종결.
     **런 내 재현성(within-set sd)과 세션 간 드리프트(between-session drift)를 구분하고,
-    런 내 sd를 세션 간 유의성 문턱으로 쓰지 않는다.** (ADR 0010)
+    런 내 sd를 세션 간 유의성 문턱으로 쓰지 않는다.** (ADR 0010, 0014)
 14. **정본 접속 경로는 `csql -C` 직결** ↔ `psql` 직결. broker/CAS 경유 조항은 대체됐고
     기존 측정은 전부 유효하다. **모든 측정 표에 쿼리별 파싱·플랜 생성 시간 열을 채증**한다
     (CUBRID는 클라이언트측이라 SUT 밖, PG는 backend 안이라는 비대칭 때문). (ADR 0011)
@@ -179,6 +196,12 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
     (ADR 0012)
 16. **기준선 전용 재측정 라운드를 만들지 않는다** — 해당 구성에서 처음 돌리는 측정
     라운드가 기준선을 겸한다. (ADR 0013)
+17. **파리티는 실행 단위 수로 맞춘다** — 실행 단위 = 실제로 튜플을 처리하는 동시 실행
+    주체 수이며 worker 수와 다르다(CUBRID = worker 수, PG = worker 수 + 1). 확정값은
+    CUBRID `parallelism=6` ↔ PG `max_parallel_workers_per_gather=5` = **양쪽 6단위**.
+    `parallel_leader_participation`은 기본 `on` 유지. 지표는 **(1) 자연 구성값 /
+    (2) 단위 파리티 통제값 2트랙**으로 내고 **헤드라인 배수는 (2)**를 쓴다. 모든 표에
+    **실행 단위 수 행**을 넣는다. (ADR 0014)
 
 ## 실행 전략(얇은 경로)
 
