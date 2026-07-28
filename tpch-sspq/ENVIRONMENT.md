@@ -94,9 +94,14 @@ perf --version && perf stat -e cycles true
 ## 5. 남은 pending
 
 - TPC-H kit 미확보 — `dbgen`/`qgen` SHA-256과 spec/kit 버전은 **여전히 확정 불가**(ADR 0004에서 한계 수용).
-- PG 데이터 적재와 PG용 스키마·쿼리 파생: 이번 범위 밖.
+- PG 데이터 적재와 PG용 스키마·쿼리 파생 — 얇은 경로 G1이 양쪽 22개 쿼리를 요구하므로 **G1의 선행 조건**이다.
 - 양측 파라미터 공정 대응 규칙(`data_buffer_size`/`sort_buffer_size` ↔ `shared_buffers`/`work_mem`).
 - cold/warm 캐시 레짐 고정 방식.
-- 측정 격리 수준(코어 핀 집합, 상주 프로세스 정리 범위). cgroup v2·RT 우선순위는 이 장비에서 사용 불가.
-- 게이트 마진과 검정력(예비 런으로 CoV·paired sd 실측 후 확정).
+- 측정 격리 — cgroup v2·`chrt`(RT 우선순위)·HugePages가 불가하므로 `taskset`+`numactl` 바인딩으로
+  대체 확정(ADR 0005). 남은 것은 핀 집합 크기(목표 DOP 6 기준)와 상주 프로세스 정리 범위이며,
+  `numactl` 바인딩은 4절 sudo 설치가 선행 조건이다.
+- 게이트 마진 — 판정은 paired AB/BA + 신뢰구간으로 확정(ADR 0005). G2 절대격차 컷 마진 수치만
+  G1의 paired sd 실측치로 정한다.
+- 병렬 여부 분류표 라벨 규칙 — 목표 DOP 6과 채증 수단은 확정. 플랜 일부만 병렬인 경우의 라벨과
+  `Workers Launched < 목표 DOP` 처리만 미정.
 - stray `cub_master` 4개 정리 여부 — 측정 시작 전에 판단한다.

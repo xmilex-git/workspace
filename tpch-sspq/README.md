@@ -17,7 +17,7 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 - PostgreSQL `5713b437a`(20devel) 빌드·설치 완료 — `~/pg/pg20devel-5713b437`,
   `initdb -D ~/pg/pgdata-tpch-sspq` 성공. **서버는 아직 띄우지 않았다.**
 - `-g` 무해성 `.text` 검증 통과(ADR 0003).
-- 남은 것: 하네스 작성 전에 아래 pending을 닫는다. PG 데이터 적재와 PG판 쿼리는 범위 밖.
+- 남은 것: **G1(R0 재현)이 다음 행동**이다. 아래 pending 중 게이트 진행을 막는 항목만 그 전에 닫는다.
 
 ## 확정 결정
 
@@ -34,19 +34,52 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
    `-g`만 추가한다는 것과 `.text` 코드 동일성은 실측으로 확인했다. (ADR 0003)
 5. **데이터·쿼리는 기존 자산 재사용** — `~/databases/tpch_sf10_v2`(SF10)와
    `scale10/queries/q1~q22`(CUBRID 정본). TPC-H kit 부재로 dbgen seed·kit 버전은 확정 불가이며
-   그 한계를 수용한다. PG 적재·PG판 쿼리 파생은 범위 밖. (ADR 0004)
+   그 한계를 수용한다. PG 적재·PG판 쿼리 파생은 ADR 0004 시점에는 범위 밖이었고, ADR 0005에서
+   **G1 선행 조건으로 승격**됐다. (ADR 0004, 0005)
 6. **`perf`/`numactl`은 사용자가 직접 sudo 설치** — 정확한 `dnf` 명령은 `ENVIRONMENT.md` 4절.
+7. **실행 전략은 얇은 경로(게이트 기반)** — R1~R8 전체 매트릭스를 순서대로 돌지 않고 G1~G5를
+   차례로 통과시키며, 각 게이트의 증거로 다음 게이트의 대상 범위를 좁힌다. multi-seed(R4)와
+   POWER-SHAPED는 삭제하고, 전용 C driver와 네트워크 실험(N1~N4)은 연기한다. (ADR 0005)
+8. **목표 DOP는 양쪽 6으로 고정** — CUBRID `parallelism=6` ↔ PG `max_parallel_workers_per_gather=6`,
+   PG `max_parallel_workers`(및 `max_worker_processes`)는 6 이상을 확보한다. CUBRID 서버 풀
+   `max_parallel_workers`는 기본값 100이라 제약이 되지 않는다. DOP sweep 범위는 1~6. (ADR 0005)
+9. **단일 쿼리 timeout은 양쪽 300초** — 초과한 쿼리는 값을 대체하거나 보간하지 않고 **별도 상태
+   `timeout`으로 기록**하며, 스트림은 다음 쿼리로 계속한다. 하네스 필수 요구사항이다. (ADR 0005)
+
+## 실행 전략(얇은 경로)
+
+전체 매트릭스를 순회하지 않는다. **게이트를 하나 통과할 때마다 그 게이트의 증거로 다음 게이트의
+대상 범위를 좁히는 얇은 경로**로 진행한다. 각 게이트는 통과 조건과 산출물이 정해져 있고, 조건을
+채우지 못하면 다음 게이트를 열지 않는다. (ADR 0005)
+
+| 게이트 | 하는 일 | 통과 조건 / 산출물 |
+|---|---|---|
+| **G1** | R0 재현 — 기존 하네스를 그대로 쓰고, 새 pinned 빌드 2개(CUBRID `f30f1c260`, PG `5713b437a`) 위에서 AB/BA interleaved 3회 | 양쪽 22개 쿼리 완주(또는 `timeout` 상태 기록), paired 차이의 sd 실측치 확보 |
+| **G2** | 절대격차 Pareto + 22개 쿼리 양쪽 plan **병렬 여부 분류표** | **PG-only Parallel subset 식별이 최우선 통과 조건**, 절대격차 상위 목록 확정 |
+| **G3** | top5만 DOP 1 vs 목표 DOP(6) 분해 | 쿼리별 병렬 이득/무이득 구분, 필요한 쿼리에만 DOP sweep 1~6 |
+| **G4** | top3~5 plan diff + actual rows | **선행 조건: 통계 파리티**(CUBRID 통계 갱신 ↔ PG `ANALYZE`)를 먼저 맞춘 뒤 비교. plan 형상 차이와 추정/실측 행수 괴리를 기록 |
+| **G5** | 증거가 가리키는 **한 트랙만** 오픈 — optimizer 트랙 또는 VTune DIAG-PREFIX 트랙 | 증거로 확정된 영역에만 계측 패치. 두 트랙 동시 오픈 금지 |
+
+**원인 후보는 측정 증거에서만 도출한다.** 어떤 연산자·코드 경로·서브시스템도 게이트를 통과하기 전에
+병목 후보로 지목하지 않는다. 사전 지목은 G2~G4의 분류와 비교를 편향시키므로 문서·하네스·보고서
+어디에도 넣지 않는다.
+
+**환경 대체**: cgroup v2·HugePages·`chrt`(RT 우선순위)가 이 장비에서 불가하므로 `taskset`+`numactl`
+바인딩으로 격리하고, CV 3% 절대 기준 대신 **paired AB/BA + 신뢰구간**으로 판정한다. (ADR 0005)
 
 ## Pending decisions
 
 - 양측 파라미터 공정 대응 규칙(CUBRID `data_buffer_size`/`sort_buffer_size` ↔ PG `shared_buffers`/`work_mem`).
-- single-session 병렬성의 조작적 정의와 "병렬이 실제로 걸렸다"의 실증 방법
-  (CUBRID `;trace on`의 `parallel workers: N>1`, PG `EXPLAIN (ANALYZE, VERBOSE)`의 Workers Launched).
+- 병렬 여부 분류표의 라벨 규칙 — 목표 DOP(6)와 채증 수단(CUBRID `;trace on`의 `parallel workers: N`,
+  PG `EXPLAIN (ANALYZE, VERBOSE)`의 Workers Launched)은 확정됐다. 플랜 일부만 병렬인 경우의 라벨과
+  `Workers Launched < 목표 DOP`의 처리만 G1 산출물을 보고 정한다.
+- 게이트 마진 — 판정 방식은 paired AB/BA + 신뢰구간으로 확정됐고, G2 절대격차 컷 마진 수치만
+  G1의 paired sd 실측치로 정한다.
 - cold/warm 캐시 레짐 고정 방식 — CUBRID DB 55G, available 91Gi로 레짐이 갈리는 구간이다.
-- 측정 격리 수준(코어 핀 집합, 상주 프로세스 정리 범위, stray `cub_master` 4개 처리).
-  cgroup v2와 RT 우선순위는 이 장비에서 사용 불가.
-- 게이트 마진과 검정력(예비 런으로 CoV·paired sd 실측 후 확정).
-- PG 데이터 적재 시점과 PG판 쿼리 파생 규칙(다음 스코프).
+- 측정 격리 — `taskset`+`numactl` 바인딩으로 확정. 핀 집합 크기(목표 DOP 6 기준), 상주 프로세스
+  정리 범위, stray `cub_master` 4개 처리만 남았다.
+- PG 데이터 적재와 PG판 쿼리 파생 규칙 — G1이 양쪽 22개 쿼리를 요구하므로 **G1의 선행 조건**이며
+  다음 스코프의 첫 항목이다.
 
 ## 산출물 배치 원칙
 
