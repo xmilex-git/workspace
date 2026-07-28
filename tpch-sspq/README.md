@@ -7,10 +7,48 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 이 폴더는 workspace 저장소의 기존 single-context 규칙에서 **의도적으로 분리된 독립 컨텍스트**다.
 프로젝트 문서와 ADR은 모두 이 폴더 안에 둔다(ADR 0001).
 
-## 상태
+## 다음 세션 시작점 (컨텍스트 없이 시작해도 이것만 읽으면 된다)
 
-**G1 선행 조건 완료 / G1 미시작.** 양쪽 엔진에 8개 테이블이 모두 적재됐고 q1~q22가 양쪽
-방언으로 준비됐다. 측정은 아직 시작하지 않았다.
+**상태: G2 완주. Q1 규명 완료. 다음 후보는 Q21** — 격차 Pareto **43.5 %를 단독**으로 쥐고
+있고 Q1과 다른 축(실행 단위 붕괴 + 조인 전략 차이)이며 **원인 미규명**이다.
+
+### 측정 계약 요약 (전문은 아래 "확정 결정"과 `docs/adr/`)
+
+| 항목 | 값 |
+|---|---|
+| **정본 트랙** | **단위 파리티** — CUBRID `parallelism=6` ↔ PG `max_parallel_workers_per_gather=5`(+leader) = **양쪽 6 실행 단위**. 헤드라인 배수는 이 트랙 (ADR 0014) |
+| **기준선 (Q1)** | CUBRID **31.612 s** / PG **10.296 s** = **3.070x** (mmap 기준. ADR 0010+0015) |
+| **WARM 규칙** | 세트 전 warmup 1회 미집계 + **엔진 전환 직후 재수행**, 집계 런 physical read≈0 채증(문턱 1 % / 100 MiB), 실패 런 무효 (ADR 0006) |
+| **timeout** | 쿼리당 **300초**. PG는 세션 GUC `statement_timeout`(엔진 취소), **CUBRID는 기제가 없어 외부 `timeout 300`으로 클라이언트를 감싼다** → 그래서 CUBRID는 쿼리별 개별 호출이 필요하다 (CONTEXT.md 비대칭 항) |
+| **격리** | 양쪽 서버 node0 `0-15` 핀, **클라이언트도 SUT cpuset 공유**, 수집기만 밖(20-23) (ADR 0012) |
+| **PG DSM** | **`dynamic_shared_memory_type=mmap`** — 기본값 `posix` 이탈. `/dev/shm`이 64000k 고정이라 Parallel Hash 쿼리가 기본값에서 실패했다 (ADR 0015) |
+| **CPU 회계** | 주 지표 `cub_server` ↔ backend+workers. `broker+CAS`(=클라이언트측 처리 역할)와 **파싱·플랜 시간**은 별개 열 필수, 합산 단일 숫자 금지 (ADR 0009+0011) |
+| **대외 인용 단서 3건** | (1) PG 개발 스냅샷 핀 (2) CUBRID 히스토그램 on (3) PG mmap — 어느 엔진도 "출시 기본 설정 성능"이 아니다 |
+
+### 좌표 (절대경로)
+
+| 대상 | 경로 |
+|---|---|
+| 환경 변수 (**먼저 source**) | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/scratch/env.sh` |
+| 프로젝트 문서 | `/home/cubrid/dev/workspace/tpch-sspq/{README,CONTEXT,ENVIRONMENT}.md`, `docs/adr/0001`~`0015`, `docs/report-*.md` |
+| 쿼리 — CUBRID 정본 / PG 파생본 | `/home/cubrid/dev/workspace/tpch-sspq/queries/q{1..22}-{cubrid,pg}.sql` (+ `q15_{create_view,select,drop_view}-*.sql`, 변환 diff `queries/diff/`) |
+| 스키마 | `/home/cubrid/dev/workspace/tpch-sspq/schema/` |
+| G2 raw 산출물 | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/g2-stream/raw/` (`g2-times.tsv` 220행, `blocks/`, `plans/`, `plans2/`, `cubplan/`) |
+| G2 하네스 | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/g2-stream/scratch/run-g2.sh` (단계 1~5) |
+| A~D·프로파일 하네스 | `.../g1-abcd/scratch/{run-a.sh,run-a-unitparity.sh,run-b2.sh,run-c.sh,snap.py,reduce_a.py}`, `.../g1-prof/scratch/{run-prof.sh,classify.py}` |
+| CUBRID 측정 빌드 / DB | `/home/cubrid/tpch-sspq-install/cubrid-f30f1c260` / `/home/cubrid/dev/workspace/.git_ignored_dir/tpch-sspq/cubrid-databases/tpch_sf10_q1` (전용 `databases.txt`) |
+| CUBRID 핀 소스 워크트리 | `/home/cubrid/dev/wt-tpch-sspq` @ `f30f1c260` |
+| PG 측정 빌드 / PGDATA | `/home/cubrid/pg/pg20devel-5713b437` / `/home/cubrid/pg/pgdata-tpch-sspq` (port 5442) |
+| PG 핀 소스 | `/home/cubrid/dev/postgres` @ `5713b437` |
+| CUBRID 서버 기동/정지 | `/home/cubrid/dev/workspace/.agents/skills/cubrid-server-control/scripts/cubrid-server-ctl.sh` (**이것만 사용**) |
+
+**불가침**: `~/CUBRID` 심링크(`jdbc-direct-poc-release/CUBRID-jdbc-direct-v3-r1`), 공용
+`~/databases`, 적재된 8테이블(재적재 금지), `/tmp` 사용 금지, push 금지.
+
+## 상태 이력
+
+**G1 선행 조건 완료 →** 양쪽 엔진에 8개 테이블이 모두 적재됐고 q1~q22가 양쪽
+방언으로 준비됐다. 이후 Q1 파일럿·A~D 카운터·대칭 프로파일·소스 규명·G2 완주까지 진행됐다.
 
 - 인벤토리 조사 완료(2026-07-28, 읽기 전용) → `ENVIRONMENT.md`.
 - CUBRID `f30f1c260` release 빌드 설치 완료 — `~/tpch-sspq-install/cubrid-f30f1c260`,
