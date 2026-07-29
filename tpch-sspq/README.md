@@ -9,10 +9,26 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 
 ## 다음 세션 시작점 (컨텍스트 없이 시작해도 이것만 읽으면 된다)
 
-**상태: G2 완주. Q1 규명 완료. Q21 규명 완료** → `docs/report-q21-gap-20260729.md`.
-Pareto 1위 Q21의 격차가 **곱으로 갈렸다: 플랜·조인 전략 4.436x × 행당 실행 비용 3.228x**
-(단위 파리티, single-query-repeat 레짐 **14.32x**). **실행 단위 붕괴는 기여 0.2 %**로
-닫혔다(ADR 0018). 다음 후보는 Pareto 3위 **Q9(2.79x, 9.3 %)** 또는 G3(top5 DOP 분해)다.
+**상태: G2 완주. Q1·Q21·Q9 규명 완료.** Pareto 1·2·3위가 모두 갈렸다.
+
+| Q | 배수 (단위 파리티) | 곱 분해 | 지배 버킷 (instructions) | 보고서 |
+|---|---|---|---|---|
+| **Q21** (1위) | **14.32x** (single-query-repeat) | 플랜 **4.436x** × 행당 **3.228x** | 인덱스 탐색·키 비교(B-tree) **51.5 %** (69.7x) | `docs/report-q21-gap-20260729.md` |
+| **Q1** (2위) | **3.070x** | (플랜 축 미측정) | 식 평가/튜플 구성 31.2 % + 값/도메인 22.0 % + 수치 16.3 % = **69.5 %** | `docs/report-q1-symmetric-profile-20260728.md` |
+| **Q9** (3위) | **2.741x** (single-query-repeat) | 플랜 **0.984x** × 행당 **2.785x** | **지배 버킷 없음** — 상위 6개가 89.5 %를 나눈다 | `docs/report-q9-gap-20260729.md` |
+
+**Q9의 결론: 플랜 축은 격차를 만들지 않는다.** CUBRID에 PG 형상을 강제하면 1.6 % **느려지고**,
+PG에 CUBRID 조인 순서를 강제하면 35 % 느려진다 — 두 옵티마이저가 각자 옳았다. **실행 단위 축도
+0.23 %로 닫혔다**(이용률 CUBRID 98.8 % / PG 96.4 %). Q9는 **Q1형 + Q21의 B-tree 하이브리드**다.
+**Q9에서 새로 확정된 것 2건**: (a) **instructions 비 4.233x가 wall 2.741x를 과장한다** — IPC가
+CUBRID 1.929 vs PG 1.378(1.40x)이고 **cycles 비 3.022x**가 시간 비에 가깝다. Q1(IPC 사실상 동일)과
+다르므로 **앞으로 프로파일 배수를 인용할 때 이벤트를 명기한다.** (b) **cycles에서 순위가 뒤집힌다** —
+버퍼 고정·래치가 instr 3위(13.3 %) → **cycles 1위(27.8 %)**, 집계·해시는 기여 부호가 역전
+(+2.2 % → −4.7 %, PG `ExecParallelScanHashBucket` IPC 0.27).
+**여러 쿼리에 걸치는 최우선 개선 후보 2개**: ① BCB 뮤텍스 → 원자 연산 + per-thread pin 캐시
+(`page_buffer.c:950-957`; Q9 cycles 1위 27.8 % + Q21 cycles 1위 23.67 %), ② B-tree descent 페이지
+캐시 + midxkey 비교 특화 (`btree.c:5190`, `object_primitive.c:7731`; Q9 11.6 % + Q21 51.5 %).
+**구현은 아직 없다.** 다음 후보는 G3(top5 DOP 분해) 또는 Pareto 4위 Q8(3.74x).
 
 ### 측정 계약 요약 (전문은 아래 "확정 결정"과 `docs/adr/`)
 
@@ -40,6 +56,8 @@ Pareto 1위 Q21의 격차가 **곱으로 갈렸다: 플랜·조인 전략 4.436x
 | G2 하네스 | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/g2-stream/scratch/run-g2.sh` (단계 1~5) |
 | **Q21 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q21/raw/` (`s1/`, `s1-times.tsv`, `s1b-cpu.tsv`, `s2/`, `pgcpu/`, `prof/`) |
 | **Q21 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q21/scratch/` (`run-s1.sh`, `run-s1b.sh`, `run-pgcpu.sh`, `run-prof.sh`, `run-stat.sh`, `symbols2.sh`, `classify.py`, `subgroup.py`, `show_threads.py`) |
+| **Q9 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q9/raw/` (`s1-times.tsv`, `s1/`, `s1p/`, `s2a-cpu.tsv`, `s2a/`, `s2b/`, `pgcpu/`, `s2c-times.tsv`, `s2c/`, `s2d/`, `prof/`, `s4/`) |
+| **Q9 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q9/scratch/` (`run-s1.sh`, `run-s1p.sh`, `run-s2a.sh`, `run-pgcpu.sh`, `run-s2c.sh`, `run-prof.sh`, `run-stat.sh`, `symbols2.sh`, `classify.py`(**Q1∪Q21 UNION 버킷 규칙 — 세 쿼리 재분류용**), `subgroup.py`, `show_threads.py`, `sample-threads.py`) |
 | A~D·프로파일 하네스 | `.../g1-abcd/scratch/{run-a.sh,run-a-unitparity.sh,run-b2.sh,run-c.sh,snap.py,reduce_a.py}`, `.../g1-prof/scratch/{run-prof.sh,classify.py}` |
 | CUBRID 측정 빌드 / DB | `/home/cubrid/tpch-sspq-install/cubrid-f30f1c260` / `/home/cubrid/dev/workspace/.git_ignored_dir/tpch-sspq/cubrid-databases/tpch_sf10_q1` (전용 `databases.txt`) |
 | CUBRID 핀 소스 워크트리 | `/home/cubrid/dev/wt-tpch-sspq` @ `f30f1c260` |
@@ -232,6 +250,34 @@ Pareto 1위 Q21의 격차가 **곱으로 갈렸다: 플랜·조인 전략 4.436x
   - **노드별 워커 분포는 시간 가중으로 읽는다** — 개수만 세는 `N×2` 라벨을 쓰지 않는다.
     판정은 `CPU/wall ÷ 목표 단위 수`이고 **80 % 미만일 때만** `단위 붕괴`. G2 결론 4번의
     성능 해석을 정정한다(플랜 채증으로는 유효). (ADR 0018)
+- **Q9 규명 완료 (2026-07-29)** → `docs/report-q9-gap-20260729.md`. 4단계 전부 완주.
+  **격차가 곱으로 갈렸다: 2.741x = 플랜·조인 전략 0.984x × 행당 실행 비용 2.785x**(검산 오차 0.00 %).
+  **플랜 축의 기여는 0이다 — Q21과 정반대다.** CUBRID에 PG 형상을 강제(`/*+ ORDERED USE_HASH(partsupp) */`,
+  주 노드 5개 행수 완전 일치)하면 19.542 → 19.852 s로 **1.6 % 느려지고**, PG에 CUBRID 조인 순서를
+  강제(`join_collapse_limit=1`)하면 7.253 → 9.798 s로 **35 % 느려진다.** 유일한 플랜 차이는
+  partsupp가 들어오는 자리이고, 그 교환(인덱스 NL 3.26 M회 제거 −5.2 s ↔ 분할 해시 조인 degree 4
+  +4.9 s)이 상쇄된다. **실행 단위 축도 0.23 %로 닫혔다** — wall 비 2.741x ≈ SUT CPU 비 2.735x,
+  시간 가중 이용률 CUBRID **98.8 %**(질의 실행분 5.927/6) / PG 96.4 %. `CPU/wall = 6.306 > 6`은
+  `pgbuf-page-flush` 0.354단위(SUT CPU의 5.6 %) 때문이고 **PG는 그 대응물이 SUT 경계 밖**이다.
+  **지배 버킷이 없다** — 스캔·디코드 23.8 % / 식 평가·튜플 구성 23.6 % / 버퍼 고정·래치 13.3 % /
+  B-tree 11.6 % / 값·도메인 9.2 % / 수치 8.0 %로 상위 6개가 89.5 %를 나눈다. **Q1형(3버킷 40.8 %)
+  + Q21형 B-tree(11.6 %)의 하이브리드**이고 제3의 축은 없다. 최대 단일 사실은 **해시 조인 프로브
+  측 lineitem 59,986,052행 전량이 QFILE 리스트 파일 튜플로 물질화된다**는 것(생존 5.44 %,
+  `px_scan_result_type.hpp:28-34`에 프로브 융합 `RESULT_TYPE`이 없다). 절제 실험으로
+  **프로젝션 NUMERIC 컬럼당 −0.97 s**를 측정했다. 귀속 검증 CUBRID **100.05 %** / PG 98.38 %,
+  오버헤드 −0.79 %/+0.48 %. 개선 후보 5개 제시, **구현 없음.**
+- **Q9가 프로파일 인용 규칙에 추가한 것 (2026-07-29, 계약 사실)**
+  - **프로파일 배수는 이벤트를 명기한다.** Q9 실측 **instructions 4.233x vs cycles 3.022x vs
+    wall 2.741x** — IPC가 CUBRID 1.929 / PG 1.378(**1.40x**)로 갈리기 때문이다. Q1은 IPC가
+    사실상 같았고(2.339 vs 2.357) Q21은 IPC를 재지 않았다. **instructions 비는 시간 격차의
+    상한이며, cycles 비가 시간 비에 가깝다.**
+  - **cycles에서 버킷 순위가 뒤집힌다.** 버퍼 고정·래치 instr 3위(13.3 %) → **cycles 1위(27.8 %)**,
+    집계·해시는 기여 **부호가 역전**(+2.2 % → −4.7 %). 원인은 PG `ExecParallelScanHashBucket`
+    (instr 6.08 G / cycles 22.34 G = **IPC 0.27**, PG cycles의 21.2 %)의 메모리 지연이다.
+    **주 표는 instructions로 두되 cycles 표를 반드시 같이 낸다.**
+  - **버킷 규칙 정정 1건**: PG `ExecParallelScanHashBucket`은 `^ExecParallel`에 걸려 `병렬 인프라`로
+    갔었는데 `nodeHash.c`의 버킷 체인 탐색이므로 **`집계·해시·해시조인`이 맞다**. Q21 재분류에도
+    같은 정정을 적용했다(`.git_ignored_dir/q9/scratch/classify.py`).
 - 남은 것: **G1(R0 재현)이 다음 행동**이고 선행 조건은 모두 닫혔다. 아래 pending 중
   게이트 진행을 막는 항목만 그 전에 닫는다.
 
@@ -353,8 +399,11 @@ Pareto 1위 Q21의 격차가 **곱으로 갈렸다: 플랜·조인 전략 4.436x
   **플랜 채증으로만** 인용하고, 판정 라벨은 `CPU/wall ÷ 목표 실행 단위 수`로 붙인다.
   **80 % 미만일 때만** `단위 붕괴`를 쓰고, 그때 어느 노드가 붕괴 시간을 쥐는지 자기 시간
   비중과 함께 적는다. `Workers Launched < 목표 DOP`(PG Q22의 `Planned 5 / Launched 4`)도
-  같은 규칙을 적용한다 — 개수 불일치가 아니라 이용률이 판정한다. 잔여: Q5·Q8·Q11의
-  이용률 미측정(라벨 미부여 상태).
+  같은 규칙을 적용한다 — 개수 불일치가 아니라 이용률이 판정한다. **Q9는 측정해 라벨을 붙였다**
+  (`1×2 2×5 2×6` → 질의 실행분 `CPU/wall` 5.927 = 6의 **98.8 %** → `병렬 유지`; `SUBQUERY` 2워커는
+  gather 래퍼이고 그 아래가 5·6워커임을 스레드 표본화로 확정). **잔여: Q5·Q8·Q11의 이용률
+  미측정(라벨 미부여 상태).** `CPU/wall > 6`이 나오는 경우의 읽는 법(내부 배경 스레드 분리)도
+  ADR 0018에 추가됐다.
 - 게이트 마진 — 판정 방식은 paired AB/BA + 신뢰구간으로 확정됐고, G2 절대격차 컷 마진 수치만
   G1의 paired sd 실측치로 정한다. Q1 파일럿의 sd(CUBRID 0.120s / PG 0.018s)는 **엔진 내부 반복 노이즈**일
   뿐 paired AB/BA sd가 아니므로 마진 근거로 쓰지 않는다.
