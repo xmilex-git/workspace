@@ -9,8 +9,10 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 
 ## 다음 세션 시작점 (컨텍스트 없이 시작해도 이것만 읽으면 된다)
 
-**상태: G2 완주. Q1 규명 완료. 다음 후보는 Q21** — 격차 Pareto **43.5 %를 단독**으로 쥐고
-있고 Q1과 다른 축(실행 단위 붕괴 + 조인 전략 차이)이며 **원인 미규명**이다.
+**상태: G2 완주. Q1 규명 완료. Q21 규명 완료** → `docs/report-q21-gap-20260729.md`.
+Pareto 1위 Q21의 격차가 **곱으로 갈렸다: 플랜·조인 전략 4.436x × 행당 실행 비용 3.228x**
+(단위 파리티, single-query-repeat 레짐 **14.32x**). **실행 단위 붕괴는 기여 0.2 %**로
+닫혔다(ADR 0018). 다음 후보는 Pareto 3위 **Q9(2.79x, 9.3 %)** 또는 G3(top5 DOP 분해)다.
 
 ### 측정 계약 요약 (전문은 아래 "확정 결정"과 `docs/adr/`)
 
@@ -18,23 +20,26 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 |---|---|
 | **정본 트랙** | **단위 파리티** — CUBRID `parallelism=6` ↔ PG `max_parallel_workers_per_gather=5`(+leader) = **양쪽 6 실행 단위**. 헤드라인 배수는 이 트랙 (ADR 0014) |
 | **기준선 (Q1)** | CUBRID **31.612 s** / PG **10.296 s** = **3.070x** (mmap 기준. ADR 0010+0015) |
-| **WARM 규칙** | 세트 전 warmup 1회 미집계 + **엔진 전환 직후 재수행**, 집계 런 physical read≈0 채증(문턱 1 % / 100 MiB), 실패 런 무효 (ADR 0006) |
+| **WARM 규칙** | 세트 전 warmup 1회 미집계 + **엔진 전환 직후 재수행**, 집계 런 physical read≈0 채증(문턱 1 % / 100 MiB), 실패 런 무효 (ADR 0006). **하위 레짐 표기 의무** — `stream` ↔ `single-query-repeat`을 같은 표에 섞지 않는다. PG는 이 축에 민감(Q21 12.72x ↔ 14.32x), CUBRID는 무감 (ADR 0016) |
 | **timeout** | 쿼리당 **300초**. PG는 세션 GUC `statement_timeout`(엔진 취소), **CUBRID는 기제가 없어 외부 `timeout 300`으로 클라이언트를 감싼다** → 그래서 CUBRID는 쿼리별 개별 호출이 필요하다 (CONTEXT.md 비대칭 항) |
 | **격리** | 양쪽 서버 node0 `0-15` 핀, **클라이언트도 SUT cpuset 공유**, 수집기만 밖(20-23) (ADR 0012) |
 | **PG DSM** | **`dynamic_shared_memory_type=mmap`** — 기본값 `posix` 이탈. `/dev/shm`이 64000k 고정이라 Parallel Hash 쿼리가 기본값에서 실패했다 (ADR 0015) |
-| **CPU 회계** | 주 지표 `cub_server` ↔ backend+workers. `broker+CAS`(=클라이언트측 처리 역할)와 **파싱·플랜 시간**은 별개 열 필수, 합산 단일 숫자 금지 (ADR 0009+0011) |
+| **CPU 회계** | 주 지표 `cub_server` ↔ backend+workers. `broker+CAS`(=클라이언트측 처리 역할)와 **파싱·플랜 시간**은 별개 열 필수, 합산 단일 숫자 금지 (ADR 0009+0011). PG **`io worker`도 별개 열**(Q21 실측 SUT의 +4.99 %), PG worker CPU는 **N회+settle 브래킷**으로 재야 회수 누수가 없다 (ADR 0017) |
 | **대외 인용 단서 3건** | (1) PG 개발 스냅샷 핀 (2) CUBRID 히스토그램 on (3) PG mmap — 어느 엔진도 "출시 기본 설정 성능"이 아니다 |
+| **병렬 라벨** | 노드별 워커 분포는 **플랜 채증으로만** 인용. 판정은 `CPU/wall ÷ 목표 단위 수`이고 **80 % 미만일 때만** `단위 붕괴` 라벨 (ADR 0018) |
 
 ### 좌표 (절대경로)
 
 | 대상 | 경로 |
 |---|---|
 | 환경 변수 (**먼저 source**) | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/scratch/env.sh` |
-| 프로젝트 문서 | `/home/cubrid/dev/workspace/tpch-sspq/{README,CONTEXT,ENVIRONMENT}.md`, `docs/adr/0001`~`0015`, `docs/report-*.md` |
+| 프로젝트 문서 | `/home/cubrid/dev/workspace/tpch-sspq/{README,CONTEXT,ENVIRONMENT}.md`, `docs/adr/0001`~`0018`, `docs/report-*.md` |
 | 쿼리 — CUBRID 정본 / PG 파생본 | `/home/cubrid/dev/workspace/tpch-sspq/queries/q{1..22}-{cubrid,pg}.sql` (+ `q15_{create_view,select,drop_view}-*.sql`, 변환 diff `queries/diff/`) |
 | 스키마 | `/home/cubrid/dev/workspace/tpch-sspq/schema/` |
 | G2 raw 산출물 | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/g2-stream/raw/` (`g2-times.tsv` 220행, `blocks/`, `plans/`, `plans2/`, `cubplan/`) |
 | G2 하네스 | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/g2-stream/scratch/run-g2.sh` (단계 1~5) |
+| **Q21 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q21/raw/` (`s1/`, `s1-times.tsv`, `s1b-cpu.tsv`, `s2/`, `pgcpu/`, `prof/`) |
+| **Q21 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q21/scratch/` (`run-s1.sh`, `run-s1b.sh`, `run-pgcpu.sh`, `run-prof.sh`, `run-stat.sh`, `symbols2.sh`, `classify.py`, `subgroup.py`, `show_threads.py`) |
 | A~D·프로파일 하네스 | `.../g1-abcd/scratch/{run-a.sh,run-a-unitparity.sh,run-b2.sh,run-c.sh,snap.py,reduce_a.py}`, `.../g1-prof/scratch/{run-prof.sh,classify.py}` |
 | CUBRID 측정 빌드 / DB | `/home/cubrid/tpch-sspq-install/cubrid-f30f1c260` / `/home/cubrid/dev/workspace/.git_ignored_dir/tpch-sspq/cubrid-databases/tpch_sf10_q1` (전용 `databases.txt`) |
 | CUBRID 핀 소스 워크트리 | `/home/cubrid/dev/wt-tpch-sspq` @ `f30f1c260` |
@@ -180,8 +185,13 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   Q1은 15.3 %(2.87x)로 2위이고 배수 중앙값은 2.15x다. **Q2는 CUBRID가 이긴다**(0.10x,
   signed 기여 −2.00 %). **PG-only Parallel subset은 비어 있다** — 완주 19개 전부 CUBRID가
   병렬을 타고, 유일한 비대칭은 반대 방향인 **Q13(CUBRID 6단위 / PG 완전 직렬, 1.03x)**.
-  **CUBRID의 6단위는 단일 스캔 쿼리에서만 유지된다** — 다중 조인 쿼리는 노드 대부분이
+  ~~**CUBRID의 6단위는 단일 스캔 쿼리에서만 유지된다**~~ — 다중 조인 쿼리는 노드 대부분이
   2워커(Q21 `4×2 1×3 1×6`, Q5·Q8·Q11 동일 양상)이고 PG는 모든 노드가 leader+5로 균일하다.
+  **→ 성능 해석으로는 정정됨 (ADR 0018)**: 플랜 형상 서술로는 유효하지만 Q21 실측에서
+  CUBRID 이용률은 `CPU/wall 5.818 = 6단위의 96.97 %`이고 2/3워커 노드의 자기 시간 합은
+  **0.83 %**다. `N×2`는 `parallel_type::SUBQUERY`의 **코드 상수 1**
+  (`px_parallel.cpp:85-109`)이며 데이터·`parallelism`·힌트와 무관하다.
+  Q5·Q8·Q11은 이용률을 재지 않았으므로 "붕괴" 라벨을 붙이지 않는다.
   timeout 3개: Q17·Q20 양쪽 초과, **Q22는 CUBRID만**(PG 0.971 s, 1500 s 프로브도 미완주 →
   하한 ≥309x). positive_pareto 80 %는 상위 6쿼리(Q21·Q1·Q9·Q8·Q18·Q15). 결과 19개 행수
   완전 일치, 수치 차이는 전부 기존 등재된 십진 스케일 범주.
@@ -192,6 +202,36 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   보수적 방향은 **성립하지 않았다**. 무변경 CUBRID 대조군이 같은 세션쌍에서 −0.72 %
   드리프트했으므로 mmap 귀속분은 최대 ~0.7 %p, 배수 영향 3.049x → 3.070x.
   **대외 인용 단서가 3개로 늘었다.**
+- **Q21 규명 완료 (2026-07-29)** → `docs/report-q21-gap-20260729.md`. 4단계 전부 완주.
+  **격차가 곱으로 정확히 갈렸다: 14.319x = 플랜·조인 전략 4.436x × 행당 실행 비용 3.228x**
+  (검산 오차 0.00 %). 앞 항은 같은 엔진 A/B(질의 재작성으로 PG 플랜 형상 강제, 플랜 형상
+  일치를 노드 단위로 채증: supplier⋈nation 4,010 / 날짜필터 37,929,348 / l1⋈supplier
+  1,522,366 / 최종 39,448 전부 양쪽 일치), 뒤 항은 형상 일치 상태의 엔진 간 비.
+  **행당 축 3.228x는 Q1의 3.070x와 같은 크기** — Q21의 초과분 4.4x는 전부 플랜이 만든다.
+  **실행 단위 축은 0.2~1.6 %**로 닫혔다(ADR 0018).
+  **뿌리는 비용 비교가 아니라 탐색 공간**: 상관 서브쿼리가 `query_planner.c:9094-9106`에서
+  조인 열거 **이전에** 단일 노드 스캔 플랜에 못박히고, `grep -rniE "semi.?join|anti.?join"
+  src/optimizer src/parser` = **0건**이다. 힌트로 조인 순서를 강제해도 sarg가 l1 노드를
+  떠나지 않으며(추정 cost 125.67 M → 488.00 M), 옵티마이저는 **볼 수 있는 대안 중 최선을
+  정확히 골랐다**. 선택도 3개가 상수다 — `attr op attr` 0.1(실측 0.632),
+  `EXISTS` 0.1(≈0.99), `NOT EXISTS` 0.9(0.0557).
+  대칭 프로파일: **인덱스 탐색·키 비교(B-tree)가 격차의 51.5 %**(CUBRID 856.17 G vs
+  PG 12.28 G = 69.72x, `pr_midxkey_compare` 단독 12.46 %). **Q1의 1~3위 버킷(식 평가·값
+  도메인 변환·수치 연산, 합 68.0 %)은 Q21에서 5.9 %**이고 수치 연산은 **양쪽 0**이다.
+  귀속 검증 CUBRID **100.03 %**(`perf stat -p`) / PG 96.2 %(잔차는 `io worker` 4.88 G와
+  일치, 합 101.0 %), 오버헤드 −0.58~+2.58 %(문턱 5 %). 개선 후보 5개 제시, **구현 없음.**
+- **계약 결정 3건 확정 (2026-07-29, ADR 0016~0018)**
+  - **WARM에 하위 레짐이 둘 있다** — `stream` ↔ `single-query-repeat`. 물리 read≈0을 둘 다
+    통과하는데 PG Q21 wall이 **12 % 다르다**(총 버퍼 접근은 11,833,091 ↔ 11,833,092로
+    1블록 차이 동일, `shared read`만 1,275,875 → 580,522). **CUBRID는 무감**(trace fetch
+    카운터 자릿수까지 불변). 두 레짐을 같은 표에 섞지 않고 표기를 의무화한다. (ADR 0016)
+  - **PG `io worker`는 SUT 밖이되 별개 열로 기록**(Q21 실측 SUT instructions의 +4.99 %) —
+    CUBRID에 대응물이 없다. **PG worker CPU는 회수 시점 가산**이라 질의 직후 스냅샷은
+    `CPU/wall = 6.86`(6단위 초과, 물리적 불가)을 만든다 → **N회 연속 + settle 2 s 브래킷**
+    으로 재고 N으로 나눈다. CUBRID는 단일 프로세스라 이 문제가 없다. (ADR 0017)
+  - **노드별 워커 분포는 시간 가중으로 읽는다** — 개수만 세는 `N×2` 라벨을 쓰지 않는다.
+    판정은 `CPU/wall ÷ 목표 단위 수`이고 **80 % 미만일 때만** `단위 붕괴`. G2 결론 4번의
+    성능 해석을 정정한다(플랜 채증으로는 유효). (ADR 0018)
 - 남은 것: **G1(R0 재현)이 다음 행동**이고 선행 조건은 모두 닫혔다. 아래 pending 중
   게이트 진행을 막는 항목만 그 전에 닫는다.
 
@@ -309,10 +349,12 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
   (`paramdump`: `data_buffer_size=8.0G`)을 PG `shared_buffers`에 그대로 미러링했다. 규칙 자체는 미확정.
   `sort_buffer_size`/`work_mem`은 기본값이며 Q1에서는 무의미했다(CUBRID `GROUPBY … page: 0, ioread: 0`,
   PG 4행 quicksort 26kB).
-- 병렬 여부 분류표의 라벨 규칙 — 목표 DOP(6)와 채증 수단(CUBRID `;trace on`의 `parallel workers: N`,
-  PG `EXPLAIN (ANALYZE, VERBOSE)`의 Workers Launched)은 확정됐다. 플랜 일부만 병렬인 경우의 라벨과
-  `Workers Launched < 목표 DOP`의 처리만 G1 산출물을 보고 정한다. Q1에서는 양쪽 다 목표 DOP 6을
-  그대로 확보해 이 케이스가 발생하지 않았다.
+- ~~병렬 여부 분류표의 라벨 규칙~~ → **해결 (2026-07-29, ADR 0018)**: 노드별 워커 분포는
+  **플랜 채증으로만** 인용하고, 판정 라벨은 `CPU/wall ÷ 목표 실행 단위 수`로 붙인다.
+  **80 % 미만일 때만** `단위 붕괴`를 쓰고, 그때 어느 노드가 붕괴 시간을 쥐는지 자기 시간
+  비중과 함께 적는다. `Workers Launched < 목표 DOP`(PG Q22의 `Planned 5 / Launched 4`)도
+  같은 규칙을 적용한다 — 개수 불일치가 아니라 이용률이 판정한다. 잔여: Q5·Q8·Q11의
+  이용률 미측정(라벨 미부여 상태).
 - 게이트 마진 — 판정 방식은 paired AB/BA + 신뢰구간으로 확정됐고, G2 절대격차 컷 마진 수치만
   G1의 paired sd 실측치로 정한다. Q1 파일럿의 sd(CUBRID 0.120s / PG 0.018s)는 **엔진 내부 반복 노이즈**일
   뿐 paired AB/BA sd가 아니므로 마진 근거로 쓰지 않는다.

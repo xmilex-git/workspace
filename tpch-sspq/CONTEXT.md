@@ -122,3 +122,21 @@ timeout이 세션 전체를 끊으므로 **CUBRID의 timeout 채증은 쿼리별
 가능하다. timeout에 걸린 쿼리는 어느 엔진에서든 **값 대체·보간 없이** timeout으로
 기록하고 Pareto에서 제외한다.
 _Avoid_: timeout (어느 엔진의 어느 기제인지 불명확)
+
+**WARM 하위 레짐 (stream / single-query-repeat)**:
+ADR 0006의 WARM 판정(물리 read ≈ 0)을 **둘 다 통과하는 두 상태**다. `stream`은 다중 쿼리
+스트림을 도는 상태로 상대 쿼리가 대상 쿼리의 워킹셋을 **엔진 버퍼**에서 밀어내고,
+`single-query-repeat`은 한 쿼리만 반복해 그 워킹셋이 엔진 버퍼에 상주한다. 물리 read
+카운터로는 구분되지 않으므로 **엔진 버퍼 카운터**로 채증한다(PG `shared hit`/`shared read`
+분할, CUBRID trace `fetch`/`ioread`). PostgreSQL은 이 축에 민감하고(Q21 12.72x ↔ 14.32x,
+총 버퍼 접근은 1블록 차이로 동일) **CUBRID는 무감**하다. 두 하위 레짐의 값을 같은 표에
+합치지 않으며, 모든 측정 표에 하위 레짐 필드를 적는다. (ADR 0016)
+_Avoid_: WARM (하위 레짐이 불명확), 드리프트 (레짐 차이를 미규명 요인으로 오해)
+
+**`io worker` 열 (PostgreSQL만)**:
+PG 18 이후 `io_method=worker` 기본값 때문에 shared buffer read의 `preadv()`를 대행하는
+별도 프로세스다. ADR 0009의 SUT 경계("플랜을 실행하는 프로세스")에 따라 **주 지표에서 빼되
+별개 열로 기록**한다 — `broker+CAS` 열과 같은 취급이며 **CUBRID에 대응물이 없다**
+(`cub_server` 스레드가 직접 읽는다). Q21 실측 SUT instructions의 **+4.99 %**. 세 열을
+합산한 단일 숫자는 내지 않는다. (ADR 0017)
+_Avoid_: PG SUT CPU (io worker 포함 여부가 불명확)
