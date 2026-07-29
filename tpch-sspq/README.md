@@ -9,13 +9,14 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 
 ## 다음 세션 시작점 (컨텍스트 없이 시작해도 이것만 읽으면 된다)
 
-**상태: G2 완주. Q1·Q21·Q9 규명 완료.** Pareto 1·2·3위가 모두 갈렸다.
+**상태: G2 완주. Q1·Q21·Q9·Q8 규명 완료.** 절대격차 Pareto 1~4위가 모두 갈렸다.
 
 | Q | 배수 (단위 파리티) | 곱 분해 | 지배 버킷 (instructions) | 보고서 |
 |---|---|---|---|---|
 | **Q21** (1위) | **14.32x** (single-query-repeat) | 플랜 **4.436x** × 행당 **3.228x** | 인덱스 탐색·키 비교(B-tree) **51.5 %** (69.7x) | `docs/report-q21-gap-20260729.md` |
 | **Q1** (2위) | **3.070x** | (플랜 축 미측정) | 식 평가/튜플 구성 31.2 % + 값/도메인 22.0 % + 수치 16.3 % = **69.5 %** | `docs/report-q1-symmetric-profile-20260728.md` |
 | **Q9** (3위) | **2.741x** (single-query-repeat) | 플랜 **0.984x** × 행당 **2.785x** | **지배 버킷 없음** — 상위 6개가 89.5 %를 나눈다 | `docs/report-q9-gap-20260729.md` |
+| **Q8** (4위) | **3.960x** (single-query-repeat, PG read-light) | 플랜 **0.999x** × **실행단위 0.931x** × 행당 **4.256x** | 정본형상 B-tree 39.2 % / **형상 일치 시 B-tree 0 %**, Q1형 3버킷 **53.3 %** | `docs/report-q8-gap-20260729.md` |
 
 **Q9의 결론: 플랜 축은 격차를 만들지 않는다.** CUBRID에 PG 형상을 강제하면 1.6 % **느려지고**,
 PG에 CUBRID 조인 순서를 강제하면 35 % 느려진다 — 두 옵티마이저가 각자 옳았다. **실행 단위 축도
@@ -25,10 +26,32 @@ CUBRID 1.929 vs PG 1.378(1.40x)이고 **cycles 비 3.022x**가 시간 비에 가
 다르므로 **앞으로 프로파일 배수를 인용할 때 이벤트를 명기한다.** (b) **cycles에서 순위가 뒤집힌다** —
 버퍼 고정·래치가 instr 3위(13.3 %) → **cycles 1위(27.8 %)**, 집계·해시는 기여 부호가 역전
 (+2.2 % → −4.7 %, PG `ExecParallelScanHashBucket` IPC 0.27).
-**여러 쿼리에 걸치는 최우선 개선 후보 2개**: ① BCB 뮤텍스 → 원자 연산 + per-thread pin 캐시
-(`page_buffer.c:950-957`; Q9 cycles 1위 27.8 % + Q21 cycles 1위 23.67 %), ② B-tree descent 페이지
-캐시 + midxkey 비교 특화 (`btree.c:5190`, `object_primitive.c:7731`; Q9 11.6 % + Q21 51.5 %).
-**구현은 아직 없다.** 다음 후보는 G3(top5 DOP 분해) 또는 Pareto 4위 Q8(3.74x).
+
+**Q8의 결론: Q1형이되, 실행 단위 축이 처음으로 닫히지 않았다.** 플랜 축 **0.999x**(CUBRID에 PG 형상을
+강제해도 0.1 % 차)이고 역방향은 **1.870x**(PG에 CUBRID 형상 강제) — CUBRID 행당 비용이 워낙 커서
+**어느 플랜을 골랐는지가 관측되지 않는다.** 실행 단위 축은 **1.129x**(이용률 CUBRID **86.5 %** vs PG 97.6 %)
+이고, 원인은 스레드 표본화로 특정됐다 — **wall의 15.1 %(1.37 s)가 실행 단위 1**로 도는 직렬 꼬리이며,
+그 구간은 gather 위의 중간 리스트 스캔(668페이지)이 `parallel_scan_page_threshold=2048` 문턱에 걸려
+직렬로 떨어진 뒤 그 위 `customer` PK 인덱스 NL이 통째로 직렬화된 것이다
+(`px_scan.cpp:885`, `px_parallel.cpp:118-122`, `system_parameter.c:5135-5140`). 제거 시 3.960x → **3.47x**.
+**정본 형상의 B-tree 39.2 %는 플랜 축이 아니라 플랜 형상의 부산물**이다 — 형상을 맞추면 B-tree는
+**0 %**가 되고 Q1형 3버킷이 **53.3 %(instr) / 46.8 %(cycles)**로 그 자리를 그대로 차지한다.
+**Q8 PG는 ADR 0016 하위 레짐 축에 민감하다**(`hit+read` 1,465,669 완전 동일, 분할만 이동 →
+미스 −17.5 %에 wall −10.6 %, 단가 2.62 µs/미스). 그래서 같은 single-query-repeat 안에서도
+배수가 **3.43x(read-heavy) ↔ 3.96x(read-light)**로 갈린다. CUBRID는 무감.
+
+**여러 쿼리에 걸치는 최우선 개선 후보 (Q8에서 3개 신규 등재, 기존 2개 유지)**:
+① **힙 튜플 디코드 인터프리테이션 제거**(`heap_file.c:10255-10302/10315-10358/10464-10525`,
+`object_primitive.c:8968-8978`; Q1 9.9 % + Q9 23.8 % + Q8 26.1 %) —
+② **노드 경계 튜플 재구성 제거**(`query_opfunc.c:625/356/6327`, `fetch.c:4852`;
+Q1 31.2 % + Q9 23.6 % + Q8 30.6 %, cycles 11.5x) —
+③ BCB 뮤텍스 → 원자 연산 + per-thread pin 캐시
+(`page_buffer.c:950-957`; Q9 cycles 1위 27.8 % + Q21 23.67 % + Q8 19.8 %) —
+④ B-tree descent 페이지 캐시 + midxkey 비교 특화 (`btree.c:5190`, `object_primitive.c:7731`;
+Q21 51.5 % + Q8 정본 39.2 % + Q9 11.6 %) —
+⑤ **중간 리스트 스캔 병렬화 문턱을 비용 기반으로**(`px_scan.cpp:885`; Q8 단독 12.9 %,
+Q5·Q11 미확인) — ⑥ NUMERIC pass-through(`object_primitive.c:8743-8800`; Q1 16.3 % + Q9 8.0 % + Q8 9.2 %).
+**구현은 아직 없다.** 다음 후보는 G3(top5 DOP 분해), 또는 ADR 0018이 미측정으로 남긴 Q5·Q11의 이용률.
 
 ### 측정 계약 요약 (전문은 아래 "확정 결정"과 `docs/adr/`)
 
@@ -58,6 +81,8 @@ CUBRID 1.929 vs PG 1.378(1.40x)이고 **cycles 비 3.022x**가 시간 비에 가
 | **Q21 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q21/scratch/` (`run-s1.sh`, `run-s1b.sh`, `run-pgcpu.sh`, `run-prof.sh`, `run-stat.sh`, `symbols2.sh`, `classify.py`, `subgroup.py`, `show_threads.py`) |
 | **Q9 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q9/raw/` (`s1-times.tsv`, `s1/`, `s1p/`, `s2a-cpu.tsv`, `s2a/`, `s2b/`, `pgcpu/`, `s2c-times.tsv`, `s2c/`, `s2d/`, `prof/`, `s4/`) |
 | **Q9 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q9/scratch/` (`run-s1.sh`, `run-s1p.sh`, `run-s2a.sh`, `run-pgcpu.sh`, `run-s2c.sh`, `run-prof.sh`, `run-stat.sh`, `symbols2.sh`, `classify.py`(**Q1∪Q21 UNION 버킷 규칙 — 세 쿼리 재분류용**), `subgroup.py`, `show_threads.py`, `sample-threads.py`) |
+| **Q8 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q8/raw/` (`s1-times.tsv`, `s1r-times.tsv`, `s1/`, `s1r/`, `s1p/`, `s2/`, `s2-times.tsv`, `cpu/`, `cpu2/`, **`final/`(정본 세트)**, `thr/`, `prof/`) |
+| **Q8 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q8/scratch/` (`run-s1.sh`, `run-s1p.sh`, `run-s2ab.sh`, `run-cpu.sh`, **`run-final.sh`**, `run-prof.sh`, `run-stat.sh`, `symbols2.sh`, `classify.py`(**Q1∪Q21∪Q9 UNION 규칙 무변경 + `Q8`/`Q8s` 두 세트 추가**), `sample-threads.py`) |
 | A~D·프로파일 하네스 | `.../g1-abcd/scratch/{run-a.sh,run-a-unitparity.sh,run-b2.sh,run-c.sh,snap.py,reduce_a.py}`, `.../g1-prof/scratch/{run-prof.sh,classify.py}` |
 | CUBRID 측정 빌드 / DB | `/home/cubrid/tpch-sspq-install/cubrid-f30f1c260` / `/home/cubrid/dev/workspace/.git_ignored_dir/tpch-sspq/cubrid-databases/tpch_sf10_q1` (전용 `databases.txt`) |
 | CUBRID 핀 소스 워크트리 | `/home/cubrid/dev/wt-tpch-sspq` @ `f30f1c260` |
