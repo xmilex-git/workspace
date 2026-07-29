@@ -9,23 +9,71 @@ CUBRID와 PostgreSQL의 **TPC-H single-session parallel query** 동작을 같은
 
 ## 다음 세션 시작점 (컨텍스트 없이 시작해도 이것만 읽으면 된다)
 
-**상태: G2 완주. Q1·Q21·Q9·Q8·Q18·Q15 규명 완료.** 절대격차 Pareto **1~6위가 모두 갈렸다**
-(positive_pareto 80.5 % 누적).
+**`contract_revision: 2`** (원칙 v2 = ADR 0020, 2026-07-29 채택). 용어가 전면 치환됐다 —
+`G2` → **`PER_QUERY_CONNECTION_DIAG`**, `실행 단위 파리티` → **`configured-cap parity`**,
+`규명 완료` → **`measured, correctness-unverified`**.
 
-| Q | 배수 (단위 파리티) | 형상 일치 배수 | 곱 분해 | IPC (C/P) | 지배 버킷 (instructions) | 보고서 |
-|---|---|---|---|---|---|---|
-| **Q21** (1위) | **14.32x** (single-query-repeat) | 3.23x | 플랜 **4.436x** × 행당 **3.228x** | 1.807/1.563 | 인덱스 탐색·키 비교(B-tree) **51.5 %** (69.7x) | `docs/report-q21-gap-20260729.md` |
-| **Q1** (2위) | **3.070x** | (미측정) | (플랜 축 미측정) | 2.339/2.357 | 식 평가/튜플 구성 31.2 % + 값/도메인 22.0 % + 수치 16.3 % = **69.5 %** | `docs/report-q1-symmetric-profile-20260728.md` |
-| **Q9** (3위) | **2.741x** (single-query-repeat) | 2.79x | 플랜 **0.984x** × 행당 **2.785x** | 1.929/1.378 | **지배 버킷 없음** — 상위 6개가 89.5 %를 나눈다 | `docs/report-q9-gap-20260729.md` |
-| **Q8** (4위) | **3.960x** (single-query-repeat, PG read-light) | 3.96x | 플랜 **0.999x** × **실행단위 0.931x** × 행당 **4.256x** | 2.132/1.374 | 정본형상 B-tree 39.2 % / **형상 일치 시 B-tree 0 %**, Q1형 3버킷 **53.3 %** | `docs/report-q8-gap-20260729.md` |
-| **Q18** (5위) | **1.247x** (single-query-repeat) | **1.877x** | 플랜 **0.664x** × **실행단위 1.541x** × 행당 **1.218x** | **1.811/2.447** | **instructions 비 0.858x — CUBRID가 더 적다.** cycles 1위 식 평가/튜플 구성 (+36.23 G), 2위 버퍼 고정·래치 (leader 23.2 %) | `docs/report-q18-gap-20260729.md` |
-| **Q15** (6위) | **2.179x** (single-query-repeat) | **2.179x** (네이티브 형상 일치) | 플랜 **1.000x** × **실행단위 1.262x** × 행당 **1.716x** | **2.29/1.94** | **술어 평가 47.7 %(cycles, 22.0x)** — 스캔·디코드는 **0.97x 동률** | `docs/report-q15-gap-20260729.md` |
+**상태: `PER_QUERY_CONNECTION_DIAG` 완주. Q1·Q21·Q9·Q8·Q18·Q15·Q3 측정 완료
+(전부 `measured, correctness-unverified` — SF1 reference correctness 미수행, ADR 0020 §7).**
+
+**순위 표기 규칙 (ADR 0020 §3)** — complete-case와 censored를 섞지 않는다.
+
+| 구분 | 쿼리 | 값 |
+|---|---|---|
+| **전체 22개 최상위 (censored lower-bound)** | **q22** | CUBRID `timeout_ext` **≥300.008 s** / PG **0.971 s** → 격차 **≥299.03 s**, 배수 **≥309x**. **다음 대상**(ADR 0020 §6) |
+| censored — 양쪽 | q17, q20 | 양쪽 ≥300 s → 격차 판정 불가, 순위 제외 |
+| **complete-case Pareto (완주 19개)** | q1~q16, q18, q19, q21 | 아래 표. `positive_pareto` 누적 **84.1 %** (complete-case 분모) |
+
+| Q | complete-case 순위 | 배수 [wall] (configured-cap parity) | 형상 일치 배수 [wall] | 곱 분해 (이벤트 단위 명시) | IPC (C/P) | 지배 버킷 [cycles] | 보고서 |
+|---|---|---|---|---|---|---|---|
+| **Q21** | **1위** | **14.32x** (single-query-repeat) | 3.23x | 플랜 **4.436x** [wall] × 행당 **3.228x** [CPU-초] | 1.807/1.563 | 인덱스 탐색·키 비교(B-tree) 35.9 % (42.4x) | `docs/report-q21-gap-20260729.md` |
+| **Q1** | 2위 | **3.070x** | (미측정) | (플랜 축 미측정) | 2.339/2.357 | (cycles 미측정) instr 식 평가 31.2 % + 값/도메인 22.0 % + 수치 16.3 % = **69.5 %** | `docs/report-q1-symmetric-profile-20260728.md` |
+| **Q9** | 3위 | **2.741x** (single-query-repeat) | 2.79x | 플랜 **0.984x** [wall] × 행당 **2.785x** [CPU-초] | 1.929/1.378 | **지배 버킷 없음** — 상위 6개가 89.5 %를 나눈다 | `docs/report-q9-gap-20260729.md` |
+| **Q8** | 4위 | **3.960x** (single-query-repeat, PG read-light) | 3.96x | **`0.999x × 0.9314x × 4.2559x`** 또는 **`3.508x × 1.129x`** (이 두 표기만 허용, ADR 0020 §5) | 2.132/1.374 | 정본형상 B-tree 35.1 % / **형상 일치 시 B-tree 0 %**, Q1형 3버킷 46.8 % | `docs/report-q8-gap-20260729.md` |
+| **Q18** | 5위 | **1.247x** (single-query-repeat) | **1.877x** | 플랜 **0.664x** [wall] × 실행단위 **1.541x** [units 비] × 행당 **1.218x** [CPU-초] | **1.811/2.447** | **instructions 비 0.858x — CUBRID가 더 적다.** cycles 1위 식 평가/튜플 구성 101.9 %, 2위 버퍼 고정·래치 94.2 % (leader 23.2 %) | `docs/report-q18-gap-20260729.md` |
+| **Q15** | 6위 | **2.179x** (single-query-repeat) | **2.179x** (네이티브 형상 일치) | 플랜 **1.000x** [wall] × 실행단위 **1.262x** [units 비] × 행당 **1.716x** [CPU-초] | **2.29/1.94** | **술어 평가 47.7 % (22.0x)** — 스캔·디코드는 **0.97x 동률** | `docs/report-q15-gap-20260729.md` |
+| **Q3** | **7위** | **2.2573x** (single-query-repeat) | **1.8109x** (PG 형상) ↔ **1.1826x** (CUBRID 형상) | 플랜 **1.2465x** [wall] × 실행단위 **0.7986x** [units 비] × 행당 **2.2676x** [CPU-초], 검산 **0.00 %** | **1.55/1.94** | **B-tree 49.3 % (∞) + 버퍼 고정·래치 47.5 % (12.3x) = 96.8 %** — 스캔·디코드는 **0.95x 동률** | `docs/report-q3-gap-20260729.md` |
+
+**Q3의 결론: 새 범주 `플랜형(옵티마이저 오선택형)`.** Q21의 `플랜형`과 다르다 —
+**플랜 축이 CPU를 바꾸지 않는다.** CUBRID의 질의실행분 CPU-초는 idx-NL 47.30 s ↔ USE_HASH 47.60 s로
+**0.6 % 동률**이고, 플랜 축 1.2465x는 전부 `time-weighted active units` 5.61 → **7.05**(노드 cap 6의
+**117.5 %**)에서 나온다. **Q3에서 새로 확정된 것 6건**:
+(a) **`parallelism`은 쿼리 단위 상한이 아니라 노드 단위 상한**이고 전역 예산은
+`max_parallel_workers`(CUBRID **100** ↔ PG **8**, `px_worker_manager_global.cpp:57-78`)다 —
+현행 `configured-cap parity`는 노드 cap만 맞추고 **전역 예산 12.5배 비대칭을 방치**한다.
+cubH가 동시 활성 **12단위**까지 올라간 것이 그 비대칭이 물린 첫 사례이며 라벨은
+**`configured-cap 초과`**(신규)다.
+(b) **형상 일치 배수가 둘로 갈리는 첫 쿼리** — PG 형상 1.8109x ↔ CUBRID 형상 1.1826x.
+CUBRID의 인덱스 NL 경로는 cycles 1.234x로 PG와 거의 대등하다(버퍼 1.19x / B-tree 1.10x).
+따라서 **정본 버킷 표의 "B-tree 49.3 %"는 플랜 형상의 부산물**이고 형상을 맞추면 13.6 %로 떨어진다
+(Q8에서 확정한 성질의 강한 재현).
+(c) **`instructions` 비가 두 번째로 하한**이다(1.9522x < wall 2.2771x, IPC 비 **0.799**) —
+`instructions` 기반 서술 금지. `cycles` 2.4397x가 wall보다 7.1 % 큰 잔차는 유효 클럭 비
+2.476/2.289 = 1.0817과 units 비 1.0098로 **0.04 %** 내에 닫힌다.
+(d) **버퍼 고정·래치 역전이 다섯 번째로 재현**되되 형태가 다르다 — 순위는 2위로 같고
+**절대 델타가 instr 28.31 G → cycles 33.57 G로 커져** 1위와의 격차가 47.9 %p → **1.8 %p로 붕괴**한다
+(그 버킷 IPC **0.83**, B-tree는 2.06). 뿌리는 **플랜이 페이지를 27.79배 더 만지는 것**이다 —
+CUBRID 39,538,926 page fix ↔ PG 1,422,457 buffer access, **fix 1회에 659 cycles**
+(`page_buffer.c:2211`, lock-free fast path `:7670`이 이미 있는데도).
+(e) **`perf record -a -C`의 심볼 해석 함정 등재** — perf 4.18은 레코드 시작 전 존재하던 sibling
+스레드의 map group을 연결하지 못해 CUBRID 정본 프로파일의 **99.95 %가 `[unknown]`**이 됐다
+(워커 풀 재사용). 오프라인 심볼라이저 `q3/scratch/resolve.py`로 보정하고 perf 해석분과
+**95.68 % / 96.42 % 일치**를 검산했다. **이전 라운드 CUBRID 프로파일은 재검증 대상**이다.
+(f) **ADR 0019 §4-c leader 클럭 이득이 재현되지 않는다**(leader 2.378 GHz < worker 2.513 GHz,
+직렬 0.50 s) → 조항을 **"직렬 구간이 wall의 20 % 이상일 때만"**으로 좁혔다(ADR 0020 §5).
+또한 **ADR 0016 민감도 판정도 좁혔다** — PG Q3는 잔존율이 30.2 → 66.6 %(**+36.4 %p**, Q8의 3.6배)로
+움직이는데 `Execution Time`은 −1.86 %다(미스 단가 **0.175 µs**) → 판정 기준은 잔존율 이동이 아니라
+**"미스 감소량 × 단가가 wall에서 관측되는가"**다.
+**개선 후보 5개** 제시(A NL probe 비용 재교정 = 신규 / B `pgbuf_fix_release` hit 경로 단축 = 기존 ③ 확장,
+**A+B 동시 착지 시 1.722x** / C 힙 튜플 디코드 특화 = ①, 형상 일치 시 1위 / D 전역 병렬 예산 쿼리 단위화
+= 신규, **성능이 아니라 계약 정합 후보** / E B-tree descent 캐시 = ④, 형상 의존).
+**기존 후보 중 ②⑤⑥⑦⑧⑬ 정본 배제, ⑫⑭ 부분 해당, ⑮ 채증**(전부 채증).
 
 **Q15의 결론: 새 범주 `필터 지배형`이고, 양쪽이 동시에 단위 붕괴한다.**
 `2.1650x = 플랜 1.0000x × 실행단위 1.2620x × 행당 1.7155x`(검산 오차 **0.00 %**).
 **플랜 축이 네이티브로 1인 첫 쿼리**다 — 형상이 계열까지 일치하고 노드별 실제 행수도 일치해
 (스캔 통과 2,265,714 / 그룹 100,000 / 최종 1) 강제할 형상 차가 없다.
-**Q15에서 새로 확정된 것 5건**: (a) **세 문장 정의 문제는 닫혔다** — G2 하네스는 `create view`/`select`/
+**Q15에서 새로 확정된 것 5건**: (a) **세 문장 정의 문제는 닫혔다** — `PER_QUERY_CONNECTION_DIAG` 하네스는 `create view`/`select`/
 `drop view` **세 문장 전체를 한 호출로** 쟀고(정의 A = 정본·헤드라인), 정의 B(select만)와 차이가
 **0.01 %**다. DDL이 **양쪽 정확히 4 ms**여서 뷰 생성 비용의 격차 기여는 **0.0000 s**다.
 (b) **양쪽 모두 뷰를 실체화하지 않고 인라인 확장해 lineitem을 2회 스캔한다** — CSE가 어느 엔진에도 없다.
@@ -119,14 +167,28 @@ Q5·Q11 미확인; **Q18 해당 없음** — Q18의 직렬 노드는 리스트 �
 ⑧ **[신규] `px_scan_result_handler::write()`의 `thread_local` 호이스팅**
 (`px_scan_result_handler.cpp:49`/`:787-925`, `hpp:80`; 이미 있는 해법 패턴 `:939-940`;
 Q18 워커 instructions 7.6 % / cycles 5.2 %, 전체 cycles 3.6 %. **난이도·위험 최저, 비용/효과 비 최상**).
-**구현은 아직 없다.** 다음 후보는 G3(top5 DOP 분해), 또는 ADR 0018·0019가 미측정으로 남긴
-Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인했으므로 PG 이용률까지 재야 한다).
+⑨ **[Q3 신규] NL 인덱스 probe 비용 재교정** — `ISCAN_IO_HIT_RATIO 0.5` 하드코드 제거,
+`HJ_MEM_ALLOC_CONSTANT`의 NL 선호 오프셋 폐기, probe 비용에 인덱스 높이 × page fix 단가 반영
+(`query_planner.c:98`/`:3411`/`:87`/`:3650-3658`; Q3 플랜 축 **1.2465x** 전량. 모델은 probe:row를
+0.91:1로 보는데 실측은 **4.49:1** = 4.9배 역방향 오차. **위험 높음** — 22쿼리 전체 플랜이 바뀐다) —
+⑩ **[Q3 신규] 전역 병렬 예산을 쿼리 단위로** — `parallelism`은 노드 cap이고 전역 예산은
+`max_parallel_workers`(CUBRID 100 ↔ PG 8)다 (`px_parallel.cpp:172`,
+`px_worker_manager_global.cpp:57-78`; **성능 개선이 아니라 `configured-cap parity` 정합 후보**.
+Q3 cubH가 동시 활성 12단위로 cap 6을 117.5 % 초과했다).
+**구현은 아직 없다.** 다음 대상은 **q22**(censored lower-bound ≥309x, bounded profile + 플랜 규명,
+ADR 0020 §6 — 새 세션으로 별도 지시). 그 밖의 미측정 항목: ADR 0018·0019가 남긴 Q5·Q11의 **양쪽**
+`time-weighted active units`, 백로그 3건(`TRUE_SINGLE_CONNECTION`, `SF1_CORRECTNESS`, rev 1 raw 백업 tar).
 
 ### 측정 계약 요약 (전문은 아래 "확정 결정"과 `docs/adr/`)
 
 | 항목 | 값 |
 |---|---|
-| **정본 트랙** | **단위 파리티** — CUBRID `parallelism=6` ↔ PG `max_parallel_workers_per_gather=5`(+leader) = **양쪽 6 실행 단위**. 헤드라인 배수는 이 트랙 (ADR 0014) |
+| **`contract_revision`** | **2** (ADR 0020). rev 1은 ADR 0001~0019까지의 계약이며 과거 결과의 실행 계약으로 보존한다. rev 1 결과를 rev 2 용어로 다시 쓸 때는 `실행 계약 rev 1 / 기술 rev 2`를 명기한다 |
+| **정본 트랙** | **`configured-cap parity`** — 노드 단위 cap을 CUBRID `parallelism=6` ↔ PG `max_parallel_workers_per_gather=5`(+leader)로 맞춘다. **전역 예산은 맞추지 않는다**(CUBRID `max_parallel_workers=100` ↔ PG `8`, 12.5배 비대칭 — 기록 대상). "6 실행 단위 파리티"라는 표현은 폐기됐다 (ADR 0014+0020 §4) |
+| **run metadata 의무** | 모든 run 디렉터리에 `meta.json`: `contract_revision`, `track`, `connection_mode`, `protocol`, `cpuset`, `timeout_method`, `sut_boundary`, `configured_cap`, `build`(commit+Build ID), `config_deviations`, `correctness`, `artifacts`(sha256). 표준 스크립트 `q3/scratch/meta.sh`. **계약≠실행이면 `CONTRACT_MISMATCH` + 중단.** metadata 없는 run은 표에 올리지 않는다 (ADR 0020 §2) |
+| **상태 라벨** | **`measured, correctness-unverified`**. SF1 reference correctness 미수행이므로 **"완료"를 쓰지 않는다**. 대체 채증(엔진 간 결과 동일성·노드별 행수 일치)은 하위 증거일 뿐이다 (ADR 0020 §7) |
+| **순위 표기** | **complete-case(완주 19개) Pareto와 censored lower-bound를 분리**한다. 전체 22개 최상위는 **q22**(≥309x), Q21은 **"완주 19개 complete-case Pareto 1위"**로만 표기 (ADR 0020 §3) |
+| **트랙 명칭** | 구 `G2` = **`PER_QUERY_CONNECTION_DIAG`** (쿼리마다 클라이언트를 새로 띄운다 → 단일 connection 결과로 표현 금지). `TRUE_SINGLE_CONNECTION`은 백로그 (ADR 0020 §1) |
 | **기준선 (Q1)** | CUBRID **31.612 s** / PG **10.296 s** = **3.070x** (mmap 기준. ADR 0010+0015) |
 | **WARM 규칙** | 세트 전 warmup 1회 미집계 + **엔진 전환 직후 재수행**, 집계 런 physical read≈0 채증(문턱 1 % / 100 MiB), 실패 런 무효 (ADR 0006). **하위 레짐 표기 의무** — `stream` ↔ `single-query-repeat`을 같은 표에 섞지 않는다. PG는 **쿼리 조건부로** 민감(Q21 12.72x ↔ 14.32x, Q8 3.43x ↔ 3.96x / **Q9·Q18 무감**), CUBRID는 무감 (ADR 0016) |
 | **timeout** | 쿼리당 **300초**. PG는 세션 GUC `statement_timeout`(엔진 취소), **CUBRID는 기제가 없어 외부 `timeout 300`으로 클라이언트를 감싼다** → 그래서 CUBRID는 쿼리별 개별 호출이 필요하다 (CONTEXT.md 비대칭 항) |
@@ -134,20 +196,22 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
 | **PG DSM** | **`dynamic_shared_memory_type=mmap`** — 기본값 `posix` 이탈. `/dev/shm`이 64000k 고정이라 Parallel Hash 쿼리가 기본값에서 실패했다 (ADR 0015) |
 | **CPU 회계** | 주 지표 `cub_server` ↔ backend+workers. `broker+CAS`(=클라이언트측 처리 역할)와 **파싱·플랜 시간**은 별개 열 필수, 합산 단일 숫자 금지 (ADR 0009+0011). PG **`io worker`도 별개 열**(Q21 실측 SUT의 +4.99 %), PG worker CPU는 **N회+settle 브래킷**으로 재야 회수 누수가 없다 (ADR 0017) |
 | **대외 인용 단서 3건** | (1) PG 개발 스냅샷 핀 (2) CUBRID 히스토그램 on (3) PG mmap — 어느 엔진도 "출시 기본 설정 성능"이 아니다 |
-| **병렬 라벨** | 노드별 워커 분포는 **플랜 채증으로만** 인용. 판정은 `CPU/wall ÷ 목표 단위 수`이고 **80 % 미만일 때만** `단위 붕괴` 라벨이며 **PG에도 같이 적용한다** (ADR 0018+0019). 직렬 구간이 wall의 20 % 이상이면 **행위자별 프로파일**(CUBRID tid comm / PG pid 역할)을 필수 산출물로 낸다 (ADR 0019 §4) |
-| **프로파일 정본 축** | **`cycles`**. `instructions` 비는 상한도 하한도 아니다(Q8 5.796x ≫ wall 3.960x, **Q18 0.858x ≪ wall 1.247x**). **IPC 비를 표에 항상 넣고**, 1에서 ±20 % 벗어나면 `instructions` 기반 서술을 금지한다 (ADR 0019 §2) |
-| **배수 표기** | 정본 플랜 배수와 **형상 일치 배수를 같은 줄에 병기**한다. 20 % 이상 벌어지면 그 배수는 "두 옵티마이저 선택의 차"를 포함한 값이다(Q18 1.247x ↔ **1.877x**) (ADR 0019 §1) |
+| **병렬 라벨** | 노드별 워커 분포는 **플랜 채증으로만** 인용. 모든 표에 `planned` / `launched` / `동시 활성(표본 최대)` / `time-weighted active units` / `serial tail`을 **따로** 적는다. 라벨은 노드 cap 대비 `time-weighted active units`로 판정 — **80 % 미만 `단위 붕괴` / 100 % 초과 `configured-cap 초과`(Q3 신규) / 그 사이 `병렬 유지`**, **PG에도 같이 적용**한다 (ADR 0018+0019+0020 §4). 직렬 구간이 wall의 20 % 이상이면 **행위자별 프로파일** 필수이고, **클럭 이득 가정도 그때만** 한다 (ADR 0019 §4, 0020 §5) |
+| **프로파일 정본 축** | **`cycles`**. `instructions` 비는 상한도 하한도 아니다(Q8 5.796x ≫ wall 3.960x, **Q18 0.858x ≪ 1.247x, Q3 1.9522x ≪ 2.2771x**). **IPC 비를 표에 항상 넣고**, 1에서 ±20 % 벗어나면 `instructions` 기반 서술을 금지한다 (ADR 0019 §2). **모든 배수·기여도에 이벤트 단위를 붙이고 혼용하지 않는다** — `[wall]`/`[질의실행분 CPU-초]`/`[cycles]`/`[instructions]`/`[time-weighted active units]` (ADR 0020 §5) |
+| **프로파일 채증 함정** | `perf record -a -C`(perf 4.18)는 **레코드 시작 전 존재하던 sibling 스레드**의 심볼을 해석하지 못한다 — CUBRID 워커 풀 재사용 시 최대 **99.95 %가 `[unknown]`**. 오프라인 심볼라이저 `q3/scratch/resolve.py`로 보정하고 perf 해석분과의 일치율을 검산한다(Q3 95.68 % / 96.42 %). 이전 라운드 CUBRID 프로파일은 재검증 대상 (Q3 §3.1) |
+| **배수 표기** | 정본 플랜 배수와 **형상 일치 배수를 같은 줄에 병기**한다. 20 % 이상 벌어지면 그 배수는 "두 옵티마이저 선택의 차"를 포함한 값이다(Q18 1.247x ↔ **1.877x**). **형상 일치 배수가 둘일 수 있다** — Q3는 PG 형상 1.8109x ↔ CUBRID 형상 1.1826x이며 둘 다 적는다 (ADR 0019 §1) |
+| **Q8 분해 표기** | **`0.999x × 0.9314x × 4.2559x` 또는 `3.508x × 1.129x`만 허용.** 두 표기를 섞거나 다른 인자 조합으로 재배열하지 않는다 (ADR 0020 §5) |
 
 ### 좌표 (절대경로)
 
 | 대상 | 경로 |
 |---|---|
 | 환경 변수 (**먼저 source**) | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/scratch/env.sh` |
-| 프로젝트 문서 | `/home/cubrid/dev/workspace/tpch-sspq/{README,CONTEXT,ENVIRONMENT}.md`, `docs/adr/0001`~`0019`, `docs/report-*.md` |
+| 프로젝트 문서 | `/home/cubrid/dev/workspace/tpch-sspq/{README,CONTEXT,ENVIRONMENT}.md`, `docs/adr/0001`~`0020`, `docs/report-*.md`, **`docs/MANIFEST-raw-evidence.md`** |
 | 쿼리 — CUBRID 정본 / PG 파생본 | `/home/cubrid/dev/workspace/tpch-sspq/queries/q{1..22}-{cubrid,pg}.sql` (+ `q15_{create_view,select,drop_view}-*.sql`, 변환 diff `queries/diff/`) |
 | 스키마 | `/home/cubrid/dev/workspace/tpch-sspq/schema/` |
-| G2 raw 산출물 | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/g2-stream/raw/` (`g2-times.tsv` 220행, `blocks/`, `plans/`, `plans2/`, `cubplan/`) |
-| G2 하네스 | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/g2-stream/scratch/run-g2.sh` (단계 1~5) |
+| `PER_QUERY_CONNECTION_DIAG` raw 산출물 (구 `G2`) | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/g2-stream/raw/` (`g2-times.tsv` 220행, `blocks/`, `plans/`, `plans2/`, `cubplan/`) — `contract_revision: 1`, metadata 없음 |
+| `PER_QUERY_CONNECTION_DIAG` 하네스 | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/g2-stream/scratch/run-g2.sh` (단계 1~5) — **쿼리마다 클라이언트를 새로 띄운다**(재명명 근거) |
 | **Q21 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q21/raw/` (`s1/`, `s1-times.tsv`, `s1b-cpu.tsv`, `s2/`, `pgcpu/`, `prof/`) |
 | **Q21 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q21/scratch/` (`run-s1.sh`, `run-s1b.sh`, `run-pgcpu.sh`, `run-prof.sh`, `run-stat.sh`, `symbols2.sh`, `classify.py`, `subgroup.py`, `show_threads.py`) |
 | **Q9 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q9/raw/` (`s1-times.tsv`, `s1/`, `s1p/`, `s2a-cpu.tsv`, `s2a/`, `s2b/`, `pgcpu/`, `s2c-times.tsv`, `s2c/`, `s2d/`, `prof/`, `s4/`) |
@@ -156,6 +220,11 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
 | **Q8 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q8/scratch/` (`run-s1.sh`, `run-s1p.sh`, `run-s2ab.sh`, `run-cpu.sh`, **`run-final.sh`**, `run-prof.sh`, `run-stat.sh`, `symbols2.sh`, `classify.py`(**Q1∪Q21∪Q9 UNION 규칙 무변경 + `Q8`/`Q8s` 두 세트 추가**), `sample-threads.py`) |
 | **Q18 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q18/raw/` (`s1/`(wall.tsv·플랜·trace), `s2/`(형상 A/B·집계 단독), `s3/`(레짐·민감도), `cpu/`, `cpu2/`, `thr/`, `prof/`) |
 | **Q18 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q18/scratch/` (`run-s1.sh`, `run-s2.sh`, `run-cpu.sh`, `run-cpu2.sh`, `run-thr.sh`, `run-prof.sh`, `run-stat18.sh`, `symbols2.sh`, **`actors.sh`·`actor-buckets.sh`(행위자별 프로파일 — 신규)**, `classify.py`(**Q1∪Q21∪Q9∪Q8 규칙 + Q18 확장 6심볼 + `Q18`/`Q18m` 세트 추가**), `sample-threads.py`, **`sample-pg.py`(PG 프로세스 동시성 표본화 — 신규)**) |
+| **Q15 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q15/raw/` (`s1/`, `s2/`, `cpu/`, `cte/`, `thr/`, `prof/`) |
+| **Q15 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q15/scratch/` (`run-s1.sh`, `run-cpu.sh`, `run-cpu-cte.sh`, `run-thr.sh`, `run-prof.sh`, `run-stat.sh`, `symbols2.sh`, `classify.py`, `actors.sh`, `actor-classify.py`) |
+| **Q3 raw 산출물** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q3/raw/` (`s1/`, `s2/`, `s2b/`, **`final/`(정본 세트)**, `pair/`, `cpu/`, `cpu2/`, `cpu3/`, `thr/`, `prof/`) — **각 세트에 `meta.json`(`contract_revision: 2`)** |
+| **Q3 하네스** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/q3/scratch/` (`run-s1.sh`, `run-s2.sh`, `run-s2b.sh`, **`run-final.sh`**, `run-pair.sh`(인접 쌍 A/B), `run-cpu.sh`(`SUB`/`QC`/`QP` 파라미터화), `run-thr.sh`, `run-prof.sh`, `run-stat.sh`, **`meta.sh`(metadata 표준 — 신규)**, `symbols2.sh`, `classify.py`(UNION 규칙 + `Q3`/`Q3h`/`Q3n`), **`resolve.py`(perf 심볼 해석 보정 — 신규)**, **`actors.py`(행위자별 분해 — 신규)**, `actor-classify.py`) |
+| **raw 백업** | `/home/cubrid/dev/workspace/tpch-sspq/.git_ignored_dir/backup/` (`q3-raw-20260729.tar.gz`) — 목록은 `docs/MANIFEST-raw-evidence.md` |
 | A~D·프로파일 하네스 | `.../g1-abcd/scratch/{run-a.sh,run-a-unitparity.sh,run-b2.sh,run-c.sh,snap.py,reduce_a.py}`, `.../g1-prof/scratch/{run-prof.sh,classify.py}` |
 | CUBRID 측정 빌드 / DB | `/home/cubrid/tpch-sspq-install/cubrid-f30f1c260` / `/home/cubrid/dev/workspace/.git_ignored_dir/tpch-sspq/cubrid-databases/tpch_sf10_q1` (전용 `databases.txt`) |
 | CUBRID 핀 소스 워크트리 | `/home/cubrid/dev/wt-tpch-sspq` @ `f30f1c260` |
@@ -169,7 +238,7 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
 ## 상태 이력
 
 **G1 선행 조건 완료 →** 양쪽 엔진에 8개 테이블이 모두 적재됐고 q1~q22가 양쪽
-방언으로 준비됐다. 이후 Q1 파일럿·A~D 카운터·대칭 프로파일·소스 규명·G2 완주까지 진행됐다.
+방언으로 준비됐다. 이후 Q1 파일럿·A~D 카운터·대칭 프로파일·소스 규명·`PER_QUERY_CONNECTION_DIAG`(구 `G2`) 완주까지 진행됐다.
 
 - 인벤토리 조사 완료(2026-07-28, 읽기 전용) → `ENVIRONMENT.md`.
 - CUBRID `f30f1c260` release 빌드 설치 완료 — `~/tpch-sspq-install/cubrid-f30f1c260`,
@@ -273,7 +342,7 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
   DATE +1.50, INTEGER ±0), 행 구조 오버헤드는 CUBRID가 10.96 B 작다.
   **정정**: 직전 라운드에 적은 "`perf -a -C` 신뢰 불가"는 **내 오류**였다 — 통제 워크로드
   대조로 0.12 % 일치를 확인했고, 그때 본 이상값은 배경 부하 변동(1.9~52 G instr/s)이었다.
-- **실행 단위 파리티 교정 (2026-07-28, ADR 0014)** →
+- **`configured-cap parity` 교정 (2026-07-28, ADR 0014; rev 2에서 재명명, ADR 0020 §4)** →
   `docs/report-q1-unit-parity-20260728.md`. "목표 DOP 6" 파리티가 실제로는 **CUBRID
   6단위 vs PG 7단위**로 어긋나 있었다 — PG는 `parallel_leader_participation`이 기본 `on`
   이라 leader가 worker와 동등 참여한다(leader CPU 8.870 s ≈ worker 평균 8.88 s). 병렬
@@ -296,7 +365,8 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
   **배제**: DECIMAL 산술이 주 동인이라는 설명(1.77x, PG 비중이 42.43 %로 더 큼),
   메모리 할당(0.82x로 CUBRID가 **적다**, 기여 −1.5 %), 버퍼·래치(양쪽 0.2 % 미만),
   정렬(양쪽 0 %). ADR 0005 해제 범위대로 근거 숫자를 붙인 원인 후보 3개를 냈다.
-- **G2 완주 (2026-07-28)** → `docs/report-g2-stream-20260728.md`. 단위 파리티 트랙,
+- **`PER_QUERY_CONNECTION_DIAG`(게이트 G2) 완주 (2026-07-28)** → `docs/report-g2-stream-20260728.md`.
+  **rev 1 실행 계약 / rev 2 기술**. `configured-cap parity` 트랙,
   AB/BA 3블록 10스트림. **Q1은 대표가 아니다** — 격차의 **43.5 %가 Q21 단독**(12.72x),
   Q1은 15.3 %(2.87x)로 2위이고 배수 중앙값은 2.15x다. **Q2는 CUBRID가 이긴다**(0.10x,
   signed 기여 −2.00 %). **PG-only Parallel subset은 비어 있다** — 완주 19개 전부 CUBRID가
@@ -318,7 +388,7 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
   보수적 방향은 **성립하지 않았다**. 무변경 CUBRID 대조군이 같은 세션쌍에서 −0.72 %
   드리프트했으므로 mmap 귀속분은 최대 ~0.7 %p, 배수 영향 3.049x → 3.070x.
   **대외 인용 단서가 3개로 늘었다.**
-- **Q21 규명 완료 (2026-07-29)** → `docs/report-q21-gap-20260729.md`. 4단계 전부 완주.
+- **Q21 측정 — `measured, correctness-unverified` (2026-07-29)** → `docs/report-q21-gap-20260729.md`. 4단계 전부 완주.
   **격차가 곱으로 정확히 갈렸다: 14.319x = 플랜·조인 전략 4.436x × 행당 실행 비용 3.228x**
   (검산 오차 0.00 %). 앞 항은 같은 엔진 A/B(질의 재작성으로 PG 플랜 형상 강제, 플랜 형상
   일치를 노드 단위로 채증: supplier⋈nation 4,010 / 날짜필터 37,929,348 / l1⋈supplier
@@ -346,9 +416,9 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
     `CPU/wall = 6.86`(6단위 초과, 물리적 불가)을 만든다 → **N회 연속 + settle 2 s 브래킷**
     으로 재고 N으로 나눈다. CUBRID는 단일 프로세스라 이 문제가 없다. (ADR 0017)
   - **노드별 워커 분포는 시간 가중으로 읽는다** — 개수만 세는 `N×2` 라벨을 쓰지 않는다.
-    판정은 `CPU/wall ÷ 목표 단위 수`이고 **80 % 미만일 때만** `단위 붕괴`. G2 결론 4번의
+    판정은 `time-weighted active units ÷ 노드 cap`이고 **80 % 미만 `단위 붕괴` / 100 % 초과 `configured-cap 초과`**. `PER_QUERY_CONNECTION_DIAG` 결론 4번의
     성능 해석을 정정한다(플랜 채증으로는 유효). (ADR 0018)
-- **Q9 규명 완료 (2026-07-29)** → `docs/report-q9-gap-20260729.md`. 4단계 전부 완주.
+- **Q9 측정 — `measured, correctness-unverified` (2026-07-29)** → `docs/report-q9-gap-20260729.md`. 4단계 전부 완주.
   **격차가 곱으로 갈렸다: 2.741x = 플랜·조인 전략 0.984x × 행당 실행 비용 2.785x**(검산 오차 0.00 %).
   **플랜 축의 기여는 0이다 — Q21과 정반대다.** CUBRID에 PG 형상을 강제(`/*+ ORDERED USE_HASH(partsupp) */`,
   주 노드 5개 행수 완전 일치)하면 19.542 → 19.852 s로 **1.6 % 느려지고**, PG에 CUBRID 조인 순서를
@@ -376,7 +446,7 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
   - **버킷 규칙 정정 1건**: PG `ExecParallelScanHashBucket`은 `^ExecParallel`에 걸려 `병렬 인프라`로
     갔었는데 `nodeHash.c`의 버킷 체인 탐색이므로 **`집계·해시·해시조인`이 맞다**. Q21 재분류에도
     같은 정정을 적용했다(`.git_ignored_dir/q9/scratch/classify.py`).
-- **Q15 규명 완료 (2026-07-29)** → `docs/report-q15-gap-20260729.md`. 4단계 전부 완주.
+- **Q15 측정 — `measured, correctness-unverified` (2026-07-29)** → `docs/report-q15-gap-20260729.md`. 4단계 전부 완주.
   **`2.1650x = 플랜 1.0000x × 실행단위 1.2620x × 행당 1.7155x`(검산 오차 0.00 %)** — 플랜 축이
   **네이티브로 1**인 첫 쿼리. 세 문장(create view/select/drop view) 정의 문제를 먼저 닫았다:
   G2는 세 문장 전체를 한 호출로 쟀고(정의 A = 헤드라인), 정의 B와 차 0.01 %, **DDL 양쪽 4 ms로
@@ -388,7 +458,7 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
   (외곽 gather 5 + InitPlan 3). `max_parallel_workers` 기본값 유지, 실행 단위 축으로만 분해 기록.
   귀속 검증 instructions CUBRID **100.22 %** / PG **100.10 %**(신규: `perf stat -p <postmaster>` 부착),
   오버헤드 −0.05 %/+0.56 %. 개선 후보 5개, **기존 후보 8개 중 5개 배제(채증)**. **구현 없음.**
-- **Q18 규명 완료 (2026-07-29)** → `docs/report-q18-gap-20260729.md`, ADR 0019.
+- **Q18 측정 — `measured, correctness-unverified` (2026-07-29)** → `docs/report-q18-gap-20260729.md`, ADR 0019.
   **`1.247x`(single-query-repeat; G2 stream 1.214x)는 두 플랜 오류의 상쇄값이다** — 형상을 맞추면
   **1.877x**, 집계 서브쿼리만 떼면 **1.958x**다. 3축 분해
   **`1.2468x = 플랜 0.6643x × 실행단위 1.5409x × 행당 1.2180x`**(검산 오차 **0.014 %**).
@@ -427,6 +497,46 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
     leader가 1,251 MB를 직렬 스필하고 20.40 s → 32.78 s로 느려진다 — 기본 4 MB가 우연히 최적이다.**
   - 개선 후보 5개(신규 2 + 기존 3), 기존 후보 중 **④ B-tree·⑤ 리스트 스캔 문턱·⑥ NUMERIC은
     Q18에 해당 없음**(각 0.0 % / 미해당 / cycles 1.00x 동률)임을 채증. **구현 없음.**
+- **Q3 측정 — `measured, correctness-unverified` (2026-07-29)** → `docs/report-q3-gap-20260729.md`, ADR 0020.
+  **`contract_revision: 2` 첫 보고서.** 4단계 전부 완주, `raw/*/meta.json` 10세트.
+  **`2.2573x [wall] = 플랜 1.2465x [wall] × 실행단위 0.7986x [units 비] × 행당 2.2676x [CPU-초 비]`**
+  (검산 오차 **0.00 %**). **새 범주 `플랜형(옵티마이저 오선택형)`**.
+  - **플랜 축이 CPU를 바꾸지 않는 첫 사례** — CUBRID 질의실행분 CPU-초가 idx-NL 47.30 s ↔
+    `USE_HASH` 47.60 s로 **0.6 % 동률**이고, 플랜 축 전량이 `time-weighted active units`
+    5.61 → **7.05**(노드 cap 6의 **117.5 %**, 동시 활성 **12단위**)에서 온다. 노드 cap 6 정규화 시
+    두 형상이 7.88 s ↔ 7.93 s로 동률 → **CUBRID에게 플랜 선택은 시간을 바꾸고 일은 바꾸지 않는다.**
+  - **`configured-cap parity`의 구멍을 찾았다** — `parallelism`은 `px_parallel.cpp:172`에서
+    **노드마다** 적용되고 전역 예산은 `px_worker_manager_global.cpp:57-78`의
+    `max_parallel_workers`(**CUBRID 100 ↔ PG 8, 12.5배 비대칭**)다. 라벨 **`configured-cap 초과`** 신설.
+  - **형상 일치 배수가 둘로 갈리는 첫 쿼리** — PG 형상 **1.8109x** ↔ CUBRID 형상 **1.1826x**.
+    양방향 A/B 성공(`/*+ USE_HASH */` ↔ `enable_hashjoin/mergejoin/memoize/incremental_sort=off`
+    + `join_collapse_limit=1` + 명시 조인 순서), 노드 6지점 실제 행수 일치 채증.
+    역방향 `pgNL/pgN` **1.9088x** — PG는 CUBRID 형상으로 1.91배 잃는다.
+  - **`instructions` 비가 두 번째로 하한**(1.9522x < wall 2.2771x, IPC 비 **0.799**). `cycles`
+    2.4397x이고 wall 대비 +7.1 % 잔차는 유효 클럭 비 1.0817과 units 비 1.0098로 **0.04 %** 내에 닫힌다.
+  - **cycles 버킷: B-tree 49.3 %(∞) + 버퍼 고정·래치 47.5 %(12.30x) = 격차의 96.8 %.**
+    버퍼 역전이 다섯 번째 재현이되 **절대 델타가 instr 28.31 G → cycles 33.57 G로 커져** 1위와
+    1.8 %p 차로 동률화한다(버킷 IPC **0.83**). 뿌리는 **페이지를 27.79배 더 만지는 것**
+    (CUBRID **39,538,926** page fix ↔ PG **1,422,457** buffer access)과 **fix 1회 659 cycles**다
+    (`page_buffer.c:2211`, lock-free fast path `:7670`이 이미 있는데도). **형상을 맞추면
+    39.54 M ↔ 36.13 M(1.094x)로 붙고 B-tree는 1.10x·버퍼는 1.19x가 된다** — 정본 버킷의
+    "B-tree 49.3 %"는 **플랜 형상의 부산물**이다(Q8 성질의 강한 재현).
+  - **플랜 축의 소스 뿌리**: `query_planner.c:98 ISCAN_IO_HIT_RATIO 0.5` + `:3411`
+    (probe IO를 절반으로 깎는다) + `:87 HJ_MEM_ALLOC_CONSTANT 1500`(주석이
+    **"Heuristic offset to prefer NL join over hash join"**) + `:3650-3658` 스필 IO
+    `(inner+outer)×0.5`. hash-join 2단 추가 비용 18,671,467의 **90.5 %(16,902,174)가 스필 항**이고
+    모델은 probe:row를 **0.91:1**로 보는데 실측은 **4.49:1**(probe 13,660 cycles / row 3,041 cycles)
+    = **4.9배 역방향 오차**. 스필 예측 자체는 맞았고(trace `SPLIT partitions: 12`) 틀린 것은 단가다.
+  - **채증 함정 2건 등재**: (i) `perf record -a -C`(perf 4.18)가 **레코드 시작 전 존재하던 sibling
+    스레드**를 해석하지 못해 CUBRID 정본 프로파일이 **99.95 % `[unknown]`**이었다 → 오프라인
+    심볼라이저 `q3/scratch/resolve.py`(일치율 검산 95.68 % / 96.42 %). (ii) ADR 0019 §4-c leader
+    클럭 이득 **미재현**(leader 2.378 GHz < worker 2.513 GHz, 직렬 0.50 s) → 조항을
+    "직렬 20 % 이상일 때만"으로 좁혔다. **ADR 0016 민감도 판정도 좁혔다** — PG 잔존율이
+    30.2 → 66.6 %(**+36.4 %p**)로 크게 움직이는데 `Execution Time` **−1.86 %**(단가 **0.175 µs**).
+  - **배경 부하로 무효 처리한 run 3건**(삭제 없이 기록): `final` 블록 6(loadavg **33.15**),
+    `s2 pg-nl R1`(sda 1,551 MiB), `s2b cubH B2`. 같은 장비의 다른 세션이 코어 0-31을 쓴다.
+  - 개선 후보 5개(신규 2 = ⑨ NL probe 비용 재교정 / ⑩ 전역 병렬 예산 쿼리 단위화, 기존 3),
+    **A+B 동시 착지 시 1.722x**(절대 격차 −42.6 %). 기존 후보 **②⑤⑥⑦⑧⑬ 정본 배제**. **구현 없음.**
 - 남은 것: **G1(R0 재현)이 다음 행동**이고 선행 조건은 모두 닫혔다. 아래 pending 중
   게이트 진행을 막는 항목만 그 전에 닫는다.
 
@@ -524,6 +634,20 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
     **IPC 비를 표에 항상 넣는다**(±20 % 벗어나면 instructions 기반 서술 금지). 이용률 라벨 규칙은
     **PG에도 같이 적용**하고, 직렬 구간이 wall의 20 % 이상이면 **행위자별 프로파일**을 필수
     산출물로 낸다. 분류 규칙 확장은 **호출지점 확인 후에만** 하고 되돌릴 방법을 적는다. (ADR 0019)
+22. **측정 원칙 v2 — `contract_revision: 2`** (사용자 지시, ADR 0020). ① 구 `G2`는 단일 세션이
+    아니므로 **`PER_QUERY_CONNECTION_DIAG`**로 재명명하고 단일 connection 결과로 표현하지 않는다
+    (`TRUE_SINGLE_CONNECTION`은 백로그 B1, 실행 금지). ② 모든 run에 `meta.json`으로
+    `contract_revision`·`connection_mode`·`protocol`·`cpuset`·`timeout_method`·`sut_boundary`·
+    `configured_cap`·`build`(commit+Build ID)·`artifacts`(sha256)를 남기고, **계약≠실행이면 즉시
+    중단**한다(`meta.sh`가 `CONTRACT_MISMATCH`로 집행). ③ **complete-case(완주 19개) Pareto와
+    censored lower-bound를 분리**하고 Q21은 "완주 19개 complete-case Pareto 1위"로만 표기한다
+    (전체 22개 최상위는 **q22 ≥309x**). ④ "6 실행 단위 파리티" → **`configured-cap parity`**,
+    `planned`/`launched`/`동시 활성`/`time-weighted active units`/`serial tail`을 따로 적는다.
+    ⑤ 배수·기여도에 **이벤트 단위를 명시**하고 혼용하지 않으며 **Q8 분해는 두 표기만 허용**한다.
+    ⑥ 다음 대상은 **q22**(bounded profile + 플랜 규명, 새 세션). ⑦ **SF1 correctness 미수행이므로
+    어떤 항목도 "완료"가 아니다** — 전부 `measured, correctness-unverified`, SF1은 백로그 B2.
+    ⑧ 기존 결과는 **삭제 금지·재분류만**, raw evidence는 `docs/MANIFEST-raw-evidence.md`에
+    manifest와 백업 위치를 남긴다. (ADR 0020)
 
 ## 실행 전략(얇은 경로)
 
@@ -534,7 +658,7 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
 | 게이트 | 하는 일 | 통과 조건 / 산출물 |
 |---|---|---|
 | **G1** | R0 재현 — 기존 하네스를 그대로 쓰고, 새 pinned 빌드 2개(CUBRID `f30f1c260`, PG `5713b437a`) 위에서 AB/BA interleaved 3회. **세트 시작 전과 엔진 전환 직후마다 warmup 스트림 1회(미집계)** | 양쪽 22개 쿼리 완주(또는 `timeout` 상태 기록), 집계 런 전부 warm 검증 통과, paired 차이의 sd 실측치 확보 |
-| **G2** | 절대격차 Pareto + 22개 쿼리 양쪽 plan **병렬 여부 분류표** | **PG-only Parallel subset 식별이 최우선 통과 조건**, 절대격차 상위 목록 확정 |
+| **G2** (트랙 명칭 = **`PER_QUERY_CONNECTION_DIAG`**) | 절대격차 Pareto + 22개 쿼리 양쪽 plan **병렬 여부 분류표**. **complete-case 19개만 순위**, q22는 censored lower-bound, q17·q20은 양쪽 censored (ADR 0020 §3) | **PG-only Parallel subset 식별이 최우선 통과 조건**, 절대격차 상위 목록 확정 |
 | **G3** | top5만 DOP 1 vs 목표 DOP(6) 분해 | 쿼리별 병렬 이득/무이득 구분, 필요한 쿼리에만 DOP sweep 1~6 |
 | **G4** | top3~5 plan diff + actual rows | **선행 조건: 통계 파리티** — 충족(2.6단계, ADR 0008). 양쪽 다 히스토그램·MCV·null 비율 보유, 범위 술어 추정이 양쪽 다 데이터에 반응한다. 단 CUBRID에 **여전히 없는 4항목**(물리 correlation, avg_width, 정확한 도메인 min/max, `attr op attr` 히스토그램 경로)과 **버킷 수 미정렬**(300 vs 100)을 산출물에 **전제로 명기**한 뒤 plan 형상 차이와 추정/실측 행수 괴리를 기록 |
 | **G5** | 증거가 가리키는 **한 트랙만** 오픈 — optimizer 트랙 또는 VTune DIAG-PREFIX 트랙 | 증거로 확정된 영역에만 계측 패치. 두 트랙 동시 오픈 금지 |
@@ -567,7 +691,7 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
   gather 래퍼이고 그 아래가 5·6워커임을 스레드 표본화로 확정). **잔여: Q5·Q8·Q11의 이용률
   미측정(라벨 미부여 상태).** `CPU/wall > 6`이 나오는 경우의 읽는 법(내부 배경 스레드 분리)도
   ADR 0018에 추가됐다.
-- 게이트 마진 — 판정 방식은 paired AB/BA + 신뢰구간으로 확정됐고, G2 절대격차 컷 마진 수치만
+- 게이트 마진 — 판정 방식은 paired AB/BA + 신뢰구간으로 확정됐고, `PER_QUERY_CONNECTION_DIAG` 절대격차 컷 마진 수치만
   G1의 paired sd 실측치로 정한다. Q1 파일럿의 sd(CUBRID 0.120s / PG 0.018s)는 **엔진 내부 반복 노이즈**일
   뿐 paired AB/BA sd가 아니므로 마진 근거로 쓰지 않는다.
 - ~~cold/warm 캐시 레짐 고정 방식~~ → **해결**: WARM 주 레짐 + cold 진단 트랙(ADR 0006). 잔여는
@@ -582,6 +706,18 @@ Q5·Q11의 **양쪽** 이용률(Q18이 "양쪽 단위 붕괴"를 처음 확인�
   잔여로 넘어간 것은 **Q14/Q17/Q22의 결과 비교 시 십진 스케일 정규화**뿐이다 —
   CUBRID의 나눗셈/`AVG`이 PG `numeric`보다 소수 자릿수를 더 많이 남긴다
   (`schema/README-type-parity.md` §3).
+
+## 백로그 (등재만, 실행은 별도 지시 — ADR 0020)
+
+| # | 트랙 | 내용 | 선행 조건 |
+|---|---|---|---|
+| B1 | **`TRUE_SINGLE_CONNECTION`** | 한 연결에서 완주 19개를 순서대로 실행하고 연결 내 상태(CUBRID `xcache`·세션 통계, PG plan cache·`work_mem` 재사용) 효과를 분리한다. 현행 `PER_QUERY_CONNECTION_DIAG`는 쿼리마다 연결을 새로 만들므로 이 축이 미측정이다 | 없음. **실행은 별도 지시 전까지 금지** (ADR 0020 §1) |
+| B2 | **`SF1_CORRECTNESS`** | SF1 데이터셋 + TPC-H reference answer 대조. **미수행이므로 모든 항목이 `measured, correctness-unverified`다** | (1) 재적재 금지 예외 승인 또는 별도 DB 승인 (2) TPC-H kit 확보(ADR 0004의 미해결 한계) |
+| B3 | **q22 bounded profile + 플랜 규명** | censored lower-bound ≥309x. CUBRID 300 s 절단이므로 bound 확정(외부 timeout 연장 = 계약 변경) 또는 timeout 안에 끝나는 축소 변형으로 플랜 규명 | **다음 대상** (ADR 0020 §6) — 새 세션으로 별도 지시 |
+| B4 | rev 1 raw 백업 tar | `g2-stream`·`q21`·`q9`·`q8`·`q18`·`q15`의 백업 tar가 아직 없다(Q3만 있다) | 없음 |
+| B5 | 이전 라운드 CUBRID 프로파일 재검증 | `perf record -a -C` 심볼 해석 함정(Q3 §3.1)의 영향 여부를 `[unknown]` 비율로 확인하고 필요 시 `resolve.py`로 재해석 | 없음 |
+| B6 | Q8·Q18 PG 귀속 재검증 | `-a -C` idle 감산법 → `perf stat -p <postmaster>` + 새 psql 세션으로 재검증 | 없음 (Q15에서 등재) |
+| B7 | 전역 병렬 예산 비대칭 | CUBRID `max_parallel_workers=100` ↔ PG `8`. 계약을 어떻게 다룰지 미결 — 후보 ⑩이 코드 축 | 사용자 결정 |
 
 ## 산출물 배치 원칙
 
