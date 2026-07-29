@@ -184,6 +184,7 @@ ADR 0020 §6 — 새 세션으로 별도 지시). 그 밖의 미측정 항목: A
 | 항목 | 값 |
 |---|---|
 | **`contract_revision`** | **2** (ADR 0020). rev 1은 ADR 0001~0019까지의 계약이며 과거 결과의 실행 계약으로 보존한다. rev 1 결과를 rev 2 용어로 다시 쓸 때는 `실행 계약 rev 1 / 기술 rev 2`를 명기한다 |
+| **4단계 절차 / PG 대조 의무** | 절차는 CONTEXT.md `단계 절차` 절, 보고서 형식은 **`docs/TEMPLATE-report-qNN.md`**(필수 절 목록). **4단계 소스 규명은 문제 항목마다 "PG는 어떻게 구현되어 있어서 이 문제가 없는가"를 PG 소스 `file:line`(pin `5713b437a`)으로 대조해야 하고, CUBRID 단독 서술은 불완전 보고로 완주에 세지 않는다** — 분류는 (a) 구조적 부재 / (b) 같은 단계가 있으나 싸다 / **(c) 양쪽 공통**이며 (c)는 후보에서 내린다 (ADR 0021) |
 | **정본 트랙** | **`configured-cap parity`** — 노드 단위 cap을 CUBRID `parallelism=6` ↔ PG `max_parallel_workers_per_gather=5`(+leader)로 맞춘다. **전역 예산은 맞추지 않는다**(CUBRID `max_parallel_workers=100` ↔ PG `8`, 12.5배 비대칭 — 기록 대상). "6 실행 단위 파리티"라는 표현은 폐기됐다 (ADR 0014+0020 §4) |
 | **run metadata 의무** | 모든 run 디렉터리에 `meta.json`: `contract_revision`, `track`, `connection_mode`, `protocol`, `cpuset`, `timeout_method`, `sut_boundary`, `configured_cap`, `build`(commit+Build ID), `config_deviations`, `correctness`, `artifacts`(sha256). 표준 스크립트 `q3/scratch/meta.sh`. **계약≠실행이면 `CONTRACT_MISMATCH` + 중단.** metadata 없는 run은 표에 올리지 않는다 (ADR 0020 §2) |
 | **상태 라벨** | **`measured, correctness-unverified`**. SF1 reference correctness 미수행이므로 **"완료"를 쓰지 않는다**. 대체 채증(엔진 간 결과 동일성·노드별 행수 일치)은 하위 증거일 뿐이다 (ADR 0020 §7) |
@@ -648,6 +649,19 @@ ADR 0020 §6 — 새 세션으로 별도 지시). 그 밖의 미측정 항목: A
     어떤 항목도 "완료"가 아니다** — 전부 `measured, correctness-unverified`, SF1은 백로그 B2.
     ⑧ 기존 결과는 **삭제 금지·재분류만**, raw evidence는 `docs/MANIFEST-raw-evidence.md`에
     manifest와 백업 위치를 남긴다. (ADR 0020)
+23. **4단계 소스 규명에서 PG 대조는 의무다** (사용자 지시, ADR 0021). 문제 항목마다 **"PG는 어떻게
+    구현되어 있어서 이 문제가 없는가"**를 PG 소스 `file:line`(pin
+    **`5713b437abed7085e7d59849c6e9e0f4f469633d`**, 20devel)으로 대조하고, 항목마다 4열
+    (CUBRID `file:line` / PG `file:line` / 구현 차이 한 문장 / 분류)을 채운다. 분류는
+    **(a) 구조적 부재 / (b) 같은 단계가 있으나 싸다 — 단가를 숫자로 / (c) 양쪽 공통**이고,
+    **(c)를 찾는 것이 목적**이다(PG 대조는 "CUBRID 고유 문제"라는 주장을 **반증 가능하게** 만드는
+    장치다). (c)로 분류된 항목은 삭제하지 않고 `양쪽 공통` 라벨로 남긴 뒤 **개선 후보에서 내린다.**
+    **플랜 수준 서술은 대조가 아니고**, PG에 대응 코드가 **없다**는 주장도 탐색한 심볼·경로·grep
+    패턴을 적어야 성립한다. 한 열이라도 비면 그 항목은 **`PG 대조 미채증`**이며,
+    **CUBRID 단독 서술로 끝난 4단계는 불완전 보고로 완주에 세지 않는다.** 절차는 CONTEXT.md
+    `단계 절차` 절, 보고서 형식은 **`docs/TEMPLATE-report-qNN.md`**(`## PG 대조 (의무)`가 필수 절).
+    기존 7개 보고서는 재측정하지 않고 **백로그 B8 스윕** 대상이며 그때까지 `PG 대조 미채증`으로
+    읽는다. `contract_revision`은 **2를 유지**한다(측정 방법이 아니라 보고 요건 추가). (ADR 0021)
 
 ## 실행 전략(얇은 경로)
 
@@ -718,6 +732,9 @@ ADR 0020 §6 — 새 세션으로 별도 지시). 그 밖의 미측정 항목: A
 | B5 | 이전 라운드 CUBRID 프로파일 재검증 | `perf record -a -C` 심볼 해석 함정(Q3 §3.1)의 영향 여부를 `[unknown]` 비율로 확인하고 필요 시 `resolve.py`로 재해석 | 없음 |
 | B6 | Q8·Q18 PG 귀속 재검증 | `-a -C` idle 감산법 → `perf stat -p <postmaster>` + 새 psql 세션으로 재검증 | 없음 (Q15에서 등재) |
 | B7 | 전역 병렬 예산 비대칭 | CUBRID `max_parallel_workers=100` ↔ PG `8`. 계약을 어떻게 다룰지 미결 — 후보 ⑩이 코드 축 | 사용자 결정 |
+| **B8** | **PG 대조 보강 스윕** | ADR 0021은 4단계 소스 규명에서 **문제 항목마다 PG `file:line` 대조**를 요구하는데, 기존 7개 보고서(Q1·Q21·Q9·Q8·Q18·Q15·Q3)는 **CUBRID 단독 서술**이다. 그 항목들의 PG측 `file:line`을 **pin `5713b437abed7085e7d59849c6e9e0f4f469633d`** 기준으로 확정하고 (a) 구조적 부재 / (b) 같은 단계가 있으나 싸다 / **(c) 양쪽 공통**으로 분류한다. **(c)가 나오면 그 개선 후보를 내린다** — 후보 ①~⑯ 목록이 줄어들 수 있고, 그것이 이 스윕의 목적이다. 재측정은 하지 않는다(ADR 0020 §8) | 없음. 그때까지 7개 보고서의 4단계 항목은 **`PG 대조 미채증`**으로 읽는다 (ADR 0021) |
+| **B9** | **`TRUE_SINGLE_CONNECTION` 19개 검증** | B1의 실행 단계 — 한 연결에서 **완주 19개**(q1~q16, q18, q19, q21)를 순서대로 실행해 `PER_QUERY_CONNECTION_DIAG` 대비 연결 내 상태 효과(CUBRID `xcache`·세션 통계, PG plan cache·`work_mem` 재사용)를 분리한다. censored 3개(q17·q20·q22)는 외부 timeout이 세션 전체를 끊으므로 이 트랙에 넣지 않는다(CONTEXT.md `쿼리 timeout 비대칭` 항) | **B1과 같은 항목의 실행 단계**. 별도 지시 전까지 금지 (ADR 0020 §1) |
+| **B10** | **SF1 correctness ADR 결정** | B2는 "미수행"만 등재돼 있고 **어떻게 종결할지가 미결**이다. 결정할 것 — (1) SF1 재적재 금지 예외를 받을지 / 별도 DB를 쓸지, (2) TPC-H kit 미확보 상태에서 reference answer를 무엇으로 대체할지, (3) 대체 불가면 `measured, correctness-unverified` 라벨을 **영구 상태로 확정**할지. 결정을 ADR로 남긴다 | **사용자 결정.** B2의 선행 조건 판단이 이 항목이다 (ADR 0004+0020 §7) |
 
 ## 산출물 배치 원칙
 

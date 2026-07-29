@@ -328,3 +328,34 @@ SF1 reference answer 대조를 수행하지 않았으므로 **어떤 쿼리도 "
 뿐이며 정확성을 증명하지 않는다(둘 다 같이 틀릴 수 있다). SF1 트랙은 백로그 B2이고 선행 조건은
 (1) 재적재 금지 예외 승인 또는 별도 DB 승인, (2) TPC-H kit 확보다. (ADR 0004+0020 §7)
 _Avoid_: 규명 완료, 검증 완료 (correctness가 미수행이다)
+
+**`PG 대조` (PG source cross-reference — 4단계 의무)**:
+4단계 소스 규명에서 지적한 **문제 항목마다** PG의 **같은 역할을 하는 코드**를 `file:line`으로 짝지어
+붙이는 것이다. pin은 **PG `5713b437abed7085e7d59849c6e9e0f4f469633d`**(20devel)이고 다른 커밋을
+인용하면 같은 줄에 적는다. 항목마다 4열(CUBRID `file:line` / PG `file:line` / 구현 차이 한 문장 /
+분류)을 채우며 분류는 **(a) 구조적 부재 — PG에 그 단계가 없다 / (b) 같은 단계가 있으나 싸다 — 단가를
+숫자로 / (c) 양쪽 공통 — PG도 같은 비용을 낸다** 셋 중 하나다. **(c)를 찾는 것이 목적이다** —
+PG 대조는 CUBRID를 깎는 근거 보강이 아니라 "CUBRID 고유 문제"라는 주장을 **반증 가능하게** 만드는
+장치이고, (c)로 분류된 항목은 삭제하지 않고 `양쪽 공통` 라벨로 남긴 뒤 **개선 후보에서 내린다.**
+**플랜 수준 서술은 대조가 아니다**("PG는 `Parallel Hash Right Anti Join`을 쓴다"는 그 노드를
+구현하는 파일·행이 없으면 무효다). PG에 대응 코드가 **없다**는 주장도 탐색한 심볼·경로·grep 패턴을
+적어야 성립한다. 한 열이라도 비면 그 항목은 **`PG 대조 미채증`**이고 개선 후보의 근거로 쓸 수 없다.
+**CUBRID 단독 서술로 끝난 4단계는 불완전 보고**이며 완주로 세지 않는다. (ADR 0021)
+_Avoid_: 소스 규명 (어느 엔진 쪽인지 불명확), PG는 hash join을 쓴다 (플랜 서술은 대조가 아니다)
+
+## 단계 절차 (쿼리별 격차 규명)
+
+표준은 **4단계**다. 완주하지 못하는 쿼리(censored)는 **bounded 방식**으로 대체하되 아래 산출물
+의무는 동일하게 적용한다. 보고서 형식의 정본은 **`docs/TEMPLATE-report-qNN.md`**이며,
+그 파일의 필수 절이 빠진 보고서는 완주로 세지 않는다.
+
+| 단계 | 내용 | 산출물 의무 |
+|---|---|---|
+| **1. 플랜 규명** | 양쪽 플랜 전체 덤프 — CUBRID `SET OPTIMIZATION LEVEL 514`(무실행) ↔ PG `EXPLAIN (ANALYZE, BUFFERS, VERBOSE)` | 추정 ↔ 실측 카디널리티, 형상이 갈리는 지점 |
+| **2. 실행 채증** | wall / 질의실행분 CPU-초 / 병렬 5축 | `planned`·`launched`·`동시 활성(표본 최대)`·`time-weighted active units`·`serial tail`을 **따로**. CUBRID trace `rows == readrows` 함정 확인 |
+| **3. 프로파일** | 정본 축 `cycles` | `instructions`·IPC 비 병기(IPC 비 ±20 % 이탈 시 `instructions` 서술 금지), 기능 단계 버킷, 직렬 구간 > wall 5 %면 행위자별 분해 |
+| **4. 소스 규명 + 개선 후보** | CUBRID `file:line` **+ PG 대조(의무)** | **문제 항목마다 PG `file:line` 대조 4열을 채운다. CUBRID 단독 서술은 불완전 보고다 (ADR 0021).** 후보는 기존 ①~⑯과의 겹침·예상 배수 레인지·난이도를 적고 **구현하지 않는다** |
+
+**모든 단계 공통**: run 디렉터리마다 `meta.json`(ADR 0020 §2), 배수·기여도에 이벤트 단위 명기
+(ADR 0020 §5), censored는 lower-bound로만 인용(ADR 0020 §3), 상태 라벨은
+`measured, correctness-unverified`(ADR 0020 §7).
