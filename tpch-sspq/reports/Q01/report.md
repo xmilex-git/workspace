@@ -437,9 +437,24 @@ local-only or Notion-only ID exists.
 - [x] Git improvement ledger deduplicated and committed (`IMP-001`, `IMP-002`)
 - [x] every claim indexed to raw evidence and checksum (36 artifacts)
 - [x] report, manifest and registry committed, pushed and reachable from
-      `origin/main`
-- [x] `QUERY_COMPLETE` emitted
-- [x] current session removed and absence verified
+      `origin/main` (`73b96c6`, `c55c59f`, and this correcting commit)
+- [x] `QUERY_COMPLETE` emitted by the worker session
+- [ ] **current session removed and absence verified — OUTSTANDING, control-plane
+      action.** This worker *is* the Q01 session: PID 1440800 is the pane process of
+      tmux session `gajae_code_ms7bmpvn_fqbk4jb6`. Self-removal would terminate the
+      worker mid-turn and make the mandated dual absence check
+      (`gjc session status <exact-id>` **and** `tmux has-session -t <exact-id>`)
+      unobservable, so it is deliberately NOT claimed here. Per section 22 steps 7-9
+      and the section 23 `QUERY_COMPLETE` action, removal and absence verification
+      are performed from outside this session, before any Q02 session is created:
+
+      ```
+      gjc session remove gajae_code_ms7bmpvn_fqbk4jb6
+      gjc session status gajae_code_ms7bmpvn_fqbk4jb6      # expect: absent
+      tmux has-session -t gajae_code_ms7bmpvn_fqbk4jb6     # expect: non-zero exit
+      # if remove refuses a live session, exact-target fallback (never by pattern):
+      tmux kill-session -t gajae_code_ms7bmpvn_fqbk4jb6
+      ```
 
 Known carried-forward gaps, explicitly recorded rather than silently omitted:
 
