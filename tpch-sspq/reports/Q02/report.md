@@ -558,8 +558,10 @@ cache node and no hit/miss instrumentation.
    is the LIKE/UTF-8 band against 3.00% for PostgreSQL on the *same* 2,000,000-row
    predicate — 418.1 ns/row vs 42.9 ns/row. A same-engine A/B confirms it
    independently: adding `p_type like '%BRASS'` to a bare `part` scan costs CUBRID
-   +181.5 ms wall and PostgreSQL +21.0 ms, both at 5 active units, so 0.907 vs
-   0.105 core-s per 2M rows (8.64x). Two independent methods (9.75x profile-band,
+   +181.5 ms wall and PostgreSQL +21.0 ms, **both at 5 active units** — CUBRID
+   `parallel workers: 5` and PostgreSQL `Workers Launched: 4` + leader on *both*
+   variants, evidenced in `q2-predicate-ab-units.txt` — so 0.907 vs 0.105 core-s per
+   2M rows (8.64x). Two independent methods (9.75x profile-band,
    8.64x A/B) bracket the same effect.
 5. **The predicate order amplifies it, and both engines get the order wrong.**
    CUBRID evaluates the expensive LIKE on all 2,000,000 rows instead of the 39,575
@@ -775,7 +777,7 @@ yet. Full fields in `reports/improvement-registry.json`.
 
 Format: `claim → raw file → formula → evidence type → SHA-256`.
 All paths are under `/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q02/`; byte sizes
-and full hashes for all **47** artifacts are in `reports/Q02/raw-manifest.json`.
+and full hashes for all **54** artifacts are in `reports/Q02/raw-manifest.json`.
 
 | Claim | Raw file | Formula / basis | Evidence type | SHA-256 |
 |---|---|---|---|---|
@@ -804,6 +806,9 @@ and full hashes for all **47** artifacts are in `reports/Q02/raw-manifest.json`.
 | call paths for `lang_strmatch_utf8` / `qstr_eval_like` | `profile-cubrid-callgraph.txt` | dwarf call-graph | profile attribution | see manifest |
 | `dynamic_shared_memory_type=mmap` live; PHJ executes (5 workers, 16 batches) with `/dev/shm` at 628k/64000k; PHJ absent from Q02 for planner reasons | `q2-shared-memory-verification.txt` | direct capture + forced-path probe | direct A/B | `29298d5a6a4256a0…` |
 | Q02 forced hash path probe input | `q2-phj-probe.sql` | `EXPLAIN ANALYZE` under `enable_mergejoin=off` | direct A/B | `6309332339152d61…` |
+| A/B active-unit basis: CUBRID `parallel workers: 5` on both variants; PostgreSQL `Workers Launched: 4` + leader on both | `q2-predicate-ab-units.txt` | trace + `EXPLAIN ANALYZE` per variant | direct A/B | `d31b1a8068f47ec5…` |
+| perf coverage: CUBRID 36,429 samples, PostgreSQL 15,790 samples, 0 lost | `perf-record-cubrid.log` (`perf-record-pg.log` `7f763cd104388ffe…`) | `perf record` stderr | profile attribution | `5280543931502a6f…` |
+| perf driver consumed all rows (60 CUBRID statements; 16 x 100 PostgreSQL rows) | `Q02-cubrid-perf-driver-sink.out` (`Q02-postgresql-perf-driver-sink.out` `64370e36197a20ee…`) | statement result markers | direct A/B | `b329fd59d8e34d03…` |
 | card factors, `W` per-node derivation, residual −3.770% vs predicted −3.770% | `Q02-causal-card.json` | section 16 formulas | profile attribution | `fd97ecfbb572bc38…` |
 
 Truncated hashes above are the manifest's first 16 hex digits; the manifest carries
@@ -858,7 +863,7 @@ content for `IMP-003` and `IMP-004`.
 - [x] Git improvement ledger deduplicated and committed (`IMP-003`, `IMP-004`, each
       carrying the full section 18 field set including priority, category,
       difficulty, upstream precedent and ranking justification)
-- [x] every claim indexed to raw evidence and checksum (47 artifacts)
+- [x] every claim indexed to raw evidence and checksum (54 artifacts)
 - [x] report, manifest and registry committed, pushed and reachable from
       `origin/main`. Durable commits: `05ea623` (report, raw manifest,
       `IMP-003`/`IMP-004`), `dd17518` (section 9 shared-memory contract and the
