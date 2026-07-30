@@ -1,0 +1,52 @@
+{
+  "campaign_id": "tpch-sspq-fk-r1-20260730",
+  "ssot_commit": "1d6a5ea6ddaf03fe6d89e986c41433f667257aa7",
+  "ssot_blob_sha": "fe21c548d52bb1490b271d9bbcef5722b82f7157",
+  "frozen": true,
+  "cubrid": {
+    "source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+    "source_sha_includes": "PR #7441 merge commit b334446d6",
+    "source_checkout": "/home/cubrid/dev/tpch-sspq-fk-r1/cubrid-src",
+    "source_sha_verification": "git -C <source_checkout> rev-parse HEAD == 607f1ee9fb2394de129e083602c84a6525fc685c (exact match, live-verified); git merge-base --is-ancestor b334446d6 HEAD == true",
+    "install_prefix": "/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9",
+    "version_string": "CUBRID 11.5.0.2366-607f1ee 64bit RelWithDebInfo",
+    "build_type": "RelWithDebInfo",
+    "compiler": "gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-22)",
+    "linker": "GNU ld bundled with gcc 8.5.0",
+    "cmake_version": "3.26.5",
+    "build_flags": [
+      "CMAKE_BUILD_TYPE=RelWithDebInfo",
+      "CMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "WITH_CCI=true"
+    ],
+    "assertions": "disabled",
+    "stripped": false,
+    "binary_path": "/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9/bin/cub_server",
+    "binary_sha256": "e5043f0e30cbf4a56f219f833f4f4833687ed774895779450e84550c3d6f2a13",
+    "elf_build_id": "4df41ee21300bf617bccd5e1d5c8522b074ef86e",
+    "database_name": "tpch_sf10_q1",
+    "cubrid_databases_prefix": "/home/cubrid/dev/workspace/.git_ignored_dir/tpch-sspq/cubrid-databases",
+    "port": 1523
+  },
+  "postgresql": {
+    "source_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
+    "source_checkout": "/home/cubrid/dev/postgres",
+    "source_sha_verification": "git -C <source_checkout> rev-parse HEAD == 5713b437abed7085e7d59849c6e9e0f4f469633d (exact match, live-verified)",
+    "install_prefix": "/home/cubrid/pg/pg20devel-5713b437",
+    "version_string": "PostgreSQL 20devel",
+    "compiler": "gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-22)",
+    "configure_args": "/home/cubrid/dev/postgres/configure --prefix=/home/cubrid/pg/pg20devel-5713b437 --enable-debug --without-icu --without-readline --with-zlib --with-zstd --without-llvm --without-lz4 --without-libxml",
+    "assertions": "disabled",
+    "assertions_verification": "SHOW debug_assertions == off (live-verified)",
+    "jit": "disabled",
+    "jit_verification": "SHOW jit == off (live-verified, consistent with --without-llvm)",
+    "stripped": false,
+    "binary_path": "/home/cubrid/pg/pg20devel-5713b437/bin/postgres",
+    "binary_sha256": "f55cd1d705d0bc1656709d88ecdd8b7b5cf49706095022ec27fb745357b6602b",
+    "elf_build_id": "5f2cb2987765c612638c278f85cfc85c211fffe1",
+    "pgdata": "/home/cubrid/pg/pgdata-tpch-sspq",
+    "database_name": "tpch_sspq",
+    "port": 5442
+  },
+  "note": "Frozen after bootstrap gate passed. Changing either engine SHA, compiler/linker version, optimization flags, assertion mode, JIT mode, or resulting binary hash is a campaign contract change requiring a new campaign ID (SSOT.md section 3)."
+}

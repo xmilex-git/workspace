@@ -9,3 +9,5 @@
  group by
  	n_name
  order by
+
+# Reason: CUBRID DATE_ADD(date, INTERVAL n unit) has no PostgreSQL equivalent; translated to standard date + interval 'n' unit arithmetic.

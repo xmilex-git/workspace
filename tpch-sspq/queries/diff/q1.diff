@@ -9,3 +9,5 @@
  group by
  	l_returnflag,
  	l_linestatus
+
+# Reason: CUBRID DATE_SUB(date, INTERVAL n unit) has no PostgreSQL equivalent; translated to standard date - interval 'n' unit arithmetic.

@@ -15,3 +15,5 @@
  order by
 -	[value] desc;
 +	"value" desc;
+
+# Reason: CUBRID bracket-quoted identifier [value] is not valid PostgreSQL syntax; translated to standard double-quoted identifier "value".

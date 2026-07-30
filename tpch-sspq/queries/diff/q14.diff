@@ -6,3 +6,5 @@
  	and l_shipdate >= date '1995-09-01'
 -	and l_shipdate < DATE_ADD(DATE '1995-09-01', INTERVAL 1 MONTH);
 +	and l_shipdate < date '1995-09-01' + interval '1' month;
+
+# Reason: CUBRID DATE_ADD(date, INTERVAL n unit) has no PostgreSQL equivalent; translated to standard date + interval 'n' unit arithmetic.

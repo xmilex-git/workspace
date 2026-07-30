@@ -8,3 +8,5 @@
 +		and l_shipdate < date '1996-01-01' + interval '3' month
  	group by
  		l_suppkey;
+
+# Reason: CUBRID DATE_ADD(date, INTERVAL n unit) has no PostgreSQL equivalent; translated to standard date + interval 'n' unit arithmetic.
