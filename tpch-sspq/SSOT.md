@@ -741,6 +741,17 @@ reading the just-pushed GitHub commit as source of truth. The interactive main
 session must dispatch that subagent and relay its result; it must never issue
 Notion write calls itself, even to fix a gap found mid-conversation.
 
+Markdown formatting rule (root-caused after Q04's page rendered literal `n`
+characters and literal `<table>` tags instead of paragraphs and a table):
+assemble Notion page content with real newline characters, never the two-glyph
+literal `\n`. Escape only text that must display literally; never escape
+structural markup the content relies on (`<table>`/`<tr>`/`<td>`, `##`
+headings, code fences) -- escaping structure is what broke Q04's table and,
+combined with the lost newlines, made the block boundaries unrecoverable.
+After every Notion write, `notion-fetch` the page back and scan for an
+isolated `n` token or a literal `<`/`&lt;` inside what should be a rendered
+table as a correctness check before considering the write done.
+
 ## 22. GJC/tmux lifecycle
 
 Use SSH alias `34-ilhansong`, official `gjc session` and tmux. Do not use
