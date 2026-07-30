@@ -826,6 +826,11 @@ at committing and pushing this report and manifest to `origin/main`. Accordingly
    `reports/notion_backfill_pending.jsonl`, keyed on
    `campaign_id + QNN + session_id + report_commit + content_fingerprint`, carrying
    the section 21 required query fields with the same field names as this report.
+   `content_fingerprint` follows the Q01 convention: sha256 of this `report.md` at
+   `report_commit`. The record was written only after the report, manifest and
+   registry were durable on `origin/main`, so the key it carries is stable and a
+   later re-run of the same reconciliation cannot produce a second, differently-keyed
+   row for the same content. `pending_cleared` is `false`.
 
 This satisfies the section 26 gate item ("Notion relations are synced **or** an
 idempotent backfill record is durable") without a Notion call. Pending is **not**
@@ -854,7 +859,24 @@ content for `IMP-003` and `IMP-004`.
       carrying the full section 18 field set including priority, category,
       difficulty, upstream precedent and ranking justification)
 - [x] every claim indexed to raw evidence and checksum (47 artifacts)
-- [x] report, manifest and registry committed, pushed and reachable from `origin/main`
+- [x] report, manifest and registry committed, pushed and reachable from
+      `origin/main`. Durable commits: `05ea623` (report, raw manifest,
+      `IMP-003`/`IMP-004`), `dd17518` (section 9 shared-memory contract and the
+      Parallel-Hash-Join availability proof), `2c34e58` (registry merge placing
+      `IMP-003`/`IMP-004` on top of `origin/main`'s section-18-enriched
+      `IMP-001`/`IMP-002`, field names harmonized to `ranking_rationale` and array
+      `category`, `next_id: IMP-005`), and merge `3c53999`; plus this finalizing
+      commit and the backfill-record commit that follows it. Verified after the
+      merge: `report.md`, `raw-manifest.json` and `improvement-registry.json` are
+      byte-identical to the blobs on `origin/main`, all **47** raw artifacts
+      re-hash to their manifest entries (0 mismatched, 0 missing), and all 24
+      evidence-index rows still match the manifest.
+      A push-integration blocker occurred and was handled per section 4: the first
+      push was rejected non-fast-forward because `origin/main` had advanced with a
+      concurrent edit to the same `improvement-registry.json`. No automatic rebase
+      or merge was performed; the divergence was reported with the exact overlap and
+      resolved by the main session, after which this worker re-verified the merged
+      result rather than assuming it.
 - [x] `QUERY_COMPLETE` emitted by the worker session
 - [ ] **current session removed and absence verified — OUTSTANDING, control-plane
       action.** This worker *is* the Q02 session: tmux session
