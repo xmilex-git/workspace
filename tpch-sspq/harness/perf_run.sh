@@ -12,10 +12,14 @@
 # Usage: perf_run.sh QNN cubrid|postgresql N_REPEATS WINDOW_S
 set -uo pipefail
 
-QNN="${1:?usage: perf_run.sh QNN cubrid|postgresql N_REPEATS WINDOW_S}"
+QNN="${1:?usage: perf_run.sh QNN cubrid|postgresql N_REPEATS WINDOW_S [SQL_FILE] [VARIANT_TAG]}"
 ENGINE="${2:?}"
 NREP="${3:?}"
 WIN="${4:?}"
+# Optional controlled-plan A/B: profile an explicit variant SQL file instead of the
+# canonical query, tagging every artifact so it never overwrites the native profile.
+SQL_OVERRIDE="${5:-}"
+VARIANT="${6:-native}"
 N="$((10#${QNN#Q}))"
 
 CAMPAIGN=tpch-sspq-fk-r1-20260730
@@ -35,21 +39,22 @@ if [ "$ENGINE" = cubrid ]; then
 else
   SUF=pg; TAG=pg
 fi
+[ "$VARIANT" = native ] || TAG="${TAG}-${VARIANT}"
 
 # --- build the repeat driver -------------------------------------------------
-DRV="$W/q${N}-${ENGINE}-perf-driver.sql"
+DRV="$W/q${N}-${TAG}-perf-driver.sql"
 : > "$DRV"
-QTXT="$(cat "${REPO}/queries/q${N}-${SUF}.sql")"
+QTXT="$(cat "${SQL_OVERRIDE:-${REPO}/queries/q${N}-${SUF}.sql}")"
 case "$QTXT" in *\;) ;; *) QTXT="${QTXT};";; esac
 for _ in $(seq 1 "$NREP"); do printf '%s\n' "$QTXT" >> "$DRV"; done
 
 # --- launch the driver in the background ------------------------------------
 if [ "$ENGINE" = cubrid ]; then
   taskset -c "$SUT_CPUS" "${CUBRID}/bin/csql" -C -u dba "${CUBRID_DB}" --no-pager \
-      -i "$DRV" > "$W/sink/${QNN}-${ENGINE}-perf.out" 2>"$W/${QNN}-${ENGINE}-perf.err" &
+      -i "$DRV" > "$W/sink/${QNN}-${TAG}-perf.out" 2>"$W/${QNN}-${TAG}-perf.err" &
 else
   taskset -c "$SUT_CPUS" "${PG_PREFIX}/bin/psql" -h "$PGHOST" -p "$PGPORT" -d "$PGDATABASE" \
-      -A -t -f "$DRV" > "$W/sink/${QNN}-${ENGINE}-perf.out" 2>"$W/${QNN}-${ENGINE}-perf.err" &
+      -A -t -f "$DRV" > "$W/sink/${QNN}-${TAG}-perf.out" 2>"$W/${QNN}-${TAG}-perf.err" &
 fi
 DRIVER_PID=$!
 
@@ -64,7 +69,7 @@ if [ "$ENGINE" = cubrid ]; then
   echo "[pid attach] all query worker threads live inside this process; TIDs=$(ls "/proc/${SRV}/task" | wc -l)"
 else
   LEADER="$("${PG_PREFIX}/bin/psql" -h "$PGHOST" -p "$PGPORT" -d "$PGDATABASE" -Atc \
-    "select pid from pg_stat_activity where state='active' and query like '%p_size = 15%' and pid <> pg_backend_pid() order by query_start limit 1;")"
+    "select pid from pg_stat_activity where state='active' and pid <> pg_backend_pid() and query not like '%pg_stat_activity%' order by query_start limit 1;")"
   if [ -z "$LEADER" ]; then echo "ERROR: could not resolve PG leader backend" >&2; kill $DRIVER_PID 2>/dev/null; exit 1; fi
   WORKERS="$(pgrep -P "$(pgrep -f "${PG_PREFIX}/bin/postgres -D ${PGHOST}" | head -1)" | while read -r c; do
       tr '\0' ' ' < "/proc/$c/cmdline" 2>/dev/null | grep -q 'parallel worker' && echo "$c"; done | tr '\n' ' ')"
@@ -89,7 +94,7 @@ echo "[perf stat] -> $W/perf-stat-${TAG}.txt"
 if [ "$ENGINE" = postgresql ]; then
   PM="$(pgrep -f "${PG_PREFIX}/bin/postgres -D ${PGHOST}" | head -1)"
   LEADER2="$("${PG_PREFIX}/bin/psql" -h "$PGHOST" -p "$PGPORT" -d "$PGDATABASE" -Atc \
-    "select pid from pg_stat_activity where state='active' and query like '%p_size = 15%' and pid <> pg_backend_pid() order by query_start limit 1;")"
+    "select pid from pg_stat_activity where state='active' and pid <> pg_backend_pid() and query not like '%pg_stat_activity%' order by query_start limit 1;")"
   PIDCSV="$(normalize_pids "$PM" "${LEADER2:-$LEADER}")"
   echo "[pid attach] perf record target set = ${PIDCSV} (postmaster + live leader, workers inherited)"
 fi
@@ -99,13 +104,17 @@ echo "[perf record] -> $W/perf-${TAG}.data"
 
 wait $DRIVER_PID 2>/dev/null
 echo "[driver] exit=$? repeats=${NREP}"
-grep -cE 'rows selected|^9[0-9]{3}\.' "$W/sink/${QNN}-${ENGINE}-perf.out" 2>/dev/null | sed 's/^/[driver] result-row markers: /'
+echo "[driver] non-empty sink lines: $(grep -c . "$W/sink/${QNN}-${TAG}-perf.out" 2>/dev/null)"
+grep -cE 'rows selected' "$W/sink/${QNN}-${TAG}-perf.out" 2>/dev/null | sed 's/^/[driver] csql result-set markers: /'
 
 # --- reports + coverage validation -------------------------------------------
-perf report -i "$W/perf-${TAG}.data" --stdio --no-children -F overhead,symbol \
-    --percent-limit 0.3 > "$W/profile-${TAG}-flat.txt" 2>/dev/null
-perf report -i "$W/perf-${TAG}.data" --stdio -g graph,0.5,caller \
-    > "$W/profile-${TAG}-callgraph.txt" 2>/dev/null
+# perf report is itself a collector (SSOT section 9: collectors run on CPUs 20-23).
+# Decoding a dwarf call graph of this size costs ~1.2 cores, so leaving it unpinned puts
+# collector work on the SUT set and shows up as external load after the driver exits.
+taskset -c "$COLLECTOR_CPUS" perf report -i "$W/perf-${TAG}.data" --stdio --no-children \
+    -F overhead,symbol --percent-limit 0.3 > "$W/profile-${TAG}-flat.txt" 2>/dev/null
+taskset -c "$COLLECTOR_CPUS" perf report -i "$W/perf-${TAG}.data" --stdio \
+    -g graph,0.5,caller > "$W/profile-${TAG}-callgraph.txt" 2>/dev/null
 
 TOT=$(grep -c . "$W/profile-${TAG}-flat.txt")
 UNK=$(grep -c '\[unknown\]' "$W/profile-${TAG}-flat.txt")

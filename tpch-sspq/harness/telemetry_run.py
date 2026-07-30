@@ -284,24 +284,30 @@ def numa(pid):
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("usage: telemetry_run.py QNN cubrid|postgresql", file=sys.stderr)
+    if len(sys.argv) not in (3, 4, 5):
+        print("usage: telemetry_run.py QNN cubrid|postgresql [SQL_FILE] [VARIANT_TAG]",
+              file=sys.stderr)
+        print("  SQL_FILE overrides the canonical query file for a controlled-plan A/B",
+              file=sys.stderr)
         return 2
     qnn, engine = sys.argv[1].upper(), sys.argv[2].lower()
+    override = sys.argv[3] if len(sys.argv) > 3 else None
+    variant = sys.argv[4] if len(sys.argv) > 4 else ("native" if not override else "variant")
     n = int(qnn[1:])
     workdir = os.path.join(RAW_ROOT, "work", qnn)
     os.makedirs(workdir, exist_ok=True)
 
     suffix = "cubrid" if engine == "cubrid" else "pg"
-    qfile = os.path.join(QUERIES, f"q{n}-{suffix}.sql")
-    sql_path = os.path.join(workdir, f"q{n}-{engine}-telemetry.sql")
+    qfile = override or os.path.join(QUERIES, f"q{n}-{suffix}.sql")
+    tag = engine if variant == "native" else f"{engine}-{variant}"
+    sql_path = os.path.join(workdir, f"q{n}-{tag}-telemetry.sql")
     with open(qfile) as f:
         q = f.read().rstrip()
     if not q.endswith(";"):
         q += ";"
     with open(sql_path, "w") as f:
         f.write(q + "\n")
-    sink = os.path.join(workdir, "sink", f"{qnn}-{engine}-telemetry.out")
+    sink = os.path.join(workdir, "sink", f"{qnn}-{tag}-telemetry.out")
     os.makedirs(os.path.dirname(sink), exist_ok=True)
 
     srv_pid = None
@@ -346,6 +352,7 @@ def main():
 
     result = {
         "campaign_id": CAMPAIGN, "qnn": qnn, "engine": engine,
+        "variant": variant, "query_file": qfile,
         "stage": "14.7-execution-telemetry", "headline": False,
         "client_exit": p.returncode, "client_stderr": p.stderr[-1500:],
         "client_wall_s": t1 - t0,
@@ -370,16 +377,16 @@ def main():
                "device": disk_delta(sampler.samples)},
         "numa": {"pre": numa_pre, "post": numa_post},
     }
-    ipath = os.path.join(workdir, f"{qnn}-{engine}-telemetry-intervals.json")
+    ipath = os.path.join(workdir, f"{qnn}-{tag}-telemetry-intervals.json")
     with open(ipath, "w") as f:
         json.dump(intervals, f)
     result["intervals_path"] = ipath
-    spath = os.path.join(workdir, f"{qnn}-{engine}-telemetry-samples.json")
+    spath = os.path.join(workdir, f"{qnn}-{tag}-telemetry-samples.json")
     with open(spath, "w") as f:
         json.dump(sampler.samples, f)
     result["samples_path"] = spath
 
-    out = os.path.join(workdir, f"{qnn}-{engine}-telemetry.json")
+    out = os.path.join(workdir, f"{qnn}-{tag}-telemetry.json")
     with open(out, "w") as f:
         json.dump(result, f, indent=2, sort_keys=True)
     printable = {k: v for k, v in result.items() if k not in ("numa", "client_stderr")}
