@@ -1,0 +1,7 @@
+.not_git_tracking/
+.git_ignored_dir/
+**/scratch/
+**/.scratch/
+*.perf.data
+*.core
+
