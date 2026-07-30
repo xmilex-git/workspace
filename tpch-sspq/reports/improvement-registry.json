@@ -34,7 +34,14 @@
       "implementation_direction": "Introduce an aggregate-local fixed-point sum accumulator for NUMERIC SUM/AVG that defers carry propagation and precision/overflow normalization to finalization, keeping the general operator only for the final materialization; avoid per-row DB_VALUE construction inside qdata_evaluate_aggregate_list.",
       "correctness_risk": "Must preserve CUBRID NUMERIC precision/scale and overflow semantics exactly, including the DB_MAX_NUMERIC_PRECISION rounding rule and the -0 normalization; deferred carry changes intermediate representation only, not the final rounded result.",
       "validation_criteria": "Q01 result must remain byte-identical for sum_qty/sum_base_price/sum_disc_price/sum_charge and within the SSOT 1e-12 relative rule for avg_*; re-run the section 11 gate plus a NUMERIC overflow/precision regression set; F_cpu must drop with F_work held at 1.0000.",
-      "relations": {"predecessor": null, "alternative": null, "contains": null, "contained_by": null}
+      "relations": {"predecessor": null, "alternative": null, "contains": null, "contained_by": null},
+      "priority": "P0",
+      "priority_justification": "Carries the majority of the measured F_cpu 2.7407x gap (186.67 vs 68.11 core-s), bounded by the 62.35% expression/NUMERIC/DB_VALUE profile band; largest single measured effect candidate for Q01.",
+      "category": ["expression/type", "aggregation/sort"],
+      "difficulty": "high",
+      "difficulty_reason": "Not a localized early-return: requires a new aggregate-local deferred-carry accumulator state, dispatch changes in the qdata_evaluate_aggregate_list path to bypass the generic qdata_add_dbval operator, and consistency with the parallel partial-aggregate merge path.",
+      "upstream_precedent": "None identified in this investigation; report.md cites no prior CBRD issue/PR of the same kind. Code/issue-history survey needed.",
+      "ranking_rationale": "Ranked above IMP-002: evidence band is 62.35% of CUBRID profiled self cost and directly explains most of F_cpu 2.7407x, versus IMP-002's <1%-of-query-CPU upper bound in this WARM regime (device read_bytes=0). Rejected sibling explanations and their rejecting numbers: plan shape (F_plan 1.0000 structural equality), parallelism (F_units 1.0197), work volume (F_work 1.0000 exact), memory stalls (CUBRID IPC 2.527 vs PG 2.354, i.e. 1.073x better while retiring 2.949x instructions per row)."
     },
     {
       "id": "IMP-002",
@@ -64,7 +71,14 @@
       "implementation_direction": "Consider a scan-resistant replacement policy or bulk-read ring for large sequential scans so a repeated scan retains a resident fraction instead of self-evicting; do not pursue on Q01 CPU grounds alone.",
       "correctness_risk": "None expected; replacement policy does not affect results. Risk is regression for workloads that rely on current LRU promotion.",
       "validation_criteria": "Buffer hit ratio > 0 on a repeated scan of a table 1.0-1.5x the pool size, with no regression in the section 11 correctness gate and no increase in Q01 median wall.",
-      "relations": {"predecessor": null, "alternative": null, "contains": null, "contained_by": null}
+      "relations": {"predecessor": null, "alternative": null, "contains": null, "contained_by": null},
+      "priority": "P3",
+      "priority_justification": "Upper bound < 1% of CUBRID query CPU in the mandated WARM regime: device read_bytes=0 on both engines and the measured page-fetch path totals under 1% (pgbuf_get_vpid_ptr 0.19%, pgbuf_unlatch_void_zone_bcb 0.06%, pgbuf_get_victim 0.06%, kernel filemap 0.20%).",
+      "category": ["buffer/IO"],
+      "difficulty": "high",
+      "difficulty_reason": "A scan-resistant replacement policy is a structural change: victim-selection/zone-promotion logic in page_buffer.c plus plumbing scan-context awareness from the executor down to the buffer manager, not a localized fix.",
+      "upstream_precedent": "No precedent identified in this investigation; report.md cites no prior CBRD issue/PR of the same kind.",
+      "ranking_rationale": "Ranked below IMP-001: despite the dramatic 0.005% buffer hit ratio (ioread 682,950 / fetch 682,982), device read_bytes=0 rejects any material CPU contribution in this WARM regime, which is why this is filed as a separate upper-bound item and not folded into the F_cost decomposition; IMP-001's 62.35% band dominates. Effects are disjoint (page replacement vs aggregate accumulation) and are not summed."
     }
   ]
 }
