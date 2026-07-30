@@ -263,6 +263,34 @@ budget`, not a claim of equivalent internal cache architecture, eviction policy,
 or page format. Record the actual configured value and physical-read deltas
 (section 12) in every report.
 
+Shared memory contract:
+
+- PostgreSQL: `dynamic_shared_memory_type=mmap`;
+- CUBRID: no equivalent parameter (parallel scan units share process memory,
+  not a POSIX/SysV shared-memory segment).
+
+The host's `/dev/shm` is `tmpfs` sized `64000k` (~62.5 MiB), fixed by the host
+mount and not campaign-controlled. With the PostgreSQL default
+`dynamic_shared_memory_type=posix`, any parallel plan whose DSM segment (e.g.
+Parallel Hash Join's hash table, or a large `Gather`/`Gather Merge` tuple
+queue) exceeds the remaining `/dev/shm` headroom fails outright with `could not
+resize shared memory segment ... No space left on device`, observed at a
+measured peak of `48412k` of `64000k` — not a slowdown, an execution failure
+that would silently remove Parallel Hash Join from PostgreSQL's available plan
+space at SF10. `sysv` was considered and rejected: it is bounded by the same
+host's kernel `shmmax`/`shmall`, so it only moves the ceiling without removing
+the dependency on a fixed, campaign-uncontrolled limit. `mmap` backs DSM with
+anonymous/file-backed memory instead, which is bounded only by the
+already-contracted process memory (section 9's CPU/memory block), so it does
+not introduce a second, undocumented memory budget alongside the buffer/cache
+contract above. This is a `parallel-plan-availability parity` decision, not a
+performance tuning choice: without it, some queries could not reach their
+natural PostgreSQL plan at all under this host's `/dev/shm` limit, which would
+confound the campaign's `F_plan` structural-equality claims (section 3-a) with
+an artifact of host shared-memory sizing rather than an engine difference.
+Record the configured value in every report where a Parallel Hash Join or a
+large parallel gather is part of either engine's natural plan.
+
 CPU and memory:
 
 - SUT and client: CPUs `0-15`, memory node0;
