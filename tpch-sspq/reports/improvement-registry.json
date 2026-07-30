@@ -1,12 +1,14 @@
 {
   "campaign_id": "tpch-sspq-fk-r1-20260730",
-  "next_id": "IMP-003",
+  "next_id": "IMP-005",
   "improvements": [
     {
       "id": "IMP-001",
       "root_cause_title": "Aggregate accumulation performs a fully generalized per-row NUMERIC add/mul (buffer zeroing, byte<->word conversion, precision recomputation, overflow check, round-and-pack, DB_VALUE construction) instead of a deferred-carry fast sum accumulator",
       "status": "measured",
-      "q_relations": ["Q01"],
+      "q_relations": [
+        "Q01"
+      ],
       "cubrid_source": [
         "src/query/numeric_opfunc.c:2477 float_numeric_db_value_add()",
         "src/query/numeric_opfunc.c (float_numeric_db_value_mul, float_numeric_db_value_sub, same shape)",
@@ -23,24 +25,50 @@
         "cubrid_total_query_cpu_core_s": 186.67,
         "postgresql_total_query_cpu_core_s": 68.11,
         "f_cpu": 2.74071,
-        "cpu_per_row_us": {"cubrid": 3.1119, "postgresql": 1.1354},
-        "instructions_per_row": {"cubrid": 21279, "postgresql": 7216, "ratio": 2.949},
-        "cycles_per_row": {"cubrid": 8422, "postgresql": 3065, "ratio": 2.747},
-        "ipc": {"cubrid": 2.527, "postgresql": 2.354},
-        "profile_share_expr_numeric_dbvalue": {"cubrid": "62.35% of top-40 self cost", "postgresql": "~59% of top-22 self cost"}
+        "cpu_per_row_us": {
+          "cubrid": 3.1119,
+          "postgresql": 1.1354
+        },
+        "instructions_per_row": {
+          "cubrid": 21279,
+          "postgresql": 7216,
+          "ratio": 2.949
+        },
+        "cycles_per_row": {
+          "cubrid": 8422,
+          "postgresql": 3065,
+          "ratio": 2.747
+        },
+        "ipc": {
+          "cubrid": 2.527,
+          "postgresql": 2.354
+        },
+        "profile_share_expr_numeric_dbvalue": {
+          "cubrid": "62.35% of top-40 self cost",
+          "postgresql": "~59% of top-22 self cost"
+        }
       },
       "effect_range": "Bounded by the expression/NUMERIC/DB_VALUE band that dominates both profiles. CUBRID spends 62.35% of profiled self cost there while retiring 2.949x the instructions per row at 1.073x better IPC, so this band carries the majority of the 2.74x total-query-CPU gap. A deferred-carry accumulator cannot remove the scan/deform cost, so the realistic ceiling is a large fraction of the aggregate band, not of the whole query.",
       "evidence_type": "profile attribution",
       "implementation_direction": "Introduce an aggregate-local fixed-point sum accumulator for NUMERIC SUM/AVG that defers carry propagation and precision/overflow normalization to finalization, keeping the general operator only for the final materialization; avoid per-row DB_VALUE construction inside qdata_evaluate_aggregate_list.",
       "correctness_risk": "Must preserve CUBRID NUMERIC precision/scale and overflow semantics exactly, including the DB_MAX_NUMERIC_PRECISION rounding rule and the -0 normalization; deferred carry changes intermediate representation only, not the final rounded result.",
       "validation_criteria": "Q01 result must remain byte-identical for sum_qty/sum_base_price/sum_disc_price/sum_charge and within the SSOT 1e-12 relative rule for avg_*; re-run the section 11 gate plus a NUMERIC overflow/precision regression set; F_cpu must drop with F_work held at 1.0000.",
-      "relations": {"predecessor": null, "alternative": null, "contains": null, "contained_by": null}
+      "relations": {
+        "predecessor": null,
+        "alternative": null,
+        "contains": null,
+        "contained_by": null
+      },
+      "pending_section18_enrichment": true,
+      "pending_section18_reason": "allocated under the pre-b3b7a874 section 18 contract during Q01; priority/category/difficulty/upstream-precedent/ranking not assessed at allocation time"
     },
     {
       "id": "IMP-002",
       "root_cause_title": "Data buffer replacement gives ~0% reuse for a repeated sequential scan whose working set slightly exceeds the buffer pool, where PostgreSQL retains a protected resident fraction",
       "status": "observed",
-      "q_relations": ["Q01"],
+      "q_relations": [
+        "Q01"
+      ],
       "cubrid_source": [
         "src/storage/page_buffer.c (pgbuf victim selection / LRU zones; pgbuf_get_victim, pgbuf_unlatch_void_zone_bcb observed in profile)"
       ],
@@ -56,7 +84,10 @@
         "postgresql_heap_blks_hit_per_run": 694494,
         "postgresql_heap_blks_read_per_run": 430634,
         "postgresql_buffer_hit_ratio": "61.7%",
-        "read_syscalls_per_run": {"cubrid": 683272, "postgresql": 462763},
+        "read_syscalls_per_run": {
+          "cubrid": 683272,
+          "postgresql": 462763
+        },
         "device_read_bytes_both_engines": 0
       },
       "effect_range": "UPPER BOUND < 1% of CUBRID query CPU under the current WARM regime. Because device read_bytes is 0 on both engines, every miss is served from the OS page cache, and the measured page-fetch path is small: pgbuf_get_vpid_ptr 0.19%, pgbuf_unlatch_void_zone_bcb 0.06%, pgbuf_get_victim 0.06%, kernel filemap_get_read_batch 0.13% + filemap_read 0.07%. The 6.06% heap_attrinfo_read_dbvalues is tuple deform, not page fetch, and is NOT attributed here. This candidate would only become material with a cold OS page cache, which is outside the section 12 WARM regime.",
@@ -64,7 +95,191 @@
       "implementation_direction": "Consider a scan-resistant replacement policy or bulk-read ring for large sequential scans so a repeated scan retains a resident fraction instead of self-evicting; do not pursue on Q01 CPU grounds alone.",
       "correctness_risk": "None expected; replacement policy does not affect results. Risk is regression for workloads that rely on current LRU promotion.",
       "validation_criteria": "Buffer hit ratio > 0 on a repeated scan of a table 1.0-1.5x the pool size, with no regression in the section 11 correctness gate and no increase in Q01 median wall.",
-      "relations": {"predecessor": null, "alternative": null, "contains": null, "contained_by": null}
+      "relations": {
+        "predecessor": null,
+        "alternative": null,
+        "contains": null,
+        "contained_by": null
+      },
+      "pending_section18_enrichment": true,
+      "pending_section18_reason": "allocated under the pre-b3b7a874 section 18 contract during Q01; priority/category/difficulty/upstream-precedent/ranking not assessed at allocation time"
+    },
+    {
+      "id": "IMP-003",
+      "root_cause_title": "Leading-wildcard LIKE selectivity is estimated from histogram bucket *upper-boundary* values only, producing a 21.7x under-estimate that then decides conjunctive predicate evaluation order, so an expensive UTF-8 LIKE is evaluated on all rows instead of the few surviving a cheap integer equality",
+      "status": "measured",
+      "q_relations": [
+        "Q02"
+      ],
+      "priority": "P0",
+      "priority_justification": "Largest measured actionable CUBRID-side effect in Q02: a direct same-engine A/B puts the part-scan stage at 253 ms vs 65.6 ms achievable, i.e. -53.1% of the 353 ms Q02 median, from one estimator change.",
+      "category": "optimizer",
+      "difficulty": "low-to-medium",
+      "difficulty_reason": "A localized early-return/fallback inside one function (histogram_get_like_selectivity): return *success=false for patterns with no usable fixed prefix so the caller falls back to PRM_ID_LIKE_TERM_SELECTIVITY. Medium only if per-bucket sample-value probing is implemented instead of the fallback.",
+      "cubrid_source": [
+        "src/optimizer/histogram/histogram_cl.cpp:1427 histogram_get_like_selectivity()",
+        "src/optimizer/histogram/histogram_cl.cpp:1480-1486 MCV LIKE probe loop (correct)",
+        "src/optimizer/histogram/histogram_cl.cpp:1487-1501 non-MCV estimate = fraction of matching bucket_hi boundary values",
+        "src/optimizer/histogram/histogram_cl.cpp:1508-1526 histogram-size gate (>=100 trust fully) and heuristic blend",
+        "src/optimizer/query_planner.c:10068 qo_like_selectivity(), call site :10101",
+        "src/optimizer/query_planner.c:9934 qo_expr_selectivity() PT_LIKE case",
+        "src/optimizer/plan_generation.c:1577 make_pred_from_bitset(); ordering :1615-1636 (selectivity primary :1630, rank only on exact tie :1635)",
+        "src/optimizer/query_graph.c:3406 get_opcode_rank() classifies PT_LIKE in 'Group 3 -- heavy'"
+      ],
+      "postgresql_source": [
+        "src/backend/utils/adt/selfuncs.c:807 mcv_selectivity()",
+        "src/backend/utils/adt/selfuncs.c:898 histogram_selectivity()",
+        "src/backend/utils/adt/selfuncs.c:1032 mcv_selectivity() call for pattern operators",
+        "src/backend/utils/adt/selfuncs.c:1042 histogram_selectivity() call for pattern operators",
+        "src/backend/optimizer/plan/createplan.c order_qual_clauses() (orders quals by cost_qual_eval_node per_tuple cost)"
+      ],
+      "mechanism_cubrid": "For the non-MCV mass of a string histogram the estimator LIKE-tests one representative value per bucket - the bucket upper boundary bucket_hi - and, once the histogram has >=100 entries, uses that matching-bucket fraction directly as the selectivity. A bucket boundary is an artefact of sort order, so a suffix pattern uncorrelated with that order matches boundaries at a rate unrelated to its true frequency. The resulting selectivity flows into make_pred_from_bitset(), which orders AND-predicates by selectivity and consults its own heavy/light rank ONLY when two selectivities are exactly equal; so p_type like '%BRASS' (est 0.00921158, actual 0.19979) is placed ahead of p_size = 15 (est 0.02, actual 0.0198) and runs on all 2,000,000 part rows.",
+      "mechanism_postgresql": "histogram_selectivity() applies the operator function across the histogram bound array and mcv_selectivity() across the MCV list, and patternsel combines both, so a leading-wildcard pattern is still estimated from values that actually occur: 0.26099 vs a true 0.19979 (1.31x). PostgreSQL's order_qual_clauses() then orders quals strictly by cost_qual_eval_node() per-tuple cost - though for this query textlike carries the same default procost as int4eq, so PostgreSQL ALSO evaluates the LIKE first; it is simply not hurt by it.",
+      "evidence_event": "LIKE evaluations per part scan: 2,000,000 actual vs 39,575 achievable; denominator = rows scanned in the part node (2,000,000). Selectivity: estimated 0.00921158 vs measured 399,587/2,000,000 = 0.19979.",
+      "explanation": "CUBRID under-estimates leading-wildcard LIKE selectivity by 21.7x because it probes only bucket boundary values, and that wrong number, not any cost consideration, decides which conjunct runs first.",
+      "measurement": {
+        "cubrid_predicate_ab_wall_s": {
+          "p_size_only": 0.062,
+          "like_only": 0.2435,
+          "both_size_first": 0.2535,
+          "both_like_first": 0.253
+        },
+        "matching_rows": {
+          "p_size_15": 39575,
+          "like_brass": 399587,
+          "both": 7854
+        },
+        "selectivity": {
+          "like_estimated": 0.00921158,
+          "like_actual": 0.19979,
+          "under_estimate_factor": 21.69,
+          "p_size_estimated": 0.02,
+          "p_size_actual": 0.0198
+        },
+        "cardinality_estimate": {
+          "cubrid_card": 368,
+          "cubrid_actual": 7854,
+          "cubrid_error_factor": 21.34,
+          "postgresql_rows": 8366,
+          "postgresql_actual": 7854,
+          "postgresql_error_factor": 1.065
+        },
+        "projected_stage_wall_s": 0.0656,
+        "measured_stage_wall_s": 0.253,
+        "q02_median_wall_s": 0.353,
+        "projected_q02_wall_s": 0.1656,
+        "projected_saving_pct": 53.1
+      },
+      "effect_range": "-53.1% of Q02 median wall (353 ms -> ~166 ms) from reordering alone. Generalizes to any query whose cheap predicate is estimated less selective than an expensive string predicate on the same relation. Does not affect queries with a single predicate or with an accurate LIKE estimate.",
+      "evidence_type": "direct A/B",
+      "implementation_direction": "In histogram_get_like_selectivity(), treat a pattern with no usable fixed prefix as not estimable from bucket boundaries: either probe per-bucket stored sample values, or set *success = false so qo_like_selectivity() falls back to PRM_ID_LIKE_TERM_SELECTIVITY. Separately and optionally, promote rank above selectivity in make_pred_from_bitset() when rank classes differ by more than one group.",
+      "correctness_risk": "Low-to-medium. Selectivity affects plan choice only, never results. Risk is plan churn on other string predicates; a fallback to the parameter default is deliberately conservative. Prefix patterns ('ABC%'), which boundary probing does handle correctly, must keep their current path.",
+      "validation_criteria": "(1) p_type like '%BRASS' estimated selectivity within 2x of 0.19979; (2) q2-plan-est-cubrid.out shows the sarg order inverted to p_size before the LIKE term; (3) Q02 median wall <= 0.20 s with 100-row output byte-identical to Q02-cubrid-headline.out; (4) no Q01-Q22 plan regression.",
+      "upstream_precedent": "YES. 5510afbfb '[CBRD-27039] Fix five histogram-consumption defects (selectivity math + concurrent-fetch robustness) (#7442)' - same file, same defect class (histogram selectivity math), and an ancestor of the pinned build 607f1ee9. Related: aabba8d1e '[CBRD-26202] Add Optimizer Histogram Support (#7180)' introduced this estimator; 10d0aa0e7 '[CBRD-26746]' extended histogram use to equi-join selectivity. Predicate-order precedent: ce7937a27 '[CBRD-24668] predicate evaluation order is not kept after view merging and push-predicate (#4124)'. All four verified as ancestors of 607f1ee9.",
+      "ranking_justification": "Ranked above IMP-004 despite owning the smaller raw profile band. (a) It captures most of IMP-004's Q02 benefit: reordering cuts LIKE evaluations from 2,000,000 to 39,575 (50.5x) for a measured -53.1%, whereas fixing only the matcher (8.64x per-row) would take the same 253 ms stage to about 83 ms = -48.2% - comparable in Q02, but by making wasted work faster rather than not doing it. (b) It is one estimator function versus IMP-004's collation dispatch path shared by every string comparison, so far less regression surface. (c) It has direct upstream precedent (CBRD-27039) while IMP-004 has none.",
+      "relations": {
+        "predecessor": null,
+        "alternative": [
+          "promote rank above selectivity in make_pred_from_bitset() (src/optimizer/plan_generation.c:1635) - same Q02 outcome, wider blast radius"
+        ],
+        "contains": [
+          "IMP-004 (for Q02: after this fix only 39,575 of 2,000,000 rows reach the matcher)"
+        ],
+        "contained_by": [],
+        "note": "Effects with IMP-004 are NOT summed; for Q02 they overlap almost completely and the combined statement is bounded by this candidate alone."
+      }
+    },
+    {
+      "id": "IMP-004",
+      "root_cause_title": "UTF-8 LIKE matcher decodes both operands to codepoints per character through non-inlined PLT calls and maps each codepoint through a collation weight table, with no byte-lockstep comparison and no ASCII fast path",
+      "status": "measured",
+      "q_relations": [
+        "Q02"
+      ],
+      "priority": "P1",
+      "priority_justification": "Owns the largest single profile band in Q02 - 46.72% of query CPU (0.836 of 1.79 core-s) at 418.1 ns/row vs PostgreSQL's 42.9 ns/row - but ranked below IMP-003 because IMP-003 removes 98.0% of the affected rows at lower risk. P1 rather than P2 because the matcher is shared by every LIKE in the workload.",
+      "category": "expression/type",
+      "difficulty": "medium",
+      "difficulty_reason": "The fast path itself is small, but correct gating across the collation matrix (built-in vs UCA levels, contraction tables, case-insensitive collations, ignore_trailing_space) is the real work; making the two hot leaf helpers inlinable to remove the PLT overhead is a separate low-risk step.",
+      "cubrid_source": [
+        "src/base/language_support.c:2831 lang_strmatch_utf8()",
+        "src/base/language_support.c:2857-2858 intl_utf8_to_cp() on BOTH target and pattern per character position",
+        "src/base/language_support.c:2869-2894 collation weight-table mapping weight_ptr[cp1]/weight_ptr[cp2]",
+        "src/query/string_opfunc.c:5906 qstr_eval_like() driver",
+        "src/base/language_support.c:2995 lang_strmatch_utf8_w_contr(), :3583 lang_strmatch_utf8_uca_w_level() (fallback paths the gate must preserve)"
+      ],
+      "postgresql_source": [
+        "src/backend/utils/adt/like_match.c:84 MatchText() - byte-by-byte comparison even for multi-byte encodings",
+        "src/backend/utils/adt/like.c:129-131 NextChar macro for UTF8: do { (p)++; (plen)--; } while ((plen) > 0 && (*(p) & 0xC0) == 0x80 )",
+        "src/backend/utils/adt/like.c:132 #define MatchText UTF8_MatchText",
+        "src/backend/utils/adt/like.c:43 UTF8_MatchText declaration"
+      ],
+      "mechanism_cubrid": "lang_strmatch_utf8() advances one character at a time and per position calls intl_utf8_to_cp() on both the target and the pattern, then maps each resulting codepoint through the collation weight table before comparing. There is no ASCII fast path and no byte-lockstep comparison, so a pure-ASCII pattern against an ASCII column still pays two codepoint decodes plus two table lookups per character. The profile shows both decode helpers reached through the dynamic linker on every character: intl_utf8_to_cp 4.82% + @plt 1.75%, intl_nextchar_utf8 3.09% + @plt 1.07% - 2.82% of total query CPU is PLT stub overhead alone.",
+      "mechanism_postgresql": "MatchText() documents and implements byte-by-byte comparison even for multi-byte encodings, on the grounds that text and pattern stay in lockstep outside wildcard handling, and advances characters with a two-instruction inline macro that just skips UTF-8 continuation bytes. No codepoint is materialized, no weight table is consulted, and there is no out-of-line call in the inner loop.",
+      "evidence_event": "CPU-seconds per part row for the LIKE predicate; denominator = 2,000,000 rows scanned in the part node. Profile band 46.72% x 1.79 core-s = 0.836 core-s -> 418.1 ns/row; PostgreSQL UTF8_MatchText 3.00% x 2.86 core-s = 0.0858 core-s -> 42.9 ns/row.",
+      "explanation": "CUBRID pays codepoint decoding and collation-weight mapping per character for a predicate where byte equality would be sufficient, making its LIKE 8.64-9.75x more expensive per row than PostgreSQL's.",
+      "measurement": {
+        "profile_band_pct": {
+          "cubrid_like_utf8_band": 46.72,
+          "postgresql_utf8_matchtext": 3.0
+        },
+        "profile_band_core_s": {
+          "cubrid": 0.836,
+          "postgresql": 0.0858
+        },
+        "ns_per_row": {
+          "cubrid": 418.1,
+          "postgresql": 42.9,
+          "ratio": 9.75
+        },
+        "cubrid_band_symbols": {
+          "lang_strmatch_utf8": 22.01,
+          "qstr_eval_like": 12.78,
+          "intl_utf8_to_cp": 4.82,
+          "intl_utf8_to_cp@plt": 1.75,
+          "intl_nextchar_utf8": 3.09,
+          "intl_nextchar_utf8@plt": 1.07,
+          "db_string_like": 1.2
+        },
+        "plt_overhead_pct_of_query_cpu": 2.82,
+        "ab_wall_increment_ms_per_2M_rows": {
+          "cubrid": 181.5,
+          "postgresql": 21.0,
+          "ratio": 8.64
+        },
+        "ab_cpu_increment_core_s_per_2M_rows": {
+          "cubrid": 0.907,
+          "postgresql": 0.105
+        },
+        "active_units_during_ab": {
+          "cubrid": 5,
+          "postgresql": 5
+        },
+        "instructions_per_tuple_touch": {
+          "cubrid": 5031,
+          "postgresql": 1933,
+          "ratio": 2.603
+        }
+      },
+      "effect_range": "8.64x-9.75x reduction of per-row LIKE cost. Upper bound on Q02 is the 46.72% band (0.836 of 1.79 core-s). Two independent methods bracket the same effect: 9.75x from profile self-time band, 8.64x from a same-engine A/B wall increment at equal active-unit counts. NOT additive with IMP-003.",
+      "evidence_type": "direct A/B",
+      "implementation_direction": "Add an early fast path in lang_strmatch_utf8() (or dispatch from qstr_eval_like()) for deterministic built-in collations where both operands are ASCII: compare bytes directly and advance with an inlined continuation-byte skip, mirroring PostgreSQL's MatchText/NextChar. Secondarily make intl_utf8_to_cp and intl_nextchar_utf8 inlinable (static inline in a header, or hidden visibility) to remove the 2.82% PLT overhead.",
+      "correctness_risk": "Medium-to-high. This path implements LIKE semantics for every collation, including contraction and UCA-level collations (lang_strmatch_utf8_w_contr, lang_strmatch_utf8_uca_w_level) and case-insensitive collations. The fast path must be gated so any non-deterministic collation, contraction table, case-insensitive collation, trailing-space rule or non-ASCII byte falls back to the existing loop.",
+      "validation_criteria": "(1) full LIKE/collation regression suite unchanged, including contraction, case-insensitive and ignore_trailing_space cases; (2) select count(*) from part where p_type like '%BRASS' returns 399,587 with wall <= 0.10 s; (3) lang_strmatch_utf8 + intl_* band below 15% in a re-profiled Q02; (4) Q02 output byte-identical to Q02-cubrid-headline.out.",
+      "upstream_precedent": "NO PRECEDENT FOUND. A search of the pinned CUBRID history (607f1ee9) for LIKE/collation matcher performance work returned only correctness and feature commits (e.g. 14589b6fa, c37a85a2a on communication histograms); no commit modifies lang_strmatch_* for performance. Recorded explicitly as no-precedent rather than left blank.",
+      "ranking_justification": "Ranked below IMP-003 even though its raw band (46.72% of query CPU) exceeds IMP-003's measured -53.1% wall effect, because the two overlap: after IMP-003 reorders the predicates only 39,575 of 2,000,000 rows reach the matcher, so IMP-003 captures most of this benefit at lower risk and with upstream precedent. IMP-004 remains independently valuable for any query where the LIKE cannot be deferred behind a cheaper predicate, which is why it is P1 and not P2.",
+      "relations": {
+        "predecessor": null,
+        "alternative": [
+          "IMP-003 (cheaper, achieves a similar Q02 result by avoiding the work rather than accelerating it)"
+        ],
+        "contains": [],
+        "contained_by": [
+          "IMP-003 (for Q02)"
+        ],
+        "note": "Effects with IMP-003 are NOT summed; independent only for queries where the LIKE cannot be deferred."
+      }
     }
-  ]
+  ],
+  "section18_schema_note": "Fields priority/priority_justification, category, difficulty/difficulty_reason, upstream_precedent, mechanism_cubrid, mechanism_postgresql and ranking_justification became mandatory at SSOT pin b3b7a874873c1d2f6c07870099c88cf7c1d42987 (blob 2118be0fefd3b6303d64448a2cbf2223318d91f2). IMP-003 and IMP-004 (Q02) carry them. IMP-001 and IMP-002 were allocated under the previous contract during Q01 and are marked pending_section18_enrichment: they are NOT backfilled here because assigning them a priority, difficulty and upstream-precedent statement requires re-doing Q01's candidate assessment, and inventing those values would be fabrication."
 }

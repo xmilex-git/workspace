@@ -37,7 +37,10 @@ PG_PORT = "5442"
 PG_DB = "tpch_sspq"
 
 SUT_CPUS = "0-15"
-INTERVAL = 0.1
+# Nominal sampler period. Sub-second queries need a finer period so the TWU window
+# has enough intervals; TWU itself is always weighted by ACTUAL timestamp deltas
+# (SSOT section 15), never by this nominal value.
+INTERVAL = float(os.environ.get("TPCH_SSPQ_TELEMETRY_INTERVAL_S", "0.1"))
 TICKS = os.sysconf("SC_CLK_TCK")
 
 # CUBRID cub_server maintenance/background threads -> auxiliary_query_cpu.
@@ -135,9 +138,20 @@ def engine_procs(engine, client_pid=None):
 
 
 class Sampler(threading.Thread):
-    def __init__(self, engine):
+    """Per-TID CPU/IO sampler, pinned to the collector CPUs.
+
+    Process-set discovery (`engine_procs`) spawns pgrep and walks /proc, which is
+    far more expensive than the per-TID reads themselves. Re-running it on every
+    sample perturbed sub-second queries measurably (observed +8..16% wall on a
+    0.35 s query at a 20 ms period), so discovery is refreshed at most every
+    PROC_REFRESH_S while CPU/IO is still sampled every period. PG parallel workers
+    live for seconds, so a 0.1 s discovery lag still attributes them.
+    """
+
+    def __init__(self, engine, proc_refresh_s=0.1):
         super().__init__(daemon=True)
         self.engine = engine
+        self.proc_refresh_s = proc_refresh_s
         self.samples = []
         self.stop_flag = threading.Event()
 
@@ -146,8 +160,13 @@ class Sampler(threading.Thread):
             os.sched_setaffinity(0, {20, 21, 22, 23})
         except OSError:
             pass
+        procs = {}
+        last_refresh = -1.0
         while not self.stop_flag.is_set():
-            procs = engine_procs(self.engine)
+            now = time.monotonic()
+            if now - last_refresh >= self.proc_refresh_s:
+                procs = engine_procs(self.engine)
+                last_refresh = now
             snap = {"t": time.monotonic(), "wall": time.time(), "tids": {}, "io": {}}
             for pid, role in procs.items():
                 for tid in tids(pid):
