@@ -249,6 +249,20 @@ This is a `configured node/gather-cap comparison`, not DOP parity and not
 global-worker parity. Use that exact label in reports. Never infer planned,
 launched, simultaneous or time-weighted execution units from settings.
 
+Buffer/cache contract:
+
+- CUBRID: `data_buffer_size=8192M`;
+- PostgreSQL: `shared_buffers=8192MB`.
+
+Both engines get an equal 8192MB buffer/cache budget. The prior configuration
+inherited a CUBRID `data_buffer_size=512MB` vs PostgreSQL `shared_buffers=8192MB`
+asymmetry from an earlier, contaminated setup; at SF10 that gap risked leaving
+CUBRID unable to hold its working set resident, which would fail the WARM proof
+in section 12 rather than merely bias it. This is a `configured-equal buffer
+budget`, not a claim of equivalent internal cache architecture, eviction policy,
+or page format. Record the actual configured value and physical-read deltas
+(section 12) in every report.
+
 CPU and memory:
 
 - SUT and client: CPUs `0-15`, memory node0;
