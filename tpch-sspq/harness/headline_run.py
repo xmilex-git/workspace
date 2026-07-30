@@ -117,16 +117,31 @@ class Sampler(threading.Thread):
             self.stop_flag.wait(SAMPLE_INTERVAL)
 
 
-def build_block(qnn, engine, workdir):
+def build_block(qnn, engine, workdir, override=None, tag=None):
+    """Build the section 12 block: 1 uncounted warmup + N_MEASURED statements.
+
+    `override`/`tag` support a controlled-plan A/B (SSOT section 16: a numeric
+    `F_plan` must be anchored on a same-engine native/controlled pair). The
+    controlled variant must be measured in the SAME regime as the native block,
+    otherwise the card mixes a block-regime denominator with a single-statement
+    one. Defaults reproduce the native path byte for byte.
+
+    A PostgreSQL variant is expressed through `PGOPTIONS` in the caller's
+    environment, never as an extra `set` statement inside the block: an extra
+    statement would emit its own `\\timing` line and corrupt statement-time
+    parsing, and would also change the statement count the contract fixes at 4.
+    """
     n = int(qnn[1:])
     suffix = "cubrid" if engine == "cubrid" else "pg"
-    qfile = os.path.join(QUERIES, f"q{n}-{suffix}.sql")
+    qfile = override if (override and override != "-") else os.path.join(
+        QUERIES, f"q{n}-{suffix}.sql")
     with open(qfile) as f:
         qtext = f.read().rstrip()
     if not qtext.endswith(";"):
         qtext += ";"
     stmts = [qtext] * (1 + N_MEASURED)  # statement 1 = uncounted warmup
-    path = os.path.join(workdir, f"q{n}-{engine}-block.sql")
+    label = engine if not tag or tag == "native" else f"{engine}-{tag}"
+    path = os.path.join(workdir, f"q{n}-{label}-block.sql")
     with open(path, "w") as f:
         if engine == "postgresql":
             f.write("\\timing on\n")
@@ -212,19 +227,30 @@ def integrate(samples, key):
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("usage: headline_run.py QNN cubrid|postgresql", file=sys.stderr)
+    if len(sys.argv) not in (3, 4, 5):
+        print("usage: headline_run.py QNN cubrid|postgresql [SQL_FILE|-] [VARIANT_TAG]",
+              file=sys.stderr)
+        print("  SQL_FILE/- plus VARIANT_TAG run a controlled-plan A/B in the section 12",
+              file=sys.stderr)
+        print("  block regime; '-' keeps the canonical query (PostgreSQL variants come",
+              file=sys.stderr)
+        print("  from PGOPTIONS). Artifacts are tagged so a variant never overwrites the",
+              file=sys.stderr)
+        print("  native block.", file=sys.stderr)
         return 2
     qnn, engine = sys.argv[1].upper(), sys.argv[2].lower()
     if engine not in ("cubrid", "postgresql"):
         print("engine must be cubrid or postgresql", file=sys.stderr)
         return 2
+    override = sys.argv[3] if len(sys.argv) > 3 else None
+    variant = sys.argv[4] if len(sys.argv) > 4 else "native"
+    label = engine if variant == "native" else f"{engine}-{variant}"
 
     workdir = os.path.join(RAW_ROOT, "work", qnn)
     sinkdir = os.path.join(workdir, "sink")
     os.makedirs(sinkdir, exist_ok=True)
-    sink_path = os.path.join(sinkdir, f"{qnn}-{engine}-headline.out")
-    block_sql, qfile = build_block(qnn, engine, workdir)
+    sink_path = os.path.join(sinkdir, f"{qnn}-{label}-headline.out")
+    block_sql, qfile = build_block(qnn, engine, workdir, override, variant)
 
     pre_buf = cubrid_buffer_gauges() if engine == "cubrid" else pg_buffer_counters()
     sampler = Sampler(engine)
@@ -241,7 +267,7 @@ def main():
     sha = subprocess.run(["sha256sum", sink_path], capture_output=True,
                          text=True).stdout.split()[0]
 
-    samples_path = os.path.join(workdir, f"{qnn}-{engine}-samples.json")
+    samples_path = os.path.join(workdir, f"{qnn}-{label}-samples.json")
     with open(samples_path, "w") as f:
         json.dump(sampler.samples, f)
 
@@ -250,6 +276,8 @@ def main():
         "campaign_id": CAMPAIGN,
         "qnn": qnn,
         "engine": engine,
+        "variant": variant,
+        "pgoptions": os.environ.get("PGOPTIONS", "") if engine == "postgresql" else None,
         "stage": "14.4-cubrid-headline" if engine == "cubrid" else "14.5-postgresql-headline",
         "connection_mode": "single-connection-four-statements",
         "regime": "single-query-repeat WARM",
@@ -280,7 +308,7 @@ def main():
         var = sum((x - result["mean_s"]) ** 2 for x in measured) / (len(measured) - 1) if len(measured) > 1 else 0.0
         result["stddev_s"] = var ** 0.5
 
-    out_path = os.path.join(workdir, f"{qnn}-{engine}-headline.json")
+    out_path = os.path.join(workdir, f"{qnn}-{label}-headline.json")
     with open(out_path, "w") as f:
         json.dump(result, f, indent=2, sort_keys=True)
     print(json.dumps({k: v for k, v in result.items() if k != "client_stderr"},

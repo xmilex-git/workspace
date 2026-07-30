@@ -16,13 +16,22 @@
 # Every attempt is preserved (headline JSON, sink, load trace) so that discarded
 # blocks remain auditable instead of vanishing.
 #
-# Usage: measure_block.sh QNN cubrid|postgresql [MAX_ATTEMPTS] [MAX_WAIT_S]
+# A controlled-plan variant (SSOT section 16 F_plan anchor) is measured through the
+# SAME gate as the native block, with SQL_FILE/VARIANT_TAG passed down to
+# warm_establish.py and headline_run.py. Variant artifacts are tagged
+# <engine>-<variant> so they can never overwrite the native block. For PostgreSQL a
+# variant is expressed through PGOPTIONS in the environment, so pass SQL_FILE as "-".
+#
+# Usage: measure_block.sh QNN cubrid|postgresql [MAX_ATTEMPTS] [MAX_WAIT_S] [SQL_FILE|-] [VARIANT_TAG]
 set -uo pipefail
 
-QNN="${1:?usage: measure_block.sh QNN cubrid|postgresql [MAX_ATTEMPTS] [MAX_WAIT_S]}"
+QNN="${1:?usage: measure_block.sh QNN cubrid|postgresql [MAX_ATTEMPTS] [MAX_WAIT_S] [SQL_FILE|-] [VARIANT_TAG]}"
 ENGINE="${2:?}"
 MAX_ATTEMPTS="${3:-6}"
 MAX_WAIT_S="${4:-1800}"
+SQL_OVERRIDE="${5:--}"
+VARIANT="${6:-native}"
+if [ "$VARIANT" = native ]; then LABEL="$ENGINE"; else LABEL="${ENGINE}-${VARIANT}"; fi
 THRESHOLD=1.5
 QUIET_N=6          # consecutive quiet samples required before starting
 QUIET_INTERVAL=2.0 # seconds per gate sample
@@ -33,12 +42,23 @@ W="${RAW_ROOT}/work/${QNN}"
 HARNESS=/home/cubrid/dev/workspace/tpch-sspq/harness
 mkdir -p "$W/sink"
 
+# Stale-canonical-file guard. When every attempt is rejected this script exits
+# non-zero but used to leave the PREVIOUS run's canonical artifacts in place, so a
+# caller that copies "$W/${QNN}-${LABEL}-headline.json" into a per-block name after
+# a failed invocation silently records the earlier block a second time. That
+# happened on Q05: two "new" CUBRID blocks were byte-identical copies of an
+# already-invalidated block. Remove the canonical names up front so a rejected run
+# leaves nothing to copy and the mistake becomes a missing file instead of a
+# duplicated measurement.
+rm -f "$W/${QNN}-${LABEL}-headline.json" "$W/${QNN}-${LABEL}-warm.json" \
+      "$W/${QNN}-${LABEL}-bgload.json" "$W/sink/${QNN}-${LABEL}-headline.out"
+
 for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-  echo "=== ${QNN} ${ENGINE} attempt ${attempt}/${MAX_ATTEMPTS} — waiting for quiet SUT set"
+  echo "=== ${QNN} ${LABEL} attempt ${attempt}/${MAX_ATTEMPTS} — waiting for quiet SUT set"
   python3.11 "${HARNESS}/wait_quiet.py" "$THRESHOLD" "$QUIET_N" "$QUIET_INTERVAL" "$MAX_WAIT_S"
   gate_rc=$?
   if [ "$gate_rc" -ne 0 ]; then
-    echo "${QNN} ${ENGINE}: gate did not pass (rc=${gate_rc}); no measurement started"
+    echo "${QNN} ${LABEL}: gate did not pass (rc=${gate_rc}); no measurement started"
     exit "$gate_rc"
   fi
 
@@ -49,36 +69,36 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
   # produces is ever a headline value. Q04 is the first query that needed it:
   # PostgreSQL was still 2.1% above steady state at the third measured statement
   # and CUBRID's level moved 4.2% with the preceding workload.
-  python3.11 "${HARNESS}/warm_establish.py" "$QNN" "$ENGINE" \
-      > "$W/${QNN}-${ENGINE}-warm-attempt${attempt}.log" 2>&1
+  python3.11 "${HARNESS}/warm_establish.py" "$QNN" "$ENGINE" "${WARM_STATEMENTS:-20}" "$SQL_OVERRIDE" "$VARIANT" \
+      > "$W/${QNN}-${LABEL}-warm-attempt${attempt}.log" 2>&1
   wrc=$?
-  cp -f "$W/${QNN}-${ENGINE}-warm.json" "$W/${QNN}-${ENGINE}-warm-attempt${attempt}.json" 2>/dev/null
-  wverdict="$(python3.11 -c "import json,sys;d=json.load(open(sys.argv[1]));print(('CONVERGED' if d['converged'] else 'NOT_CONVERGED'), d['verdict'], 'after', d['converged_after_statements'], 'steady', d['steady_state_median_s'])" "$W/${QNN}-${ENGINE}-warm.json" 2>/dev/null)"
+  cp -f "$W/${QNN}-${LABEL}-warm.json" "$W/${QNN}-${LABEL}-warm-attempt${attempt}.json" 2>/dev/null
+  wverdict="$(python3.11 -c "import json,sys;d=json.load(open(sys.argv[1]));print(('CONVERGED' if d['converged'] else 'NOT_CONVERGED'), d['verdict'], 'after', d['converged_after_statements'], 'steady', d['steady_state_median_s'])" "$W/${QNN}-${LABEL}-warm.json" 2>/dev/null)"
   echo "  warm_establish rc=${wrc} ${wverdict}"
   if [ "$wrc" -ne 0 ]; then
     # Not a hard stop: WARM is a state the engine can be driven into, and the
     # next attempt starts from the state this one already left behind. Retry
     # like a rejected load gate, and keep the failed trace as evidence.
-    echo "${QNN} ${ENGINE}: attempt ${attempt} WARM NOT ESTABLISHED (rc=${wrc}); block not timed — retrying"
+    echo "${QNN} ${LABEL}: attempt ${attempt} WARM NOT ESTABLISHED (rc=${wrc}); block not timed — retrying"
     continue
   fi
 
-  LOAD="$W/${QNN}-${ENGINE}-bgload-attempt${attempt}.json"
+  LOAD="$W/${QNN}-${LABEL}-bgload-attempt${attempt}.json"
   nohup python3.11 "${HARNESS}/bgload_monitor.py" "$LOAD" 0.25 "$THRESHOLD" \
-      > "$W/${QNN}-${ENGINE}-bgload-attempt${attempt}.log" 2>&1 &
+      > "$W/${QNN}-${LABEL}-bgload-attempt${attempt}.log" 2>&1 &
   MON=$!
   sleep 0.5
 
-  python3.11 "${HARNESS}/headline_run.py" "$QNN" "$ENGINE" \
-      > "$W/${QNN}-${ENGINE}-headline-attempt${attempt}.log" 2>&1
+  python3.11 "${HARNESS}/headline_run.py" "$QNN" "$ENGINE" "$SQL_OVERRIDE" "$VARIANT" \
+      > "$W/${QNN}-${LABEL}-headline-attempt${attempt}.log" 2>&1
   hrc=$?
 
   kill -TERM "$MON" 2>/dev/null
   wait "$MON" 2>/dev/null
   sleep 0.3
 
-  cp -f "$W/${QNN}-${ENGINE}-headline.json" "$W/${QNN}-${ENGINE}-headline-attempt${attempt}.json" 2>/dev/null
-  cp -f "$W/sink/${QNN}-${ENGINE}-headline.out" "$W/sink/${QNN}-${ENGINE}-headline-attempt${attempt}.out" 2>/dev/null
+  cp -f "$W/${QNN}-${LABEL}-headline.json" "$W/${QNN}-${LABEL}-headline-attempt${attempt}.json" 2>/dev/null
+  cp -f "$W/sink/${QNN}-${LABEL}-headline.out" "$W/sink/${QNN}-${LABEL}-headline-attempt${attempt}.out" 2>/dev/null
 
   verdict="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['verdict'])" "$LOAD" 2>/dev/null)"
   extmax="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['external_max'])" "$LOAD" 2>/dev/null)"
@@ -88,15 +108,15 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
 import json,sys
 d=json.load(open(sys.argv[1]))
 print('  times:', d.get('statement_times_all'), 'median=', d.get('median_s'))
-" "$W/${QNN}-${ENGINE}-headline.json" 2>/dev/null
+" "$W/${QNN}-${LABEL}-headline.json" 2>/dev/null
 
   if [ "$hrc" -eq 0 ] && [ "$verdict" = "CLEAN" ]; then
-    cp -f "$LOAD" "$W/${QNN}-${ENGINE}-bgload.json"
-    echo "${QNN} ${ENGINE}: block ACCEPTED on attempt ${attempt} (load CLEAN, external_max=${extmax})"
+    cp -f "$LOAD" "$W/${QNN}-${LABEL}-bgload.json"
+    echo "${QNN} ${LABEL}: block ACCEPTED on attempt ${attempt} (load CLEAN, external_max=${extmax})"
     exit 0
   fi
-  echo "${QNN} ${ENGINE}: attempt ${attempt} REJECTED (headline_rc=${hrc}, ${verdict}) — retrying"
-  python3.11 - "$W" "$QNN" "$ENGINE" "$attempt" "$verdict" "$extmax" <<'PY'
+  echo "${QNN} ${LABEL}: attempt ${attempt} REJECTED (headline_rc=${hrc}, ${verdict}) — retrying"
+  python3.11 - "$W" "$QNN" "$LABEL" "$attempt" "$verdict" "$extmax" <<'PY'
 import json, sys
 w, qnn, eng, att, verdict, extmax = sys.argv[1:7]
 json.dump({"campaign_id": "tpch-sspq-fk-r1-20260730", "qnn": qnn, "engine": eng,
@@ -107,5 +127,5 @@ json.dump({"campaign_id": "tpch-sspq-fk-r1-20260730", "qnn": qnn, "engine": eng,
 PY
 done
 
-echo "${QNN} ${ENGINE}: all ${MAX_ATTEMPTS} attempts rejected"
+echo "${QNN} ${LABEL}: all ${MAX_ATTEMPTS} attempts rejected"
 exit 1

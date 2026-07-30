@@ -59,21 +59,30 @@ os.environ.setdefault("CUBRID_TMP", "/tmp")
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("usage: headline_telemetry.py QNN cubrid|postgresql", file=sys.stderr)
+    if len(sys.argv) not in (3, 4, 5):
+        print("usage: headline_telemetry.py QNN cubrid|postgresql [SQL_FILE|-] [VARIANT_TAG]",
+              file=sys.stderr)
+        print("  SQL_FILE/- plus VARIANT_TAG measure a controlled-plan variant in the same",
+              file=sys.stderr)
+        print("  section 12 block regime as the native run, so a section 16 F_plan anchor",
+              file=sys.stderr)
+        print("  and its remaining cross-engine pair share one denominator.", file=sys.stderr)
         return 2
     qnn, engine = sys.argv[1].upper(), sys.argv[2].lower()
     if engine not in ("cubrid", "postgresql"):
         print("engine must be cubrid or postgresql", file=sys.stderr)
         return 2
+    override = sys.argv[3] if len(sys.argv) > 3 else None
+    variant = sys.argv[4] if len(sys.argv) > 4 else "native"
+    label = engine if variant == "native" else f"{engine}-{variant}"
 
     workdir = os.path.join(tr.RAW_ROOT, "work", qnn)
     sinkdir = os.path.join(workdir, "sink")
     os.makedirs(sinkdir, exist_ok=True)
-    sink = os.path.join(sinkdir, f"{qnn}-{engine}-headline-telemetry.out")
+    sink = os.path.join(sinkdir, f"{qnn}-{label}-headline-telemetry.out")
 
     # identical block to the section 12 headline runner
-    block_sql, qfile = hr.build_block(qnn, engine, workdir)
+    block_sql, qfile = hr.build_block(qnn, engine, workdir, override, variant)
 
     if engine == "cubrid":
         env = dict(os.environ)
@@ -120,6 +129,8 @@ def main():
     median = sorted(measured)[len(measured) // 2] if measured else None
     result = {
         "campaign_id": tr.CAMPAIGN, "qnn": qnn, "engine": engine,
+        "variant": variant,
+        "pgoptions": os.environ.get("PGOPTIONS", "") if engine == "postgresql" else None,
         "stage": "14.7-execution-telemetry-headline-regime",
         "regime": "single-query-repeat WARM",
         "connection_mode": "single-connection-four-statements",
@@ -168,16 +179,16 @@ def main():
                                           text=True).stdout.split()[0]},
     }
 
-    ipath = os.path.join(workdir, f"{qnn}-{engine}-headline-telemetry-intervals.json")
+    ipath = os.path.join(workdir, f"{qnn}-{label}-headline-telemetry-intervals.json")
     with open(ipath, "w") as f:
         json.dump(intervals, f)
     result["intervals_path"] = ipath
-    spath = os.path.join(workdir, f"{qnn}-{engine}-headline-telemetry-samples.json")
+    spath = os.path.join(workdir, f"{qnn}-{label}-headline-telemetry-samples.json")
     with open(spath, "w") as f:
         json.dump(sampler.samples, f)
     result["samples_path"] = spath
 
-    out = os.path.join(workdir, f"{qnn}-{engine}-headline-telemetry.json")
+    out = os.path.join(workdir, f"{qnn}-{label}-headline-telemetry.json")
     with open(out, "w") as f:
         json.dump(result, f, indent=2, sort_keys=True)
     print(json.dumps({k: v for k, v in result.items()

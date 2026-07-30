@@ -1,6 +1,6 @@
 {
   "campaign_id": "tpch-sspq-fk-r1-20260730",
-  "next_id": "IMP-009",
+  "next_id": "IMP-010",
   "improvements": [
     {
       "id": "IMP-001",
@@ -72,12 +72,13 @@
     },
     {
       "id": "IMP-002",
-      "root_cause_title": "Data buffer replacement fails to retain a working set that marginally exceeds the pool, for repeated sequential scans (Q01/Q03) and now also for random index-driven access (Q04), where PostgreSQL under an identical 8192MB budget retains the whole set and takes zero physical reads",
+      "root_cause_title": "Data buffer replacement fails to retain a working set that marginally exceeds the pool, for repeated sequential scans (Q01/Q03) and now also for random index-driven access (Q04), where PostgreSQL under an identical 8192MB budget retains the whole set and takes zero physical reads; Q05 adds a distinct failure mode of the same replacement policy - the pool settles into a history-dependent equilibrium that it cannot leave without a server restart",
       "status": "measured",
       "q_relations": [
         "Q01",
         "Q03",
-        "Q04"
+        "Q04",
+        "Q05"
       ],
       "cubrid_source": [
         "src/storage/page_buffer.c:2211 pgbuf_fix_release() miss branch",
@@ -210,7 +211,32 @@
       "difficulty": "high",
       "difficulty_reason": "A scan-resistant replacement policy is a structural change to victim selection and zone promotion in page_buffer.c plus plumbing scan-context awareness from the executor to the buffer manager. Q04 adds that the random-probe case needs a different signal from the sequential-scan case, so a single BAS_BULKREAD-style ring is not a complete answer.",
       "upstream_precedent": "No precedent identified in this investigation; report.md cites no prior CBRD issue/PR of the same kind.",
-      "ranking_rationale": "Now ranked above IMP-007, which it used to sit beside: IMP-002 removes misses, IMP-007 makes each remaining miss cheaper, and on Q04 the miss COUNT is the larger lever - 342,384 misses per statement against PostgreSQL's 0 at the same budget, so the entire 1.160 core-s kernel band is addressable by retention while asynchrony could only move it off the critical path. Effects are explicitly NOT summed with IMP-007 (same core-seconds, different levers) and not with IMP-008 (disjoint symbol sets: kernel copy and buffer manager versus predicate evaluation)."
+      "ranking_rationale": "Now ranked above IMP-007, which it used to sit beside: IMP-002 removes misses, IMP-007 makes each remaining miss cheaper, and on Q04 the miss COUNT is the larger lever - 342,384 misses per statement against PostgreSQL's 0 at the same budget, so the entire 1.160 core-s kernel band is addressable by retention while asynchrony could only move it off the critical path. Effects are explicitly NOT summed with IMP-007 (same core-seconds, different levers) and not with IMP-008 (disjoint symbol sets: kernel copy and buffer manager versus predicate evaluation).",
+      "q05_relation": {
+        "finding": "Q05's steady-state miss rate is negligible (65,169 ioread of 7,524,219 fetches = 0.87%, zero device reads), so Q05 adds NO steady-state cost evidence. What it adds is that the level the pool settles at depends on workload history and is not self-correcting.",
+        "measured_equilibria": {
+          "native-only pool after a server restart, >=80 statements": "9.47-9.68 s (40-statement probe median 9.528 s, half-to-half drift -0.10%)",
+          "intermediate plateau at ~40 statements after a restart": "11.08 s, certified stationary by the warm gate (half-split trend +0.20%) yet 16% above the true level; reproduced across two independent restarts",
+          "pool carrying the correctness/groundtruth/plan workloads": "10.67-10.71 s, reproducible across three gated blocks",
+          "pool after ONE 24-statement /*+ USE_HASH */ full-scan block": "13.27-13.55 s, stable over 60 further native statements, never self-recovering",
+          "recovery": "only cubrid-server-ctl.sh restart followed by native-only repetition returns the level to 9.5 s"
+        },
+        "miss_rates_across_those_states": {
+          "converged": "65,169 ioread/statement",
+          "pre-restart mixed": "619,299",
+          "post-USE_HASH": "~1,631,608 (from 6,526,434 read syscalls per 4-statement block)"
+        },
+        "rejected_alternative_cause": "cross-engine OS page-cache interference was tested and rejected: a converged CUBRID re-probed immediately after a 40-statement PostgreSQL workload measured 9.596 s vs 9.528 s, +0.71%.",
+        "why_it_matters": "a 25x swing in miss count and a 42% swing in wall time on the same query, same data and same plan, decided purely by what the pool saw earlier. It is also a measurement hazard: it invalidated Q05's first three gated headline blocks.",
+        "evidence_type": "direct A/B",
+        "raw": [
+          "q5-convergence-cubrid.out",
+          "q5-cubrid-restart.txt",
+          "q5-xengine-probe-cubrid.out",
+          "pre-restart-pool/INVALID.json",
+          "q5-trace-cubrid.out"
+        ]
+      }
     },
     {
       "id": "IMP-003",
@@ -398,7 +424,8 @@
       "status": "measured",
       "q_relations": [
         "Q03",
-        "Q04"
+        "Q04",
+        "Q05"
       ],
       "priority": "P2",
       "priority_justification": "No runtime cost, but it corrupts the primary evidence source for every parallel nested-loop plan by an exact integer factor: Q03's own W_C would have been overstated by 5,845,603 index entries and 302,114 heap lookups (a 1.54x error on W_C_native) had the doubling not been caught and corrected.",
@@ -442,6 +469,18 @@
         "contains": [],
         "contained_by": [],
         "note": "Independent of every other candidate: it changes reported numbers, not executed work. It does interact with all of them as an evidence-quality prerequisite."
+      },
+      "q05_relation": {
+        "role": "second negative control, and it pins the boundary from the other side",
+        "finding": "Q05 has the deepest scan_ptr chain in the campaign so far - five nested index scans (region -> nation -> customer -> orders -> lineitem) - which by the (k-1)x rule should overstate the level-5 counters by 4x. Every counter is instead EXACT against independently derived ground truth: nation 5, customer 300,270, orders index entries 3,006,380, orders survivors 456,771, lineitem 1,825,856, final 72,985.",
+        "why": "the chain executes inside an uncorrelated subquery whose parallel degree is hardcoded to 1 (IMP-009), so the parallel-worker stats merge in px_scan_trace_handler that produces the multiplication is never entered for these nodes. The defect requires BOTH a scan_ptr chain AND parallel workers on it.",
+        "consequence": "this is a direct dependency between two candidates: fixing IMP-009 raises this chain's degree above 1 and would expose Q05's five-level chain to the IMP-005 multiplication for the first time. IMP-005 must be fixed first or validated together with IMP-009.",
+        "regression_pin": "after any IMP-009 change, Q05's trace must still report 5 / 300,270 / 3,006,380 / 456,771 / 1,825,856 / 72,985",
+        "raw": [
+          "q5-trace-cubrid.out",
+          "q5-groundtruth-cubrid.out",
+          "q5-groundtruth-pg.out"
+        ]
       }
     },
     {
@@ -628,6 +667,80 @@
       "difficulty_reason": "Localized to the predicate-evaluation entry points and the SCAN_PRED setup that already performs partial single-node-type specialization in eval_fnc(), so the hook exists; the work is in proving semantic equivalence across every domain pair rather than in restructuring the executor. The constant-pre-coercion sub-step alone is low difficulty.",
       "upstream_precedent": "Partial and same-direction: eval_value_rel_cmp() already carries an explicit constant-coercion optimization, commented 'check for constant values to coerce 1-time, then reduce many-times coerce at tp_value_compare_with_error()' at src/query/query_evaluator.c:178, so hoisting per-row domain work out of the comparison path is an accepted pattern in this very file. No prior CBRD issue/PR was identified that generalizes it to full (domain, domain, REL_OP) dispatch; searched the pinned tree at 607f1ee9 for changes to eval_value_rel_cmp, eval_pred_comp0 and tp_value_compare_with_error call sites.",
       "ranking_rationale": "Ranked immediately below IMP-002 on Q04 (18.1% vs 25.5% of the CPU excess) and above IMP-007, whose Q04 asynchrony argument does not apply because PostgreSQL takes zero physical reads. Bands are verified disjoint by symbol: IMP-002 and IMP-007 are kernel copy plus buffer manager, IMP-008 is predicate evaluation, IMP-006 is intermediate-tuple materialization (small on Q04 - fetch_val_list 0.55% - because this plan materializes only 526,040 result tuples). The bands are NOT summed."
+    },
+    {
+      "id": "IMP-009",
+      "root_cause_title": "The parallel degree of an uncorrelated subquery is hardcoded to 1 and explicitly ignores both the parallelism parameter and an explicit PARALLEL hint, so when the optimizer folds an entire multi-table join chain into an uncorrelated subquery that whole chain executes single-threaded",
+      "status": "measured",
+      "q_relations": [
+        "Q05"
+      ],
+      "cubrid_source": [
+        "src/query/parallel/px_parallel.cpp:85-109 compute_parallel_degree(), case parallel_type::SUBQUERY",
+        "src/query/parallel/px_parallel.cpp:89-92 the decision itself: '/* TODO: degree fixed at 1 (main + gather = 2) to be revised when exact parallel count is available for many uncorrelated subqueries */  auto_degree = 1;'",
+        "src/query/parallel/px_parallel.cpp:99-103 hint path: 'else if ((UINT32) hint_degree >= start_degree) { /* hint ignored, degree fixed for subquery, ignore the parallelism parameter */ return auto_degree; }'",
+        "src/query/parallel/px_scan/px_scan.cpp:416-419 the SCAN path by contrast derives its degree from num_data_pages and only falls back to single-threaded below the threshold",
+        "introduced by ec77e0bef [CBRD-26311] Improve parallel query execution rules (#6674), an ancestor of the pinned build 607f1ee9"
+      ],
+      "postgresql_source": [
+        "src/backend/optimizer/path/allpaths.c:830 set_rel_consider_parallel() marks a relation parallel-safe; :2919-2922 extends the same marking to subquery rels, so a subquery is not a parallelism barrier",
+        "src/backend/optimizer/path/allpaths.c:608 generate_useful_gather_paths() places the Gather ABOVE an arbitrary parallel-safe plan branch rather than at a scan",
+        "src/backend/executor/execParallel.c:1514 ParallelQueryMain() -> :1583 ExecutorRun(): each worker runs the WHOLE branch below the Gather",
+        "src/backend/executor/nodeNestloop.c:61 ExecNestLoop() needs no parallel-specific variant - it inherits parallelism from the branch it sits in, which is why PostgreSQL drives 456,771 index probes across 6 units"
+      ],
+      "evidence_event": "active execution units (CPU-seconds per wall-second) over the section 12 headline block, at a plan shape matched node-for-node on the dominant path",
+      "explanation": "Q05's CUBRID plan hangs the whole 5-table index-nested-loop chain (region -> nation -> customer -> orders -> lineitem) off an uncorrelated subquery feeding a hash-join probe. compute_parallel_degree() returns a fixed degree of 1 for parallel_type::SUBQUERY, so that chain - 99% of the query's time - runs on one thread while the trivial hash-probe node above it parallelizes normally.",
+      "measurement": {
+        "cubrid_U_active_units": 1.02822,
+        "cubrid_TWU": 1.0263,
+        "cubrid_perf_cpus_utilized": 1.043,
+        "postgresql_U_active_units_same_plan_shape": 5.42598,
+        "postgresql_TWU": 5.5433,
+        "F_units": 5.277061,
+        "configured_parallelism": 6,
+        "cubrid_total_query_cpu_core_s_per_statement": 9.8863,
+        "postgresql_total_query_cpu_core_s_per_statement": 7.7358,
+        "F_cpu_at_matched_plan": 1.27799,
+        "F_cost_per_tuple_touch": 1.149962,
+        "trace_worker_counts": {
+          "subquery_containing_the_join_chain": 2,
+          "hash_join_probe": 4
+        },
+        "hint_is_inert": {
+          "native_trailing4_median_s": 9.6,
+          "NO_PARALLEL_SCAN": 9.716,
+          "PARALLEL(6)": 9.605,
+          "PARALLEL(12)": 9.648,
+          "subquery_workers_under_PARALLEL(6)": 2,
+          "subquery_workers_under_PARALLEL(12)": 2,
+          "note": "the hint scales only the hash-probe node (6 and 12 workers respectively, 27-75 ms of ~10,800 ms); the subquery node stays at 2 and wall time is flat within noise, exactly as px_parallel.cpp:101 says it will"
+        }
+      },
+      "effect_range": "F_units = 5.2771x of the 3.7494x total wall gap, at a plan shape whose CPU differs by only 1.278x and whose per-tuple cost differs by only 1.150x. Upper bound on what perfect parallelization of this node recovers; the realistic bound is PostgreSQL's own 5.43 units on the same plan, i.e. CUBRID's 9.615 s would approach 9.8863 core-s / 5.43 units = 1.82 s.",
+      "evidence_type": "direct A/B",
+      "implementation_direction": "Replace the fixed auto_degree = 1 in the parallel_type::SUBQUERY branch with a degree derived from the subquery's own estimated input size, the way the SCAN branch already derives it from num_data_pages, and stop discarding an explicit hint at px_parallel.cpp:99-103. CBRD-26931 already did exactly this for uncorrelated SCALAR subqueries; the remaining gap is the non-scalar uncorrelated subquery that feeds a join operator, which is Q05's shape. Cheapest first step that is also directly testable on Q05: honour an explicit PARALLEL(n) hint for the subquery instead of ignoring it, which converts this from a hardcode into a user-controllable degree and lets the auto-derivation be validated against measurement before it becomes the default.",
+      "correctness_risk": "Medium. Parallelizing a subquery body changes nothing semantically for a read-only uncorrelated block, but the body must be proved parallel-safe by the existing px_scan_checker rules (it already walks dptr_list/scan_ptr chains), and the trace-merge path for nested chains is known to be fragile - IMP-005 documents a (k-1)x counter multiplication that appears exactly when a scan_ptr chain is merged under parallel workers. Raising this subquery's degree above 1 would put Q05's 5-level scan_ptr chain onto that path for the first time, so IMP-005 must be fixed first or validated together.",
+      "validation_criteria": [
+        "Q01-Q22 results byte-identical, Q05 output byte-identical to sink-Q05-cubrid-headline-block1.out",
+        "Q05 CUBRID trace reports the uncorrelated SUBQUERY node with more than 2 workers and readkeys/rows still exactly 5 / 300,270 / 3,006,380 / 456,771 / 1,825,856 / 72,985 (the IMP-005 regression pin)",
+        "Q05 CUBRID U rises from 1.028 toward PostgreSQL's 5.43 on the same plan, measured by harness/headline_telemetry.py in the block regime",
+        "Q05 CUBRID median wall improves against 9.615 s under the same warm_establish + measure_block protocol with the WARM gate still CONVERGED at 40 statements",
+        "no regression on Q04, whose correlated EXISTS subquery is a different path, and none on Q02/Q03"
+      ],
+      "relations": {
+        "predecessor": "none",
+        "alternative": "IMP-005 must be resolved or co-validated because raising this degree first exercises the buggy nested-chain trace merge",
+        "containment": "disjoint from IMP-002/IMP-007 (buffer/IO): at Q05's reported state CUBRID misses only 0.87% of 7,524,219 page fixes and takes zero device reads, so no part of this factor is buffer cost"
+      },
+      "priority": "P0",
+      "priority_justification": "5.2771x measured, the single largest factor isolated anywhere in this campaign so far, and it is the whole of Q05's loss: at the matched plan CUBRID's CPU is only 1.278x PostgreSQL's.",
+      "category": [
+        "parallelism"
+      ],
+      "difficulty": "high",
+      "difficulty_reason": "The one-line degree change is trivial, but making a multi-level index-nested-loop chain actually execute correctly across workers is structural: input partitioning for the driving scan, per-worker scan_ptr state, and the trace/statistics merge (IMP-005) all have to hold. The hint-honouring first step is low difficulty and independently shippable.",
+      "upstream_precedent": "Direct and same-direction: 978b628c8 [CBRD-26931] 'Parallelize uncorrelated scalar subquery inner scan' (#7316) fixed precisely this defect class for uncorrelated SCALAR subqueries after TPC-H Q15 regressed from 12.2 s to 24.2 s because an identical lineitem scan ran with 10 workers in a FROM-clause derived table and 1 worker inside the scalar subquery. Q05 is the same root cause in the branch that fix did not cover - a non-scalar uncorrelated subquery consumed by a hash join - and px_parallel.cpp:89-91 still carries the maintainers' own TODO saying the fixed degree is to be revised.",
+      "ranking_rationale": "Ranks above every other Q05 finding by an order of magnitude: 5.2771x versus 1.278x for all CPU effects combined at the matched plan. It also outranks IMP-002's Q05 relation, which costs nothing at steady state (0.87% miss rate) and only manifests as a warm-up hazard."
     }
   ]
 }
