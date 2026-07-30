@@ -48,6 +48,29 @@ QTXT="$(cat "${SQL_OVERRIDE:-${REPO}/queries/q${N}-${SUF}.sql}")"
 case "$QTXT" in *\;) ;; *) QTXT="${QTXT};";; esac
 for _ in $(seq 1 "$NREP"); do printf '%s\n' "$QTXT" >> "$DRV"; done
 
+# --- PostgreSQL: attach perf stat BEFORE the client connects -----------------
+# Q04 and Q05 both had to caveat PostgreSQL's "CPUs utilized" as invalid, because
+# the set was a snapshot of ONE statement's parallel workers, and on Q06 the
+# snapshot raced the workers' exit outright ("Problems finding threads of
+# monitor" -> empty perf-stat file). Both are the same defect: the worker PIDs
+# are transient per statement, so no post-hoc PID list can cover the window.
+# Attaching to the postmaster BEFORE the driver's connection exists fixes it:
+# perf's inherit-on-fork then counts the leader backend and every statement's
+# parallel workers, and nothing else, because io workers and background workers
+# were forked at server start and pre-date the attach -- exactly the
+# executor/auxiliary split telemetry_run.py's classify() applies. The reading
+# becomes a valid PostgreSQL utilization measurement instead of a caveat.
+PERF_STAT_PID=""
+if [ "$ENGINE" = postgresql ]; then
+  PM_PRE="$(pgrep -f "${PG_PREFIX}/bin/postgres -D ${PGHOST}" | head -1)"
+  if [ -z "$PM_PRE" ]; then echo "ERROR: could not resolve PG postmaster" >&2; exit 1; fi
+  echo "[pid attach] perf stat target = postmaster ${PM_PRE} (inherit-on-fork: leader + every statement's workers)"
+  taskset -c "$COLLECTOR_CPUS" perf stat -e cycles,instructions,task-clock,context-switches \
+      -p "$PM_PRE" -- sleep "$WIN" 2>"$W/perf-stat-${TAG}.txt" &
+  PERF_STAT_PID=$!
+  sleep 1.0
+fi
+
 # --- launch the driver in the background ------------------------------------
 if [ "$ENGINE" = cubrid ]; then
   taskset -c "$SUT_CPUS" "${CUBRID}/bin/csql" -C -u dba "${CUBRID_DB}" --no-pager \
@@ -68,6 +91,9 @@ if [ "$ENGINE" = cubrid ]; then
   echo "[pid attach] cub_server=${SRV} exe=$(readlink -f "/proc/${SRV}/exe")"
   echo "[pid attach] all query worker threads live inside this process; TIDs=$(ls "/proc/${SRV}/task" | wc -l)"
 else
+  # informational only: the perf stat window is already running on the postmaster
+  # (see above). This snapshot is still printed so the report can name the leader
+  # and the workers that were live mid-window, but it is NOT the counted set.
   LEADER="$("${PG_PREFIX}/bin/psql" -h "$PGHOST" -p "$PGPORT" -d "$PGDATABASE" -Atc \
     "select pid from pg_stat_activity where state='active' and pid <> pg_backend_pid() and query not like '%pg_stat_activity%' order by query_start limit 1;")"
   if [ -z "$LEADER" ]; then echo "ERROR: could not resolve PG leader backend" >&2; kill $DRIVER_PID 2>/dev/null; exit 1; fi
@@ -75,7 +101,7 @@ else
       tr '\0' ' ' < "/proc/$c/cmdline" 2>/dev/null | grep -q 'parallel worker' && echo "$c"; done | tr '\n' ' ')"
   PIDSET="$LEADER $WORKERS"
   echo "[pid attach] leader=${LEADER} exe=$(readlink -f "/proc/${LEADER}/exe")"
-  echo "[pid attach] parallel workers=${WORKERS:-<none active at sample time>}"
+  echo "[pid attach] parallel workers live mid-window=${WORKERS:-<none active at sample time>}"
 fi
 # normalize: no empty fields / trailing comma (perf record rejects them)
 normalize_pids() { echo "$*" | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -un | paste -sd,; }
@@ -83,8 +109,15 @@ PIDCSV="$(normalize_pids $PIDSET)"
 echo "[pid attach] perf target set = ${PIDCSV}"
 
 # --- perf stat over the window ----------------------------------------------
-taskset -c "$COLLECTOR_CPUS" perf stat -e cycles,instructions,task-clock,context-switches \
-    -p "$PIDCSV" -- sleep "$WIN" 2>"$W/perf-stat-${TAG}.txt"
+# CUBRID: attach now; every query worker thread lives inside the one pre-existing
+# cub_server process, so a post-hoc attach counts the complete set.
+# PostgreSQL: already running since before the connection existed; just collect it.
+if [ "$ENGINE" = cubrid ]; then
+  taskset -c "$COLLECTOR_CPUS" perf stat -e cycles,instructions,task-clock,context-switches \
+      -p "$PIDCSV" -- sleep "$WIN" 2>"$W/perf-stat-${TAG}.txt"
+else
+  wait "$PERF_STAT_PID"
+fi
 echo "[perf stat] -> $W/perf-stat-${TAG}.txt"
 
 # --- perf record (call graph) over a second window --------------------------
