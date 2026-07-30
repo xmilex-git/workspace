@@ -5,3 +5,6 @@
 *.perf.data
 *.core
 
+__pycache__/
+csql.err
+csql.access

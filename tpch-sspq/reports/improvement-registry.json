@@ -1,5 +1,70 @@
 {
   "campaign_id": "tpch-sspq-fk-r1-20260730",
-  "next_id": "IMP-001",
-  "improvements": []
+  "next_id": "IMP-003",
+  "improvements": [
+    {
+      "id": "IMP-001",
+      "root_cause_title": "Aggregate accumulation performs a fully generalized per-row NUMERIC add/mul (buffer zeroing, byte<->word conversion, precision recomputation, overflow check, round-and-pack, DB_VALUE construction) instead of a deferred-carry fast sum accumulator",
+      "status": "measured",
+      "q_relations": ["Q01"],
+      "cubrid_source": [
+        "src/query/numeric_opfunc.c:2477 float_numeric_db_value_add()",
+        "src/query/numeric_opfunc.c (float_numeric_db_value_mul, float_numeric_db_value_sub, same shape)",
+        "src/query/query_opfunc.c:2059 qdata_add_numeric_to_dbval()"
+      ],
+      "postgresql_source": [
+        "src/backend/utils/adt/numeric.c:381 typedef struct NumericSumAccum",
+        "src/backend/utils/adt/numeric.c:4821 do_numeric_accum()",
+        "src/backend/utils/adt/numeric.c accum_sum_add() (declared :603)"
+      ],
+      "evidence_event": "heap rows scanned = 59,986,052 (identical both engines); denominator = total_query_cpu core-seconds per row, and retired instructions per row",
+      "explanation": "PostgreSQL accumulates SUM/AVG into a 32-bit digit array with separate positive/negative buffers and propagates carry only once every NBASE-1 values, so the per-row cost is an int32 add per digit with no allocation, no precision recomputation and no rounding; CUBRID calls the general NUMERIC operator per row per aggregate, which memsets three VLA word buffers, converts both operands byte<->word, recomputes decimal precision, checks overflow, rounds/packs and builds a DB_VALUE.",
+      "measurement": {
+        "cubrid_total_query_cpu_core_s": 186.67,
+        "postgresql_total_query_cpu_core_s": 68.11,
+        "f_cpu": 2.74071,
+        "cpu_per_row_us": {"cubrid": 3.1119, "postgresql": 1.1354},
+        "instructions_per_row": {"cubrid": 21279, "postgresql": 7216, "ratio": 2.949},
+        "cycles_per_row": {"cubrid": 8422, "postgresql": 3065, "ratio": 2.747},
+        "ipc": {"cubrid": 2.527, "postgresql": 2.354},
+        "profile_share_expr_numeric_dbvalue": {"cubrid": "62.35% of top-40 self cost", "postgresql": "~59% of top-22 self cost"}
+      },
+      "effect_range": "Bounded by the expression/NUMERIC/DB_VALUE band that dominates both profiles. CUBRID spends 62.35% of profiled self cost there while retiring 2.949x the instructions per row at 1.073x better IPC, so this band carries the majority of the 2.74x total-query-CPU gap. A deferred-carry accumulator cannot remove the scan/deform cost, so the realistic ceiling is a large fraction of the aggregate band, not of the whole query.",
+      "evidence_type": "profile attribution",
+      "implementation_direction": "Introduce an aggregate-local fixed-point sum accumulator for NUMERIC SUM/AVG that defers carry propagation and precision/overflow normalization to finalization, keeping the general operator only for the final materialization; avoid per-row DB_VALUE construction inside qdata_evaluate_aggregate_list.",
+      "correctness_risk": "Must preserve CUBRID NUMERIC precision/scale and overflow semantics exactly, including the DB_MAX_NUMERIC_PRECISION rounding rule and the -0 normalization; deferred carry changes intermediate representation only, not the final rounded result.",
+      "validation_criteria": "Q01 result must remain byte-identical for sum_qty/sum_base_price/sum_disc_price/sum_charge and within the SSOT 1e-12 relative rule for avg_*; re-run the section 11 gate plus a NUMERIC overflow/precision regression set; F_cpu must drop with F_work held at 1.0000.",
+      "relations": {"predecessor": null, "alternative": null, "contains": null, "contained_by": null}
+    },
+    {
+      "id": "IMP-002",
+      "root_cause_title": "Data buffer replacement gives ~0% reuse for a repeated sequential scan whose working set slightly exceeds the buffer pool, where PostgreSQL retains a protected resident fraction",
+      "status": "observed",
+      "q_relations": ["Q01"],
+      "cubrid_source": [
+        "src/storage/page_buffer.c (pgbuf victim selection / LRU zones; pgbuf_get_victim, pgbuf_unlatch_void_zone_bcb observed in profile)"
+      ],
+      "postgresql_source": [
+        "src/backend/storage/buffer/freelist.c (BufferAccessStrategy BAS_BULKREAD ring for large sequential scans)"
+      ],
+      "evidence_event": "data pages fetched per run vs pages read from outside the buffer pool",
+      "explanation": "CUBRID trace reports fetch=682,982 and ioread=682,950 for the lineitem scan, i.e. essentially every page fetch missed the 8192MB buffer, because the 682,937-page (10.42 GiB) heap exceeds the 524,288-page pool and plain LRU evicts pages before reuse; PostgreSQL under the same equal 8192MB budget kept 694,494 of 1,125,128 blocks resident (61.7% hit) because the bulk-read ring protects the resident set from scan-driven eviction.",
+      "measurement": {
+        "cubrid_fetch_pages": 682982,
+        "cubrid_ioread_pages": 682950,
+        "cubrid_buffer_hit_ratio": "0.005%",
+        "postgresql_heap_blks_hit_per_run": 694494,
+        "postgresql_heap_blks_read_per_run": 430634,
+        "postgresql_buffer_hit_ratio": "61.7%",
+        "read_syscalls_per_run": {"cubrid": 683272, "postgresql": 462763},
+        "device_read_bytes_both_engines": 0
+      },
+      "effect_range": "UPPER BOUND < 1% of CUBRID query CPU under the current WARM regime. Because device read_bytes is 0 on both engines, every miss is served from the OS page cache, and the measured page-fetch path is small: pgbuf_get_vpid_ptr 0.19%, pgbuf_unlatch_void_zone_bcb 0.06%, pgbuf_get_victim 0.06%, kernel filemap_get_read_batch 0.13% + filemap_read 0.07%. The 6.06% heap_attrinfo_read_dbvalues is tuple deform, not page fetch, and is NOT attributed here. This candidate would only become material with a cold OS page cache, which is outside the section 12 WARM regime.",
+      "evidence_type": "upper bound",
+      "implementation_direction": "Consider a scan-resistant replacement policy or bulk-read ring for large sequential scans so a repeated scan retains a resident fraction instead of self-evicting; do not pursue on Q01 CPU grounds alone.",
+      "correctness_risk": "None expected; replacement policy does not affect results. Risk is regression for workloads that rely on current LRU promotion.",
+      "validation_criteria": "Buffer hit ratio > 0 on a repeated scan of a table 1.0-1.5x the pool size, with no regression in the section 11 correctness gate and no increase in Q01 median wall.",
+      "relations": {"predecessor": null, "alternative": null, "contains": null, "contained_by": null}
+    }
+  ]
 }
