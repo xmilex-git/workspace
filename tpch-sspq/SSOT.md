@@ -538,7 +538,22 @@ Required fields:
 - implementation direction;
 - correctness/regression risk;
 - validation criteria;
-- predecessor, alternative and containment relations.
+- predecessor, alternative and containment relations;
+- priority (`P0`-`P3`) with a one-line justification tied to a measured number;
+- category (optimizer, parallelism, expression/type, buffer/IO,
+  aggregation/sort, index, intermediate-result, MVCC, storage);
+- difficulty (low/medium/high/very high) with the reason (e.g. localized
+  early-return vs structural dispatch change);
+- upstream precedent if one exists (a prior CBRD issue/PR that did the same
+  kind of change), or an explicit "no precedent" statement.
+
+An improvement candidate is not a restated profile line. It must state the
+mechanism: what the engine does per row/operation, what the contrasting engine
+does instead (with both `file:line` citations from section 7's contrast), and
+why the change direction follows. When multiple candidates coexist for one
+query, rank them and justify the ranking against the measured bands; explicitly
+record explanations that were considered and rejected, with the number that
+rejected them.
 
 Evidence type is one of direct A/B, profile attribution, projection, upper bound
 or lower bound. Never sum overlapping effects.
@@ -632,6 +647,39 @@ Required query fields:
 - report commit and raw manifest link;
 - improvement relations;
 - content fingerprint and last verified timestamp.
+
+Content richness requirement: a query's Notion page body must not be a bare
+metrics/link stub pointing back to Git. It must mirror the report's
+substantial analytical content directly into the page, specifically:
+
+- the causal multiplier card (report section 3-a) with the full factor table;
+- headline timings (section 3-b);
+- a plan comparison summary (section 4) showing both engines' shapes, not just
+  a verdict;
+- profiling top-cost symbols for both engines (section 6);
+- the full source contrast (section 7): concrete `file:line` citations on
+  both sides showing how the other engine solves the same problem, not a
+  one-line pointer;
+- the causal decomposition narrative (section 8), including the explanations
+  that were considered and rejected and the numbers that rejected them;
+- every improvement candidate (section 9), each also getting its own
+  improvement-registry Notion page.
+
+Each improvement-registry Notion page body must carry the candidate's full
+section 18 content: the per-row/per-operation mechanism on the CUBRID side and
+the contrasting mechanism on the PostgreSQL side (both with `file:line`), the
+quantified expected effect mapped to a named profile band or counter, the
+implementation direction, the validation criteria, the upstream-precedent
+statement, and the ranking justification against sibling candidates. Every
+select/property field the mirror schema offers (status, evidence level,
+evidence event, difficulty, risk, priority, category) is populated with a
+justified value — never left blank or defaulted.
+
+A one-line "see report.md" reference does not satisfy this, and neither does a
+properties-only database row with an empty body. Git remains the source of
+truth for correctness of the numbers; the Notion mirror exists so a reader
+understands the finding — mechanism, evidence and next action — without
+opening Git.
 
 Rules are not copied to Notion.
 
