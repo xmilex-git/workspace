@@ -42,6 +42,27 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
     exit "$gate_rc"
   fi
 
+  # SSOT section 12: "WARM is proved, not assumed" / "a failed WARM gate ...
+  # restarts at warmup". Drive the engine to its own steady state first, in a
+  # separate uncounted connection, so the contract block below is not timed on a
+  # decay curve or on residency inherited from the previous stage. Nothing this
+  # produces is ever a headline value. Q04 is the first query that needed it:
+  # PostgreSQL was still 2.1% above steady state at the third measured statement
+  # and CUBRID's level moved 4.2% with the preceding workload.
+  python3.11 "${HARNESS}/warm_establish.py" "$QNN" "$ENGINE" \
+      > "$W/${QNN}-${ENGINE}-warm-attempt${attempt}.log" 2>&1
+  wrc=$?
+  cp -f "$W/${QNN}-${ENGINE}-warm.json" "$W/${QNN}-${ENGINE}-warm-attempt${attempt}.json" 2>/dev/null
+  wverdict="$(python3.11 -c "import json,sys;d=json.load(open(sys.argv[1]));print(('CONVERGED' if d['converged'] else 'NOT_CONVERGED'), d['verdict'], 'after', d['converged_after_statements'], 'steady', d['steady_state_median_s'])" "$W/${QNN}-${ENGINE}-warm.json" 2>/dev/null)"
+  echo "  warm_establish rc=${wrc} ${wverdict}"
+  if [ "$wrc" -ne 0 ]; then
+    # Not a hard stop: WARM is a state the engine can be driven into, and the
+    # next attempt starts from the state this one already left behind. Retry
+    # like a rejected load gate, and keep the failed trace as evidence.
+    echo "${QNN} ${ENGINE}: attempt ${attempt} WARM NOT ESTABLISHED (rc=${wrc}); block not timed — retrying"
+    continue
+  fi
+
   LOAD="$W/${QNN}-${ENGINE}-bgload-attempt${attempt}.json"
   nohup python3.11 "${HARNESS}/bgload_monitor.py" "$LOAD" 0.25 "$THRESHOLD" \
       > "$W/${QNN}-${ENGINE}-bgload-attempt${attempt}.log" 2>&1 &

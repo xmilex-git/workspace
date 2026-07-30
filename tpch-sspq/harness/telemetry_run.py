@@ -99,8 +99,19 @@ def diskstats():
     return out
 
 
-def engine_procs(engine, client_pid=None):
-    """Map pid -> role for the engine under test."""
+def engine_procs(engine, client_pid=None, sticky=None):
+    """Map pid -> role for the engine under test.
+
+    `sticky` is a caller-owned pid->role cache. A PostgreSQL backend or parallel
+    worker that is exiting has an EMPTY /proc/<pid>/cmdline (it is already past
+    the point where it carries a ps title, and a reaped-but-not-yet-collected
+    child reads as ""), which makes the cmdline test below fall through to
+    "pg_background". That misfiles the process's final CPU delta as auxiliary
+    even though it was executor work: measured on Q04 at 5 workers x 12 ticks
+    plus the leader's 8 ticks = 0.68 core-s, 12.2% of PostgreSQL's
+    total_query_cpu. A pid's role never legitimately changes, so once a pid has
+    been positively identified the classification is pinned.
+    """
     procs = {}
     if engine == "cubrid":
         r = subprocess.run(["pgrep", "-f", f"cub_server {CUBRID_DB}"],
@@ -119,6 +130,9 @@ def engine_procs(engine, client_pid=None):
             rc = subprocess.run(["pgrep", "-P", str(pm)], capture_output=True, text=True)
             for c in rc.stdout.split():
                 cp = int(c)
+                if sticky is not None and cp in sticky:
+                    procs[cp] = sticky[cp]
+                    continue
                 try:
                     cmd = open(f"/proc/{cp}/cmdline").read().replace("\x00", " ")
                 except OSError:
@@ -129,8 +143,14 @@ def engine_procs(engine, client_pid=None):
                     procs[cp] = "pg_io_worker"
                 elif f"{PG_DB}" in cmd and "postgres:" in cmd:
                     procs[cp] = "pg_backend"
+                elif not cmd.strip():
+                    # exiting/unreadable: leave unclassified this round rather
+                    # than guessing; a later refresh may still catch the title.
+                    continue
                 else:
                     procs[cp] = "pg_background"
+                if sticky is not None:
+                    sticky[cp] = procs[cp]
         r = subprocess.run(["pgrep", "-x", "psql"], capture_output=True, text=True)
         for p in r.stdout.split():
             procs[int(p)] = "client_psql"
@@ -154,6 +174,7 @@ class Sampler(threading.Thread):
         self.proc_refresh_s = proc_refresh_s
         self.samples = []
         self.stop_flag = threading.Event()
+        self.role_sticky = {}
 
     def run(self):
         try:
@@ -165,7 +186,7 @@ class Sampler(threading.Thread):
         while not self.stop_flag.is_set():
             now = time.monotonic()
             if now - last_refresh >= self.proc_refresh_s:
-                procs = engine_procs(self.engine)
+                procs = engine_procs(self.engine, sticky=self.role_sticky)
                 last_refresh = now
             snap = {"t": time.monotonic(), "wall": time.time(), "tids": {}, "io": {}}
             for pid, role in procs.items():
