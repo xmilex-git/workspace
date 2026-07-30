@@ -61,8 +61,8 @@ per-node derivation is in `Q02-causal-card.json` and reproduced in section 8.
 |---|---|
 | Campaign ID | `tpch-sspq-fk-r1-20260730` |
 | QNN | Q02 |
-| SSOT commit | `b3b7a874873c1d2f6c07870099c88cf7c1d42987` |
-| SSOT blob | `2118be0fefd3b6303d64448a2cbf2223318d91f2` |
+| SSOT commit | `5912f0654f1e98beea154c7003d372f52a24a9c4` |
+| SSOT blob | `6ce8e04da201fd3f5e1b2d3dae42db1534d5b51a` |
 | GJC session ID | `gajae_code_ms7esqu3_mj3cgscn` |
 | Raw dir | `/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q02` |
 | CUBRID source SHA | `607f1ee9fb2394de129e083602c84a6525fc685c` (incl. PR #7441 `b334446d6`) |
@@ -78,7 +78,7 @@ block; after both blocks 0 orphan `csql`, 0 orphan `psql`, 0 leftover backends a
 0 leftover parallel workers remained.
 
 **SSOT re-pinning during this query.** Q02 began pinned to
-`ad1433b4…`/`3f742927…`. Three contract updates were issued by direct user
+`ad1433b4…`/`3f742927…`. Four contract updates were issued by direct user
 instruction mid-query (authority order 1 in section 2) and each was verified before
 adoption — commit object present, blob SHA matching the stated value, previous pin
 an ancestor, and the diff inspected:
@@ -88,6 +88,7 @@ an ancestor, and the diff inspected:
 | `2a5c4452…` | `a855b570…` | §21 execution boundary: worker never writes Notion | none (reporting only) |
 | `f8c7cfd0…` | `049f511c…` | §21 tightened: all Notion writes via a Notion-capable subagent | none (reporting only) |
 | `b3b7a874…` | `2118be0f…` | §18 improvement-candidate quality bar; §21 mirror depth floor | none on measurement; applied to sections 7/8/9 |
+| `5912f065…` | `6ce8e04d…` | §9 shared memory contract: PostgreSQL `dynamic_shared_memory_type=mmap` | none; the setting was already live before all Q02 measurement (verified, sections 1 and 4) |
 
 No update touched the schema, statistics, parallel, buffer or timing contract, so no
 completed measurement was invalidated and nothing was re-run. `SSOT_DRIFT` was never
@@ -131,6 +132,17 @@ Contract state at measurement time:
   (`part` 380.5 + `partsupp` 1,457.5 + `supplier` 20.0 + `nation`/`region` ~0) and
   1,706 MB on PostgreSQL, so neither engine self-evicts and the Q01 buffer-pressure
   confound is absent here.
+- shared memory, `parallel-plan-availability parity`: PostgreSQL
+  `dynamic_shared_memory_type=mmap`, verified live with
+  `source=configuration file, sourcefile=postgresql.conf:969` (line 159 carries the
+  packaged `posix` default and is overridden later in the same file; last wins).
+  CUBRID has no equivalent parameter — its parallel scan units share process memory
+  rather than a POSIX/SysV segment. The host `/dev/shm` is a fixed 64000k tmpfs
+  (628k in use), not campaign-controlled. This setting was already live before every
+  Q02 measurement, so no Q02 value is affected by it; it is recorded here because
+  Q02's natural PostgreSQL plan contains a parallel gather (`Gather Merge`, 4 workers
+  launched), which section 9 makes a recording trigger. Evidence:
+  `q2-shared-memory-verification.txt`.
 - cpuset/NUMA: SUT+client CPUs `0-15` (node0), collectors CPUs `20-23`. All 35
   engine TIDs verified on `0-15` with **0 off-cpuset** before and after each block.
   `cub_server` 8,644.99 MB node0 / 4.55 MB node1 (99.95% node0); postmaster
@@ -326,6 +338,31 @@ recorded without being promoted to a factor: in the third variant the
 **870.971 ms**, so a hypothetical PostgreSQL plan with CUBRID's shape *and*
 index access on the small dimensions would plausibly land near 0.9–1.0 s rather than
 2.4 s. That is a projection, not an A/B, and it anchors nothing.
+
+**PostgreSQL's plan space was not truncated by host shared memory.** Section 9 warns
+that a `/dev/shm` ceiling can silently remove Parallel Hash Join and thereby
+confound exactly this `F_plan` reasoning, so it was checked rather than assumed. Two
+proofs, both in `q2-shared-memory-verification.txt`:
+
+1. Parallel Hash Join *does* execute on this host under `mmap` DSM. A probe join
+   (`partsupp ⋈ part` on `p_size < 40`) reached `Parallel Hash Join` with
+   `Workers Launched: 5` and `Buckets: 262144  Batches: 16  Memory Usage: 5920kB`,
+   completing in 582 ms with no `No space left on device`. `/dev/shm` stayed at
+   628k of 64000k throughout and the DSM segments appear as
+   `PGDATA/pg_dynshmem/mmap.*`, i.e. DSM is file-backed and never touches the
+   64000k tmpfs.
+2. Parallel Hash Join is nevertheless **not** part of Q02's natural plan, for
+   planner rather than host reasons. Forcing the hash path (`enable_mergejoin=off`)
+   yields a **non-parallel** `Hash Join` (`Buckets: 65536  Batches: 64
+   Memory Usage: 5623kB`, 2,675 ms) because the join qual carries the correlated
+   `SubPlan expr_1` on `part.p_partkey` across the `Gather` boundary. Every function
+   involved is parallel-safe (`textlike=s`, `int4eq=s`, `numeric_eq=s`, `min=s`), so
+   parallel-safety is not the limiter either.
+
+PostgreSQL therefore had Parallel Hash Join available and still chose the merge-join
+plan with a 293 MB external sort. `F_plan` stays `UNMEASURED`, but its unmeasured
+content is a genuine cost-model decision, not an artifact of host shared-memory
+sizing.
 
 ## 5. Execution telemetry
 
@@ -738,7 +775,7 @@ yet. Full fields in `reports/improvement-registry.json`.
 
 Format: `claim → raw file → formula → evidence type → SHA-256`.
 All paths are under `/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q02/`; byte sizes
-and full hashes for all **45** artifacts are in `reports/Q02/raw-manifest.json`.
+and full hashes for all **47** artifacts are in `reports/Q02/raw-manifest.json`.
 
 | Claim | Raw file | Formula / basis | Evidence type | SHA-256 |
 |---|---|---|---|---|
@@ -765,6 +802,8 @@ and full hashes for all **45** artifacts are in `reports/Q02/raw-manifest.json`.
 | CUBRID LIKE/UTF-8 band 46.72%, 0 unresolved symbols | `profile-cubrid-flat.txt` | `perf report` self% | profile attribution | `6df8836707d2e3fc…` |
 | PostgreSQL `UTF8_MatchText` 3.00%, 0 unresolved symbols | `profile-pg-flat.txt` | `perf report` self% | profile attribution | `1617e7212bb96226…` |
 | call paths for `lang_strmatch_utf8` / `qstr_eval_like` | `profile-cubrid-callgraph.txt` | dwarf call-graph | profile attribution | see manifest |
+| `dynamic_shared_memory_type=mmap` live; PHJ executes (5 workers, 16 batches) with `/dev/shm` at 628k/64000k; PHJ absent from Q02 for planner reasons | `q2-shared-memory-verification.txt` | direct capture + forced-path probe | direct A/B | `29298d5a6a4256a0…` |
+| Q02 forced hash path probe input | `q2-phj-probe.sql` | `EXPLAIN ANALYZE` under `enable_mergejoin=off` | direct A/B | `6309332339152d61…` |
 | card factors, `W` per-node derivation, residual −3.770% vs predicted −3.770% | `Q02-causal-card.json` | section 16 formulas | profile attribution | `fd97ecfbb572bc38…` |
 
 Truncated hashes above are the manifest's first 16 hex digits; the manifest carries
@@ -814,7 +853,7 @@ content for `IMP-003` and `IMP-004`.
 - [x] Git improvement ledger deduplicated and committed (`IMP-003`, `IMP-004`, each
       carrying the full section 18 field set including priority, category,
       difficulty, upstream precedent and ranking justification)
-- [x] every claim indexed to raw evidence and checksum (45 artifacts)
+- [x] every claim indexed to raw evidence and checksum (47 artifacts)
 - [x] report, manifest and registry committed, pushed and reachable from `origin/main`
 - [x] `QUERY_COMPLETE` emitted by the worker session
 - [ ] **current session removed and absence verified — OUTSTANDING, control-plane
@@ -854,10 +893,11 @@ Known carried-forward gaps, explicitly recorded rather than silently omitted:
   is quantified, predicted and closed (section 3-a, section 5) rather than removed; a
   future harness change could sample CPU inside the headline block itself.
 - `reports/bootstrap/build-manifest.json` pins `ssot_commit 1d6a5ea6…` while this
-  query ends pinned at `b3b7a874…`. The intervening SSOT changes touched the
+  query ends pinned at `5912f065…`. The intervening SSOT changes touched the
   buffer/cache contract (already applied and recorded), the Notion execution
-  boundary and the improvement-candidate quality bar — no engine SHA, schema,
-  statistics, parallel or timing term — so no bootstrap finding is invalidated.
+  boundary, the improvement-candidate quality bar and the shared-memory contract
+  (which documents an already-live setting) — no engine SHA, schema, statistics,
+  parallel-worker or timing term — so no bootstrap finding is invalidated.
 - The CUBRID databases live under a repository-internal `.git_ignored_dir`; this is
   the reused SF10 dataset and moving it would be a destructive action outside the
   cleanup manifest, so it was left untouched and only recorded.
