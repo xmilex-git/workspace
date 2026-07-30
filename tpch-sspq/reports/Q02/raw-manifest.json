@@ -7,7 +7,7 @@
   "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
   "postgresql_source_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
   "raw_dir": "/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q02",
-  "artifact_count": 54,
+  "artifact_count": 55,
   "invalid_runs": [],
   "artifacts": [
     {
@@ -527,6 +527,23 @@
       "creation_command": "python3.11 harness/correctness_check.py Q02",
       "artifact_type": "correctness-verdict",
       "producing_stage": "14.2-correctness-gate",
+      "campaign_id": "tpch-sspq-fk-r1-20260730",
+      "qnn": "Q02",
+      "gjc_session_id": "gajae_code_ms7esqu3_mj3cgscn",
+      "ssot_commit": "5912f0654f1e98beea154c7003d372f52a24a9c4",
+      "ssot_blob_sha": "6ce8e04da201fd3f5e1b2d3dae42db1534d5b51a",
+      "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+      "postgresql_source_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
+      "valid": true,
+      "invalid_reason": null
+    },
+    {
+      "path": "/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q02/q2-cpuset-postcheck.txt",
+      "bytes": 2354,
+      "sha256": "13fb622ad0cf8841d0666d1be9024dc6d51eb6787307374b1e345fd729fa3efa",
+      "creation_command": "hand-composed post-query cpuset re-validation: all-TID sweep of cub_server+cub_master, plus a 2456-sweep 10 ms poller across 30 consecutive Q02 statements under taskset -c 0-15",
+      "artifact_type": "cpuset-postcheck",
+      "producing_stage": "14.13-completion-checklist",
       "campaign_id": "tpch-sspq-fk-r1-20260730",
       "qnn": "Q02",
       "gjc_session_id": "gajae_code_ms7esqu3_mj3cgscn",

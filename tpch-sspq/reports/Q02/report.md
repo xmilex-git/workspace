@@ -777,7 +777,7 @@ yet. Full fields in `reports/improvement-registry.json`.
 
 Format: `claim → raw file → formula → evidence type → SHA-256`.
 All paths are under `/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q02/`; byte sizes
-and full hashes for all **54** artifacts are in `reports/Q02/raw-manifest.json`.
+and full hashes for all **55** artifacts are in `reports/Q02/raw-manifest.json`.
 
 | Claim | Raw file | Formula / basis | Evidence type | SHA-256 |
 |---|---|---|---|---|
@@ -809,6 +809,7 @@ and full hashes for all **54** artifacts are in `reports/Q02/raw-manifest.json`.
 | A/B active-unit basis: CUBRID `parallel workers: 5` on both variants; PostgreSQL `Workers Launched: 4` + leader on both | `q2-predicate-ab-units.txt` | trace + `EXPLAIN ANALYZE` per variant | direct A/B | `d31b1a8068f47ec5…` |
 | perf coverage: CUBRID 36,429 samples, PostgreSQL 15,790 samples, 0 lost | `perf-record-cubrid.log` (`perf-record-pg.log` `7f763cd104388ffe…`) | `perf record` stderr | profile attribution | `5280543931502a6f…` |
 | perf driver consumed all rows (60 CUBRID statements; 16 x 100 PostgreSQL rows) | `Q02-cubrid-perf-driver-sink.out` (`Q02-postgresql-perf-driver-sink.out` `64370e36197a20ee…`) | statement result markers | direct A/B | `b329fd59d8e34d03…` |
+| post-query cpuset re-validation: idle-time transient escape, 0 escapes under 25 s / 2,456 sweeps of load; Q02 unaffected | `q2-cpuset-postcheck.txt` | all-TID sweep + 10 ms poller under load | direct A/B | `13fb622ad0cf8841…` |
 | card factors, `W` per-node derivation, residual −3.770% vs predicted −3.770% | `Q02-causal-card.json` | section 16 formulas | profile attribution | `fd97ecfbb572bc38…` |
 
 Truncated hashes above are the manifest's first 16 hex digits; the manifest carries
@@ -863,7 +864,7 @@ content for `IMP-003` and `IMP-004`.
 - [x] Git improvement ledger deduplicated and committed (`IMP-003`, `IMP-004`, each
       carrying the full section 18 field set including priority, category,
       difficulty, upstream precedent and ranking justification)
-- [x] every claim indexed to raw evidence and checksum (54 artifacts)
+- [x] every claim indexed to raw evidence and checksum (55 artifacts)
 - [x] report, manifest and registry committed, pushed and reachable from
       `origin/main`. Durable commits: `05ea623` (report, raw manifest,
       `IMP-003`/`IMP-004`), `dd17518` (section 9 shared-memory contract and the
@@ -925,6 +926,20 @@ Known carried-forward gaps, explicitly recorded rather than silently omitted:
   boundary, the improvement-candidate quality bar and the shared-memory contract
   (which documents an already-live setting) — no engine SHA, schema, statistics,
   parallel-worker or timing term — so no bootstrap finding is invalidated.
+- **Post-query cpuset re-validation caught a transient escape, which does not
+  invalidate Q02.** A sweep taken while the engines were idle (after the section 19
+  cleanup) reported `tids=29 off_cpuset=2 -> FAIL`; the two threads had exited ~60 s
+  later. They are short-lived `cub_server` maintenance threads, not query threads:
+  2,456 sweeps at a 10 ms period across 30 consecutive Q02 statements under
+  `taskset -c 0-15` found **0** off-cpuset signatures (max 30 TIDs). Both section 9
+  mandated gates passed at their mandated points (preflight `tids=35 off_cpuset=0`;
+  post-CUBRID-block `tids=26 off_cpuset=0`), and the telemetry attributes every
+  non-query `cub_server` cycle to `dwb-file-sync`/`dwb-flush-block` (0.03 of
+  1.79 core-s, auxiliary, never executor). So no measured statement ran concurrently
+  with an off-cpuset thread and no run is marked invalid. Recorded because it is the
+  section 24 "pooled threads escaped cpuset" pattern in a new, idle-time-only guise:
+  Q03–Q22 should keep running the all-TID gate before *and* after every block.
+  Evidence: `q2-cpuset-postcheck.txt`.
 - The CUBRID databases live under a repository-internal `.git_ignored_dir`; this is
   the reused SF10 dataset and moving it would be a destructive action outside the
   cleanup manifest, so it was left untouched and only recorded.
