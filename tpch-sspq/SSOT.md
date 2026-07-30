@@ -12,7 +12,7 @@ disposal record are never evidence for this campaign.
 
 Compare CUBRID and PostgreSQL on TPC-H SF10 for one session executing one query,
 with histogram statistics and a controlled parallel configuration. For every
-Q1–Q22, establish result equivalence, measure single-query-repeat WARM performance,
+Q01–Q22, establish result equivalence, measure single-query-repeat WARM performance,
 and complete plan, execution, profile, source and improvement analysis before
 moving to the next query.
 
@@ -31,11 +31,18 @@ Authority order:
 
 1. The user's latest direct instruction.
 2. This file at the latest verified GitHub `main` commit.
-3. Files explicitly referenced by this file at the same commit.
-4. Current verified external state: engine catalogs, GJC/tmux and Notion.
+3. Files explicitly referenced by this file at the same commit, only for the data,
+   template or evidence role assigned here. They do not define independent rules.
+4. Current verified external state: engine catalogs, campaign raw evidence,
+   GJC/tmux and Notion. External state is evidence, not a rule source.
 
-If a direct instruction changes a measurement contract, update this file and
-commit it before collecting more measurements.
+If a direct instruction changes a measurement contract, update this file, commit
+it and push it to GitHub `main` before collecting more measurements.
+
+Each query session pins one `ssot_commit` at creation. Do not pull or mix a newer
+SSOT revision into an active query. If `origin/main` changes this file mid-query,
+finish only the currently running command, preserve artifacts, mark `SSOT_DRIFT`,
+and reconcile the contract before starting another measurement stage.
 
 The former PK-only campaign is contaminated because it omitted foreign keys from
 the canonical CUBRID schema. Never:
@@ -48,6 +55,10 @@ the canonical CUBRID schema. Never:
 The only retained historical item is one Notion disposal record containing the
 reason, date range, known commits, removed paths and an explicit reuse ban. It has
 no relation to active databases.
+
+“Old commits” above means former workspace campaign commits and artifacts. Pinned
+CUBRID or PostgreSQL source history may be consulted only for implementation
+provenance. It is never performance evidence and never seeds an improvement ID.
 
 ## 3. Topology, paths and exact pins
 
@@ -75,27 +86,45 @@ Recommended build posture:
 - PostgreSQL optimized with debug symbols, assertions disabled, JIT disabled.
 - Do not strip binaries.
 
-Changing an engine SHA, compiler optimization, assertion mode or JIT is a campaign
-contract change and requires a new campaign ID.
+Bootstrap writes `reports/bootstrap/build-manifest.json` with compiler and linker
+versions, complete build/configure arguments, install prefixes, binary SHA-256,
+ELF Build IDs and source SHAs. Once the bootstrap gate passes, that manifest is
+frozen for the campaign.
+
+Changing an engine SHA, compiler/linker version, optimization flags, assertion
+mode, JIT mode or resulting binary hash is a campaign contract change and requires
+a new campaign ID.
 
 ## 4. Safe Git synchronization
 
-At the start of every GJC session:
+At campaign bootstrap and before every GJC session, perform the same check on the
+local control copy and the remote measurement copy:
 
-1. `cd ~/dev/workspace`.
-2. Run `git status --porcelain -- tpch-sspq`.
-3. If the subdirectory is dirty, do not reset, checkout, clean or overwrite it.
-   Recover or commit the durable work, or report the exact conflict.
-4. Run `git fetch origin main`.
-5. Run `git pull --ff-only origin main`.
-6. Record `git rev-parse HEAD`.
-7. Read this file completely.
+1. enter the workspace repository root and verify the checked-out branch is `main`;
+2. run `git status --porcelain -- tpch-sspq`;
+3. if the subdirectory is dirty, do not reset, checkout, clean or overwrite it;
+   recover or commit durable current-campaign work, or report the exact conflict;
+4. run `git fetch origin main`;
+5. run `git pull --ff-only origin main`;
+6. require local `HEAD`, remote `HEAD` and `origin/main` to match;
+7. record `git rev-parse HEAD` and
+   `git rev-parse HEAD:tpch-sspq/SSOT.md`;
+8. read this file completely to EOF.
+
+Do not pull, switch branches or alter the pinned SSOT during an active query.
+
+At durable query completion, commit the report, raw manifest and improvement
+ledger, then push the workspace `main` with a normal fast-forward push. A
+`report_commit` is durable only when it is reachable from `origin/main`. If push
+is rejected, do not rebase or merge automatically; preserve work and report the
+blocker.
 
 “Use latest Git” applies to the workspace repository. Do not move the engine
 source SHAs.
 
-Never use `git reset --hard`, `git clean -fd`, force checkout or history rewrite.
-Delete only paths explicitly covered by the initial cleanup manifest.
+Never use rebase, `git reset --hard`, `git clean -fd`, force checkout, force push
+or history rewrite. Delete only paths explicitly covered by the initial cleanup
+manifest.
 
 ## 5. Active repository allowlist
 
@@ -107,11 +136,15 @@ The clean active tree may contain only:
 - verified canonical queries and minimal engine dialects under `queries/`;
 - FK/index DDL and catalog verification SQL under `schema/`;
 - newly written measurement/verification harnesses under `harness/`;
-- new campaign reports and small raw manifests under `reports/`.
+- new campaign reports and small raw manifests under `reports/`, including
+  `reports/bootstrap/`, `reports/improvement-registry.json` and
+  `reports/notion_backfill_pending.jsonl`.
 
 Do not create repository-internal `.not_git_tracking`, `.git_ignored_dir` or hidden
 scratch. Old `CONTEXT.md`, `docs/adr/`, reports, plans, manifests, candidate
 alignment files and measurement harnesses are deleted from the active tree.
+Bootstrap must scan tracked, untracked and ignored filesystem entries; a clean
+`git status` alone does not prove this gate.
 
 ## 6. Query provenance and dialect
 
@@ -119,7 +152,7 @@ The CUBRID query source is:
 
 `/home/cubrid/dev/cubrid/.vscode/TPC-H/scale10/queries/`
 
-The active CUBRID Q1–Q22 files must byte-match that source. Record SHA-256 values.
+The active CUBRID Q01–Q22 files must byte-match that source. Record SHA-256 values.
 PostgreSQL files are minimal syntax dialects derived from the verified CUBRID
 files. Every dialect file has a generated diff and a one-line reason for each
 change. Forbidden dialect changes include hints, join reordering, subquery
@@ -160,14 +193,18 @@ child columns and order above. A PK left-prefix is not a substitute.
 
 Schema patch rules:
 
-- run CUBRID and PostgreSQL patch jobs concurrently because this is not a
-  performance measurement;
+- schema work is not a performance measurement; CUBRID and PostgreSQL jobs may run
+  concurrently only after ownership and shared CPU/I/O preflight. Concurrency is
+  optional, and shared-host contention requires sequential execution;
+- require a quiescent read-only dataset while validating and creating constraints;
 - use independent preflight, logs and rollback DDL;
 - if either side fails, do not measure;
 - do not silently rename, replace or drop a conflicting existing object;
-- after success, prove zero FK violations and exactly 8 expected FKs and 8
-  corresponding child B-trees per engine;
-- compare column order, referenced key, uniqueness and index method;
+- after success, prove zero FK violations, fully enabled and validated constraints,
+  and exactly 8 expected FKs and 8 corresponding child B-trees per engine;
+- PostgreSQL constraints must have `convalidated=true`; record the equivalent
+  CUBRID enabled/validated state;
+- compare child-column order, referenced key, uniqueness, ownership and index method;
 - reject unexpected schema objects.
 
 The post-patch catalog fingerprint is the schema baseline.
@@ -179,9 +216,11 @@ Only histogram-enabled configurations are in scope.
 CUBRID:
 
 - `update_statistics_update_histogram=yes`;
-- 300 histogram buckets;
+- histogram target bucket count 300;
 - update statistics after FK/index creation;
-- do not measure the histogram-disabled or 4-bucket configuration.
+- record the actual bucket count per column; low-NDV columns may contain fewer
+  distinct buckets than the target;
+- do not measure the histogram-disabled or unintended 4-bucket configuration.
 
 PostgreSQL:
 
@@ -206,8 +245,9 @@ PostgreSQL:
 - `parallel_leader_participation=on`;
 - set higher process limits so they do not bind.
 
-This is node/gather-cap control, not global-worker parity. Never infer actual
-execution units from settings.
+This is a `configured node/gather-cap comparison`, not DOP parity and not
+global-worker parity. Use that exact label in reports. Never infer planned,
+launched, simultaneous or time-weighted execution units from settings.
 
 CPU and memory:
 
@@ -243,15 +283,24 @@ Before every CUBRID block:
 5. after start, repeat identity checks, apply affinity to every TID and verify
    configured parameters.
 
-Run the gate before and after each measurement block, not only once per session.
+Before every PostgreSQL block, perform the analogous ownership gate for postmaster
+PID, `/proc/<pid>/exe`, `PGDATA`, socket/port and campaign build prefix. Classify
+`OK`, `FREE` or `BLOCKED`; never stop an unknown or non-campaign postmaster.
+
+Run the ownership gates before and after each measurement block, not only once per
+session.
 
 ## 11. Correctness gate
 
-Before performance work, run Q1–Q22 smoke on both engines and save full results.
+Before performance work, run Q01–Q22 smoke on both engines and save full results.
 
-- Canonically sort only queries without `ORDER BY`.
-- Text, integers, dates, NULLs, row count and row set must match exactly.
+- For a query with `ORDER BY`, compare the ordered result sequence exactly except
+  for the decimal rule below.
+- For a query without `ORDER BY`, canonically sort complete rows while preserving
+  duplicate multiplicity; never convert results to a set.
+- Text, integers, dates, NULLs, row count and row multiset must match exactly.
 - Preserve raw decimal text.
+- For Q15, prove the view is absent before the query and dropped after the query.
 - Compare decimals with arbitrary precision and allow only:
 
   `abs(a-b) ≤ 1e-12 × max(1, abs(a), abs(b))`
@@ -267,29 +316,39 @@ Before performance work, run Q1–Q22 smoke on both engines and save full result
 
 The only headline regime is `single-query-repeat WARM`.
 
-Per query:
+Engine-block order alternates to avoid a campaign-wide fixed-order bias:
 
-1. open one CUBRID `csql -C` direct connection;
+- odd QNN: CUBRID block, then PostgreSQL block;
+- even QNN: PostgreSQL block, then CUBRID block.
+
+For each engine block:
+
+1. open one direct campaign connection;
 2. execute one uncounted warmup statement;
 3. verify WARM;
 4. execute three measured statements consecutively;
-5. close the connection;
-6. repeat as one PostgreSQL `psql` Unix-socket connection with one warmup and
-   three measured statements.
+5. close the connection.
+
+CUBRID uses `csql -C` direct ad-hoc execution. PostgreSQL uses one `psql`
+Unix-socket connection and the simple-query protocol.
 
 Metadata connection mode:
 
 `single-connection-four-statements`
 
-Each statement uses simple-query parse/plan/execute. No prepared statement,
-server-side prepare, connection pool or reconnect between measured statements.
-Connection establishment is excluded. Per-statement client wall includes result
-transfer and fixed file output. Record server plan and execution times separately.
+No prepared statement, server-side prepare, connection pool or reconnect occurs
+between measured statements. Connection establishment is excluded. Every statement
+must fully consume all rows without terminal rendering. Write only to a
+campaign-owned fixed output sink under `work/QNN`. Record output bytes, then
+compute the content hash after the headline timer stops. Per-statement client wall
+includes result transfer and the sink write; client formatting/transfer CPU remains
+auxiliary and is never attributed to executor CPU.
+Record server plan and execution times separately.
 
 WARM is proved, not assumed. Record physical read deltas and engine buffer
 counters. A failed WARM gate invalidates the run and restarts at warmup.
 
-The Q1–Q22 full stream is smoke/timeout discovery only. Never use stream times for
+The Q01–Q22 full stream is smoke/timeout discovery only. Never use stream times for
 ratios, ranking or causal analysis.
 
 Report all three values and use the median as headline. Also report mean and
@@ -316,7 +375,7 @@ No next run starts while an orphan backend, worker or CUBRID task remains.
 
 ## 14. Per-query mandatory pipeline
 
-Every Q1–Q22 completes this pipeline before transition:
+Every Q01–Q22 completes this pipeline before transition:
 
 1. identity/schema/ownership/NUMA/cpuset preflight;
 2. correctness gate;
@@ -377,13 +436,33 @@ Every report begins with:
 ```text
 R_wall [wall]
 = F_plan [plan-shape]
-× F_units [TWU correction]
+× F_units [total-query-CPU/wall correction, explained by TWU]
 × F_cpu [total query CPU-seconds]
 
 F_cpu [total query CPU-seconds]
 = F_work [named work event]
 × F_cost [CPU-seconds or cycles / work event]
 ```
+
+For the exact cross-engine pair used after any plan anchor, define:
+
+```text
+U_C = CPU_C / T_C
+U_P = CPU_P / T_P
+F_units = U_P / U_C
+F_cpu = CPU_C / CPU_P
+
+F_work = W_C / W_P
+F_cost = (CPU_C / W_C) / (CPU_P / W_P)
+```
+
+Therefore `F_units × F_cpu = T_C / T_P`. TWU is an independent explanation and
+cross-check of `U`; a configured cap or nominal sampling interval is never
+substituted for measured utilization.
+
+If `F_plan` is numeric, define it with a same-engine native/controlled A/B, name
+the anchor direction, and compute `F_units` and `F_cpu` on the remaining controlled
+cross-engine pair. Do not mix native and controlled denominators.
 
 Example layout only:
 
@@ -423,11 +502,15 @@ symbols and patterns.
 
 ## 18. Improvement registry
 
-The new registry starts empty at `IMP-001`. Old candidate IDs are prohibited.
+The canonical allocation ledger is
+`reports/improvement-registry.json`. It starts empty and allocates `IMP-001`
+upward. Notion is a relation-rich mirror of the Git ledger. Old candidate IDs are
+prohibited.
 
-Before creating a candidate, search by title, CUBRID source location, PostgreSQL
-source location and root cause. Reuse an existing root cause and add Q relations
-and evidence.
+Because only one query session may exist, that session is the sole registry
+writer. Before creating a candidate, sync the Git ledger and search by title,
+CUBRID source location, PostgreSQL source location and root cause. Reuse an
+existing root cause and add Q relations and evidence.
 
 Required fields:
 
@@ -450,14 +533,20 @@ Status:
 
 `observed → measured → validated → implemented`
 
-Do not mark `validated` without correctness evidence. During a Notion outage, do
-not allocate temporary IDs.
+Do not mark `validated` without correctness evidence. During a Notion outage,
+allocate the final ID in the Git ledger, commit and push it, then backfill the same
+ID to Notion. Temporary, local-only or Notion-only IDs are prohibited.
 
 ## 19. Raw evidence and manifests
 
 Raw root:
 
 `/data/tpch-sspq/tpch-sspq-fk-r1-20260730`
+
+Before Q01, the raw root must be absent or contain only campaign bootstrap
+artifacts whose campaign ID and SSOT commit match. Pre-existing QNN evidence,
+unknown files or another SSOT revision block bootstrap; do not reuse or silently
+delete them.
 
 Layout:
 
@@ -513,8 +602,9 @@ Use the same field names in Git reports and Notion.
 The existing master URL remains stable but is cleaned to contain:
 
 - one unlinked PK-only disposal record;
-- a new Q1–Q22 database with 22 empty rows;
-- a new empty improvement registry;
+- a new Q01–Q22 database with 22 empty rows;
+- a new empty improvement registry mirroring
+  `reports/improvement-registry.json`;
 - one operational-state page.
 
 Required query fields:
@@ -535,11 +625,12 @@ Write path:
 
 1. official Notion connector;
 2. logged-in Aside browser;
-3. Git `notion_backfill_pending`.
+3. append an idempotent record to
+   `reports/notion_backfill_pending.jsonl`.
 
 Always fetch, minimally update and refetch. Do not mix write paths in one
-reconciliation. Notion failure never blocks measurement, deep analysis or query
-transition.
+reconciliation. Notion failure never blocks measurement, deep analysis, final IMP
+ID allocation or query transition.
 
 Backfill idempotency key:
 
@@ -556,12 +647,13 @@ Normal lifecycle:
 
 1. prove no previous measurement session exists;
 2. create one session with `PI_STREAM_IDLE_TIMEOUT_MS=300000`;
-3. record exact session ID in operational state;
-4. send the single-line Q-specific prompt;
-5. capture tmux and prove the correct QNN was received;
+3. record exact session ID and pinned `ssot_commit` in operational state;
+4. send the single-line Q-specific prompt containing QNN and pinned `ssot_commit`;
+5. capture tmux and prove the correct QNN and SSOT commit were received;
 6. keep that session for the query;
 7. after durable completion, remove it;
-8. verify absence with both `gjc session status` and `tmux has-session`;
+8. verify absence with both `gjc session status <exact-id>` and
+   `tmux has-session -t <exact-id>`;
 9. only then create the next query session.
 
 Never run two measurement sessions concurrently.
@@ -572,6 +664,8 @@ The worker emits:
 TPCH_SSPQ_STATUS:
   campaign_id: tpch-sspq-fk-r1-20260730
   query: QNN
+  ssot_commit: exact-git-sha
+  ssot_blob_sha: exact-blob-sha
   session_id: exact-id
   stage: exact-stage
   state: working|complete|blocked
@@ -590,16 +684,21 @@ and idle state, then use `tmux kill-session -t <exact-id>`. Never kill by patter
 
 Every 20 minutes:
 
-1. read latest GitHub `SSOT.md` commit;
+1. read the latest GitHub `SSOT.md` commit and compare it with the session-pinned
+   `ssot_commit`; do not pull into an active query;
 2. fetch Notion operational state if available;
-3. inspect exact `gjc session status`;
+3. inspect exact `gjc session status <session-id>`;
 4. capture exact tmux tail;
 5. inspect relevant measurement processes;
-6. inspect report/manifest Git commits;
+6. inspect report/manifest commits and whether the latest durable commit is
+  reachable from `origin/main`;
 7. reconcile only the missing transition.
 
 Actions:
 
+- GitHub SSOT differs from the pinned revision: allow only the currently running
+  command to finish, preserve artifacts, set `SSOT_DRIFT`, and block new
+  measurement stages until reconciliation;
 - active `Working` or measurement process: do nothing;
 - idle prompt: immediately evaluate completion; do not wait 40 minutes;
 - missing checklist item: steer the exact missing item in the same session;
@@ -658,10 +757,11 @@ A query can transition only when:
 - timeout has two confirmations if censored;
 - plan, execution, profile and source contrast sections are complete;
 - causal multiplier card has evidence or explicit `UNMEASURED` factors;
-- improvement deduplication and relations are complete or Notion backfill is
-  durably recorded without temporary IDs;
+- the Git improvement ledger is deduplicated and committed; Notion relations are
+  synced or an idempotent backfill record is durable;
 - every claim is indexed to raw evidence and checksum;
-- report and manifest are committed;
+- report, manifest and registry changes are committed, pushed and reachable from
+  `origin/main`;
 - `QUERY_COMPLETE` is emitted;
 - current session is removed and absence verified.
 
@@ -669,15 +769,24 @@ A query can transition only when:
 
 Before Q01:
 
-1. clean old active Git files and hidden scratch; verify absence;
-2. clean Notion and create the new structures;
-3. verify clean engine worktrees/builds/prefixes and exact binary SHAs;
-4. capture pre-schema catalogs;
-5. apply CUBRID and PostgreSQL FK/index patches concurrently;
-6. verify 8 FK/8 B-tree parity and zero violations;
-7. rebuild histogram-enabled statistics and capture catalogs;
-8. verify query hashes and dialect diffs;
-9. run result-equivalence smoke;
-10. create exactly one Q01 GJC session and begin the mandatory pipeline.
+1. synchronize local and remote workspace `main`, pin the SSOT commit/blob SHA and
+   verify the active-tree allowlist including ignored filesystem entries;
+2. verify the campaign raw root has no stale QNN evidence and create an empty
+   `reports/improvement-registry.json`;
+3. clean Notion and create the disposal record, Q01–Q22 database, empty IMP mirror
+   and operational-state page;
+4. verify clean engine worktrees, campaign-only builds/prefixes, exact binary
+   hashes and the frozen build manifest;
+5. capture pre-schema catalogs and deterministic fingerprints;
+6. apply CUBRID and PostgreSQL FK/index patches under the schema safety rules;
+7. verify fully validated 8 FK/8 child-B-tree parity, exact column order and zero
+   violations;
+8. rebuild histogram-enabled statistics and capture target plus actual catalogs;
+9. verify canonical query SHA-256 values and PostgreSQL dialect diffs;
+10. run Q01–Q22 result-equivalence smoke, recording censored correctness where
+    applicable;
+11. write a bootstrap report and manifest, commit and push them to `origin/main`;
+12. create exactly one Q01 GJC session pinned to that SSOT commit and begin the
+    mandatory pipeline.
 
 No partial bootstrap state may be called campaign start.
