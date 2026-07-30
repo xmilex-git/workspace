@@ -652,6 +652,16 @@ Backfill idempotency key:
 
 Clear pending only after server-side refetch.
 
+Execution boundary:
+
+The GJC/tmux worker session (section 22) runs on the remote build host and has no
+Notion connector. It must never attempt a Notion write. Its Notion-adjacent duty
+ends at committing and pushing the query's report/manifest to `origin/main`. All
+Notion sync (operational-state update, Q01-Q22 database row, improvement
+relations) is performed only by the main orchestrating session -- normally a
+dedicated subagent invoked during section 23 reconciliation -- reading the
+just-pushed GitHub commit as source of truth, never by the worker itself.
+
 ## 22. GJC/tmux lifecycle
 
 Use SSH alias `34-ilhansong`, official `gjc session` and tmux. Do not use
