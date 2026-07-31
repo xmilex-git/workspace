@@ -299,8 +299,12 @@ CPU and memory:
 
 If a pooled CUBRID thread or a PG worker/io worker inherits a different affinity,
 mark the run invalid, reapply affinity and rerun. If external CPU on the SUT set is
-above 1.5 core-seconds per second before a run, wait. If it crosses the threshold
-during a run, mark `INVALID_BACKGROUND_LOAD`.
+above 6.0 core-seconds per second before a run, wait. If it crosses the threshold
+during a run, mark `INVALID_BACKGROUND_LOAD`. (Threshold raised from 1.5 to 6.0 by
+operator decision on 2026-07-31: sustained host background load kept the 1.5 gate
+practically unattainable — Q07 burned repeated attempts on `INVALID_BACKGROUND_LOAD`
+while external load bounced 0.36-2.0 core-s/s; 6.0 still reserves 10 of the 16 SUT
+cores for the measured engine.)
 
 Do not terminate another user's process or database. Only campaign-owned servers
 may be stopped.
