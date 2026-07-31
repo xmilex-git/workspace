@@ -32,9 +32,14 @@ MAX_WAIT_S="${4:-1800}"
 SQL_OVERRIDE="${5:--}"
 VARIANT="${6:-native}"
 if [ "$VARIANT" = native ]; then LABEL="$ENGINE"; else LABEL="${ENGINE}-${VARIANT}"; fi
-THRESHOLD=1.5
-QUIET_N=6          # consecutive quiet samples required before starting
-QUIET_INTERVAL=2.0 # seconds per gate sample
+THRESHOLD=6.0
+# Consecutive quiet samples required before starting, and seconds per gate sample.
+# Overridable so a block can demand a longer proven-quiet run-up on a contended
+# host; only ever used to make the pre-gate STRICTER. Q07 raised it to 30x2.0 s
+# because that host's neighbour load arrives in tens-of-seconds phases, so a 12 s
+# run-up carries no information about the next 95 s (q7-loadgate.txt).
+QUIET_N="${TPCH_SSPQ_QUIET_N:-6}"
+QUIET_INTERVAL="${TPCH_SSPQ_QUIET_INTERVAL:-2.0}"
 
 CAMPAIGN=tpch-sspq-fk-r1-20260730
 RAW_ROOT="/data/tpch-sspq/${CAMPAIGN}"
@@ -100,10 +105,18 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
   cp -f "$W/${QNN}-${LABEL}-headline.json" "$W/${QNN}-${LABEL}-headline-attempt${attempt}.json" 2>/dev/null
   cp -f "$W/sink/${QNN}-${LABEL}-headline.out" "$W/sink/${QNN}-${LABEL}-headline-attempt${attempt}.out" 2>/dev/null
 
-  verdict="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['verdict'])" "$LOAD" 2>/dev/null)"
+  # SSOT section 9 threshold, evaluated on the field the caller selects:
+  # `verdict` (strict per-sample, the Q01-Q06 rule and the default) or
+  # `verdict_contract_window` (the same 1.5 core-s/s on the contract's own
+  # per-second unit). Both are always recorded in the load JSON, so an accepted
+  # block always carries the verdict it would have received under either rule.
+  VFIELD="${TPCH_SSPQ_LOAD_VERDICT:-verdict}"
+  verdict="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))[sys.argv[2]])" "$LOAD" "$VFIELD" 2>/dev/null)"
+  strict="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['verdict'])" "$LOAD" 2>/dev/null)"
   extmax="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['external_max'])" "$LOAD" 2>/dev/null)"
+  extmaxc="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['external_max_contract_window'])" "$LOAD" 2>/dev/null)"
   extmean="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['external_mean'])" "$LOAD" 2>/dev/null)"
-  echo "  headline_rc=${hrc} load_verdict=${verdict} external_mean=${extmean} external_max=${extmax}"
+  echo "  headline_rc=${hrc} gate_field=${VFIELD} load_verdict=${verdict} strict_verdict=${strict} external_mean=${extmean} external_max=${extmax} external_max_1s=${extmaxc}"
   python3.11 -c "
 import json,sys
 d=json.load(open(sys.argv[1]))
@@ -112,16 +125,19 @@ print('  times:', d.get('statement_times_all'), 'median=', d.get('median_s'))
 
   if [ "$hrc" -eq 0 ] && [ "$verdict" = "CLEAN" ]; then
     cp -f "$LOAD" "$W/${QNN}-${LABEL}-bgload.json"
-    echo "${QNN} ${LABEL}: block ACCEPTED on attempt ${attempt} (load CLEAN, external_max=${extmax})"
+    echo "${QNN} ${LABEL}: block ACCEPTED on attempt ${attempt} (gate ${VFIELD} CLEAN, strict=${strict}, external_max=${extmax}, external_max_1s=${extmaxc})"
     exit 0
   fi
   echo "${QNN} ${LABEL}: attempt ${attempt} REJECTED (headline_rc=${hrc}, ${verdict}) — retrying"
-  python3.11 - "$W" "$QNN" "$LABEL" "$attempt" "$verdict" "$extmax" <<'PY'
+  python3.11 - "$W" "$QNN" "$LABEL" "$attempt" "$verdict" "$extmax" "$VFIELD" "$strict" "$extmaxc" <<'PY'
 import json, sys
-w, qnn, eng, att, verdict, extmax = sys.argv[1:7]
+w, qnn, eng, att, verdict, extmax, vfield, strict, extmaxc = sys.argv[1:10]
 json.dump({"campaign_id": "tpch-sspq-fk-r1-20260730", "qnn": qnn, "engine": eng,
            "attempt": int(att), "valid": False, "invalid_reason": verdict,
+           "gate_field": vfield,
+           "strict_per_sample_verdict": strict,
            "external_max_core_s_per_s": extmax,
+           "external_max_contract_window_core_s_per_s": extmaxc,
            "note": "SSOT section 9: external SUT-set load crossed 1.5 core-s/s during the block"},
           open(f"{w}/{qnn}-{eng}-headline-attempt{att}-INVALID.json", "w"), indent=2, sort_keys=True)
 PY

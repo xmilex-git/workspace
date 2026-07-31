@@ -2,9 +2,11 @@
 """
 TPCH-SSPQ FK campaign (tpch-sspq-fk-r1-20260730) — external SUT-set load monitor.
 
-SSOT section 9 requires: "If external CPU on the SUT set is above 1.5 core-seconds
+SSOT section 9 requires: "If external CPU on the SUT set is above 6.0 core-seconds
 per second before a run, wait. If it crosses the threshold during a run, mark
-INVALID_BACKGROUND_LOAD." The preflight harness only samples the *pre-run* value.
+INVALID_BACKGROUND_LOAD." (Raised from 1.5 to 6.0 by operator decision on
+2026-07-31, SSOT commit f60fe90; 6.0 still reserves 10 of the 16 SUT cores for the
+measured engine.) The preflight harness only samples the *pre-run* value.
 This monitor supplies the *during-run* half of that gate, which Q03 needs because the
 measurement host is a podman container: /proc/stat is host-wide, so CPU burned by
 processes outside the container is real contention on CPUs 0-15 that is invisible to
@@ -18,8 +20,27 @@ CPU from the host-wide SUT-set busy time leaves exactly the non-campaign load. T
 monitor itself is pinned to the collector CPUs 20-23 (section 9) so it never competes
 with the measurement.
 
+Two verdicts are computed from the same samples, because the SSOT threshold is
+stated in `core-seconds per second` while the sampler runs at 0.25 s:
+
+  `verdict`                  strict: any single sample above the threshold rejects.
+                             This is the rule Q01-Q06 were accepted under and stays
+                             the default gate.
+  `verdict_contract_window`  the same threshold evaluated on the contract's own unit:
+                             a dt-weighted trailing mean over CONTRACT_WINDOW_S
+                             (default 1.0 s) must stay at or below the threshold.
+
+Q07 needed the distinction while the gate still stood at 1.5: that host carried an
+invisible outside-container neighbour at 1.2-2.3 core-s/s mean with isolated 0.25 s
+spikes to 4-6, and with a 95 s CUBRID block the strict 1.5 rule admitted only 3.8%
+of windows against 57% for the contract-unit rule (measured on 6,404 samples,
+`q7-loadgate.txt`). The threshold is now 6.0, which makes both readings pass in that
+regime; both verdicts are still recorded so a block always carries the verdict it
+would have received under either reading, and callers select the gating field with
+TPCH_SSPQ_LOAD_VERDICT.
+
 Usage:
-  bgload_monitor.py OUT_JSON [INTERVAL_S] [THRESHOLD]     # runs until SIGTERM/SIGINT
+  bgload_monitor.py OUT_JSON [INTERVAL_S] [THRESHOLD] [CONTRACT_WINDOW_S]
 """
 import json
 import os
@@ -131,12 +152,13 @@ def campaign_total():
 
 def main():
     if len(sys.argv) < 2:
-        print("usage: bgload_monitor.py OUT_JSON [INTERVAL_S] [THRESHOLD]",
-              file=sys.stderr)
+        print("usage: bgload_monitor.py OUT_JSON [INTERVAL_S] [THRESHOLD] "
+              "[CONTRACT_WINDOW_S]", file=sys.stderr)
         return 2
     out_path = sys.argv[1]
     interval = float(sys.argv[2]) if len(sys.argv) > 2 else 0.25
-    threshold = float(sys.argv[3]) if len(sys.argv) > 3 else 1.5
+    threshold = float(sys.argv[3]) if len(sys.argv) > 3 else 6.0
+    contract_window = float(sys.argv[4]) if len(sys.argv) > 4 else 1.0
 
     try:
         os.sched_setaffinity(0, COLLECTOR_CPUS)
@@ -192,6 +214,42 @@ def main():
         windows.append({k: (round(v, 4) if isinstance(v, float) else v)
                         for k, v in run.items()})
 
+    # Contract-unit evaluation. SSOT section 9 states the threshold in
+    # core-seconds per second, so the same samples are re-evaluated as a
+    # dt-weighted trailing mean over contract_window seconds. Only fully covered
+    # windows are judged; a leading partial window is always contained in a later
+    # full one.
+    cwin_max, cwin_over, cwin_n = 0.0, 0, 0
+    cwin_runs = []
+    crun = None
+    for i in range(n):
+        span, acc = 0.0, 0.0
+        j = i
+        while j >= 0 and span < contract_window:
+            span += samples[j]["dt_s"]
+            acc += samples[j]["external"] * samples[j]["dt_s"]
+            j -= 1
+        if span < contract_window:
+            continue
+        cwin_n += 1
+        m = acc / span
+        cwin_max = max(cwin_max, m)
+        if m > threshold:
+            cwin_over += 1
+            if crun is None:
+                crun = {"start_wall": samples[i]["wall"], "dur_s": 0.0, "max": m, "n": 0}
+            crun["dur_s"] += samples[i]["dt_s"]
+            crun["n"] += 1
+            crun["max"] = max(crun["max"], m)
+        elif crun is not None:
+            cwin_runs.append({k: (round(v, 4) if isinstance(v, float) else v)
+                              for k, v in crun.items()})
+            crun = None
+    if crun is not None:
+        cwin_runs.append({k: (round(v, 4) if isinstance(v, float) else v)
+                          for k, v in crun.items()})
+    external_core_s = sum(s["external"] * s["dt_s"] for s in samples)
+
     summary = {
         "campaign_id": "tpch-sspq-fk-r1-20260730",
         "artifact": "external SUT-set background load during a measurement block",
@@ -212,6 +270,14 @@ def main():
         "n_over_threshold": len(over),
         "over_threshold_windows": windows,
         "verdict": ("CLEAN" if not over else "INVALID_BACKGROUND_LOAD"),
+        "contract_window_s": contract_window,
+        "external_core_seconds": round(external_core_s, 4),
+        "external_max_contract_window": round(cwin_max, 4) if cwin_n else None,
+        "n_contract_windows": cwin_n,
+        "n_over_threshold_contract_window": cwin_over,
+        "over_threshold_contract_windows": cwin_runs,
+        "verdict_contract_window": ("CLEAN" if not cwin_over
+                                    else "INVALID_BACKGROUND_LOAD"),
         "samples": samples,
     }
     with open(out_path, "w") as f:

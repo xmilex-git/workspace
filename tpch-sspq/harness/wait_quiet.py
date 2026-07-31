@@ -2,7 +2,7 @@
 """
 TPCH-SSPQ FK campaign (tpch-sspq-fk-r1-20260730) — SSOT section 9 pre-run load gate.
 
-"If external CPU on the SUT set is above 1.5 core-seconds per second before a run,
+"If external CPU on the SUT set is above 6.0 core-seconds per second before a run,
 wait." This blocks until the external (non-campaign) load on CPUs 0-15 has stayed at or
 below the threshold for a required number of consecutive samples, then exits 0. It
 exits 3 if the set never quiesces within the deadline, so a caller never starts a

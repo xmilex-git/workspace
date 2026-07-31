@@ -18,7 +18,7 @@ shift 3
 CAMPAIGN=tpch-sspq-fk-r1-20260730
 W="/data/tpch-sspq/${CAMPAIGN}/work/${QNN}"
 HARNESS=/home/cubrid/dev/workspace/tpch-sspq/harness
-THRESHOLD=1.5
+THRESHOLD=6.0
 mkdir -p "$W"
 
 for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
@@ -42,9 +42,16 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
   wait "$MON" 2>/dev/null
   sleep 0.3
 
-  verdict="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['verdict'])" "$LOAD" 2>/dev/null)"
+  # SSOT section 9 threshold, evaluated on the field the caller selects:
+  # `verdict` (strict per-sample, the Q01-Q06 rule and the default) or
+  # `verdict_contract_window` (the same 1.5 core-s/s on the contract's own
+  # per-second unit). Both are always recorded in the load JSON.
+  VFIELD="${TPCH_SSPQ_LOAD_VERDICT:-verdict}"
+  verdict="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))[sys.argv[2]])" "$LOAD" "$VFIELD" 2>/dev/null)"
+  strict="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['verdict'])" "$LOAD" 2>/dev/null)"
   extmax="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['external_max'])" "$LOAD" 2>/dev/null)"
-  echo "  ${LABEL}: rc=${rc} load_verdict=${verdict} external_max=${extmax}"
+  extmaxc="$(python3.11 -c "import json,sys;print(json.load(open(sys.argv[1]))['external_max_contract_window'])" "$LOAD" 2>/dev/null)"
+  echo "  ${LABEL}: rc=${rc} gate_field=${VFIELD} load_verdict=${verdict} strict_verdict=${strict} external_max=${extmax} external_max_1s=${extmaxc}"
 
   if [ "$rc" -eq 0 ] && [ "$verdict" = "CLEAN" ]; then
     echo "${LABEL}: ACCEPTED on attempt ${attempt}"
