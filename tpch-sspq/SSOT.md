@@ -774,7 +774,10 @@ Normal lifecycle:
    `tmux has-session -t <exact-id>`;
 9. only then create the next query session.
 
-Never run two measurement sessions concurrently.
+Never run two measurement sessions concurrently. A dedicated child tmux session
+spawned by the query session solely to host a long-running block driver (see
+section 24's tmux-server-survival entry) is an implementation detail of that
+single query session, not a second concurrent measurement session.
 
 The worker emits:
 
@@ -848,6 +851,7 @@ must not repeat valid headline measurements.
 | alternating variants evicted each other's cache | group identical query variants and re-warm per block |
 | PK-only schema contradicted canonical DDL | mandatory 8-FK/8-index fingerprint gate |
 | completion depended on Telegram/remote-claude | SSH/GJC/tmux is the normal control plane |
+| tool-call abort killed a `nohup`/`setsid`/disowned background block job (0-byte stale log, foreground poller unaware) | launch long-running block drivers (`run_blocks.sh` etc.) inside a dedicated child tmux session (`tmux new-session -d -s <qNN><suffix> ...`) rather than backgrounding within the interactive tool's own process group; the tmux server survives tool-call abort/cgroup teardown, `nohup`/`setsid`/disown do not; the parent session records the child session name, polls its driver log for an explicit completion marker (`ALL_BLOCKS_DONE`/`FATAL`/`DRIVER_EXIT`), then removes the child session once consumed |
 
 ## 25. Escalation rules
 
