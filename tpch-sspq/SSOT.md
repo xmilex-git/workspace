@@ -299,8 +299,12 @@ CPU and memory:
 
 If a pooled CUBRID thread or a PG worker/io worker inherits a different affinity,
 mark the run invalid, reapply affinity and rerun. If external CPU on the SUT set is
-above 1.5 core-seconds per second before a run, wait. If it crosses the threshold
-during a run, mark `INVALID_BACKGROUND_LOAD`.
+above 6.0 core-seconds per second before a run, wait. If it crosses the threshold
+during a run, mark `INVALID_BACKGROUND_LOAD`. (Threshold raised from 1.5 to 6.0 by
+operator decision on 2026-07-31: sustained host background load kept the 1.5 gate
+practically unattainable — Q07 burned repeated attempts on `INVALID_BACKGROUND_LOAD`
+while external load bounced 0.36-2.0 core-s/s; 6.0 still reserves 10 of the 16 SUT
+cores for the measured engine.)
 
 Do not terminate another user's process or database. Only campaign-owned servers
 may be stopped.
@@ -770,7 +774,10 @@ Normal lifecycle:
    `tmux has-session -t <exact-id>`;
 9. only then create the next query session.
 
-Never run two measurement sessions concurrently.
+Never run two measurement sessions concurrently. A dedicated child tmux session
+spawned by the query session solely to host a long-running block driver (see
+section 24's tmux-server-survival entry) is an implementation detail of that
+single query session, not a second concurrent measurement session.
 
 The worker emits:
 
@@ -844,6 +851,7 @@ must not repeat valid headline measurements.
 | alternating variants evicted each other's cache | group identical query variants and re-warm per block |
 | PK-only schema contradicted canonical DDL | mandatory 8-FK/8-index fingerprint gate |
 | completion depended on Telegram/remote-claude | SSH/GJC/tmux is the normal control plane |
+| tool-call abort killed a `nohup`/`setsid`/disowned background block job (0-byte stale log, foreground poller unaware) | launch long-running block drivers (`run_blocks.sh` etc.) inside a dedicated child tmux session (`tmux new-session -d -s <qNN><suffix> ...`) rather than backgrounding within the interactive tool's own process group; the tmux server survives tool-call abort/cgroup teardown, `nohup`/`setsid`/disown do not; the parent session records the child session name, polls its driver log for an explicit completion marker (`ALL_BLOCKS_DONE`/`FATAL`/`DRIVER_EXIT`), then removes the child session once consumed |
 
 ## 25. Escalation rules
 
