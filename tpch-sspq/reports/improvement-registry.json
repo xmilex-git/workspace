@@ -384,49 +384,52 @@
       "explanation": "CUBRID pays codepoint decoding and collation-weight mapping per character for a predicate where byte equality would be sufficient, making its LIKE 8.64-9.75x more expensive per row than PostgreSQL's.",
       "id": "IMP-004",
       "implementation_direction": "Add an early fast path in lang_strmatch_utf8() (or dispatch from qstr_eval_like()) for deterministic built-in collations where both operands are ASCII: compare bytes directly and advance with an inlined continuation-byte skip, mirroring PostgreSQL's MatchText/NextChar. Secondarily make intl_utf8_to_cp and intl_nextchar_utf8 inlinable (static inline in a header, or hidden visibility) to remove the 2.82% PLT overhead.",
-      "measurement": {
-        "ab_cpu_increment_core_s_per_2M_rows": {
-          "cubrid": 0.907,
-          "postgresql": 0.105
+      "measurement": [
+        {
+          "ab_cpu_increment_core_s_per_2M_rows": {
+            "cubrid": 0.907,
+            "postgresql": 0.105
+          },
+          "ab_wall_increment_ms_per_2M_rows": {
+            "cubrid": 181.5,
+            "postgresql": 21.0,
+            "ratio": 8.64
+          },
+          "active_units_during_ab": {
+            "cubrid": 5,
+            "postgresql": 5
+          },
+          "cubrid_band_symbols": {
+            "db_string_like": 1.2,
+            "intl_nextchar_utf8": 3.09,
+            "intl_nextchar_utf8@plt": 1.07,
+            "intl_utf8_to_cp": 4.82,
+            "intl_utf8_to_cp@plt": 1.75,
+            "lang_strmatch_utf8": 22.01,
+            "qstr_eval_like": 12.78
+          },
+          "instructions_per_tuple_touch": {
+            "cubrid": 5031,
+            "postgresql": 1933,
+            "ratio": 2.603
+          },
+          "ns_per_row": {
+            "cubrid": 418.1,
+            "postgresql": 42.9,
+            "ratio": 9.75
+          },
+          "plt_overhead_pct_of_query_cpu": 2.82,
+          "profile_band_core_s": {
+            "cubrid": 0.836,
+            "postgresql": 0.0858
+          },
+          "profile_band_pct": {
+            "cubrid_like_utf8_band": 46.72,
+            "postgresql_utf8_matchtext": 3.0
+          }
         },
-        "ab_wall_increment_ms_per_2M_rows": {
-          "cubrid": 181.5,
-          "postgresql": 21.0,
-          "ratio": 8.64
-        },
-        "active_units_during_ab": {
-          "cubrid": 5,
-          "postgresql": 5
-        },
-        "cubrid_band_symbols": {
-          "db_string_like": 1.2,
-          "intl_nextchar_utf8": 3.09,
-          "intl_nextchar_utf8@plt": 1.07,
-          "intl_utf8_to_cp": 4.82,
-          "intl_utf8_to_cp@plt": 1.75,
-          "lang_strmatch_utf8": 22.01,
-          "qstr_eval_like": 12.78
-        },
-        "instructions_per_tuple_touch": {
-          "cubrid": 5031,
-          "postgresql": 1933,
-          "ratio": 2.603
-        },
-        "ns_per_row": {
-          "cubrid": 418.1,
-          "postgresql": 42.9,
-          "ratio": 9.75
-        },
-        "plt_overhead_pct_of_query_cpu": 2.82,
-        "profile_band_core_s": {
-          "cubrid": 0.836,
-          "postgresql": 0.0858
-        },
-        "profile_band_pct": {
-          "cubrid_like_utf8_band": 46.72,
-          "postgresql_utf8_matchtext": 3.0
-        }
-      },
+        "Q13: LARGEST measurement of this candidate in the campaign. Profile band A = 33.01% of CUBRID's Q13 CPU = 15.995 core-s per statement, against PostgreSQL's UTF8_MatchText + textnlike at 12.57% = 2.773 core-s. Band ratio 5.5483x on the tight bracketing (matcher symbols only, both sides) and 4.2653x on the wide one (plus each engine's generic per-row expression dispatch); the band is 47.78% / 46.39% of Q13's entire 26.3964 core-s per-statement CPU gap under the two bracketings. Symbols: lang_strmatch_utf8 16.91, qstr_eval_like 7.40, intl_utf8_to_cp 3.53, intl_nextchar_utf8 1.77, intl_utf8_to_cp@plt 1.10, intl_nextchar_utf8@plt 0.63, db_string_like 0.41, eval_pred 1.26; 16.90 of the 16.91 points of lang_strmatch_utf8 sit under a single stack via eval_data_filter <- scan_next_index_lookup_heap. The predicate 'o_comment not like ''%special%requests%''' is evaluated 15,000,000 times per statement (trace btree rows: 15000000, lookup rows: 14837583, difference 162,417 = ground truth G2). TWO NEW SOURCE FACTS: (a) intl_utf8_to_cp@plt and intl_nextchar_utf8@plt appear as separate PLT symbols, proving the per-character decode is genuinely not inlined; (b) language_support.c:2843-2846 shows the only collation-dependent branch inside the matcher selects a different WEIGHT TABLE, never a different algorithm, so utf8_bin -- whose weight function is the identity -- still pays two intl_utf8_to_cp decodes (:2857,:2858) and two weight-table lookups (:2877,:2893) per character. CHARSET/COLLATION PARITY VERIFIED BEFORE ATTRIBUTION: PostgreSQL database tpch_sspq is encoding UTF8, so like.c:156-161 routes to UTF8_MatchText, NOT the SB_MatchText single-byte path; CUBRID's column is COLLATE utf8_bin. PostgreSQL's advantage is the UTF-8 specialization at like.c:128-134 (NextChar = pointer increment + continuation-byte test, no decode, no table, no call) plus the one-byte candidate rejection at like_match.c:174-185. RECOMMEND RAISING TO P0 at the next ledger review on this evidence."
+      ],
       "mechanism_cubrid": "lang_strmatch_utf8() advances one character at a time and per position calls intl_utf8_to_cp() on both the target and the pattern, then maps each resulting codepoint through the collation weight table before comparing. There is no ASCII fast path and no byte-lockstep comparison, so a pure-ASCII pattern against an ASCII column still pays two codepoint decodes plus two table lookups per character. The profile shows both decode helpers reached through the dynamic linker on every character: intl_utf8_to_cp 4.82% + @plt 1.75%, intl_nextchar_utf8 3.09% + @plt 1.07% - 2.82% of total query CPU is PLT stub overhead alone.",
       "mechanism_postgresql": "MatchText() documents and implements byte-by-byte comparison even for multi-byte encodings, on the grounds that text and pattern stay in lockstep outside wildcard handling, and advances characters with a two-instruction inline macro that just skips UTF-8 continuation bytes. No codepoint is materialized, no weight table is consulted, and there is no out-of-line call in the inner loop.",
       "postgresql_source": [
@@ -438,7 +441,8 @@
       "priority": "P1",
       "priority_justification": "Owns the largest single profile band in Q02 - 46.72% of query CPU (0.836 of 1.79 core-s) at 418.1 ns/row vs PostgreSQL's 42.9 ns/row - but ranked below IMP-003 because IMP-003 removes 98.0% of the affected rows at lower risk. P1 rather than P2 because the matcher is shared by every LIKE in the workload.",
       "q_relations": [
-        "Q02"
+        "Q02",
+        "Q13"
       ],
       "ranking_rationale": "Ranked below IMP-003 even though its raw band (46.72% of query CPU) exceeds IMP-003's measured -53.1% wall effect, because the two overlap: after IMP-003 reorders the predicates only 39,575 of 2,000,000 rows reach the matcher, so IMP-003 captures most of this benefit at lower risk and with upstream precedent. IMP-004 remains independently valuable for any query where the LIKE cannot be deferred behind a cheaper predicate, which is why it is P1 and not P2.",
       "relations": {
@@ -479,7 +483,10 @@
       "explanation": "Under a parallel outer scan, CUBRID's query trace multiplies the reported work of nested-loop levels deeper than 2 by (depth-1), because two overlapping traversals both merge the same worker statistics.",
       "id": "IMP-005",
       "implementation_direction": "In px_scan_trace_handler.cpp:492-500, stop the double traversal. Either (a) merge only the node itself per level by extracting the single-node body of xasl_merge_stats into a merge_one_node() helper and calling that inside the scan_ptr loop, or (b) keep xasl_merge_stats' subtree semantics and drop the caller's scan_ptr loop, calling it once on xasl_tree->scan_ptr. Option (b) is the smaller diff; option (a) is clearer about intent. The dptr_list loop at :496-499 needs the same review, since dptr subtrees reached from a level that was already subtree-merged are duplicated by the same mechanism.",
-      "measurement": "Three independent scales, all with engine-independent ground truth:\n(1) Q03 full scale, parallel outer scan (q3-trace-cubrid.out): lineitem index entries reported 11,691,206 vs true 5,845,603 (2.0000x) and heap lookups 604,228 vs true 302,114 (2.0000x, ground truth q3-groundtruth-cubrid.out and PostgreSQL's own 302,114 at q3-plan-act-pg.out); the orders level (depth 2) is exact at 1,461,923 on both engines.\n(2) Small slice, SERIAL control (q3-doubling-trace.out, index outer scan so no parallel scan): every level exact - customer 1,079, orders 5,422, lineitem entries 21,847, lineitem qualifying 1,056, all equal to ground truth q3-doubling-groundtruth.out.\n(3) Same slice with a PARALLEL outer scan forced by c_custkey-0<5000 (q3-doubling-parallel-trace.out): depth 2 still exact (readkeys 1,079, rows 11,054, lookups 5,422) while depth 3 is exactly 2x (readkeys 10,844, rows 43,694, lookups 2,112).\n(4) Falsifiable prediction of the code reading, tested: a depth-4 chain must report 3x. Measured (q3-doubling-depth4-trace.out vs q3-doubling-depth4-groundtruth.out): depth-3 lineitem 17,810 vs true 8,905 (2.0000x) and depth-4 partsupp 26,715 vs true 8,905 (3.0000x).\n\n(5) Q04 NEGATIVE CONTROL - no duplication, every counter exact under a 6-worker parallel outer scan:\norders scan readrows reported 15,000,000 vs true cardinality 15,000,000; correlated-subquery readkeys reported 573,671 vs true probe count 573,671 (q4-groundtruth-{cubrid,pg}.out, identical on both engines); lookup rows reported 526,040 vs true answer row count 526,040.\nWHY: Q04's XASL hangs the correlated EXISTS subquery off the ROOT node's dptr_list and has NO scan_ptr chain (single-table driving scan, no nested-loop join). merge_xasl_tree() therefore merges it exactly once at src/query/parallel/px_scan/px_scan_trace_handler.cpp:467-470, and the duplicating loop at :493-500 never executes because xasl_tree->scan_ptr is nullptr.\nWHAT THIS PINS: this is the negative control the Q03 entry asked for. It SCOPES the defect - the (depth-1) multiplication requires a non-empty scan_ptr chain, so a correlated subquery under the root is unaffected - and it pins the root-dptr merge path with exact numbers a fix must preserve. It does NOT clear the :496-499 inner dptr_list loop, which merges a dptr hanging off a scan_ptr LEVEL and is still double-counted by construction, because the outer xasl_merge_stats(xptr1) has already recursed into xptr1's dptr_list via iterate_xasl_tree (src/xasl/xasl_iteration.hpp:180-187, called from src/xasl/xasl_iteration.cpp:205); Q04 simply does not exercise it.\nRaw: q4-trace-cubrid.out, q4-groundtruth-cubrid.out, q4-groundtruth-pg.out.",
+      "measurement": [
+        "Three independent scales, all with engine-independent ground truth:\n(1) Q03 full scale, parallel outer scan (q3-trace-cubrid.out): lineitem index entries reported 11,691,206 vs true 5,845,603 (2.0000x) and heap lookups 604,228 vs true 302,114 (2.0000x, ground truth q3-groundtruth-cubrid.out and PostgreSQL's own 302,114 at q3-plan-act-pg.out); the orders level (depth 2) is exact at 1,461,923 on both engines.\n(2) Small slice, SERIAL control (q3-doubling-trace.out, index outer scan so no parallel scan): every level exact - customer 1,079, orders 5,422, lineitem entries 21,847, lineitem qualifying 1,056, all equal to ground truth q3-doubling-groundtruth.out.\n(3) Same slice with a PARALLEL outer scan forced by c_custkey-0<5000 (q3-doubling-parallel-trace.out): depth 2 still exact (readkeys 1,079, rows 11,054, lookups 5,422) while depth 3 is exactly 2x (readkeys 10,844, rows 43,694, lookups 2,112).\n(4) Falsifiable prediction of the code reading, tested: a depth-4 chain must report 3x. Measured (q3-doubling-depth4-trace.out vs q3-doubling-depth4-groundtruth.out): depth-3 lineitem 17,810 vs true 8,905 (2.0000x) and depth-4 partsupp 26,715 vs true 8,905 (3.0000x).\n\n(5) Q04 NEGATIVE CONTROL - no duplication, every counter exact under a 6-worker parallel outer scan:\norders scan readrows reported 15,000,000 vs true cardinality 15,000,000; correlated-subquery readkeys reported 573,671 vs true probe count 573,671 (q4-groundtruth-{cubrid,pg}.out, identical on both engines); lookup rows reported 526,040 vs true answer row count 526,040.\nWHY: Q04's XASL hangs the correlated EXISTS subquery off the ROOT node's dptr_list and has NO scan_ptr chain (single-table driving scan, no nested-loop join). merge_xasl_tree() therefore merges it exactly once at src/query/parallel/px_scan/px_scan_trace_handler.cpp:467-470, and the duplicating loop at :493-500 never executes because xasl_tree->scan_ptr is nullptr.\nWHAT THIS PINS: this is the negative control the Q03 entry asked for. It SCOPES the defect - the (depth-1) multiplication requires a non-empty scan_ptr chain, so a correlated subquery under the root is unaffected - and it pins the root-dptr merge path with exact numbers a fix must preserve. It does NOT clear the :496-499 inner dptr_list loop, which merges a dptr hanging off a scan_ptr LEVEL and is still double-counted by construction, because the outer xasl_merge_stats(xptr1) has already recursed into xptr1's dptr_list via iterate_xasl_tree (src/xasl/xasl_iteration.hpp:180-187, called from src/xasl/xasl_iteration.cpp:205); Q04 simply does not exercise it.\nRaw: q4-trace-cubrid.out, q4-groundtruth-cubrid.out, q4-groundtruth-pg.out.",
+        "Q13: new instance on a new plan shape. q13-trace-cubrid.out reports 'ORDERBY (time: 0, sort: true, page: 20861, ioread: 0)' for a 46-ROW sort; 20,861 is the inner GROUPBY node's temp page count re-reported at an ancestor node. Excluded from every calculation in the Q13 report."
+      ],
       "mechanism_cubrid": "Each parallel worker executes a private clone of the sub-plan below the parallel scan. When a worker finishes, merge_xasl_tree() folds its XASL clone into the coordinator's tree. For the nested-loop chain it iterates the scan_ptr list and calls xasl_merge_stats(xptr1, main) for every level. xasl_merge_stats does not merge a single node: its last statement is iterate_xasl_tree(src, merge_stats, true), which recurses through scan_ptr (xasl_iteration.hpp:189-191) and merges every node in the subtree by header.id with +=. So the level-2 node is merged once (from the caller's first iteration), the level-3 node twice (once inside level-2's subtree walk, once from the caller's second iteration), the level-4 node three times, and a level-k node (k-1) times. The output row counts, and therefore query results, are unaffected - only the trace counters are.",
       "mechanism_postgresql": "PostgreSQL keeps a per-worker NodeInstrumentation array in DSM and merges it with planstate_tree_walker (execParallel.c:1173), which visits every PlanState exactly once; for the node being visited it loops over the worker slots and calls InstrAggNode once per worker (execParallel.c:1115). The merge primitive itself (instrument.c:232) touches only the node handed to it and never re-walks children, so no node can be visited by two overlapping traversals.",
       "postgresql_source": [
@@ -537,7 +544,8 @@
         "Q09",
         "Q10",
         "Q11",
-        "Q12"
+        "Q12",
+        "Q13"
       ],
       "ranking_rationale": "Ranked below IMP-006 and IMP-007 on runtime effect, which is zero, and above nothing on that axis. It is recorded at P2 rather than P3 because it is a precondition for trusting the other two: Q03's own F_work would have been wrong by 1.54x on the native side if the trace had been believed. It is also the cheapest fix in the registry (a one-loop change) with the lowest risk.",
       "raw_evidence": [
@@ -1080,54 +1088,57 @@
       "explanation": "One scan thread reads 158,930 pages per statement - the predicted overflow to within 0.18% - so CUBRID's replacement policy retains the entire pool's worth of the relation and behaves optimally. The identical scan on 3, 6 or 12 pooled workers reads 468,980 / 458,209 / 459,242 pages, retaining only 213,957-224,728, and the degradation is flat in DOP rather than proportional to it: it is a step change caused by WHICH LRU list receives the pages, not by concurrency pressure. PostgreSQL, whose scan-resistance is a per-scan strategy ring rather than a per-thread list, reads 76,987 pages serially and 78,482 at DOP 5 against a predicted overflow of 76,552 - a 1.9% DOP effect against CUBRID's 188%.",
       "id": "IMP-010",
       "implementation_direction": "Propagate the parent's LRU identity into the parallel-scan worker's thread entry at src/query/parallel/px_scan/px_scan_task.cpp:94, next to the existing m_px_orig_thread_entry assignment: copy m_parent_thread_p->private_lru_index and call pgbuf_thread_variables_init() so m_is_private_lru_enabled follows, and clear both again on retire (thread_entry_task.cpp:75-76 already does). All N workers of one scan then share the ONE private list of the session that owns the query, which is the same list the serial path uses, so the serial retention behaviour is reproduced exactly rather than approximated. Cheaper and less invasive alternative if sharing one private list across workers proves contended: keep the shared list but insert scan pages at the TOP rather than the MIDDLE when the fixing thread is a parallel-scan worker of a sequential scan; that recovers most of the retention without touching thread identity. The structurally cleanest fix - and the one PostgreSQL's design argues for - is to make scan-resistance a property of the SCAN (a per-scan ring/strategy handed to pgbuf_fix, as in freelist.c:426) instead of a property of the fixing thread, which removes the whole class of defect rather than this instance.",
-      "measurement": {
-        "cubrid_device_read_bytes_per_block": 0,
-        "cubrid_extra_bytes_per_stmt_GiB": 4.57,
-        "cubrid_parallel_miss_pct_range": [
-          67.09,
-          68.67
-        ],
-        "cubrid_parallel_vs_serial_read_amplification": 2.883,
-        "cubrid_pool_pages": 524288,
-        "cubrid_predicted_overflow_pages": 158649,
-        "cubrid_rchar_per_stmt_parallel_GiB": 9.286,
-        "cubrid_rchar_per_stmt_serial_GiB": 2.422,
-        "cubrid_read_syscall_size_bytes": 16377,
-        "cubrid_reads_per_stmt_1_unit_NO_PARALLEL_SCAN": 158930,
-        "cubrid_reads_per_stmt_1_unit_second_measurement": 162257,
-        "cubrid_reads_per_stmt_PARALLEL_1": 158929,
-        "cubrid_reads_per_stmt_PARALLEL_12": 459242,
-        "cubrid_reads_per_stmt_PARALLEL_3": 468980,
-        "cubrid_reads_per_stmt_native_6": 458209,
-        "cubrid_relation_heap_pages": 682937,
-        "cubrid_serial_miss_pct": 23.27,
-        "cubrid_serial_vs_predicted_overflow_error_pct": 0.18,
-        "headline_regime_miss_pct": 89.1,
-        "headline_regime_reads_per_stmt": 608510,
-        "kernel_read_band_call_graph": "pgbuf_ordered_fix_release -> pgbuf_fix_release -> pgbuf_claim_bcb_for_fix -> fileio_read -> __libc_pread64 -> vfs_read -> xfs_file_buffered_read -> filemap_read -> copy_page_to_iter -> rep_movs_alternative (9.18%)",
-        "kernel_read_band_core_s_parallel": 2.543,
-        "kernel_read_band_pct_of_cubrid_profile": 11.01,
-        "limitation_no_single_worker_control": "The cleanest possible control - one POOLED worker, which would separate 'which thread fixes the page' from 'how many threads contend' - is not obtainable on this build: /*+ PARALLEL(1) */ degenerates to the serial non-px path (variants/trace-PARALLEL1.txt shows no 'parallel workers' line, reports rows: 1139264 correctly, and reads 158,929 pages, all identical to NO_PARALLEL_SCAN). The mechanism claim therefore rests on (a) the source branch at page_buffer.c:6900-6934 together with thread_entry_task.cpp:75-76,95 and px_scan_task.cpp:94, and (b) the measurement being a STEP at >=2 workers that is then flat across DOP 3, 6 and 12 rather than scaling with worker count. A contention explanation predicts DOP dependence and is rejected by that flatness; it is not excluded by a single-worker control, and that gap is recorded rather than glossed. The validation criteria above are written so that applying the fix settles it either way.",
-        "pool_state_dependence": "The parallel read count is itself unstable across pool states while the serial one is not: the three headline-regime telemetry blocks all measured 608,510 reads per statement (rchar 39,874,595,032-096 bytes per 4-statement block, i.e. 89.1% miss) while the lru_ab probe, which drives each variant to its own equilibrium with two extra passes first, measured 458,209-468,980 across DOP 3/6/12 (67.1-68.7%). Serial measured 158,930 and 162,257 in the same two settings (23.27% and 23.76%). Read amplification is therefore 2.88x-3.83x depending on pool state, and the section 12 headline regime sits at the 3.83x end. That the PARALLEL figure wobbles by 33% while the SERIAL figure is pinned to the arithmetic overflow is additional evidence that the parallel path's retention is unstable, not merely lower.",
-        "postgresql_dop_effect_pct": 1.9,
-        "postgresql_heap_blks_read_per_stmt_dop5": 78482,
-        "postgresql_heap_blks_read_per_stmt_serial": 76987,
-        "postgresql_pool_pages": 1048576,
-        "postgresql_predicted_overflow_pages": 76552,
-        "postgresql_relation_pages": 1125128,
-        "raw": [
-          "q6-lru-ab.txt",
-          "q6-cubrid-bufstate.txt",
-          "q6-bufstate.txt",
-          "q6-serial-telemetry.txt",
-          "q6-trace-cubrid.out",
-          "variants/trace-PARALLEL1.txt",
-          "variants/trace-PARALLEL3.txt",
-          "variants/trace-PARALLEL12.txt",
-          "variants/trace-NOPARALLELSCAN.txt",
-          "profile-cubrid-flat.txt"
-        ]
-      },
+      "measurement": [
+        {
+          "cubrid_device_read_bytes_per_block": 0,
+          "cubrid_extra_bytes_per_stmt_GiB": 4.57,
+          "cubrid_parallel_miss_pct_range": [
+            67.09,
+            68.67
+          ],
+          "cubrid_parallel_vs_serial_read_amplification": 2.883,
+          "cubrid_pool_pages": 524288,
+          "cubrid_predicted_overflow_pages": 158649,
+          "cubrid_rchar_per_stmt_parallel_GiB": 9.286,
+          "cubrid_rchar_per_stmt_serial_GiB": 2.422,
+          "cubrid_read_syscall_size_bytes": 16377,
+          "cubrid_reads_per_stmt_1_unit_NO_PARALLEL_SCAN": 158930,
+          "cubrid_reads_per_stmt_1_unit_second_measurement": 162257,
+          "cubrid_reads_per_stmt_PARALLEL_1": 158929,
+          "cubrid_reads_per_stmt_PARALLEL_12": 459242,
+          "cubrid_reads_per_stmt_PARALLEL_3": 468980,
+          "cubrid_reads_per_stmt_native_6": 458209,
+          "cubrid_relation_heap_pages": 682937,
+          "cubrid_serial_miss_pct": 23.27,
+          "cubrid_serial_vs_predicted_overflow_error_pct": 0.18,
+          "headline_regime_miss_pct": 89.1,
+          "headline_regime_reads_per_stmt": 608510,
+          "kernel_read_band_call_graph": "pgbuf_ordered_fix_release -> pgbuf_fix_release -> pgbuf_claim_bcb_for_fix -> fileio_read -> __libc_pread64 -> vfs_read -> xfs_file_buffered_read -> filemap_read -> copy_page_to_iter -> rep_movs_alternative (9.18%)",
+          "kernel_read_band_core_s_parallel": 2.543,
+          "kernel_read_band_pct_of_cubrid_profile": 11.01,
+          "limitation_no_single_worker_control": "The cleanest possible control - one POOLED worker, which would separate 'which thread fixes the page' from 'how many threads contend' - is not obtainable on this build: /*+ PARALLEL(1) */ degenerates to the serial non-px path (variants/trace-PARALLEL1.txt shows no 'parallel workers' line, reports rows: 1139264 correctly, and reads 158,929 pages, all identical to NO_PARALLEL_SCAN). The mechanism claim therefore rests on (a) the source branch at page_buffer.c:6900-6934 together with thread_entry_task.cpp:75-76,95 and px_scan_task.cpp:94, and (b) the measurement being a STEP at >=2 workers that is then flat across DOP 3, 6 and 12 rather than scaling with worker count. A contention explanation predicts DOP dependence and is rejected by that flatness; it is not excluded by a single-worker control, and that gap is recorded rather than glossed. The validation criteria above are written so that applying the fix settles it either way.",
+          "pool_state_dependence": "The parallel read count is itself unstable across pool states while the serial one is not: the three headline-regime telemetry blocks all measured 608,510 reads per statement (rchar 39,874,595,032-096 bytes per 4-statement block, i.e. 89.1% miss) while the lru_ab probe, which drives each variant to its own equilibrium with two extra passes first, measured 458,209-468,980 across DOP 3/6/12 (67.1-68.7%). Serial measured 158,930 and 162,257 in the same two settings (23.27% and 23.76%). Read amplification is therefore 2.88x-3.83x depending on pool state, and the section 12 headline regime sits at the 3.83x end. That the PARALLEL figure wobbles by 33% while the SERIAL figure is pinned to the arithmetic overflow is additional evidence that the parallel path's retention is unstable, not merely lower.",
+          "postgresql_dop_effect_pct": 1.9,
+          "postgresql_heap_blks_read_per_stmt_dop5": 78482,
+          "postgresql_heap_blks_read_per_stmt_serial": 76987,
+          "postgresql_pool_pages": 1048576,
+          "postgresql_predicted_overflow_pages": 76552,
+          "postgresql_relation_pages": 1125128,
+          "raw": [
+            "q6-lru-ab.txt",
+            "q6-cubrid-bufstate.txt",
+            "q6-bufstate.txt",
+            "q6-serial-telemetry.txt",
+            "q6-trace-cubrid.out",
+            "variants/trace-PARALLEL1.txt",
+            "variants/trace-PARALLEL3.txt",
+            "variants/trace-PARALLEL12.txt",
+            "variants/trace-NOPARALLELSCAN.txt",
+            "profile-cubrid-flat.txt"
+          ]
+        },
+        "Q13: NEGATIVE result, recorded as a SCOPE BOUND rather than as confirming evidence. A controlled traced parallel statement and a traced /*+ NO_PARALLEL_SCAN */ statement, each bracketed by /proc/<cub_server>/io and statdump, give Num_data_page_fetches of 22,649,042 vs 22,648,891 -- 0.00067% apart -- with read_bytes 0 on both. IMP-010's damage mechanism is re-reading pages the parallel path evicted; Q13's working set is resident in the 8192 MB pool so there is nothing to re-read. This narrows IMP-010 to the working-set-exceeds-pool regime; it does not weaken the finding."
+      ],
       "postgresql_source": [
         "src/backend/access/heap/heapam.c:398-410 initscan(): 'scan->rs_nblocks > NBuffers / 4' and allow_strat -> scan->rs_strategy = GetAccessStrategy(BAS_BULKREAD). The decision is a property of the SCAN and its relation size, never of the executing process",
         "src/backend/access/heap/heapam.c:1340 rs_flags |= SO_ALLOW_STRAT - set for a normal heap scan, so each parallel worker's own heap_beginscan builds its own BAS_BULKREAD ring; the behaviour is therefore identical at any DOP",
@@ -1143,7 +1154,8 @@
       },
       "q_relations": [
         "Q06",
-        "Q12"
+        "Q12",
+        "Q13"
       ],
       "ranking_rationale": "Ranked first among Q06's buffer/IO candidates and second overall on Q06 behind IMP-008. Against IMP-008's 7.624 core-s (54.4% of the CPU excess) IMP-010 is worth about 1.66 core-s (11.8%), so it loses on magnitude but wins decisively on evidence quality and cost: it is the only Q06 candidate proved by a direct same-engine A/B with an arithmetically predicted control value (158,649 predicted vs 158,930 measured), and its fix is a two-field propagation rather than an executor specialization. Bands are disjoint by symbol from IMP-008 (kernel read path versus predicate/domain evaluation) so their effects add; they are NOT disjoint from IMP-007, which is why that relation is recorded as multiplicative.",
       "relations": {
@@ -1372,7 +1384,10 @@
       "explanation": "CUBRID's LRU replacement policy needs list order, so it pays a mutex-protected unlink/relink plus zone rebalance on every unfix of a resident page; PostgreSQL's clock sweep needs no order, so it pays one atomic counter bump - which is why CUBRID's 6.6x smaller tuple-touch count only converts into a 16% CPU advantage instead of a wall win.",
       "id": "IMP-013",
       "implementation_direction": "Three options, cheapest first. (a) Extend the existing age-based suppression: pgbuf_lru_boost_bcb's own comment already documents 'if a page is quickly fixed several times, its age is really small ... we don't boost it', implemented in pgbuf_unlatch_bcb_upon_unfix; a random index-probe workload is the opposite case - a cold SINGLE touch of a zone-2/3 page - which that rule does not cover. Suppress the boost when the BCB's hit count since insertion is 1 and the fix was a read-only visibility fetch. (b) Batch the boost: record boost intent in the BCB and apply it under one mutex acquisition per N unfixes. (c) Replace the LRU lists with a clock sweep over the BCB array, removing the list and the per-list mutex entirely; freelist.c StrategyGetBuffer() is the reference shape.",
-      "measurement": "F_cost = (CPU_C/W_C)/(CPU_P/W_P) = 1034.2 ns / 194.4 ns = 5.320850x, against F_work = W_C/W_P = 0.151371x, so F_cpu(native) = 0.805422x. CUBRID retires 0.7391x PostgreSQL's instructions (252.359 G vs 341.463 G) at 1.0909x the IPC (1.20 vs 1.10), and switches context 38.5x more often (2.734 K/s vs 71/s).",
+      "measurement": [
+        "F_cost = (CPU_C/W_C)/(CPU_P/W_P) = 1034.2 ns / 194.4 ns = 5.320850x, against F_work = W_C/W_P = 0.151371x, so F_cpu(native) = 0.805422x. CUBRID retires 0.7391x PostgreSQL's instructions (252.359 G vs 341.463 G) at 1.0909x the IPC (1.20 vs 1.10), and switches context 38.5x more often (2.734 K/s vs 71/s).",
+        "Q13: first instance of this candidate measured FREE of a miss-count confound. Page fixes at the matched node are equal to 1.000259x (CUBRID trace fetch 19,504,609 vs PostgreSQL Index Scan Buffers: shared hit=19,499,552) and BOTH engines take zero physical reads (/proc read_bytes 0, Num_data_page_ioreads delta 0, blks_read delta 0). For that identical page-fix count CUBRID spends 10.210 core-s per statement (pgbuf_fix_release 13.86%, pgbuf_unfix 3.49%, pgbuf_replace_watcher 1.07%, pgbuf_ordered_fix_release 0.34%, plus 2.31 points of libpthread mutex traffic: __pthread_mutex_trylock 0.98, __pthread_mutex_unlock_usercnt 0.86, __pthread_mutex_lock 0.47) against PostgreSQL's 7.006 core-s (hash_search_with_hash_value 10.19%, PinBuffer 7.74%, LWLockAttemptLock 6.69%, StartReadBuffer 1.13%, LockBufferInternal 1.07%, LWLockRelease 1.06%, GetPrivateRefCountEntrySlow 0.94%, UnpinBufferNoOwner 0.87%, hash_bytes 0.86%, BufferLockUnlock 0.63%, ResourceOwnerForget 0.58%). Ratio 1.4573x, contributing 3.204 core-s = 12.1% of Q13's 26.3964 core-s CPU gap."
+      ],
       "mechanism_cubrid": "pgbuf_lru_boost_bcb() is called on unfix of any BCB that lives in LRU zone 2 or 3. It takes pthread_mutex_lock(&lru_list->mutex), calls pgbuf_remove_from_lru_list() to unlink the BCB from its current position, pgbuf_lru_add_bcb_to_top() to relink it at the head, and then pgbuf_lru_adjust_zone1() or pgbuf_lru_adjust_zones(), which walk the list to re-balance zone boundaries through pgbuf_bcb_change_zone(). On Q08's dominant path this runs once PER HEAP ROW: heap_get_visible_version() -> heap_clean_get_context -> pgbuf_unfix -> pgbuf_lru_boost_bcb, verified in the call graph at 5.38% of the parallel-query threads' cost. Q08 performs about 1.35 M fix/unfix pairs per statement (403,487 lineitem + 403,487 orders + 122,404 customer + 24,254 supplier heap lookups, each preceded by its index descent), so the list is reordered under a mutex about a million times per statement on pages that were already resident.",
       "mechanism_postgresql": "UnpinBuffer() / UnpinBufferNoOwner() decrement a PROCESS-LOCAL PrivateRefCountEntry->refcount and, only when it reaches zero, issue one pg_atomic_fetch_sub_u64(&buf->state, BUF_REFCOUNT_ONE). PinBuffer() bumps usagecount INSIDE the same compare-and-swap that takes the pin ('Default case: increase usagecount unless already max'). PostgreSQL's replacement algorithm is a clock sweep over the buffer array, so there is no ordered list to maintain, no per-list mutex to acquire and no zone rebalance to run. Searched src/storage/page_buffer.c for clock / sweep / usage_count / usagecount: CUBRID has no clock-sweep equivalent - the file implements private and shared LRU lists with zones 1/2/3.",
       "postgresql_source": [
@@ -1392,7 +1407,8 @@
         "Q08",
         "Q09",
         "Q10",
-        "Q11"
+        "Q11",
+        "Q13"
       ],
       "ranking_rationale": "Ranked 2 of 2 new Q08 candidates. It owns the largest profile band on either engine and is the lever that converts CUBRID's 6.6x work advantage into a wall win rather than a 16% CPU margin, but it is not the factor that loses Q08 - F_cpu = 0.838224x already favours CUBRID, and only F_units = 1.373763x is above 1.0, which is IMP-012's. Explanations rejected in favour of this one: 'CUBRID is CPU-hungrier' (rejected by F_cpu = 0.838224x and 0.7391x the instructions) and 'IMP-008's generic DB_VALUE comparator dominates' (rejected by tp_value_compare_with_error 0.59% + eval_value_rel_cmp 0.50% + mr_cmpval_* 1.02% = 2.11%, an order of magnitude below the 27.41% buffer band).",
       "raw_evidence": [
@@ -2105,39 +2121,42 @@
       "explanation": "CUBRID spends 27.31 ns of total query CPU per attribute materialised against PostgreSQL's 5.45 ns -- 5.01x -- and then spends a further 1.5019 core-s tearing those values down, against PostgreSQL's 0.0800 core-s, because PostgreSQL never builds a value object in the first place. CUBRID loses this band while materialising THREE TIMES FEWER attributes than PostgreSQL.",
       "id": "IMP-020",
       "implementation_direction": "Two independent steps, cheapest first. (1) Hoist the per-row, per-attribute invariants out of heap_attrinfo_read_dbvalues(): a scan's attribute set, their domains and their disk sizes are fixed for the whole scan, so tp_domain_disk_size() and pr_type_from_id() should be resolved once into the HEAP_CACHE_ATTRINFO at scan open, and the DB_VALUE containers initialised once and REUSED, which removes db_value_domain_init()/pr_clear_value() from the per-row path entirely (band B). (2) Give the sarg path an attribute accessor that reads the value in place from the page image for the fixed-width types, so a predicate on a DATE or a CHAR(n) never needs a constructed DB_VALUE. Step (2) is the same direction as the accepted per-row-overhead reductions CBRD-26924 and CBRD-27041 already took for the scan path, extended from page/visibility handling to attribute handling.",
-      "measurement": {
-        "attributes_materialised_cubrid": 299930260,
-        "attributes_materialised_postgresql": 899790780,
-        "cubrid_band_A_core_s": 8.1904,
-        "cubrid_band_A_pct": 34.41,
-        "cubrid_band_B_core_s": 1.5019,
-        "cubrid_band_B_pct": 6.31,
-        "delta_band_A_core_s": 3.2854,
-        "delta_band_B_core_s": 1.4219,
-        "delta_total_core_s": 4.7073,
-        "instructions_per_row_cubrid": 2493,
-        "instructions_per_row_postgresql": 1398,
-        "instructions_ratio": 1.784,
-        "ipc_cubrid": 2.32,
-        "ipc_postgresql": 1.99,
-        "note_on_ipc": "CUBRID's IPC is HIGHER (2.32 vs 1.99): it is not stalling, it is executing 1.784x more instructions per row. That excludes a memory-stall explanation for this band and points at instruction count, i.e. work done per row.",
-        "ns_per_attribute_cubrid": 27.31,
-        "ns_per_attribute_postgresql": 5.45,
-        "ns_per_attribute_ratio": 5.01,
-        "pct_of_q12_cpu_excess": 69.5,
-        "postgresql_band_A_core_s": 4.905,
-        "postgresql_band_A_pct": 28.81,
-        "postgresql_band_B_core_s": 0.08,
-        "postgresql_band_B_pct": 0.47,
-        "raw": [
-          "raw/Q12/profile-cubrid-flat.txt",
-          "raw/Q12/profile-pg-flat.txt",
-          "raw/Q12/q12-profile-bands.txt",
-          "raw/Q12/perf-stat-cubrid.txt",
-          "raw/Q12/perf-stat-pg.txt",
-          "raw/Q12/Q12-causal-card.json"
-        ]
-      },
+      "measurement": [
+        {
+          "attributes_materialised_cubrid": 299930260,
+          "attributes_materialised_postgresql": 899790780,
+          "cubrid_band_A_core_s": 8.1904,
+          "cubrid_band_A_pct": 34.41,
+          "cubrid_band_B_core_s": 1.5019,
+          "cubrid_band_B_pct": 6.31,
+          "delta_band_A_core_s": 3.2854,
+          "delta_band_B_core_s": 1.4219,
+          "delta_total_core_s": 4.7073,
+          "instructions_per_row_cubrid": 2493,
+          "instructions_per_row_postgresql": 1398,
+          "instructions_ratio": 1.784,
+          "ipc_cubrid": 2.32,
+          "ipc_postgresql": 1.99,
+          "note_on_ipc": "CUBRID's IPC is HIGHER (2.32 vs 1.99): it is not stalling, it is executing 1.784x more instructions per row. That excludes a memory-stall explanation for this band and points at instruction count, i.e. work done per row.",
+          "ns_per_attribute_cubrid": 27.31,
+          "ns_per_attribute_postgresql": 5.45,
+          "ns_per_attribute_ratio": 5.01,
+          "pct_of_q12_cpu_excess": 69.5,
+          "postgresql_band_A_core_s": 4.905,
+          "postgresql_band_A_pct": 28.81,
+          "postgresql_band_B_core_s": 0.08,
+          "postgresql_band_B_pct": 0.47,
+          "raw": [
+            "raw/Q12/profile-cubrid-flat.txt",
+            "raw/Q12/profile-pg-flat.txt",
+            "raw/Q12/q12-profile-bands.txt",
+            "raw/Q12/perf-stat-cubrid.txt",
+            "raw/Q12/perf-stat-pg.txt",
+            "raw/Q12/Q12-causal-card.json"
+          ]
+        },
+        "Q13: profile band C = 17.16% = 8.315 core-s per statement for 15,337,604 join output rows = 542 ns/row (spage_get_record 4.00, heap_attrinfo_read_dbvalues 2.89, or_mvcc_get_repid_and_flags 2.48, mr_readval_string_internal 1.51, fetch_val_list 1.28, heap_prepare_get_context 1.01, qdata_generate_tuple_desc_for_valptr_list 0.89, pr_clear_value 0.77, heap_init_get_context 0.68, qdata_get_tuple_value_size_from_dbval 0.51, spage_get_record_data 0.45, qdata_copy_db_value_to_tuple_value 0.38, or_header_size 0.31). CAVEAT RECORDED RATHER THAN GLOSSED: the 1.6987x band ratio in the report compares this against PostgreSQL's whole 22.19% heap-access band, of which 19.52 points are heap_page_prune_opt (12.77) + heap_hot_search_buffer (6.75) -- MVCC maintenance, not tuple deforming. PostgreSQL's actual deforming counterpart is tts_buffer_heap_getsomeattrs at 1.74% = 0.384 core-s, which is not an exact functional equivalent either, so NO single cross-engine ratio is claimed for this band on Q13; the defensible number is CUBRID's own 542 ns/row."
+      ],
       "postgresql_source": [
         "src/backend/executor/execTuples.c:751 tts_buffer_heap_getsomeattrs() -> :1017 slot_deform_heap_tuple() - 26.61% of Q12's PostgreSQL profile (4.9050 core-s band A). Deforms into flat Datum/isnull arrays; for a run of fixed-width, NOT NULL-so-far attributes it advances by the cached attcacheoff instead of re-deriving each offset",
         "src/backend/executor/execExprInterp.c:662 EEO_CASE(EEOP_SCAN_FETCHSOME) - the single step that triggers the deform, with the attribute count computed ONCE by ExecComputeSlotInfo() (src/backend/executor/execExpr.c:3057)",
@@ -2147,7 +2166,8 @@
       "priority": "P0",
       "priority_justification": "The two bands this names are 8.1904 + 1.5019 = 9.6923 core-s of CUBRID's 23.8024 core-s total query CPU on Q12, and +4.7073 core-s against PostgreSQL's comparable 4.9850 core-s -- 69.5% of Q12's entire 6.7771 core-s CPU excess and the largest single measured effect on this query. It is P0 rather than P1 because the excess is paid on EVERY row of a 59,986,052-row scan whose predicates reject 99.48% of them, i.e. it is paid almost entirely on rows that are then discarded.",
       "q_relations": [
-        "Q12"
+        "Q12",
+        "Q13"
       ],
       "ranking_rationale": "Ranked FIRST of Q12's candidates. It is 69.5% of the measured CPU excess against IMP-019's 19.2% and IMP-010's Q12 share, it is proved by a profile with zero unresolved symbols and an empty unbanded remainder, and its denominator (attributes materialised) is a ground-truth count rather than an estimate. It ranks above IMP-010 on Q12 specifically because IMP-010's whole kernel band on this query is 2.4326 core-s of which only the +0.5360 core-s delta over PostgreSQL is addressable, while this candidate's delta is 8.8x larger.",
       "relations": {
@@ -2165,7 +2185,66 @@
       "status": "measured",
       "upstream_precedent": "Yes, for the direction. a2f738e75 [CBRD-26924] 'Cut per-row overhead in non-fixed heap scan: COPY all-visible shortcut' (#7281) and b334446d6 [CBRD-27041] 'page-copy-then-peek scan' (#7441) are both accepted, and #7441 is IN the pinned build 607f1ee9 (SSOT section 3). Both reduce per-row scan overhead by hoisting work out of the row loop; this candidate applies the same principle to the attribute-materialisation step those two did not touch. No prior CBRD issue or PR was found that caches per-attribute domain or disk-size resolution across rows, or that reuses DB_VALUE containers across scan rows.",
       "validation_criteria": "(1) Q01-Q22 results byte-identical, in particular Q12's 2 rows MAIL 62071/93045 and SHIP 62426/93261 against sink/Q12-cubrid-headline-block1.out; (2) heap_attrinfo_read_dbvalues self-cost falls below 12% of the CUBRID profile on Q12 (from 21.64%) and the band-B symbols below 1.5% (from 6.31%), measured the same way with the same verified-PID perf attachment; (3) CUBRID instructions per lineitem row scanned fall from the measured 2,493 toward PostgreSQL's 1,398, recorded with perf stat over the same 60 s window; (4) Q12 CUBRID median wall improves against 4.039 s under the same warm_establish + measure_block protocol with the WARM gate still CONVERGED; (5) total_query_cpu does not increase."
+    },
+    {
+      "category": [
+        "optimizer"
+      ],
+      "correctness_risk": "Medium. The change admits plans rather than forcing them, and qexec_groupby_index() is long-standing and already exercised by single-table queries, so no new execution path is introduced. The specific hazard is claiming an ordering across a join type that does not preserve it; validation criterion 5 pins that, and both engines already have the join-type guard written down.",
+      "cubrid_source": [
+        "src/optimizer/query_planner.c:6014-6019 -- THE DEFECT. 'if (qo_is_iscan_from_groupby (plan) && !plan->plan_un.scan.index->head->groupby_skip) { qo_plan_release (plan); return 0; }'. At the moment this runs, the flag is still false for every plan that is not yet top-rooted, so the plan is released at birth.",
+        "src/optimizer/query_planner.c:6006-6012 -- THE ASYMMETRY, in the same function: the ORDER BY arm reads '!(plan->top_rooted ? plan->plan_un.scan.index->head->orderby_skip : qo_plan_is_orderby_skip_candidate (plan))', i.e. it has a pre-top-rooted candidate predicate. The GROUP BY arm has no such branch.",
+        "src/optimizer/query_planner.c:12559-12610 qo_plan_is_orderby_skip_candidate() -- the existing candidate predicate to mirror; it computes the sort list on the spot at :12603 via qo_plan_compute_iscan_sort_list().",
+        "src/optimizer/query_planner.c:1172-1175 -- the ONLY write of groupby_skip in the whole tree, inside qo_top_plan_new(), guarded by 'plan->plan_type == QO_PLANTYPE_SCAN'. A join plan can never satisfy it.",
+        "src/optimizer/query_planner.c:1192 -- the consequence: 'plan = qo_sort_new (plan, QO_UNORDERED, SORT_GROUPBY)', an unconditional sort.",
+        "src/optimizer/query_planner.c:9239-9246 -- where the QO_SCANMETHOD_INDEX_GROUPBY_SCAN plan is deliberately created for a node with no sargable terms once qo_validate_index_for_groupby() passes; :9283 qo_generate_seq_scan() then supplies the only surviving access path once the index plan is released.",
+        "src/optimizer/query_planner.c:12271-12291 -- qo_plan_compute_iscan_sort_list() ALREADY walks a join to its outer side ('case QO_PLANTYPE_JOIN: plan = plan->plan_un.join.outer;'), so the ability to read an order off a join is present and unused; :12310 then requires that leaf to be an interesting-order scan.",
+        "src/query/query_executor.c:16605-16609 -- the sort-free grouping routine qexec_groupby_index() is reachable only when xasl->spec_list->indexptr->groupby_skip is set, i.e. only when THIS xasl's own first access spec is the index scan carrying the flag; a join's xasl cannot satisfy that.",
+        "src/parser/xasl_generation.c:18399-18403 -- the '/* ---> skip GROUP BY */' plan annotation, gated on the same flag; its presence/absence is what the Q13 probes read."
+      ],
+      "difficulty": "medium",
+      "difficulty_reason": "A localized predicate addition whose exact analogue already exists three lines above it in the same function (the orderby_skip candidate branch at query_planner.c:6007-6008 with qo_plan_is_orderby_skip_candidate() at :12559-12610), and the ordering machinery it needs already walks joins (qo_plan_compute_iscan_sort_list() at :12279-12281). Not low, because it needs a correct join-type guard so an ordering is not claimed across a join type that does not preserve it.",
+      "effect_range": "Direct same-engine A/B on CUBRID: 1.5617x (0.883 s -> 1.379 s, medians of 5) on an isolated 1,500,000-group aggregate where the ONLY change is adding one 1-row cross join, which cannot change the grouping work; the plan flips from 'iscan pk_customer_c_custkey (covers)' + '/* ---> skip GROUP BY */' to 'temp(group by)' + 'sort: 1 asc'. An explicit positive index hint cannot recover it (B' 1.371 s, plan text byte-identical to B), which is the runtime confirmation of the admission-time release. PostgreSQL's mirror A/B values the same optimization at 1.7268x (GroupAggregate 523.773 ms vs HashAggregate 904.450 ms over the same Index Only Scan), so the effect is not CUBRID-specific pessimism. On Q13 itself the addressable band is 16.4857% of traced CUBRID wall. NOT additive with IMP-015 or IMP-016.",
+      "evidence_event": "inner GROUP BY node time and its temp materialisation. Q13 CUBRID trace: GROUPBY (time: 2202, hash: partial, sort: true, page: 20861, rows: 1500000) inside SELECT (time: 13187) inside a traced statement of 13,357 ms. Denominator: one Q13 statement. PostgreSQL's entire equivalent grouping apparatus (Partial GroupAggregate + Gather Merge + Finalize GroupAggregate) is 946.9 ms with no sort of the 15,337,604-row stream anywhere in the plan.",
+      "evidence_type": "direct A/B",
+      "explanation": "CUBRID tests a flag that cannot yet be true at the point of the test; PostgreSQL tests the ordering property itself.",
+      "id": "IMP-021",
+      "implementation_direction": "Mirror query_planner.c:6007-6008 in the GROUP BY arm: replace '!plan->plan_un.scan.index->head->groupby_skip' at :6015 with '!(plan->top_rooted ? plan->plan_un.scan.index->head->groupby_skip : qo_plan_is_groupby_skip_candidate (plan))', adding qo_plan_is_groupby_skip_candidate() as the exact analogue of qo_plan_is_orderby_skip_candidate() (:12559-12610) -- qo_plan_compute_iscan_sort_list() already accepts the group_by node it needs. Leave qo_top_plan_new() to set the flag on the surviving plan as it does today, so the executor and XASL paths are untouched. The change ADMITS a plan; the existing cost model still decides whether to use it.",
+      "measurement": [
+        "Q13: R_wall 2.246313x (CUBRID 11.425999 s vs PostgreSQL 5.086557 s, medians of 3). Addressable band = inner GROUPBY 2,202 ms of 13,357 ms traced wall (16.4857%) + 20,861 temp pages (326 MiB). Direct A/B 1.5617x; hint-immune (B' 1.371 s). PostgreSQL mirror A/B 1.7268x. Capability probe q13-groupby-skip-probe.out shows '/* ---> skip GROUP BY */' present for a bare GROUP BY on customer/orders and absent as soon as the same GROUP BY sits above a join."
+      ],
+      "postgresql_source": [
+        "src/backend/optimizer/path/indxpath.c:965-966 -- 'if (index_clauses != NIL || useful_pathkeys != NIL || useful_predicate || index_only_scan)' creates the index path BECAUSE the ordering is useful, with no restriction to single-relation queries; :984-1003 creates the parallel twin with the same useful_pathkeys, which is exactly the Parallel Index Only Scan Q13's PostgreSQL plan uses.",
+        "src/backend/optimizer/path/pathkeys.c:739 build_index_pathkeys() -- turns the index's sort order into pathkeys; :1294-1318 build_join_pathkeys() returns the outer path's pathkeys unchanged for every join type except JOIN_FULL/JOIN_RIGHT/JOIN_RIGHT_ANTI (:1303-1306), so Q13's LEFT join preserves them.",
+        "src/backend/optimizer/util/pathnode.c:2420 -- create_nestloop_path() stores those pathkeys on the NestPath.",
+        "src/backend/optimizer/plan/planner.c:7959-8003 make_ordered_path() -- returns the path UNCHANGED when pathkeys_count_contained_in() says it is already sorted, inserting no Sort node at all; :7436-7446 then builds create_agg_path(..., AGG_SORTED, ...) on top."
+      ],
+      "priority": "P1",
+      "priority_justification": "The addressable band is the inner GROUPBY node: 2,202 ms of Q13's 13,357 ms traced CUBRID wall (16.4857%) plus a 20,861-page (326 MiB) temp materialisation, and profile band D at 5.12% = 2.481 core-s per statement. Real and well-localised, but roughly a third of what IMP-004 is worth on the same query (46.4-47.8% of Q13's CPU gap), so P1 rather than P0.",
+      "q_relations": [
+        "Q13"
+      ],
+      "ranking_rationale": "Ranked 4th of the five candidates carrying Q13 evidence. IMP-004 (46.4-47.8% of the 26.3964 core-s CPU gap), IMP-013 (12.1%) and IMP-020 (13.0%) all own larger measured bands of the CPU gap; IMP-021 owns 16.5% of CUBRID's traced WALL but only 5.12% of its CPU, because the grouping phase runs at fewer active units than the scan/join phase. Ranked above IMP-005, which is an instrumentation defect with no wall-clock value. It is nevertheless the only NEW root cause Q13 found, and the only one that is an optimizer plan-space defect rather than a per-row execution cost.",
+      "relations": {
+        "alternative": [],
+        "containment": [
+          "Distinct from IMP-015: IMP-015 is about the sort-based group-by running single-threaded once it exists; IMP-021 is about the sort never being needed. Fixing IMP-021 removes the workload IMP-015 fails to parallelise, so the two are NOT additive on any query where both fire.",
+          "Distinct from IMP-016/IMP-017: those are about hash aggregation being abandoned or mis-parameterised. Q13's inner GROUPBY reports 'hash: partial', i.e. hash aggregation was NOT abandoned here; the cost is the materialisation the plan shape forces around it.",
+          "Distinct from IMP-011/IMP-014: those are about choosing the wrong JOIN. Q13's two engines choose the SAME join over the same FK index."
+        ],
+        "predecessor": []
+      },
+      "root_cause_title": "A group-by-skip index scan plan is released at birth whenever the query contains a join, because qo_check_plan_on_info() tests index->head->groupby_skip -- a flag that is only ever written later, in qo_top_plan_new(), and only when the final top plan is itself a scan -- where the ORDER BY twin six lines above it tests a candidate predicate instead; so the sort-free streaming GROUP BY is unreachable behind any join and an unconditional SORT_GROUPBY is inserted",
+      "status": "measured",
+      "upstream_precedent": "Yes, in this very source tree: CBRD-26906, cited in the comment at query_planner.c:9257-9260 ('an interesting-order (group-by / order-by skip) index scan also means the hinted index is usable, so a positive index hint that only provides ordering (no key-range) still suppresses the sequential scan below'). That change taught the planner that an index whose only contribution is ordering is a real alternative on the HINT path; IMP-021 extends the same reasoning to the ADMISSION path. CBRD-24044 is referenced in the adjacent comment at :9274-9275 as the earlier state of the same code.",
+      "validation_criteria": [
+        "Q13's CUBRID estimated plan shows an ordered customer access with '/* ---> skip GROUP BY */' and no 'sort: 1 asc' above the join, and the trace's 20,861 temp pages go to 0.",
+        "Result equivalence re-proved by the SSOT section 11 gate: 46 rows, exact ordered match, and the ten ground-truth cardinalities G0-G8 unchanged.",
+        "The section 8-c A/B collapses toward 1.0x: 'select c_custkey, count(*) from customer, region where r_regionkey = 0 group by c_custkey' approaches the 0.883 s of the join-free form.",
+        "No plan regression on Q01-Q12, re-checked with the estimated-plan harness; the change only admits an alternative.",
+        "Left-outer-join null-extension semantics preserved: the ordering is taken from the OUTER (preserved) side only. query_planner.c:12621-12628 already documents the RIGHT-outer restriction the new predicate must respect, exactly as PostgreSQL's build_join_pathkeys() does at pathkeys.c:1303-1306."
+      ]
     }
   ],
-  "next_id": "IMP-021"
+  "next_id": "IMP-022"
 }
