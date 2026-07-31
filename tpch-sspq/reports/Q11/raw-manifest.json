@@ -1,5 +1,5 @@
 {
-  "artifact_count": 363,
+  "artifact_count": 364,
   "artifacts": [
     {
       "artifact_type": "causal-card",
@@ -3548,6 +3548,24 @@
       "valid": true
     },
     {
+      "artifact_type": "unclassified",
+      "bytes": 40860,
+      "campaign_id": "tpch-sspq-fk-r1-20260730",
+      "creation_command": "see work/Q11 stage drivers",
+      "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+      "gjc_session_id": "019fb8e7-fe3e-7000-b0d5-5a2ee55b905a",
+      "invalid_reason": null,
+      "path": "/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q11/make_backfill.py",
+      "postgresql_source_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
+      "producing_stage": "14.x",
+      "qnn": "Q11",
+      "relative_path": "make_backfill.py",
+      "sha256": "3ad01602d1915a44cd36e05c0d808d05ae21cf3f3d41e5eec34e7e030407f863",
+      "ssot_blob_sha": "510478846bff081d3223d3835069283a7cd2e47b",
+      "ssot_commit": "122c21596b15c5bf9c9a1a4b8d46c7fdaac4ee69",
+      "valid": true
+    },
+    {
       "artifact_type": "stage-driver-script",
       "bytes": 17343,
       "campaign_id": "tpch-sspq-fk-r1-20260730",
@@ -6538,7 +6556,7 @@
   ],
   "campaign_id": "tpch-sspq-fk-r1-20260730",
   "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
-  "generated_at": "2026-08-01T02:58:12+09:00",
+  "generated_at": "2026-08-01T03:02:34+09:00",
   "gjc_session_id": "019fb8e7-fe3e-7000-b0d5-5a2ee55b905a",
   "invalid_artifact_count": 25,
   "not_promoted": [
