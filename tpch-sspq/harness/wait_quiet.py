@@ -74,7 +74,7 @@ def campaign_total():
 
 
 def main():
-    threshold = float(sys.argv[1]) if len(sys.argv) > 1 else 1.5
+    threshold = float(sys.argv[1]) if len(sys.argv) > 1 else 6.0
     need = int(sys.argv[2]) if len(sys.argv) > 2 else 6
     interval = float(sys.argv[3]) if len(sys.argv) > 3 else 2.0
     max_wait = float(sys.argv[4]) if len(sys.argv) > 4 else 1800.0

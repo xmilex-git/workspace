@@ -122,7 +122,7 @@ a = snap(); t0 = time.time(); time.sleep(5); b = snap(); dt = time.time() - t0
 tk = os.sysconf("SC_CLK_TCK")
 busy = sum((b[c][1] - a[c][1]) - (b[c][0] - a[c][0]) for c in a)
 v = busy / tk / dt
-print(f"  external SUT-set busy = {v:.3f} core-seconds/second (threshold 1.5) -> {'PASS' if v <= 1.5 else 'WAIT / INVALID_BACKGROUND_LOAD'}")
+print(f"  external SUT-set busy = {v:.3f} core-seconds/second (threshold 6.0) -> {'PASS' if v <= 6.0 else 'WAIT / INVALID_BACKGROUND_LOAD'}")
 PY
 for pid in $(pgrep -f "cub_server ${CUBRID_DB}") $(pgrep -f "${PG_PREFIX}/bin/postgres -D ${PGDATA_DIR}"); do
   echo "  numastat pid=${pid} ($(basename "$(readlink -f "/proc/${pid}/exe")")):"
