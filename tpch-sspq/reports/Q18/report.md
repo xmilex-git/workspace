@@ -756,4 +756,5 @@ Handoff values for the reconciler: `campaign_id` `tpch-sspq-fk-r1-20260730`,
 | 26 | committed, pushed, reachable from `origin/main` | ✅ see `report_commit` |
 | 21 | Notion sync or durable backfill record | ⏭ **deferred to the §23 reconciler subagent by contract** — §21 bars this worker from every Notion write path, and the backfill key needs `report_commit`, which does not exist until this commit is pushed. Handoff values are in §11. |
 | 22 | `QUERY_COMPLETE` emitted | ✅ |
-| 22 | session removed and absence verified | ✅ after push |
+| 24 | child block-driver tmux sessions consumed | ✅ all 8 (`q18probe`, `q18blocks`, `q18plans`, `q18tel`, `q18var`, `q18fin`, `q18perf`, `q18perf2`) verified absent by `tmux has-session`; 0 orphan `csql`/`psql`/`perf`/PG workers |
+| 22 | measurement session removed and absence verified | ⏭ **controller step, not this worker's** — §22 has the controlling session remove the worker after durable completion and verify with both `gjc session status <id>` and `tmux has-session -t <id>`. This session is `gajae_code_msa9jlby_r5xvme65`; it reports `QUERY_COMPLETE` and stops. |
