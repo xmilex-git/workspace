@@ -345,16 +345,26 @@
       "priority": "P0",
       "priority_justification": "Largest measured actionable CUBRID-side effect in Q02: a direct same-engine A/B puts the part-scan stage at 253 ms vs 65.6 ms achievable, i.e. -53.1% of the 353 ms Q02 median, from one estimator change.",
       "q09_evidence": "Q09: second measured instance. p_name like '%green%' is estimated at selectivity 0.0016 -> 3,200 rows against a ground-truth 108,782 (raw/Q09/q9-plan-est-cubrid.out term[8], raw/Q09/q9-groundtruth-cubrid.out G1), a 34.0x under-estimate (Q02 measured 21.7x). It is a CONTRIBUTING error to Q09's plan misselection, not the deciding one: correcting it alone scales the lineitem-join estimate from 2.41 to ~82 rows, still 39,800x below the true 3,261,613, so the index-NL chain still wins the cost comparison. The deciding error is IMP-014.",
+      "q16_evidence": "Q16 supplies this candidate's third instance and its cleanest SIBLING CONTRAST. The leading-wildcard predicate `s_comment like '%Customer%Complaints%'` on supplier (100,000 rows) is estimated at sel 0.0001 -- the lower clamp at histogram_cl.cpp:1529-1532, i.e. no bucket boundary and no MCV matched -- giving card 10 against a true 56 (5.60x under; q16-plan-est-cubrid.out term[0] of the subquery, q16-groundtruth-*.out 'supplier_complaints'). The same statement simultaneously exhibits the OPPOSITE failure on part.p_type through the anchored arm, which is registered separately as IMP-022; Q16 is therefore the query that separates the two branches of this estimator by exhibiting both at once on two columns. The Q16 instance costs no wall time -- the subquery is a 1,281-page scan either way and CUBRID's plan is unchanged -- so it is recorded as mechanism evidence, not as an effect. PostgreSQL's estimate on the identical predicate is 'rows=6' per worker (~30 total) against the same true 56, i.e. also low but by 1.9x rather than 5.6x, and it reaches that number through mcv_selectivity() + histogram_selectivity() applying the real operator (selfuncs.c:1032, :1042).",
       "q_relations": [
         "Q02",
-        "Q09"
+        "Q09",
+        "Q16"
       ],
       "ranking_rationale": "Ranked above IMP-004 despite owning the smaller raw profile band. (a) It captures most of IMP-004's Q02 benefit: reordering cuts LIKE evaluations from 2,000,000 to 39,575 (50.5x) for a measured -53.1%, whereas fixing only the matcher (8.64x per-row) would take the same 253 ms stage to about 83 ms = -48.2% - comparable in Q02, but by making wasted work faster rather than not doing it. (b) It is one estimator function versus IMP-004's collation dispatch path shared by every string comparison, so far less regression surface. (c) It has direct upstream precedent (CBRD-27039) while IMP-004 has none.",
+      "raw_evidence": [
+        "raw/Q16/q16-groundtruth-cubrid.out",
+        "raw/Q16/q16-groundtruth-pg.out",
+        "raw/Q16/q16-plan-est-cubrid.out"
+      ],
       "relations": {
         "alternative": [
           "promote rank above selectivity in make_pred_from_bitset() (src/optimizer/plan_generation.c:1635) - same Q02 outcome, wider blast radius"
         ],
         "contained_by": [],
+        "containment": [
+          "SIBLING: IMP-022 is the anchored-prefix / heuristic arm of the same estimator (histogram_cl.cpp:1311-1337) reached through PT_NOT_LIKE. Q16 exhibits both arms in one statement on two different columns. Their effects are never additive on a single term, because no term takes both branches."
+        ],
         "contains": [
           "IMP-004 (for Q02: after this fix only 39,575 of 2,000,000 rows reach the matcher)"
         ],
@@ -442,11 +452,25 @@
       ],
       "priority": "P1",
       "priority_justification": "Owns the largest single profile band in Q02 - 46.72% of query CPU (0.836 of 1.79 core-s) at 418.1 ns/row vs PostgreSQL's 42.9 ns/row - but ranked below IMP-003 because IMP-003 removes 98.0% of the affected rows at lower risk. P1 rather than P2 because the matcher is shared by every LIKE in the workload.",
+      "q16_evidence": "Q16 measures this candidate on a plan-controlled pair and on a much larger evaluation count than Q02/Q13. CUBRID evaluates LIKE 2,500,000 times per statement -- 2,000,000 `p_type not like 'MEDIUM POLISHED%'` plus 500,000 `s_comment like '%Customer%Complaints%'`, the latter being 5x the 100,000-row supplier table because the uncorrelated subquery is re-executed once per parallel scan worker (see IMP-009). PostgreSQL evaluates it 2,100,000 times. Profile band C: CUBRID lang_strmatch_utf8 3.32% + qstr_eval_like 3.09% + intl_utf8_to_cp 0.75% + intl_nextchar_utf8 0.64% + db_string_like = 8.64% of 9.4929 core-s = 0.8202 core-s per statement, against PostgreSQL's UTF8_MatchText 0.72% of 3.67115 = 0.0264 core-s. Normalised per evaluation that is 328 ns against 12.6 ns, a 26.1x per-call ratio -- the largest per-call ratio this candidate has been measured at, and consistent with its thesis: intl_utf8_to_cp and intl_nextchar_utf8 alone are 1.39% of CUBRID's profile, i.e. the per-codepoint decode is 16.1% of the band, and PostgreSQL's UTF8_MatchText has no decode step at all (like.c:129-131 advances by raw continuation bytes).",
       "q_relations": [
         "Q02",
-        "Q13"
+        "Q13",
+        "Q16"
       ],
       "ranking_rationale": "Ranked below IMP-003 even though its raw band (46.72% of query CPU) exceeds IMP-003's measured -53.1% wall effect, because the two overlap: after IMP-003 reorders the predicates only 39,575 of 2,000,000 rows reach the matcher, so IMP-003 captures most of this benefit at lower risk and with upstream precedent. IMP-004 remains independently valuable for any query where the LIKE cannot be deferred behind a cheaper predicate, which is why it is P1 and not P2.",
+      "raw_evidence": [
+        "raw/Q16/Q16-causal-card.json",
+        "raw/Q16/Q16-cubrid-headline-block1.json",
+        "raw/Q16/Q16-cubrid-noparscan-headline.json",
+        "raw/Q16/Q16-postgresql-headline-block1.json",
+        "raw/Q16/Q16-postgresql-nopresorted-headline.json",
+        "raw/Q16/profile-cubrid-flat-nocg.txt",
+        "raw/Q16/profile-pg-flat-nocg.txt",
+        "raw/Q16/q16-bands.txt",
+        "raw/Q16/q16-plan-act-pg.out",
+        "raw/Q16/q16-trace-cubrid.out"
+      ],
       "relations": {
         "alternative": [
           "IMP-003 (cheaper, achieves a similar Q02 result by avoiding the work rather than accelerating it)"
@@ -671,6 +695,9 @@
           "cache the tuple descriptor per node instead of rebuilding per tuple (query_opfunc.c:625) - a strict subset of this candidate, 3.04% of profiled cost, low risk"
         ],
         "contained_by": [],
+        "containment": [
+          "Distinct from IMP-023: IMP-023's list files are per-GROUP aggregate-operand files opened by qdata_process_distinct_or_sort() (query_aggregate.cpp:70-115), not the per-tuple join-output materialisation this candidate owns. They share qfile_* profile symbols, so on a query where both fire their bands overlap and must not be summed; Q16 reports them as a single band A for that reason."
+        ],
         "contains": [
           "the tuple-descriptor rebuild sub-case (query_opfunc.c:625)"
         ],
@@ -940,6 +967,7 @@
       "priority": "P0",
       "priority_justification": "Raised from P1 to P0 on Q06 evidence. On Q04 this band was 0.825 core-s and 18.1% of that query's CPU excess, which justified P1. On Q06 - a bare three-sarg full scan with F_plan = 1.0000 and F_work = 1.0000, i.e. no plan or cardinality confound whatsoever - the same root cause accounts for 7.624 core-s and 54.4% of a 14.023 core-s CPU excess, and 4.23x on the directly comparable predicate band. It is now the largest single non-parallelism cost difference measured anywhere in this campaign, on a code path every sargable scan executes, and Q06 also supplies the missing A/B leverage the old P1 justification lacked: the NUMERIC decode component (2.014 core-s) is a structural absence in PostgreSQL rather than a dearer implementation of the same work, so at least that part is provably removable rather than irreducible.",
       "q10_evidence": "Q10: tp_value_compare_with_error 1.45% plus eval_pred 1.38%, eval_value_rel_cmp 0.56% and eval_data_filter 0.38% (3.77% banded) for two scan-level sargs - the o_orderdate range on the 15,000,000-row orders heap scan and l_returnflag='R' on the 2,292,924 lineitem index entries. PostgreSQL evaluates the same two predicates through compiled ExprEvalSteps: ExecInterpExpr 5.90% + bpchareq 5.13% on 59,986,052 lineitem and 15,000,000 orders rows, i.e. 26.1x the rows for 2.9x the relative cost.",
+      "q16_evidence": "Q16 adds a fifth instance on a plan-controlled pair. Profile band D: CUBRID tp_value_compare_with_error 5.94% + eval_value_rel_cmp 3.98% + eval_pred 3.87% + mr_cmpval_int 0.74% + siblings = 16.75% of 9.4929 core-s = 1.5901 core-s per statement, against PostgreSQL's ExecInterpExpr 3.34% + ExecEvalScalarArrayOp 2.03% + FunctionCall2Coll 0.58% + bpcharne 0.50% + siblings = 7.34% of 3.67115 = 0.2695 core-s -- 5.90x. The predicate load is identical and independently counted on both sides: 2,000,000 part rows x three sargs (p_brand <>, p_type NOT LIKE, p_size IN with 8 values) plus 1,186,602 anti-join membership tests. tp_value_compare_with_error is Q16's single largest CUBRID symbol at 5.94%, ahead of every sort and every buffer symbol, which is this candidate's thesis in one line. Note the p_size IN list is where PostgreSQL's ExecEvalScalarArrayOp (2.03%) does in ONE specialised opcode what CUBRID reaches through eval_pred -> eval_pred_comp0 -> eval_value_rel_cmp -> tp_value_compare_with_error eight times.",
       "q_evidence": {
         "Q12": "Q12 REFUTES this candidate's root cause as the deciding factor on this query while confirming its source set, and that refutation is why IMP-020 was allocated. Measured: CUBRID's comparator band (eval_pred 8.46% + tp_value_compare_with_error 5.07% + eval_value_rel_cmp 2.90% + eval_data_filter 1.63% + mr_cmpval_date 1.01% = 19.07% = 4.5391 core-s) is 0.913x of PostgreSQL's comparable compiled-expression band (bpchareq 12.47% + ExecEvalScalarArrayOp 7.91% + ExecInterpExpr 6.62% + pg_newlocale_from_collation 1.39% + ArrayGetNItemsSafe 0.80% = 29.19% = 4.9697 core-s) -- CUBRID is CHEAPER in absolute core-seconds, at 39.1 ns per term evaluation against PostgreSQL's 54.3 ns, while performing 1.1605x MORE evaluations (106,195,014 vs 91,506,768). On Q04 this band was 4.24x AGAINST CUBRID; the difference is the data type: Q04's comparisons are NUMERIC and DATE where the coercion prologue dominates, Q12's are DATE-vs-DATE and CHAR(10)-vs-constant where it does not. IMP-008's Q04/Q06/Q10 evidence and its P0 priority are unchanged, but its effect must not be assumed to generalize to every sarg-bound query: Q12 is a counter-example with a measured number. What Q12 DOES confirm is the materialisation half of IMP-008's cited source set (heap_file.c:10464, the mr_data_readval_* readers), now tracked as IMP-020 with a 4.7073 core-s delta. raw/Q12/q12-profile-bands.txt, q12-selectivity-probe-*.out.",
         "Q15": "Q15 is this candidate's cleanest isolation so far: the l_shipdate range is the ONLY qual, applied to 119,972,104 lineitem rows per session (2 x 59,986,052, one per revenue0 expansion) with identical row counts on both engines and an essentially exact selectivity estimate on both sides (CUBRID sel 0.0380283 -> 2,281,165 estimated against 2,265,714 actual, +0.68%), so no estimation error is mixed into the number. CUBRID spends 5.957 core-s per session in eval_pred (6.88%) + tp_value_compare_with_error (4.11%) + eval_value_rel_cmp (2.44%) + eval_data_filter (1.77%) = 15.20% of its profile; PostgreSQL spends 2.434 core-s in ExecInterpExpr (8.18%) + ExecSeqScanWithQual (2.74%) + make_result_safe (0.76%) = 11.68%. Ratio 2.45x on the identical predicate and the identical rows, contributing 3.524 core-s (19%) of the 18.358 core-s gap. Raw: profile-cubrid-flat-nocg.txt, profile-pg-flat-nocg.txt, q15-bands.txt. Evidence type: profile attribution."
@@ -949,35 +977,46 @@
         "Q06",
         "Q10",
         "Q12",
-        "Q15"
+        "Q15",
+        "Q16"
       ],
       "ranking_rationale": "Ranked immediately below IMP-002 on Q04 (18.1% vs 25.5% of the CPU excess) and above IMP-007, whose Q04 asynchrony argument does not apply because PostgreSQL takes zero physical reads. Bands are verified disjoint by symbol: IMP-002 and IMP-007 are kernel copy plus buffer manager, IMP-008 is predicate evaluation, IMP-006 is intermediate-tuple materialization (small on Q04 - fetch_val_list 0.55% - because this plan materializes only 526,040 result tuples). The bands are NOT summed.",
       "raw_evidence": [
-        "raw/Q10/Q10-cubrid-headline-block1.json",
-        "raw/Q10/Q10-postgresql-headline-block1.json",
-        "raw/Q10/Q10-cubrid-nohashagg-headline.json",
-        "raw/Q10/Q10-postgresql-idxnl-headline.json",
-        "raw/Q10/Q10-cubrid-headline-telemetry-run3.json",
-        "raw/Q10/Q10-postgresql-headline-telemetry-run2.json",
-        "raw/Q10/Q10-cubrid-nohashagg-headline-telemetry.json",
-        "raw/Q10/Q10-postgresql-idxnl-headline-telemetry.json",
-        "raw/Q10/q10-trace-cubrid.out",
-        "raw/Q10/variants/trace-cubrid-NO_HASH_AGGREGATE.out",
-        "raw/Q10/q10-plan-act-pg.out",
-        "raw/Q10/variants/plan-act-pg-idxnl.out",
-        "raw/Q10/q10-plan-est-cubrid.out",
-        "raw/Q10/variants/plan-cubrid-NO_HASH_AGGREGATE.out",
-        "raw/Q10/q10-selectivity-probe-cubrid.out",
-        "raw/Q10/q10-bigagghash-trace.out",
-        "raw/Q10/q10-groundtruth-cubrid.out",
-        "raw/Q10/q10-groundtruth-pg.out",
+        "raw/Q10/Q10-causal-card.json",
         "raw/Q10/Q10-cubrid-buffer-io-diag.json",
+        "raw/Q10/Q10-cubrid-headline-block1.json",
+        "raw/Q10/Q10-cubrid-headline-telemetry-run3.json",
+        "raw/Q10/Q10-cubrid-nohashagg-headline-telemetry.json",
+        "raw/Q10/Q10-cubrid-nohashagg-headline.json",
         "raw/Q10/Q10-postgresql-buffer-io-diag.json",
+        "raw/Q10/Q10-postgresql-headline-block1.json",
+        "raw/Q10/Q10-postgresql-headline-telemetry-run2.json",
+        "raw/Q10/Q10-postgresql-idxnl-headline-telemetry.json",
+        "raw/Q10/Q10-postgresql-idxnl-headline.json",
         "raw/Q10/perf-stat-cubrid.txt",
         "raw/Q10/perf-stat-pg.txt",
-        "raw/Q10/q10-profile-bands.txt",
+        "raw/Q10/q10-bigagghash-trace.out",
         "raw/Q10/q10-card-calc.txt",
-        "raw/Q10/Q10-causal-card.json"
+        "raw/Q10/q10-groundtruth-cubrid.out",
+        "raw/Q10/q10-groundtruth-pg.out",
+        "raw/Q10/q10-plan-act-pg.out",
+        "raw/Q10/q10-plan-est-cubrid.out",
+        "raw/Q10/q10-profile-bands.txt",
+        "raw/Q10/q10-selectivity-probe-cubrid.out",
+        "raw/Q10/q10-trace-cubrid.out",
+        "raw/Q10/variants/plan-act-pg-idxnl.out",
+        "raw/Q10/variants/plan-cubrid-NO_HASH_AGGREGATE.out",
+        "raw/Q10/variants/trace-cubrid-NO_HASH_AGGREGATE.out",
+        "raw/Q16/Q16-causal-card.json",
+        "raw/Q16/Q16-cubrid-headline-block1.json",
+        "raw/Q16/Q16-cubrid-noparscan-headline.json",
+        "raw/Q16/Q16-postgresql-headline-block1.json",
+        "raw/Q16/Q16-postgresql-nopresorted-headline.json",
+        "raw/Q16/profile-cubrid-flat-nocg.txt",
+        "raw/Q16/profile-pg-flat-nocg.txt",
+        "raw/Q16/q16-bands.txt",
+        "raw/Q16/q16-plan-act-pg.out",
+        "raw/Q16/q16-trace-cubrid.out"
       ],
       "relations": {
         "alternative": null,
@@ -1048,14 +1087,28 @@
       ],
       "priority": "P0",
       "priority_justification": "5.2771x measured, the single largest factor isolated anywhere in this campaign so far, and it is the whole of Q05's loss: at the matched plan CUBRID's CPU is only 1.278x PostgreSQL's.",
+      "q16_evidence": "Q16 exposes a SIBLING defect of this candidate on the same feature -- not the subquery running at degree 1, but the subquery running N TIMES. CUBRID's Q16 plan puts the uncorrelated NOT IN subquery under the parallel part scan as a filter (`filtr: term[4]` on the covering iscan), and the trace shows each parallel scan worker materialising it independently: with 5 scan workers the supplier scan reports 'readrows: 500000, rows: 280' against a 100,000-row table with 56 matching rows -- exactly 5x -- while the /*+ NO_PARALLEL_SCAN */ run of the same query reports 'readrows: 100000, rows: 56' (q16-trace-cubrid.out vs q16-trace-cubrid-noparscan.out). The redundant work is 400,000 extra supplier rows and 400,000 extra leading-wildcard LIKE evaluations per statement, which lands in IMP-004's band; at the serial run's 123 ms per 100,000 rows that is ~0.49 core-s of the 9.4929 core-s CUBRID spends, i.e. 5.2% of total query CPU. WALL effect is near zero because the five copies run concurrently, so this is a CPU-efficiency item on Q16, not a latency item -- stated explicitly so it is not double-counted against IMP-023's serial-phase band. PostgreSQL builds the equivalent set ONCE into a shared Parallel Hash ('Parallel Hash ... rows=11.20 loops=5, Buckets: 1024 Batches: 1 Memory Usage: 168kB'), i.e. the 56 rows are found cooperatively across workers and probed from one shared table.",
       "q_evidence": {
         "Q11": "Q11 is a DIRECT structural instance and the second-largest measured Q11 factor after IMP-018. Q11's `having sum(...) > (select sum(...) from partsupp, supplier, nation where ...)` is an uncorrelated subquery that repeats the main query's whole join, and CUBRID's saturated trace shows it as `SUBQUERY (uncorrelated) -> SELECT (time: 619, fetch: 340131, ioread: 0)` with NO `parallel workers` sub-line - 619 ms of a 1,532 ms statement (40.4%) executed on one thread. PostgreSQL runs the identical subquery as `InitPlan expr_1 -> Finalize Aggregate -> Gather (Workers Planned: 1, Workers Launched: 1) -> Partial Aggregate` and completes it in 237 ms. That single worker is worth a measured 1.091149x to PostgreSQL: forcing max_parallel_workers_per_gather=0 moves PostgreSQL from 0.798124 s to 0.870872 s with U falling 1.24996 -> 0.98764. It is also the whole of Q11's F_units 1.238013x, because it is PostgreSQL's ONLY parallel unit. So Q11 supplies a controlled cross-engine measurement of what compute_parallel_degree()'s `case parallel_type::SUBQUERY` degree-1 hardcode costs: on equal (serial) units CUBRID loses 1.540984x rather than 1.681443x. This is a PROJECTION for the CUBRID side (the A/B was executed on PostgreSQL), not a CUBRID A/B; IMP-009's direct CUBRID A/B remains Q05's."
       },
       "q_relations": [
         "Q05",
-        "Q11"
+        "Q11",
+        "Q16"
       ],
       "ranking_rationale": "Ranks above every other Q05 finding by an order of magnitude: 5.2771x versus 1.278x for all CPU effects combined at the matched plan. It also outranks IMP-002's Q05 relation, which costs nothing at steady state (0.87% miss rate) and only manifests as a warm-up hazard.",
+      "raw_evidence": [
+        "raw/Q16/Q16-causal-card.json",
+        "raw/Q16/Q16-cubrid-headline-block1.json",
+        "raw/Q16/Q16-cubrid-noparscan-headline.json",
+        "raw/Q16/Q16-postgresql-headline-block1.json",
+        "raw/Q16/Q16-postgresql-nopresorted-headline.json",
+        "raw/Q16/profile-cubrid-flat-nocg.txt",
+        "raw/Q16/profile-pg-flat-nocg.txt",
+        "raw/Q16/q16-bands.txt",
+        "raw/Q16/q16-plan-act-pg.out",
+        "raw/Q16/q16-trace-cubrid.out"
+      ],
       "relations": {
         "alternative": "IMP-005 must be resolved or co-validated because raising this degree first exercises the buggy nested-chain trace merge",
         "containment": "disjoint from IMP-002/IMP-007 (buffer/IO): at Q05's reported state CUBRID misses only 0.87% of 7,524,219 page fixes and takes zero device reads, so no part of this factor is buffer cost",
@@ -1672,7 +1725,8 @@
         "containment": [
           "IMP-016 - the reason this veto is armed on Q10 at all. IMP-016 is why the executor reached HS_REJECT_ALL; IMP-015 is why reaching it costs the query its parallelism. They are independent: fixing IMP-016 alone would make Q10 hash-aggregate (and the veto would then be correct), fixing IMP-015 alone recovers the measured 1.313675x without touching the estimator. Ranked 1 of 3 because it is the localized change.",
           "IMP-017 - the same 2 MB budget, but the defect that the budget cannot be changed at all. IMP-017 is why the memory-limit explanation could not be tested by experiment on this server process.",
-          "IMP-012 - also a parallel-degree defect, but at compute_parallel_degree()'s SCAN branch. Q10's driving heap scan DOES reach 6 workers ('parallel workers: 6, readrows: 2380011..2525461'), so IMP-012's saturation is not what limits Q10; the group-by veto is. Q10 is recorded on IMP-012 as a negative control."
+          "IMP-012 - also a parallel-degree defect, but at compute_parallel_degree()'s SCAN branch. Q10's driving heap scan DOES reach 6 workers ('parallel workers: 6, readrows: 2380011..2525461'), so IMP-012's saturation is not what limits Q10; the group-by veto is. Q10 is recorded on IMP-012 as a negative control.",
+          "Does NOT fire on Q16: the trace shows 'GROUPBY ... (parallel workers: 3)' in both the native and the NO_PARALLEL_SCAN run, i.e. sort_check_parallelism() admitted the sort. Q16's serial phase belongs to the post-sort finalize loop (IMP-023), which is a different code path."
         ],
         "predecessor": []
       },
@@ -2197,12 +2251,26 @@
       "priority": "P0",
       "priority_justification": "The two bands this names are 8.1904 + 1.5019 = 9.6923 core-s of CUBRID's 23.8024 core-s total query CPU on Q12, and +4.7073 core-s against PostgreSQL's comparable 4.9850 core-s -- 69.5% of Q12's entire 6.7771 core-s CPU excess and the largest single measured effect on this query. It is P0 rather than P1 because the excess is paid on EVERY row of a 59,986,052-row scan whose predicates reject 99.48% of them, i.e. it is paid almost entirely on rows that are then discarded.",
       "q14_evidence": "Q14 quantifies this candidate on a plan-shape-controlled pair, which is the cleanest denominator it has had. After F_plan is anchored away (CUBRID hash-join at 8 MB vs PostgreSQL's parallel hash join -- the SAME shape), the entire residual is F_cpu 1.679358x on F_work exactly 1.000000x: both engines scan all 59,986,052 lineitem rows, a ground-truth count(*) both engines answer identically, and CUBRID's trace reproduces it as the sum over its 6 workers (9,938,887..10,011,920) while PostgreSQL's reproduces it as Rows Removed by Filter 9,872,805 x 6 plus 124,870.5 x 6 output rows. So Q14's residual is purely CPU-per-row: 277.17 ns/row (CUBRID) vs 165.04 ns/row (PostgreSQL) of total query CPU. The profile attributes it: CUBRID's row-materialisation + predicate band (heap_attrinfo_read_dbvalues 9.64%, eval_pred 8.94%, tp_value_compare_with_error 3.66%, eval_value_rel_cmp 3.03%, or_mvcc_get_header 2.22%, spage_get_record 2.52%, pr_clear_value 1.25%, heap_scan_get_visible_version 2.40% and siblings) is 44.22% of 19.2536 core-s = 8.514 core-s per statement, against PostgreSQL's tts_buffer_heap_getsomeattrs 36.73% + ExecInterpExpr 8.69% and siblings = 60.06% of 9.9003 core-s = 5.946 core-s -- a 1.4318x like-for-like ratio on the same 59,986,052 rows. PostgreSQL spends a LARGER SHARE of a much SMALLER budget on the same work, which is this candidate's thesis stated as a measurement. Instruction counts agree independently: perf stat gives 98.674e9 instructions per CUBRID statement against 46.715e9 per PostgreSQL statement (2.112x) at IPC 1.887 vs 1.705.",
+      "q16_evidence": "Q16 adds a fourth instance, again on a plan-controlled pair. Profile band E: CUBRID pr_clear_value 2.63% + heap_attrinfo_read_dbvalues 1.86% + mr_data_readval_int 1.26% + spage_get_record 0.96% + scan/or_/mr_readval siblings = 12.44% of 9.4929 core-s = 1.1809 core-s per statement, against PostgreSQL's tts_buffer_heap_getsomeattrs 3.06% + heapgettup_pagemode 0.43% + ExecScan/ExecStoreBufferHeapTuple siblings = 4.77% of 3.67115 = 0.1751 core-s -- 6.74x on an identical 2,000,000 part rows plus 1,186,602 index-only partsupp tuples. Q16 sharpens the teardown half of this candidate's thesis: pr_clear_value alone is 2.63% of CUBRID's profile (0.2497 core-s per statement) and PostgreSQL has NO corresponding symbol anywhere in its profile, because a deformed slot is a flat Datum/isnull array with nothing to destroy.",
       "q_relations": [
         "Q12",
         "Q13",
-        "Q14"
+        "Q14",
+        "Q16"
       ],
       "ranking_rationale": "Ranked FIRST of Q12's candidates. It is 69.5% of the measured CPU excess against IMP-019's 19.2% and IMP-010's Q12 share, it is proved by a profile with zero unresolved symbols and an empty unbanded remainder, and its denominator (attributes materialised) is a ground-truth count rather than an estimate. It ranks above IMP-010 on Q12 specifically because IMP-010's whole kernel band on this query is 2.4326 core-s of which only the +0.5360 core-s delta over PostgreSQL is addressable, while this candidate's delta is 8.8x larger.",
+      "raw_evidence": [
+        "raw/Q16/Q16-causal-card.json",
+        "raw/Q16/Q16-cubrid-headline-block1.json",
+        "raw/Q16/Q16-cubrid-noparscan-headline.json",
+        "raw/Q16/Q16-postgresql-headline-block1.json",
+        "raw/Q16/Q16-postgresql-nopresorted-headline.json",
+        "raw/Q16/profile-cubrid-flat-nocg.txt",
+        "raw/Q16/profile-pg-flat-nocg.txt",
+        "raw/Q16/q16-bands.txt",
+        "raw/Q16/q16-plan-act-pg.out",
+        "raw/Q16/q16-trace-cubrid.out"
+      ],
       "relations": {
         "alternative": [
           "IMP-019 (reduce how many predicate evaluations run, rather than how much each materialised row costs). Disjoint bands (C versus A+B); effects add but are NOT summed with any claim about the same core-seconds."
@@ -2277,7 +2345,194 @@
         "No plan regression on Q01-Q12, re-checked with the estimated-plan harness; the change only admits an alternative.",
         "Left-outer-join null-extension semantics preserved: the ordering is taken from the OUTER (preserved) side only. query_planner.c:12621-12628 already documents the RIGHT-outer restriction the new predicate must respect, exactly as PostgreSQL's build_join_pathkeys() does at pathkeys.c:1303-1306."
       ]
+    },
+    {
+      "category": [
+        "optimizer"
+      ],
+      "correctness_risk": "None to results. This code produces only a cost-model estimate; it cannot change which rows a predicate accepts. The risk is plan churn: making anchored NOT LIKE estimates ~30x larger will reorder sarg terms on any query that mixes one with a more selective predicate, and can flip a join side. That is the intended effect, but it must be re-checked against the Q01-Q22 estimated-plan set.",
+      "cubrid_source": [
+        "src/optimizer/histogram/histogram_cl.cpp:1311-1329 -- THE DEFECT, and it is self-documenting: '/* Find the position of the first wildcard (% or _). The fixed prefix before it is assumed to be already handled by a range predicate, so it is excluded from heuristic calculation. */' followed by the loop that advances `pos` past every literal character.",
+        "src/optimizer/histogram/histogram_cl.cpp:1334-1337 -- the same assumption taken to its limit: 'if (pos >= pattern.size()) return 1.0;', i.e. a pattern with NO wildcard at all is estimated as matching EVERYTHING. Measured: `p_type not like 'MEDIUM POLISHED'` gets sel 0.0263974, identical to the wildcarded form.",
+        "src/optimizer/histogram/histogram_cl.cpp:1300-1304 -- the constants the remainder is scored with: FIXED_CHAR_SEL 0.20, ANY_CHAR_SEL 0.90, FULL_WILDCARD_SEL 5.0, with a per-iteration clamp to 1.0 at :1362-1365.",
+        "src/optimizer/histogram/histogram_cl.cpp:1504 -- the call site inside histogram_get_like_selectivity(); :1513-1526 the histogram-size gate that selects between the bucket fraction and this heuristic; :1529-1536 the [0.0001, 0.9999] clamp that turns the heuristic's 1.0 into 0.9999.",
+        "src/optimizer/histogram/histogram_cl.cpp:1545-1555 -- '*selectivity = matched_mcv_freq + nonmcv_mass * total_non_mcv_sel' then '/= (1 - nullfrac)'. On part.p_type the non-MCV mass factor is 0.9737 (derived below), which is what turns 0.9999 into 0.97360263.",
+        "src/optimizer/query_planner.c:9939-9943 -- 'case PT_NOT_LIKE: selectivity = 1 - qo_like_selectivity (env, node);'. This is the branch that makes the prefix skip fatal: there is no NOT LIKE -> range rewrite anywhere, so the prefix selectivity the heuristic dropped is never re-applied.",
+        "src/optimizer/query_planner.c:9934-9938 -- the PT_LIKE twin, for which the assumption IS true: the optimizer rewrites an anchored LIKE into a range (measured: `p_type like 'MEDIUM POLISHED%'` is printed as \"p_type range ('MEDIUM POLISHED' ge_lt 'MEDIUM POLISHEE')\").",
+        "src/optimizer/query_planner.c:10068 qo_like_selectivity(), call site :10101 histogram_get_like_selectivity().",
+        "src/optimizer/query_graph.c:6183-6201 qo_discover_edges() -- 'sort sarg-term on pred_order desc, selectivity asc'. The exposure path: this estimate does not only size a cardinality, it orders predicate evaluation."
+      ],
+      "difficulty": "low",
+      "difficulty_reason": "The fix is local and has an existing in-tree shape to copy. Either (a) pass the operator down so pattern_heuristic_selectivity() keeps the fixed prefix when the caller is PT_NOT_LIKE (the prefix's own selectivity is already computable by the same range machinery the PT_LIKE path uses -- qo_range_selectivity() at query_planner.c:9927-9929), or (b) estimate PT_NOT_LIKE as 1 - (range_selectivity(prefix) x heuristic(remainder)) instead of 1 - heuristic(remainder). No new statistics, no catalog change, no executor change.",
+      "effect_range": "Q16: 36.61x selectivity error on one sarg, 39.24x on the part-side conjunct, 0.0000x measured wall effect. The candidate is a LATENT plan-space defect on Q16 -- upper bound on Q16 is zero seconds. Its value is that it is provably pattern-independent, so on any query where an anchored NOT LIKE competes with another sarg for evaluation order (query_graph.c:6183-6201) or decides a join side, the error is a full 30-38x and is not data-dependent.",
+      "evidence_event": "Optimizer-printed selectivity of a single sarg term, and the row cardinality it produces, from a NON-EXECUTING plan dump (SQL `SET OPTIMIZATION LEVEL 514`). Denominator: part, 2,000,000 rows, exact COUNT(*) ground truth taken separately on BOTH engines.",
+      "evidence_type": "direct A/B",
+      "explanation": "CUBRID scores only the part of the pattern AFTER the first wildcard and assumes a range predicate covers the rest; for NOT LIKE no such range is ever built, so the most selective part of the pattern is simply not counted.",
+      "id": "IMP-022",
+      "implementation_direction": "(a) MINIMAL: give pattern_heuristic_selectivity() the caller's operator, and when it is PT_NOT_LIKE do not skip the fixed prefix -- score it with FIXED_CHAR_SEL like any other literal. This alone moves 'MEDIUM POLISHED%' from 0.9999 to 0.20^15 x 5 -> lower clamp 0.0001, i.e. NOT LIKE 0.9736, which is within 0.7% of the true 0.966561. (b) BETTER: estimate PT_NOT_LIKE as 1 - (prefix_range_selectivity x heuristic(remainder)), reusing qo_range_selectivity() (query_planner.c:9927-9929) on the same ge_lt range the PT_LIKE path already builds; this keeps the comment's intent (the prefix IS best estimated by a range) while applying it on the branch that has no range node to apply it to. (c) GUARD: the ':1334-1337 return 1.0' arm for a wildcard-free pattern should return an EQUALITY selectivity (the pattern is a literal), not 1.0; histogram_get_equal_selectivity() already exists in the same file.",
+      "measurement": [
+        "Q16, part (2,000,000 rows), non-executing plan dumps (q16-like-probe-cubrid.out, q16-like-probe2-cubrid.out) against exact COUNT(*) on BOTH engines (q16-like-groundtruth-cubrid.out, q16-like-groundtruth-pg.out, identical):",
+        "  not like 'MEDIUM POLISHED%'  est sel 0.0263974 card    52,795  true 1,933,121  ->  36.61x under",
+        "  not like 'ZZZZZ%'            est sel 0.0263974 card    52,795  true 2,000,000  ->  37.88x under",
+        "  not like 'MEDIUM%'           est sel 0.0263974 card    52,795  true 1,666,123  ->  31.56x under",
+        "  not like 'M%'                est sel 0.0263974 card    52,795  true 1,666,123  ->  31.56x under",
+        "  not like 'MEDIUM POLISHED'   est sel 0.0263974 card    52,795  true 1,933,121  ->  36.61x under  (no wildcard at all)",
+        "  not like 'M'                 est sel 0.0263974 card    52,795  true 1,933,121  ->  36.61x under",
+        "  not like 'MEDIUM POLISHED_'  est sel 0.12367   card   247,340  true 1,933,121  ->   7.82x under",
+        "  not like '%MEDIUM POLISHED%' est sel 0.999903  card 1,999,805  true 1,933,121  ->   1.03x over   (leading wildcard: essentially CORRECT)",
+        "  not like '%M'                est sel 0.80526   card 1,610,520  true 1,933,121  ->   1.20x under",
+        "PATTERN-INDEPENDENCE IS THE PROOF: six different anchored patterns whose true selectivities span 0.833 to 1.000 all receive the byte-identical estimate 0.0263974, including 'ZZZZZ%', a prefix no row in the table has.",
+        "ARITHMETIC RECONSTRUCTION FROM THE SOURCE CONSTANTS (all ten probes, 7 significant digits). Write S = matched_mcv_freq + nonmcv_mass x total_non_mcv_sel, divided by (1 - nullfrac) [histogram_cl.cpp:1545-1553]. On part.p_type the non-MCV mass factor is 0.9737 and the MCV mass 0.0263, both read off the two patterns that match every value: LIKE '%' and LIKE '_%' both give 0.99990263 = 0.0263 + 0.9737 x 0.9999. Then",
+        "  'MEDIUM POLISHED%' -> prefix skipped [:1311-1329], remainder '%' -> 5.0 clamped to 1.0 [:1351,:1362-1365] -> upper clamp 0.9999 [:1533-1536] -> 0 + 0.9737 x 0.9999 = 0.97360263 -> NOT LIKE 1 - 0.97360263 = 0.02639737, printed 0.0263974  EXACT",
+        "  'MEDIUM POLISHED'  -> no wildcard -> return 1.0 [:1334-1337] -> 0.9999 -> same 0.0263974  EXACT",
+        "  'MEDIUM POLISHED_' -> prefix skipped, remainder '_' -> ANY_CHAR_SEL 0.90 -> 0.9737 x 0.90 = 0.876330 -> NOT LIKE 0.123670, printed 0.12367  EXACT",
+        "  '%M'               -> no fixed prefix, '%'->1.0 then 'M'->FIXED_CHAR_SEL 0.20 -> 0.9737 x 0.20 = 0.194740 -> NOT LIKE 0.805260, printed 0.80526  EXACT",
+        "  '%MEDIUM POLISHED%'-> 1.0 x 0.20^15 x 5 = 1.6384e-10 -> lower clamp 0.0001 [:1529-1532] -> 0.9737 x 0.0001 = 9.737e-05 -> NOT LIKE 0.99990263, printed 0.999903  EXACT",
+        "The positive twin is a separate failure mode of the same predicate and is recorded here for completeness, not double-counted: `p_type like 'MEDIUM POLISHED%'` is rewritten into \"p_type range ('MEDIUM POLISHED' ge_lt 'MEDIUM POLISHEE')\" and then estimated at sel 0 / card 1 against a true 66,879.",
+        "CONJUNCT EFFECT ON Q16: the part-side sargs are estimated at 2,000,000 x 0.0263974 x 0.149237 x 0.96 = 7,564 rows against a true 296,824 (q16-plan-est-cubrid.out node[1], q16-groundtruth-*.out 'part_all3') -- a 39.24x under-estimate, of which this candidate contributes 36.61x and the p_size range (0.149237 vs a true 0.159843) contributes 1.07x.",
+        "WALL EFFECT ON Q16: ZERO, and that is measured, not assumed. Despite the 39.24x error CUBRID selects the same plan skeleton PostgreSQL does; Q16's causal card anchors F_plan on PostgreSQL's own enable_presorted_aggregate switch (0.929368x) and no factor is attributed to this candidate."
+      ],
+      "postgresql_source": [
+        "src/backend/utils/adt/selfuncs.c:1032 and :1042 -- patternsel() calls mcv_selectivity() and histogram_selectivity() with the ACTUAL operator and the ACTUAL pattern, evaluating the real match function against real stored values; there is no prefix-skipping heuristic in the path at all.",
+        "src/backend/utils/adt/selfuncs.c:807 mcv_selectivity() and :898 histogram_selectivity() -- the two estimators, both of which apply the operator itself rather than a per-character score.",
+        "src/backend/utils/adt/like_support.c patternsel()/patternsel_common() -- the NEGATED form is handled by estimating the POSITIVE form and returning 1.0 - positive, but the positive estimate is a real estimate of the whole pattern, prefix included, so the subtraction is sound. Measured on the same predicate: PostgreSQL's Parallel Seq Scan on part estimates 74,772 rows per worker (~373,860 total) against a true 296,824 -- a 1.26x over-estimate where CUBRID is 39.2x under.",
+        "src/backend/utils/adt/like_support.c prefix_selectivity() -- PostgreSQL DOES have the prefix/range concept CUBRID's comment assumes, but it MULTIPLIES the prefix range selectivity INTO the estimate instead of dropping it, and it does so for the negated form too.",
+        "src/backend/optimizer/plan/createplan.c order_qual_clauses() -- and PostgreSQL orders quals by estimated COST, never by selectivity, so even a wrong pattern estimate cannot invert its filter order."
+      ],
+      "priority": "P1",
+      "priority_justification": "The estimate is wrong by 36.6x and is provably pattern-independent, but on Q16 it costs ZERO wall time: CUBRID still picks the same plan skeleton PostgreSQL does (sscan part -> covering iscan partsupp -> sort group-by -> sort order-by), and Q16's measured F_plan is anchored on PostgreSQL's switch, not on this. So the priority is set by exposure, not by a Q16 number: the same code path decides sarg evaluation ORDER (query_graph.c:6183-6201 sorts sarg terms by ascending selectivity), which is exactly how IMP-003's sibling defect turned a 21.7x estimate error into real Q02/Q09 wall time. P1, not P0, because no query in Q01-Q16 has yet been measured to lose wall time to THIS branch.",
+      "q16_evidence": "Q16 is this candidate's DISCOVERY and ISOLATION query, and it is a clean isolation because the defect fires without changing the plan. CUBRID's Q16 plan estimates the part-side conjunct at 7,564 rows against a true 296,824 (39.24x), and 36.61x of that comes from `p_type not like 'MEDIUM POLISHED%'` alone being scored at 0.0263974. Ten non-executing probes show the estimate is pattern-INDEPENDENT for every anchored pattern -- 'ZZZZZ%' (true selectivity 1.000) and 'MEDIUM POLISHED%' (true 0.967) and 'MEDIUM POLISHED' with no wildcard at all receive the byte-identical 0.0263974 -- and all ten are reproduced to 7 significant digits from the source constants FIXED_CHAR_SEL 0.20 / ANY_CHAR_SEL 0.90 / FULL_WILDCARD_SEL 5.0, the [0.0001, 0.9999] clamp and a 0.9737 non-MCV mass factor. Despite the error CUBRID picks the SAME plan skeleton PostgreSQL does, so Q16 attributes it ZERO wall time; the candidate's value is the mechanism, not a Q16 second.",
+      "q_relations": [
+        "Q16"
+      ],
+      "ranking_rationale": "Ranked 2nd of the two candidates Q16 allocates, and 3rd of the five carrying Q16 evidence. IMP-023 is ranked first because it owns a MEASURED band -- 1.041 s of serial time per statement and a 3.5773x serial-phase ratio against the plan-controlled PostgreSQL leg. IMP-022 owns a 36.61x estimate error with a MEASURED wall effect of exactly zero on Q16, so on this query it cannot be ranked above anything that moved the clock. It is nevertheless recorded as a first-class candidate rather than a note, because the pattern-independence result is a property of the code, not of Q16's data, and because Q16 is the first query in the campaign that isolates this branch at all.",
+      "raw_evidence": [
+        "raw/Q16/Q16-causal-card.json",
+        "raw/Q16/Q16-cubrid-headline-block1.json",
+        "raw/Q16/Q16-cubrid-noparscan-headline.json",
+        "raw/Q16/Q16-postgresql-headline-block1.json",
+        "raw/Q16/Q16-postgresql-nopresorted-headline.json",
+        "raw/Q16/profile-cubrid-flat-nocg.txt",
+        "raw/Q16/profile-pg-flat-nocg.txt",
+        "raw/Q16/q16-bands.txt",
+        "raw/Q16/q16-plan-act-pg.out",
+        "raw/Q16/q16-trace-cubrid.out"
+      ],
+      "relations": {
+        "alternative": [
+          "Rejected alternative: raise the [0.0001, 0.9999] clamp at histogram_cl.cpp:1529-1536. It would change the number without fixing the cause -- the estimate would still be identical for 'ZZZZZ%' and 'MEDIUM POLISHED%'. Rejected by the pattern-independence measurement.",
+          "Rejected alternative: rewrite NOT LIKE into a NOT(range) so the existing range estimator applies. Larger blast radius (it changes the sarg/term structure and the index-usability decision, not just the estimate) for the same numeric outcome as (b)."
+        ],
+        "containment": [
+          "SIBLING OF IMP-003, NOT A DUPLICATE. Same file and same outer function (histogram_get_like_selectivity), but IMP-003 is the non-MCV BUCKET-BOUNDARY arm (:1487-1501) on a LEADING-WILDCARD pattern producing an UNDER-estimate of a positive LIKE; IMP-022 is the HEURISTIC PREFIX-SKIP arm (:1311-1337) on an ANCHORED pattern producing an OVER-estimate of the positive LIKE and therefore an UNDER-estimate of NOT LIKE. Q16 exhibits both at once on two different columns, which is what separates them: s_comment's leading-wildcard LIKE lands on the 0.0001 lower clamp (IMP-003) in the same statement in which p_type's anchored NOT LIKE lands on the 0.9999 upper clamp (IMP-022). Fixing either does not fix the other; their effects are NOT additive on any single term because no term takes both branches.",
+          "Distinct from IMP-019 (attribute-vs-attribute comparison defaults to 0.1): that is a missing estimator arm for a different operator class. The shared consequence -- a placeholder estimate reaching qo_discover_edges()'s evaluation-order sort -- is the reason both are exposed, but the code and the operators are disjoint.",
+          "Distinct from IMP-004: IMP-004 is the RUNTIME cost of the UTF-8 LIKE matcher; IMP-022 is the PLAN-TIME estimate of how many rows will reach it. Q16 measures both, and they must not be summed: fixing IMP-022 changes how often the matcher runs on some other query, fixing IMP-004 changes what each run costs."
+        ],
+        "predecessor": []
+      },
+      "root_cause_title": "NOT LIKE selectivity silently drops the anchored literal prefix: pattern_heuristic_selectivity() deliberately skips the fixed prefix on the documented assumption that 'it is already handled by a range predicate', which holds for PT_LIKE (rewritten into a range) but NOT for PT_NOT_LIKE (never rewritten), so every anchored NOT LIKE receives the same pattern-independent selectivity -- 0.0263974 on Q16's part.p_type, a 36.6x under-estimate that is identical for a pattern matching 3.3% of rows and for one matching 0%",
+      "status": "measured",
+      "upstream_precedent": "Yes, in the same file and the same release line. The MCV/bucket arm of histogram_get_like_selectivity() carries an in-tree fix comment at histogram_cl.cpp:1076-1081 ('Evaluate ONLY the given LIKE node ... iterating the list here as well made every non-LIKE sibling contribute twice ... so it degraded to the LIKE default selectivity'), i.e. this estimator has already been corrected once for a defect of exactly this class -- a structurally-driven fallback silently replacing a real estimate. CBRD-26667 (the authorization bypass added at histogram_cl.cpp:1582-1586 and schema_template.c:1997) shows the same histogram path is under active maintenance in this SHA.",
+      "validation_criteria": [
+        "`select count(*) from part where p_type not like 'MEDIUM POLISHED%'` under SET OPTIMIZATION LEVEL 514 reports card within 2x of 1,933,121 instead of 52,795.",
+        "'ZZZZZ%', 'MEDIUM%', 'M%' and 'MEDIUM POLISHED' stop producing the byte-identical 0.0263974 -- i.e. the estimate becomes pattern-DEPENDENT, which is the property actually being fixed.",
+        "The Q16 part-side conjunct card moves from 7,564 toward the true 296,824.",
+        "Q16 result equivalence re-proved by the SSOT section 11 gate: 27,840 rows, exact ordered match, and the eleven ground-truth cardinalities unchanged.",
+        "No plan regression across Q01-Q22, re-checked with the estimated-plan harness; in particular Q02's and Q09's leading-wildcard LIKE estimates (IMP-003) must be unchanged, because this fix touches only the anchored-prefix path.",
+        "Q16 headline unchanged within its 0.6237% block-to-block band (a plan-neutral change on this query must not move the wall)."
+      ]
+    },
+    {
+      "category": [
+        "aggregation/sort",
+        "intermediate-result",
+        "parallelism"
+      ],
+      "correctness_risk": "Medium-low. DISTINCT semantics must stay collation-correct: the qfile path compares disk representations through the type's cmpdisk function, so an in-memory set must use the same collation-aware comparison (pr_midxkey_compare / mr_data_cmpdisk_* are already the primitives). The spill threshold must be a real memory bound, not a row count, or a single wide group can exhaust the server. MIN/MAX DISTINCT already bypass the file (query_aggregate.cpp:77-81) and must keep doing so.",
+      "cubrid_source": [
+        "src/query/query_aggregate.cpp:162-173 -- 'create temporary list file to handle distincts': 'if (agg_p->option == Q_DISTINCT || agg_p->sort_list != NULL) { ... qdata_process_distinct_or_sort (thread_p, agg_p, query_id) ... }' inside qdata_initialize_aggregate_list(), which is called once PER GROUP. On Q16 that is 27,840 list files per statement.",
+        "src/query/query_aggregate.cpp:70-115 qdata_process_distinct_or_sort() -- the per-group file itself: db_private_alloc of a type list, qfile_open_list(..., QFILE_FLAG_DISTINCT, ...) at :98, then qfile_close_list + qfile_destroy_list of the previous group's file at :108-109 and qfile_copy_list_id at :111.",
+        "src/query/query_aggregate.cpp:810-867 -- THE PER-ROW COST, inside qdata_evaluate_aggregate_list(): the comment at :810-814 states the design ('handle distincts by inserting each operand into a list file, which will be distinct-ified and counted/summed/averaged in qdata_finalize_aggregate_list()'), then :840 pr_data_writeval_disk_size(), :841 db_private_alloc(), :844 pr_type_p->data_writeval() and :859 qfile_add_item_to_list(), followed by :861/:866 db_private_free_and_init() and :867 pr_clear_value_vector(). One malloc/serialize/append/free per operand row -- 1,186,602 of them per Q16 statement.",
+        "src/query/query_aggregate.cpp:1388-1431 -- THE PER-GROUP COST, inside qdata_finalize_aggregate_list(): ':1403 list_id_p = qfile_sort_list (thread_p, agg_p->list_id, agg_p->sort_list, agg_p->option, false);' then, for PT_COUNT, ':1428-1431 db_make_bigint (agg_p->accumulator.value, list_id_p->tuple_cnt);'. A full external-sort entry point is invoked 27,840 times per statement purely to obtain a distinct COUNT.",
+        "src/query/list_file.c:4722 -- 'dup_option = ((option == Q_DISTINCT) ? SORT_ELIM_DUP : SORT_DUP);' and :4801 'ls_flag = (option == Q_DISTINCT) ? QFILE_FLAG_DISTINCT : QFILE_FLAG_ALL' -- the sort-with-duplicate-elimination the count is read off.",
+        "src/query/query_executor.c:4784 -- the group-finalize call site 'rc = qdata_evaluate_aggregate_list (thread_p, proc->g_agg_list, &xasl_state->vd, value->accumulators, false);' and :4597 the sibling in the group-dimension loop; both sit in the post-sort scan of the sorted list, which is the phase Q16 measures at ~1 active unit.",
+        "PROFILE ATTRIBUTION (q16-bands.txt, profile-cubrid-flat-nocg.txt): qfile_scan_list_next 3.78%, qfile_update_qlist_count 2.27%, qfile_retrieve_tuple 1.80%, qfile_compare_partial_sort_record 1.60%, qfile_locate_tuple_value_r 1.46%, pr_midxkey_compare 1.56%, lf_freelist_claim 1.59% + lf_freelist_retire 1.19% + lf_stack_pop 0.95% (the lock-free freelist churn of 27,840 file open/destroy cycles), plus mr_data_writeval_string, qdata_get_tuple_value_size_from_dbval and pr_data_writeval_disk_size -- band A total 28.09% = 2.6666 core-s per statement."
+      ],
+      "difficulty": "medium",
+      "difficulty_reason": "Sub-item (a) -- do not build a list file when the group-by sort already orders the input by the DISTINCT operand -- is a localized early-return of exactly the shape PostgreSQL's aggpresorted flag implements, and CUBRID already has the sort-list machinery to extend the group-by sort key (qexec_groupby's SORT_LIST). Sub-item (b) -- an in-memory dedup below a size threshold instead of a qfile -- is also local (qdata_process_distinct_or_sort is 45 lines). Sub-item (c) -- parallelising the post-sort finalize loop -- is structural and is NOT proposed here.",
+      "effect_range": "Addressable band on Q16 = the serial-phase differential, 1.041 - 0.291 = 0.750 s of 2.886 s (25.99%) against the plan-controlled PostgreSQL leg, plus whatever part of the 2.6666 core-s band A exceeds PostgreSQL's 2.1036. Sub-item (a) (recognise that the group-by sort can carry the DISTINCT key, PostgreSQL's aggpresorted) is bounded ABOVE by PostgreSQL's own measurement of the same optimization on this query -- which is NEGATIVE here (-7.60%), so (a) is NOT the right first fix on Q16 and is recorded as such. Sub-item (b) (in-memory per-group dedup instead of a qfile) is the one Q16 supports: it targets the 27,840 file open/sort/destroy cycles and the 1,186,602 malloc+serialize+append operations, which is where band A and the serial phase both sit. Lower bound 0.750 s (the measured serial differential), upper bound 1.041 s (the whole serial phase).",
+      "evidence_event": "Rows entering the grouping/DISTINCT pipeline, and the wall time of the sub-1.5-active-unit phase of each measured statement. Denominator: one Q16 statement = 1,186,602 rows into 27,840 groups (42.62 rows per group), a count both engines answer identically as exact ground truth.",
+      "evidence_type": "direct A/B",
+      "explanation": "CUBRID pays a file open, a per-row malloc+serialize+append and a full external sort per group to compute a distinct count; PostgreSQL pays one equality call per row, or at worst an in-memory per-group tuplesort, inside the pipeline.",
+      "id": "IMP-023",
+      "implementation_direction": "(a) CONDITIONALLY SKIP THE FILE WHEN THE INPUT IS ALREADY ORDERED BY THE OPERAND: PostgreSQL's aggpresorted, i.e. extend the SORT_GROUP_BY sort list with the DISTINCT operand and replace the per-group file with a single compare-against-previous. Q16 measures the SHAPE half of this as worth -7.60% on PostgreSQL, so this is a code-simplification/allocation win, not a sort win, and must not be sold as the latter. (b) THE Q16-SUPPORTED FIX: in qdata_process_distinct_or_sort() (query_aggregate.cpp:70-115), use an in-memory hash/sorted set for a group until it exceeds a budget and only then fall back to qfile_open_list(). Q16's groups average 42.62 rows and the widest is bounded by the 100,000-row supplier cardinality, so essentially every Q16 group fits trivially. This removes 27,840 file open/destroy cycles, 27,840 qfile_sort_list() calls and the 1,186,602 pr_data_writeval_disk_size/db_private_alloc/data_writeval/qfile_add_item_to_list/db_private_free sequences per statement. (c) FOR COUNT SPECIFICALLY: qdata_finalize_aggregate_list() at :1428-1431 only needs list_id_p->tuple_cnt, so PT_COUNT DISTINCT never needs an ordered result -- a counting hash set is sufficient and does not need the sort at all. (d) NOT PROPOSED HERE: parallelising the post-sort finalize loop. It is the largest single lever (1.041 s at ~1 unit) but it is a structural change to qexec_groupby's phase split, and (b)+(c) shrink the same phase without it.",
+      "measurement": [
+        "Q16: R_wall 2.411225x (CUBRID 2.886000 s vs PostgreSQL 1.196902 s, medians of 3 measured statements in each of three gated section-12 blocks; block-to-block spread 0.6237% and 0.4409%).",
+        "F_plan ANCHOR, same engine, PostgreSQL's own switch, every other plan node byte-identical: native (Sort Key p_brand, p_type, p_size, ps_suppkey -> presorted DISTINCT) 1.196902 s vs enable_presorted_aggregate=off (Sort Key p_brand, p_type, p_size -> per-group tuplesort, i.e. CUBRID's shape) 1.112363 s. F_plan = 0.929368x -- CUBRID's aggregation SHAPE is not the problem; it is 7.60% FASTER for PostgreSQL than the shape PostgreSQL's own optimizer picks.",
+        "CONTROLLED CROSS-ENGINE PAIR (CUBRID native vs PostgreSQL-nopresorted, both doing per-group DISTINCT): F_units 0.855774x, F_cpu 3.031730x, F_work 1.000000x, F_cost 3.031730x. CPU 9.492891 vs 3.131179 core-s per statement = 8000.1 vs 2638.8 ns per row into the grouping pipeline.",
+        "SERIAL-PHASE A/B (Q16-*-headline-telemetry-intervals-*.json, actual sample timestamp deltas, threshold 1.5 active units): CUBRID 1.041 s per statement below 1.5 units (35.9% of the busy window) against PostgreSQL-nopresorted 0.291 s (26.2%) and PostgreSQL native 0.147 s (12.2%). Serial-phase ratio against the plan-controlled leg = 3.5773x; against native = 7.0816x.",
+        "PARALLEL-PHASE A/B over the same intervals: CUBRID 1.856 s at a mean 4.498 active units, PostgreSQL-nopresorted 0.818 s at 3.422 -- 2.2689x. So BOTH phases are slower, and the serial one by 1.577x more.",
+        "CUBRID TRACE (q16-trace-cubrid.out): 'GROUPBY (time: 1471, hash: false, sort: true, page: 128, ioread: 0, rows: 27840)' with '(parallel workers: 3, time: 291..306, page: 6846..7174)'. Only ~300 ms of the 1,471 ms GROUPBY is inside the three sort workers; the remaining ~1,170 ms is the post-sort scan/finalize loop, which matches the independently measured 1.041 s serial phase.",
+        "The serial phase is NOT I/O: /proc/<cub_server>/io over a whole four-statement block moves 14,912 bytes of rchar, 0 read_bytes and 4,096 write_bytes (Q16-cubrid-buffer-io-diag.json). The 27,840 per-group list files never reach a write syscall; the cost is entirely CPU.",
+        "PARALLELISM IS NOT THE ROOT CAUSE, and CUBRID's own switch shows it: /*+ NO_PARALLEL_SCAN */ gives 7.690000 s against 2.886000 s native = 2.6646x speedup for a 17.60% CPU surcharge (8.0726 -> 9.4929 core-s), i.e. 81.0% efficiency against U 3.28929. The GROUPBY itself already runs 3 workers in BOTH the parallel and the serial-scan trace, so IMP-015 does not fire here.",
+        "PostgreSQL's own instrumentation of the controlled leg (q16-plan-act-pg-nopresorted.out): GroupAggregate actual time=544.612..1163.132 for the same 27,840 groups and 1,186,602 rows -- 618 ms, and it OVERLAPS the Gather Merge (544.572..878.780) rather than following it."
+      ],
+      "postgresql_source": [
+        "src/backend/optimizer/plan/planner.c:3501 adjust_group_pathkeys_for_groupagg() -- extends root->group_pathkeys with the DISTINCT aggregate's own pathkeys and marks each usable Aggref aggpresorted = true; :3809 the call site; :3516-3517 the enable_presorted_aggregate escape hatch this campaign used as Q16's F_plan anchor.",
+        "src/backend/executor/nodeAgg.c:4263-4268 -- 'else if (aggref->aggdistinct) { sortlist = aggref->aggdistinct; numSortCols = numDistinctCols = list_length(sortlist); pertrans->aggsortrequired = !aggref->aggpresorted; }'. When the input is presorted there is NO per-group sort state at all.",
+        "src/backend/executor/nodeAgg.c:587-622 initialize_aggregate() -- the per-group tuplesort is created only 'if (pertrans->aggsortrequired)'; the presorted path allocates nothing per group.",
+        "src/backend/executor/nodeAgg.c:1314-1342 finalize_aggregates() -- presorted DISTINCT skips process_ordered_aggregate_single() entirely and takes the :1328-1342 branch, which only releases the cached last value.",
+        "src/backend/executor/execExprInterp.c:5792 ExecEvalPreOrderedDistinctSingle() -- THE ENTIRE DEDUP: one FunctionCall2Coll(&pertrans->equalfnOne, ...) against pertrans->lastdatum. Compiled in as EEOP_AGG_PRESORTED_DISTINCT_SINGLE (execExpr.c:3916, execExprInterp.c:2238) so it is one dispatch inside the already-running expression program -- no allocation, no serialization, no file.",
+        "src/backend/executor/nodeAgg.c:848-934 process_ordered_aggregate_single() -- the NON-presorted path, i.e. CUBRID's shape as PostgreSQL implements it: a per-group tuplesort_begin_datum() with a work_mem budget (:606-611), then tuplesort_performsort() + a streaming 'if DISTINCT mode, and not distinct from prior, skip it' comparison at :891-902. Still in memory, still inside the pipelined GroupAggregate, still no per-group file. This is the leg Q16 measures at 0.291 s of serial time per statement against CUBRID's 1.041 s.",
+        "src/backend/optimizer/plan/planner.c:8019 gather_grouping_paths() -- for reference on why PostgreSQL's finalize is not a serial tail: the sort sits BELOW the Gather Merge, so the leader's aggregate loop overlaps the workers."
+      ],
+      "priority": "P0",
+      "priority_justification": "1.041 s of every 2.886 s Q16 CUBRID statement (35.9% of the busy window) runs at fewer than 1.5 active units, against 0.291 s for the PLAN-CONTROLLED PostgreSQL leg doing the identical 27,840 per-group dedups -- a 3.5773x ratio on the serial phase alone. Profile band A (list-file / sort / group-by) is 2.6666 core-s per CUBRID statement against 2.1036 for PostgreSQL native and the whole of Q16's residual after F_plan is F_cpu 3.031730x on F_work exactly 1.000000x.",
+      "q16_evidence": "Q16 is this candidate's DISCOVERY query and supplies its isolating experiment. The experiment is unusual and worth stating precisely: it uses PostgreSQL's own enable_presorted_aggregate switch to force PostgreSQL into CUBRID's aggregation shape, which both anchors F_plan (0.929368x) and produces a plan-controlled cross-engine pair in which the ONLY remaining difference is how each engine implements per-group DISTINCT. On that pair CUBRID spends 9.492891 core-s per statement against 3.131179 (F_cpu 3.031730x) on F_work exactly 1.000000x, and 1.041 s of its 2.886 s runs below 1.5 active units against 0.291 s (3.5773x). The CUBRID trace localises the same 1.17 s as the gap between GROUPBY's total 1,471 ms and the 291-306 ms its three sort workers spend, and /proc IO shows 0 physical reads, so it is pure CPU in the post-sort finalize loop -- exactly where qdata_evaluate_aggregate_list() serializes 1,186,602 operands into per-group list files and qdata_finalize_aggregate_list() sorts 27,840 of them with duplicate elimination.",
+      "q_relations": [
+        "Q16"
+      ],
+      "ranking_rationale": "Ranked 1st of the five candidates carrying Q16 evidence. It is the only one with a direct same-engine A/B bounding its band (the F_plan anchor plus the serial/parallel phase split), and it owns the largest measured differential: 0.750 s of the 1.689 s Q16 gap (44.4%) sits in the serial-phase difference alone. IMP-008 (predicate evaluation, 1.5901 vs 0.2695 core-s) and IMP-020 (row materialisation, 1.1809 vs 0.1751) own larger CPU RATIOS but are attributed by profile bands, not by an A/B, and both are already measured on four earlier queries. IMP-004 (LIKE matcher, 0.8202 vs 0.0264 core-s) is third. IMP-022 is ranked last of the new work because its measured Q16 wall effect is zero. Effects must NOT be summed: band A (IMP-023), band D (IMP-008), band E (IMP-020) and band C (IMP-004) are disjoint self-% partitions of the same profile, but IMP-023's serial-phase differential and its band-A share describe the SAME work from two directions and overlap.",
+      "raw_evidence": [
+        "raw/Q16/Q16-causal-card.json",
+        "raw/Q16/Q16-cubrid-headline-block1.json",
+        "raw/Q16/Q16-cubrid-noparscan-headline.json",
+        "raw/Q16/Q16-postgresql-headline-block1.json",
+        "raw/Q16/Q16-postgresql-nopresorted-headline.json",
+        "raw/Q16/profile-cubrid-flat-nocg.txt",
+        "raw/Q16/profile-pg-flat-nocg.txt",
+        "raw/Q16/q16-bands.txt",
+        "raw/Q16/q16-plan-act-pg.out",
+        "raw/Q16/q16-trace-cubrid.out"
+      ],
+      "relations": {
+        "alternative": [
+          "Rejected explanation, with the number that rejected it: 'CUBRID's per-group DISTINCT plan shape is the wrong shape.' PostgreSQL's own enable_presorted_aggregate A/B on the identical plan says the opposite -- the per-group shape is 1.075998x FASTER for PostgreSQL than the presorted shape its optimizer picks (1.112363 s vs 1.196902 s). The shape is fine; the implementation of the shape is not.",
+          "Rejected explanation: 'the group-by sort is not parallelised' (IMP-015). The Q16 trace shows 'GROUPBY ... (parallel workers: 3)' in BOTH the native and the NO_PARALLEL_SCAN run, so sort_check_parallelism() admitted it. Rejected by the trace.",
+          "Rejected explanation: 'hash aggregation was abandoned' (IMP-016/IMP-017). The plan is 'hash: false, sort: true' and PostgreSQL independently costs GroupAggregate below HashAggregate on the same query. Rejected by both engines agreeing.",
+          "Rejected explanation: 'CUBRID is short of buffer memory / is re-reading pages' (IMP-002/IMP-007/IMP-018). /proc/<cub_server>/io moves 14,912 bytes of rchar and 0 read_bytes across a whole four-statement block. Rejected by 0 physical reads.",
+          "Rejected explanation: 'CUBRID's parallelism is worse'. F_units is 0.855774x, i.e. CUBRID runs at MORE active units than PostgreSQL (3.28929 vs 2.81489), and its own NO_PARALLEL_SCAN A/B gives 2.6646x speedup at 81.0% efficiency. Rejected by the units measurement."
+        ],
+        "containment": [
+          "Distinct from IMP-006, which owns list-file materialisation of INTERMEDIATE JOIN RESULTS (qexec_end_one_iteration -> qfile_generate_tuple_into_list). IMP-023's list files are created by qdata_process_distinct_or_sort() once per GROUP and hold aggregate OPERANDS, not join output. The two share qfile_* symbols in the profile and their bands must NOT be summed on any query where both fire; on Q16 band A is reported as one band for exactly that reason.",
+          "Distinct from IMP-015: IMP-015 is the group-by SORT refusing to parallelise. On Q16 the sort DID parallelise (3 workers) and the cost is in the serial post-sort finalize loop. Fixing IMP-015 would not touch Q16's serial phase.",
+          "Distinct from IMP-021: IMP-021 removes the group-by sort entirely by admitting an ordered index scan. On a query where both applied the effects would overlap (IMP-021 removes the input IMP-023's loop consumes), so they are NOT additive.",
+          "Sub-item (a) is bounded by, and on Q16 CONTRADICTED by, the F_plan anchor; only sub-items (b) and (c) carry Q16's measured band."
+        ],
+        "predecessor": []
+      },
+      "root_cause_title": "count(DISTINCT x) under a sort-based GROUP BY is executed as one temporary LIST FILE PER GROUP: every operand row is converted to its disk representation and appended to that group's file, and at each group boundary the file is sorted with duplicate elimination just to read back its tuple count -- and the whole per-row/per-group loop runs SINGLE-THREADED after the parallel sort phase, where PostgreSQL either dedups adjacent rows with one equality call or runs an in-memory per-group tuplesort inside the pipelined GroupAggregate",
+      "status": "measured",
+      "upstream_precedent": "Yes on the PostgreSQL side, as a direct model: PostgreSQL 16 added exactly this optimization for its own per-group-tuplesort implementation (adjust_group_pathkeys_for_groupagg() at planner.c:3501, the aggpresorted flag, EEOP_AGG_PRESORTED_DISTINCT_SINGLE at execExpr.c:3916 and the enable_presorted_aggregate GUC), which is what makes it a known-good design rather than a speculative one -- and Q16's A/B on that very switch is what measures its worth. On the CUBRID side the closest in-tree precedent is the MIN/MAX early-out already present in the same function (query_aggregate.cpp:76-81, 'since max(distinct a) == max(a), handle these without distinct processing'), i.e. the codebase already accepts special-casing a DISTINCT aggregate that does not need the file. No CBRD issue for the per-group list file itself was found in this SHA.",
+      "validation_criteria": [
+        "Q16 CUBRID serial phase (sub-1.5-active-unit time per statement, measured with actual sample timestamp deltas) falls from 1.041 s toward PostgreSQL-nopresorted's 0.291 s; the headline median falls from 2.886000 s accordingly.",
+        "The CUBRID trace's GROUPBY total time falls toward the ~300 ms its three sort workers already spend, i.e. 'GROUPBY (time: 1471 ... parallel workers: 3, time: 291..306)' loses the ~1,170 ms gap between the two numbers.",
+        "Profile band A falls from 2.6666 core-s per statement, and lf_freelist_claim + lf_freelist_retire + lf_stack_pop (3.73% combined, the 27,840-file churn) drop out of the top-40 flat profile.",
+        "Q16 result equivalence re-proved by the SSOT section 11 gate: 27,840 rows, exact ordered match on all four output columns, supplier_cnt values unchanged.",
+        "A wide-group regression case (a DISTINCT over a single group with >1e6 distinct values) must still complete and must not exceed the configured memory budget -- this is the criterion that proves the spill path survived.",
+        "No regression on Q01-Q15's committed headline medians beyond their recorded block-to-block bands."
+      ]
     }
   ],
-  "next_id": "IMP-022"
+  "next_id": "IMP-024"
 }
