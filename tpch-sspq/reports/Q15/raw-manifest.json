@@ -1,5 +1,5 @@
 {
-  "artifact_count": 333,
+  "artifact_count": 334,
   "artifacts": [
     {
       "artifact_type": "background-load-trace",
@@ -2631,7 +2631,25 @@
     },
     {
       "artifact_type": "stage-tool",
-      "bytes": 13871,
+      "bytes": 41033,
+      "campaign_id": "tpch-sspq-fk-r1-20260730",
+      "creation_command": "committed alongside the report; regenerates the manifest / card / registry entry",
+      "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+      "gjc_session_id": "gajae_code_ms9qr67o_itsemzua",
+      "invalid_reason": null,
+      "path": "/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q15/make_backfill.py",
+      "postgresql_source_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
+      "producing_stage": "14.11/14.12",
+      "qnn": "Q15",
+      "relative_path": "make_backfill.py",
+      "sha256": "c7062470827fcc14ee15842e90bce515ad8cdc9e24dbd718cf3dd8229e894cff",
+      "ssot_blob_sha": "510478846bff081d3223d3835069283a7cd2e47b",
+      "ssot_commit": "cc56df92dfb91ede9bbcfd77a4823f5634a8413f",
+      "valid": true
+    },
+    {
+      "artifact_type": "stage-tool",
+      "bytes": 13885,
       "campaign_id": "tpch-sspq-fk-r1-20260730",
       "creation_command": "committed alongside the report; regenerates the manifest / card / registry entry",
       "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
@@ -2642,7 +2660,7 @@
       "producing_stage": "14.11/14.12",
       "qnn": "Q15",
       "relative_path": "make_manifest.py",
-      "sha256": "63adec79525bb02f3a29cee6b6e32ed50dc3e83155892745f8b7c8b3363195fa",
+      "sha256": "c7b7dca7670d34273ab84d9eb6ea1b63139fd48e7991da9ab088cd58831ae239",
       "ssot_blob_sha": "510478846bff081d3223d3835069283a7cd2e47b",
       "ssot_commit": "cc56df92dfb91ede9bbcfd77a4823f5634a8413f",
       "valid": true
@@ -5998,7 +6016,7 @@
   ],
   "campaign_id": "tpch-sspq-fk-r1-20260730",
   "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
-  "generated_at": "2026-08-01T13:59:32+09:00",
+  "generated_at": "2026-08-01T14:04:24+09:00",
   "gjc_session_id": "gajae_code_ms9qr67o_itsemzua",
   "invalid_artifact_count": 32,
   "logical_query_note": "Q15 is ONE logical query (SSOT section 6): create view revenue0 -> select -> drop view revenue0, handled in one query session. Every timed unit in this manifest is that three-statement session, and every block proves the view absent before and after.",
