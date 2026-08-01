@@ -1,5 +1,5 @@
 {
-  "artifact_count": 305,
+  "artifact_count": 306,
   "artifacts": [
     {
       "artifact_type": "profile-bands",
@@ -2535,6 +2535,24 @@
       "qnn": "Q16",
       "relative_path": "like_probe_driver.sh",
       "sha256": "ba3c1ec9a2c09b3bcff6f9623e76b7455192897a0e26c6e5aa10546bea907537",
+      "ssot_blob_sha": "510478846bff081d3223d3835069283a7cd2e47b",
+      "ssot_commit": "cc56df92dfb91ede9bbcfd77a4823f5634a8413f",
+      "valid": true
+    },
+    {
+      "artifact_type": "stage-driver-script",
+      "bytes": 61561,
+      "campaign_id": "tpch-sspq-fk-r1-20260730",
+      "creation_command": "written for Q16 in work/Q16 (see file header)",
+      "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+      "gjc_session_id": "gajae_code_ms9x5fbd_qza0x9su",
+      "invalid_reason": null,
+      "path": "/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q16/make_backfill.py",
+      "postgresql_source_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
+      "producing_stage": "14.x-stage-driver",
+      "qnn": "Q16",
+      "relative_path": "make_backfill.py",
+      "sha256": "9acc43c5bf5a227a10921d0d13d2853f27b0ebe4d94fd9eeaa64d7b30dc5a2e7",
       "ssot_blob_sha": "510478846bff081d3223d3835069283a7cd2e47b",
       "ssot_commit": "cc56df92dfb91ede9bbcfd77a4823f5634a8413f",
       "valid": true
@@ -5494,7 +5512,7 @@
   ],
   "campaign_id": "tpch-sspq-fk-r1-20260730",
   "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
-  "generated_at": "2026-08-01T15:56:07+09:00",
+  "generated_at": "2026-08-01T16:02:01+09:00",
   "gjc_session_id": "gajae_code_ms9x5fbd_qza0x9su",
   "invalid_artifact_count": 44,
   "not_promoted": [
