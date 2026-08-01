@@ -40,6 +40,12 @@ THRESHOLD=6.0
 # run-up carries no information about the next 95 s (q7-loadgate.txt).
 QUIET_N="${TPCH_SSPQ_QUIET_N:-6}"
 QUIET_INTERVAL="${TPCH_SSPQ_QUIET_INTERVAL:-2.0}"
+# Load-monitor sampling period during the block. Default 0.25 s reproduces the
+# Q01-Q16 path byte for byte. Q17 lowers it because CUBRID's Q17 block is only
+# ~0.6 s of wall (4 x 0.146 s), which a 0.25 s sampler covers with 2-3 samples --
+# too few for the during-run half of the section 9 gate to mean anything. Only
+# ever used to make the during-run gate FINER, never coarser.
+BGLOAD_INTERVAL="${TPCH_SSPQ_BGLOAD_INTERVAL:-0.25}"
 
 CAMPAIGN=tpch-sspq-fk-r1-20260730
 RAW_ROOT="/data/tpch-sspq/${CAMPAIGN}"
@@ -89,7 +95,7 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
   fi
 
   LOAD="$W/${QNN}-${LABEL}-bgload-attempt${attempt}.json"
-  nohup python3.11 "${HARNESS}/bgload_monitor.py" "$LOAD" 0.25 "$THRESHOLD" \
+  nohup python3.11 "${HARNESS}/bgload_monitor.py" "$LOAD" "$BGLOAD_INTERVAL" "$THRESHOLD" \
       > "$W/${QNN}-${LABEL}-bgload-attempt${attempt}.log" 2>&1 &
   MON=$!
   sleep 0.5
@@ -129,16 +135,17 @@ print('  times:', d.get('statement_times_all'), 'median=', d.get('median_s'))
     exit 0
   fi
   echo "${QNN} ${LABEL}: attempt ${attempt} REJECTED (headline_rc=${hrc}, ${verdict}) — retrying"
-  python3.11 - "$W" "$QNN" "$LABEL" "$attempt" "$verdict" "$extmax" "$VFIELD" "$strict" "$extmaxc" <<'PY'
+  python3.11 - "$W" "$QNN" "$LABEL" "$attempt" "$verdict" "$extmax" "$VFIELD" "$strict" "$extmaxc" "$THRESHOLD" <<'PY'
 import json, sys
-w, qnn, eng, att, verdict, extmax, vfield, strict, extmaxc = sys.argv[1:10]
+w, qnn, eng, att, verdict, extmax, vfield, strict, extmaxc, thr = sys.argv[1:11]
 json.dump({"campaign_id": "tpch-sspq-fk-r1-20260730", "qnn": qnn, "engine": eng,
            "attempt": int(att), "valid": False, "invalid_reason": verdict,
            "gate_field": vfield,
            "strict_per_sample_verdict": strict,
            "external_max_core_s_per_s": extmax,
            "external_max_contract_window_core_s_per_s": extmaxc,
-           "note": "SSOT section 9: external SUT-set load crossed 1.5 core-s/s during the block"},
+           "threshold_core_s_per_s": float(thr),
+           "note": f"SSOT section 9: external SUT-set load crossed {thr} core-s/s during the block"},
           open(f"{w}/{qnn}-{eng}-headline-attempt{att}-INVALID.json", "w"), indent=2, sort_keys=True)
 PY
 done

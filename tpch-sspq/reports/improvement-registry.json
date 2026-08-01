@@ -556,6 +556,7 @@
       "q08_relation": "Q08 is the cleanest demonstration yet, because every trace discrepancy is an EXACT integer multiple of ground truth: lineitem fk_lineitem_partsupp readkeys 67,236 = 13,452 x 5.00 (the worker count); orders pk readkeys 806,974 = 403,487 x 2.00 and orders lookup rows 244,808 = 122,404 x 2.00 (scan_ptr depth 2); customer pk readkeys 367,194 = 122,404 x 3.00 (depth 3); top-level SCAN/GROUPBY rows 24,254 x 1.00. The multiplier equals 1 at the top, the worker count at the driving level and the scan_ptr depth at intermediate levels. Consequence is methodological: Q08's F_work numerator had to be built from ground-truth count(*) queries instead of the trace, and IMP-012's implementation step (a) cannot ship before this is fixed, because moving work onto the coordinator thread adds another merge level.",
       "q09_evidence": "Q09: confirmed at a sixth query and extended to depth 6. Trace rows vs ground truth: partsupp depth 2 = 1x (435,128), lineitem depth 3 = exactly 2x (6,523,226 vs 3,261,613), orders depth 4 = exactly 3x (9,784,839), supplier depth 5 = 3.74x (12,197,824, a new off-rule variant), nation depth 6 = exactly 5x (16,308,065 hit+miss). Independent confirmation from I/O: dividing each level's trace ioread by its multiplier gives 1,833,573 predicted page reads against 1,861,608 measured syscr from /proc/<cub_server>/io (+1.5%). raw/Q09/q9-trace-cubrid.out, raw/Q09/q9-groundtruth-*.out, raw/Q09/Q09-cubrid-buffer-io-diag.json.",
       "q10_evidence": "Q10 (confirmed again, with a cross-engine ground truth for the correct value): the depth-3 scan of the index-NL chain, `SCAN (index: dba.customer.pk_customer_c_custkey)`, reports `readkeys: 2250758, filteredkeys: 2250758, rows: 2250758` and `fetch: 7736050` for an operation whose required count is 1,147,084 - the number of rows that survive the l_returnflag='R' sarg, confirmed by ground truth (G3_orders_join_lineitem_R = 1,147,084 on both engines) and by PostgreSQL executing the byte-identical shape under enable_hashjoin=off, where `Index Scan using customer_pkey ... loops=1147084, Index Searches: 1147084`. The CUBRID counter is 1.96214x the required value. Note it is NOT exactly 2x here (2 x 1,147,084 = 2,294,168, so the reported value is 1.89% below exact doubling), so Q10 does not reproduce the clean 'depth 3 is exactly 2x' rule from Q05/Q06; the depth-2 lineitem counter IS exact (rows: 2292924 against ground-truth H4 = 2,292,924). Because of this, Q10's F_work deliberately uses the ground-truth 1,147,084 for the customer probe and excludes the trace counter.",
+      "q17_evidence": "Q17 is the third independent depth-3 instance and the FIRST to exercise the SUBQUERY_CACHE counters, which no prior query reached. Every counter under the correlated SUBQUERY node is reported at exactly 2x, verified against independently measured ground truth three separate times in the same session: SUBQUERY_CACHE miss 4,088 against 2,044 distinct qualifying p_partkey values; miss 8,102 against 4,051 (widened container predicate); miss 32,060 against 16,030 (p_container LIKE 'MED%'). The subquery's index-scan counters double identically -- readkeys 20,438 vs the outer scan's 10,219, filteredkeys 16,350 vs 8,175, rows 122,770 vs 61,385 -- so the true values are exactly half of what the trace prints. NEW CONSEQUENCE beyond the counter inflation already recorded: the traced cache `size` is inflated by the same merge, and is therefore not comparable to max_subquery_cache_size at all. Measured proof: three runs reported a size LARGER than the budget they ran under while still reporting status=enabled -- size 1,980,048 under a 2 MB budget, size 2,445,672 under 2 MB, size 5,224,800 under 2 MB, and size 1,539,408 under an explicit 1,500,000-byte budget. An operator reading the trace would conclude the cache was 94.4% full and about to be disabled by the subquery_cache.c:378-383 cliff when in fact it held 7.8x more keys without disabling. Observability only: no wall effect on Q17, so ranked FOURTH of Q17's relations, above IMP-019 only because it actively misleads capacity planning.",
       "q_evidence": {
         "Q11": "Q11 NEGATIVE CONTROL. Every CUBRID trace row counter on Q11 is EXACT against ground truth that both engines answer identically: partsupp SCAN `rows: 323920` == G3 323,920, supplier SCAN `rows: 4049` == G2 4,049, GROUPBY `rows: 8685` == G5 8,685, nation `readrows: 25` == 25. Q11's scan nest is depth 3 (nation -> supplier -> partsupp), the same depth at which Q08/Q10 saw 1.96x-2x inflation, so the defect is depth-INDEPENDENT in the way IMP-005 currently states it: Q11 runs no parallel scan units (U=1.00965, no `parallel workers` sub-line anywhere in the trace), and xasl_merge_stats' double-merge needs the parallel sibling-XASL path. Q11 therefore sharpens IMP-005: the inflation is a property of PARALLEL scan trace merging, not of nesting depth alone. Q11's F_work is safe to build from trace counters, and it is.",
         "Q12": "Q12 adds a second, larger instance of the same parallel-worker statistics defect and extends it from the trace to statdump. Trace side: for the native parallel plan the traced statement reports 'SELECT (fetch: 113)' and 'SCAN (table: dba.lineitem) ... fetch: 44, readrows: 0, rows: 0' on the main thread while statdump's Num_data_page_fetches bracketed around that same statement moves by 1,788,621 -- the SELECT node under-reports page fixes by 15,829x, and readrows is reported as 0 for a scan that read 59,986,052 rows (the per-worker range line '(parallel workers: 6, readrows: 9938887..10011920)' is the only place the real figure appears, and it is a RANGE, not a total). The same statement run with /*+ NO_PARALLEL_SCAN */ reports every field correctly: 'SELECT (fetch: 2608801, ioread: 417881)' matching its statdump delta of 2,608,803 to 2 fixes. Second, new observation: the 4-statement diagnostic block moved Num_data_page_fetches by exactly 0 (106,169,292 -> 106,169,292 across 24 statements) while the single traced statement moved it by 1,788,621, i.e. the server-wide page counters appear to accumulate only while statement-level tracing is active. That is recorded as an OBSERVATION with its evidence, not as a proven mechanism -- the likely gate is perfmon_is_perf_tracking_and_active(), but this campaign did not run the controlled experiment that would prove it, and the practical consequence is only that Q12 used the trace-bracketed statdump deltas and /proc/<cub_server>/io rather than the block-bracketed statdump. raw/Q12/q12-serial-parallel.out, q12-serial-serial.out, q12-serial-statdump-*.txt, Q12-cubrid-buffer-io-diag.json.",
@@ -573,38 +574,48 @@
         "Q11",
         "Q12",
         "Q13",
-        "Q15"
+        "Q15",
+        "Q17"
       ],
       "ranking_rationale": "Ranked below IMP-006 and IMP-007 on runtime effect, which is zero, and above nothing on that axis. It is recorded at P2 rather than P3 because it is a precondition for trusting the other two: Q03's own F_work would have been wrong by 1.54x on the native side if the trace had been believed. It is also the cheapest fix in the registry (a one-loop change) with the lowest risk.",
       "raw_evidence": [
-        "raw/Q08/q8-trace-cubrid.out",
         "raw/Q08/q8-groundtruth-cubrid.out",
         "raw/Q08/q8-groundtruth-pg.out",
-        "raw/Q10/Q10-cubrid-headline-block1.json",
-        "raw/Q10/Q10-postgresql-headline-block1.json",
-        "raw/Q10/Q10-cubrid-nohashagg-headline.json",
-        "raw/Q10/Q10-postgresql-idxnl-headline.json",
-        "raw/Q10/Q10-cubrid-headline-telemetry-run3.json",
-        "raw/Q10/Q10-postgresql-headline-telemetry-run2.json",
-        "raw/Q10/Q10-cubrid-nohashagg-headline-telemetry.json",
-        "raw/Q10/Q10-postgresql-idxnl-headline-telemetry.json",
-        "raw/Q10/q10-trace-cubrid.out",
-        "raw/Q10/variants/trace-cubrid-NO_HASH_AGGREGATE.out",
-        "raw/Q10/q10-plan-act-pg.out",
-        "raw/Q10/variants/plan-act-pg-idxnl.out",
-        "raw/Q10/q10-plan-est-cubrid.out",
-        "raw/Q10/variants/plan-cubrid-NO_HASH_AGGREGATE.out",
-        "raw/Q10/q10-selectivity-probe-cubrid.out",
-        "raw/Q10/q10-bigagghash-trace.out",
-        "raw/Q10/q10-groundtruth-cubrid.out",
-        "raw/Q10/q10-groundtruth-pg.out",
+        "raw/Q08/q8-trace-cubrid.out",
+        "raw/Q10/Q10-causal-card.json",
         "raw/Q10/Q10-cubrid-buffer-io-diag.json",
+        "raw/Q10/Q10-cubrid-headline-block1.json",
+        "raw/Q10/Q10-cubrid-headline-telemetry-run3.json",
+        "raw/Q10/Q10-cubrid-nohashagg-headline-telemetry.json",
+        "raw/Q10/Q10-cubrid-nohashagg-headline.json",
         "raw/Q10/Q10-postgresql-buffer-io-diag.json",
+        "raw/Q10/Q10-postgresql-headline-block1.json",
+        "raw/Q10/Q10-postgresql-headline-telemetry-run2.json",
+        "raw/Q10/Q10-postgresql-idxnl-headline-telemetry.json",
+        "raw/Q10/Q10-postgresql-idxnl-headline.json",
         "raw/Q10/perf-stat-cubrid.txt",
         "raw/Q10/perf-stat-pg.txt",
-        "raw/Q10/q10-profile-bands.txt",
+        "raw/Q10/q10-bigagghash-trace.out",
         "raw/Q10/q10-card-calc.txt",
-        "raw/Q10/Q10-causal-card.json"
+        "raw/Q10/q10-groundtruth-cubrid.out",
+        "raw/Q10/q10-groundtruth-pg.out",
+        "raw/Q10/q10-plan-act-pg.out",
+        "raw/Q10/q10-plan-est-cubrid.out",
+        "raw/Q10/q10-profile-bands.txt",
+        "raw/Q10/q10-selectivity-probe-cubrid.out",
+        "raw/Q10/q10-trace-cubrid.out",
+        "raw/Q10/variants/plan-act-pg-idxnl.out",
+        "raw/Q10/variants/plan-cubrid-NO_HASH_AGGREGATE.out",
+        "raw/Q10/variants/trace-cubrid-NO_HASH_AGGREGATE.out",
+        "raw/Q17/q17-cache-cliff-cardinality.txt",
+        "raw/Q17/q17-capacity-2M.out",
+        "raw/Q17/q17-cliff-16M.out",
+        "raw/Q17/q17-cliff-2M.out",
+        "raw/Q17/q17-groundtruth-pg.out",
+        "raw/Q17/q17-sqcache-1500000.out",
+        "raw/Q17/q17-sqcache-16M.out",
+        "raw/Q17/q17-sqcache-2M.out",
+        "raw/Q17/q17-trace-cubrid.out"
       ],
       "relations": {
         "alternative": [
@@ -968,6 +979,7 @@
       "priority_justification": "Raised from P1 to P0 on Q06 evidence. On Q04 this band was 0.825 core-s and 18.1% of that query's CPU excess, which justified P1. On Q06 - a bare three-sarg full scan with F_plan = 1.0000 and F_work = 1.0000, i.e. no plan or cardinality confound whatsoever - the same root cause accounts for 7.624 core-s and 54.4% of a 14.023 core-s CPU excess, and 4.23x on the directly comparable predicate band. It is now the largest single non-parallelism cost difference measured anywhere in this campaign, on a code path every sargable scan executes, and Q06 also supplies the missing A/B leverage the old P1 justification lacked: the NUMERIC decode component (2.014 core-s) is a structural absence in PostgreSQL rather than a dearer implementation of the same work, so at least that part is provably removable rather than irreducible.",
       "q10_evidence": "Q10: tp_value_compare_with_error 1.45% plus eval_pred 1.38%, eval_value_rel_cmp 0.56% and eval_data_filter 0.38% (3.77% banded) for two scan-level sargs - the o_orderdate range on the 15,000,000-row orders heap scan and l_returnflag='R' on the 2,292,924 lineitem index entries. PostgreSQL evaluates the same two predicates through compiled ExprEvalSteps: ExecInterpExpr 5.90% + bpchareq 5.13% on 59,986,052 lineitem and 15,000,000 orders rows, i.e. 26.1x the rows for 2.9x the relative cost.",
       "q16_evidence": "Q16 adds a fifth instance on a plan-controlled pair. Profile band D: CUBRID tp_value_compare_with_error 5.94% + eval_value_rel_cmp 3.98% + eval_pred 3.87% + mr_cmpval_int 0.74% + siblings = 16.75% of 9.4929 core-s = 1.5901 core-s per statement, against PostgreSQL's ExecInterpExpr 3.34% + ExecEvalScalarArrayOp 2.03% + FunctionCall2Coll 0.58% + bpcharne 0.50% + siblings = 7.34% of 3.67115 = 0.2695 core-s -- 5.90x. The predicate load is identical and independently counted on both sides: 2,000,000 part rows x three sargs (p_brand <>, p_type NOT LIKE, p_size IN with 8 values) plus 1,186,602 anti-join membership tests. tp_value_compare_with_error is Q16's single largest CUBRID symbol at 5.94%, ahead of every sort and every buffer symbol, which is this candidate's thesis in one line. Note the p_size IN list is where PostgreSQL's ExecEvalScalarArrayOp (2.03%) does in ONE specialised opcode what CUBRID reaches through eval_pred -> eval_pred_comp0 -> eval_value_rel_cmp -> tp_value_compare_with_error eight times.",
+      "q17_evidence": "Q17 measures this on the campaign's cleanest denominator: a plan-shape-CONTROLLED cross-engine pair. PostgreSQL was forced into CUBRID's own plan shape with enable_hashjoin=off (the only change; query text untouched), so F_plan=8.9166x is anchored away on a same-engine A/B and the remaining pair -- CUBRID native 0.146000 s vs PostgreSQL-nlj 0.981877 s -- is structurally identical (part-driven index nested loop) AND takes zero physical reads on BOTH sides, removing residency as a confound. On that pair F_cpu=1.3667x (CPU_C 0.718958 vs CPU_Pc 0.982574 core-s) decomposes into F_work 0.535303x x F_cost 1.366905x, i.e. CUBRID reads 1.8681x FEWER executor tuples (2,122,770 vs 3,965,548) yet costs 1.3669x MORE per tuple read (338.69 ns vs 247.78 ns). Band C (scan-level predicate evaluation) is 19.59% of CUBRID's profile -> 0.14084 core-s: eval_pred 5.27% + mr_cmpval_char 4.51% + lang_fastcmp_byte 2.72% + tp_value_compare_with_error 2.69% + eval_value_rel_cmp 2.17% + eval_data_filter 1.84% + tp_value_cast_internal 0.39%. PostgreSQL's is 8.35% -> 0.08205 core-s: ExecInterpExpr 4.05% + bpchareq 2.08% + __memcmp_evex_movbe 1.35% + FunctionCall2Coll 0.44% + pg_newlocale_from_collation 0.43%. The denominator is exact and identical on both sides -- the SAME two bpchar equality sargs (p_brand='Brand#23', p_container='MED BOX') over the SAME 2,000,000 part rows, confirmed by CUBRID trace readrows 399,448..401,913 x 5 workers and by PostgreSQL 'Rows Removed by Filter: 1997956' + 2,044 output. Per part row: CUBRID 70.4 ns vs PostgreSQL 41.0 ns = 1.72x. Ranked SECOND of Q17's relations, behind IMP-020's 0.19779 core-s. Disjoint from IMP-020 (comparing a value vs materialising it); effects add but no core-second is claimed twice.",
       "q_evidence": {
         "Q12": "Q12 REFUTES this candidate's root cause as the deciding factor on this query while confirming its source set, and that refutation is why IMP-020 was allocated. Measured: CUBRID's comparator band (eval_pred 8.46% + tp_value_compare_with_error 5.07% + eval_value_rel_cmp 2.90% + eval_data_filter 1.63% + mr_cmpval_date 1.01% = 19.07% = 4.5391 core-s) is 0.913x of PostgreSQL's comparable compiled-expression band (bpchareq 12.47% + ExecEvalScalarArrayOp 7.91% + ExecInterpExpr 6.62% + pg_newlocale_from_collation 1.39% + ArrayGetNItemsSafe 0.80% = 29.19% = 4.9697 core-s) -- CUBRID is CHEAPER in absolute core-seconds, at 39.1 ns per term evaluation against PostgreSQL's 54.3 ns, while performing 1.1605x MORE evaluations (106,195,014 vs 91,506,768). On Q04 this band was 4.24x AGAINST CUBRID; the difference is the data type: Q04's comparisons are NUMERIC and DATE where the coercion prologue dominates, Q12's are DATE-vs-DATE and CHAR(10)-vs-constant where it does not. IMP-008's Q04/Q06/Q10 evidence and its P0 priority are unchanged, but its effect must not be assumed to generalize to every sarg-bound query: Q12 is a counter-example with a measured number. What Q12 DOES confirm is the materialisation half of IMP-008's cited source set (heap_file.c:10464, the mr_data_readval_* readers), now tracked as IMP-020 with a 4.7073 core-s delta. raw/Q12/q12-profile-bands.txt, q12-selectivity-probe-*.out.",
         "Q15": "Q15 is this candidate's cleanest isolation so far: the l_shipdate range is the ONLY qual, applied to 119,972,104 lineitem rows per session (2 x 59,986,052, one per revenue0 expansion) with identical row counts on both engines and an essentially exact selectivity estimate on both sides (CUBRID sel 0.0380283 -> 2,281,165 estimated against 2,265,714 actual, +0.68%), so no estimation error is mixed into the number. CUBRID spends 5.957 core-s per session in eval_pred (6.88%) + tp_value_compare_with_error (4.11%) + eval_value_rel_cmp (2.44%) + eval_data_filter (1.77%) = 15.20% of its profile; PostgreSQL spends 2.434 core-s in ExecInterpExpr (8.18%) + ExecSeqScanWithQual (2.74%) + make_result_safe (0.76%) = 11.68%. Ratio 2.45x on the identical predicate and the identical rows, contributing 3.524 core-s (19%) of the 18.358 core-s gap. Raw: profile-cubrid-flat-nocg.txt, profile-pg-flat-nocg.txt, q15-bands.txt. Evidence type: profile attribution."
@@ -978,7 +990,8 @@
         "Q10",
         "Q12",
         "Q15",
-        "Q16"
+        "Q16",
+        "Q17"
       ],
       "ranking_rationale": "Ranked immediately below IMP-002 on Q04 (18.1% vs 25.5% of the CPU excess) and above IMP-007, whose Q04 asynchrony argument does not apply because PostgreSQL takes zero physical reads. Bands are verified disjoint by symbol: IMP-002 and IMP-007 are kernel copy plus buffer manager, IMP-008 is predicate evaluation, IMP-006 is intermediate-tuple materialization (small on Q04 - fetch_val_list 0.55% - because this plan materializes only 526,040 result tuples). The bands are NOT summed.",
       "raw_evidence": [
@@ -1016,7 +1029,13 @@
         "raw/Q16/profile-pg-flat-nocg.txt",
         "raw/Q16/q16-bands.txt",
         "raw/Q16/q16-plan-act-pg.out",
-        "raw/Q16/q16-trace-cubrid.out"
+        "raw/Q16/q16-trace-cubrid.out",
+        "raw/Q17/profile-cubrid-flat.txt",
+        "raw/Q17/profile-pg-nlj-flat.txt",
+        "raw/Q17/q17-causal-card.txt",
+        "raw/Q17/q17-groundtruth-pg.out",
+        "raw/Q17/q17-plan-act-pg-nlj.out",
+        "raw/Q17/q17-trace-cubrid.out"
       ],
       "relations": {
         "alternative": null,
@@ -1399,28 +1418,36 @@
       ],
       "priority": "P0",
       "priority_justification": "Q08's F_plan (0.964885x) and F_cpu (0.838224x) both favour CUBRID; F_units 1.373763x is the only factor above 1.0, and 87% of it (6.2449/5.2166 = 1.1971x) is the raw active-unit count. Amdahl on the measured CPU split projects 1.136 s -> 0.998 s at 6 units, which reverses the query.",
+      "q17_evidence": "Q17 adds a second instance of the degree-saturation gap, on a plan CUBRID parallelises well and wins 59.9656x overall. CUBRID reached 5 active units against the contracted parallelism=6: trace reports 'parallel workers: 5' with 'gather: buildvalue' (the coordinator is a pure consumer), and the measured utilization agrees from three independent instruments -- per-TID sampler U_C=4.92437, perf stat CPUs-utilized 4.892, TWU 4.6063 from actual timestamp deltas. Projection, NOT a direct A/B: at a full 6.0 units the same measured 0.718958 core-s would complete in ~0.1198 s against the measured 0.146000 s, i.e. ~0.026 s / 17.9% of Q17's CUBRID wall. A same-engine degree A/B could NOT be run to confirm it: PRM_ID_PARALLELISM is declared PRM_FOR_SERVER|PRM_FOR_CLIENT|PRM_FORCE_SERVER with no PRM_USER_CHANGE (src/base/system_parameter.c:5111-5122), so a session SET SYSTEM PARAMETERS 'parallelism=1' was accepted without error and had no effect (still 5 workers, still 0.161 s). The projection is therefore an upper bound on the recoverable wall and is explicitly not evidence of the cost model's behaviour at degree 6. Ranked THIRD of Q17's relations.",
       "q_relations": [
-        "Q08"
+        "Q08",
+        "Q17"
       ],
       "ranking_rationale": "Ranked 1 of 2 new Q08 candidates. It owns the ONLY factor above 1.0 in Q08's card (F_units 1.373763x of a 1.111086x gap), established by three independent instruments on a plan-shape-matched cross-engine pair. IMP-013 owns a larger profile band (27.41% + 5.32%) but does not by itself lose the query, because F_cpu already favours CUBRID by 16%; it is ranked 2. The rejected sibling explanation was 'CUBRID chose the wrong plan' (IMP-011), rejected by F_plan = 0.964885x and by CUBRID's own hash variant measuring 1.5123x slower at 2.5492x the CPU.",
       "raw_evidence": [
-        "raw/Q08/Q08-cubrid-headline-block1.json",
-        "raw/Q08/Q08-postgresql-headline-block1.json",
-        "raw/Q08/Q08-postgresql-idxnl-headline.json",
-        "raw/Q08/Q08-cubrid-hashoc-headline.json",
-        "raw/Q08/Q08-cubrid-headline-telemetry-run5.json",
-        "raw/Q08/Q08-postgresql-idxnl-headline-telemetry.json",
-        "raw/Q08/Q08-postgresql-headline-telemetry-run3.json",
+        "raw/Q08/Q08-causal-card.json",
         "raw/Q08/Q08-cubrid-hashoc-headline-telemetry.json",
-        "raw/Q08/q8-trace-cubrid.out",
-        "raw/Q08/q8-plan-act-pg.out",
-        "raw/Q08/q8-plan-est-cubrid.out",
-        "raw/Q08/variants/plan-nestloop_forced.out",
-        "raw/Q08/variants/plan-USE_HASH_ORDERS_CUSTOMER.out",
+        "raw/Q08/Q08-cubrid-hashoc-headline.json",
+        "raw/Q08/Q08-cubrid-headline-block1.json",
+        "raw/Q08/Q08-cubrid-headline-telemetry-run5.json",
+        "raw/Q08/Q08-postgresql-headline-block1.json",
+        "raw/Q08/Q08-postgresql-headline-telemetry-run3.json",
+        "raw/Q08/Q08-postgresql-idxnl-headline-telemetry.json",
+        "raw/Q08/Q08-postgresql-idxnl-headline.json",
         "raw/Q08/perf-stat-cubrid.txt",
         "raw/Q08/perf-stat-pg.txt",
         "raw/Q08/q8-card-calc.txt",
-        "raw/Q08/Q08-causal-card.json"
+        "raw/Q08/q8-plan-act-pg.out",
+        "raw/Q08/q8-plan-est-cubrid.out",
+        "raw/Q08/q8-trace-cubrid.out",
+        "raw/Q08/variants/plan-USE_HASH_ORDERS_CUSTOMER.out",
+        "raw/Q08/variants/plan-nestloop_forced.out",
+        "raw/Q17/Q17-cubrid-headline-telemetry.json",
+        "raw/Q17/perf-stat-cubrid.txt",
+        "raw/Q17/q17-causal-card.txt",
+        "raw/Q17/q17-par6.out",
+        "raw/Q17/q17-serial.out",
+        "raw/Q17/q17-trace-cubrid.out"
       ],
       "relations": {
         "alternative": [
@@ -1478,6 +1505,7 @@
       "priority_justification": "Largest single profile band on either engine (27.41% fix/unfix/LRU + 5.32% libpthread) and the direct driver of F_cost = 5.320850x (1034.2 ns vs 194.4 ns of total query CPU per plan-node tuple touch). Ranked below IMP-012 because it is not the factor that loses Q08: F_cpu = 0.838224x already favours CUBRID by 16%.",
       "q09_evidence": "Q09: second measured instance and the largest absolute band of the campaign. pgbuf fix/unfix/LRU/victim = 21.38% of CUBRID's resolved samples (pgbuf_fix_release 11.66%, pgbuf_unfix 3.42%, pgbuf_lru_boost_bcb 1.98%, pgbuf_unlatch_void_zone_bcb 1.71%) plus 5.49% libpthread mutex, against PostgreSQL's 10.03% pin/unpin/clock-sweep/lwlock. In absolute terms 11.68 core-s per CUBRID statement vs 3.07 core-s per PostgreSQL statement. Context switches 284,577 in 25.002 s (2.266 K/s) vs PostgreSQL 14,412 (102.6/s), 22.1x. This is the dominant identified part of the 1.297496x same-shape CPU residual that survives after Q09's plan factor is removed. raw/Q09/profile-cubrid-flat.txt, raw/Q09/profile-pg-flat.txt, raw/Q09/q9-profile-bands.txt, raw/Q09/perf-stat-*.txt.",
       "q10_evidence": "Q10: the largest single CUBRID profile band, and the cleanest cross-engine contrast for this candidate yet. CUBRID spends 14.60% of cycles in pgbuf fix/unfix plus LRU-victim machinery (pgbuf_fix_release 6.17%, pgbuf_get_victim_candidates_from_lru 4.03%, pgbuf_unfix 1.85%, pgbuf_unlatch_void_zone_bcb 0.97%, pgbuf_get_victim_from_lru_list 0.84%, pgbuf_get_victim 0.42%, pgbuf_claim_bcb_for_fix 0.32%) plus 3.35% in libpthread mutexes (__pthread_mutex_lock 1.36%, __pthread_mutex_unlock_usercnt 1.09%, __pthread_mutex_trylock 0.90%) = 17.95% combined, against PostgreSQL's 1.66% for the equivalent function (LWLockAttemptLock 1.04% + PinBuffer 0.62%) - a 10.8x relative share. Context-switch rate from perf stat on the verified PID sets: CUBRID 249,411 in 30.002 s (2.363 K/s) against PostgreSQL 91,164 (751/s), 3.15x. Q10 also isolates the band from plan choice: CUBRID performs 24,556,558 plan-node tuple touches against PostgreSQL's 86,617,111 (F_work 0.283507x, i.e. CUBRID touches 3.53x FEWER tuples) and still spends 1.251216x the total query CPU, giving F_cost 4.413350x - 995.3 ns of total query CPU per tuple touch against 225.5 ns. Instruction counts confirm it is not a stall effect: IPC is 1.59 on BOTH engines, while CUBRID retires 78.06 G instructions per statement against PostgreSQL's 66.76 G.",
+      "q17_counterexample": "Q17 is a measured COUNTER-EXAMPLE and deliberately does NOT carry a Q17 q_relation. On Q17's plane-shape-controlled pair PostgreSQL spends 5.8x MORE core-seconds on buffer management than CUBRID: CUBRID's band (pgbuf_fix_release 5.93% + pgbuf_unfix 1.31% + pthread mutex 1.30% = 8.92%) is 0.06413 core-s, while PostgreSQL's (PinBuffer 3.67 + StartReadBuffer 2.83 + GetPrivateRefCountEntrySlow 2.77 + LWLockRelease 2.68 + UnpinBufferNoOwner 2.63 + LWLockAttemptLock 2.55 + LockBufferInternal 2.34 + BufferLockUnlock 2.06 + ResourceOwnerForget 1.74 + hash_search_with_hash_value 8.30 + hash_bytes 2.33 + siblings = 37.99%) is 0.37327 core-s. The cause is workload, not policy: PostgreSQL takes 2,198,652 buffer accesses of which 95.1% (2,090,095) come from 61,385 correlated-SubPlan index scans that CUBRID's subquery memo reduces to 2,044 executions. Recorded so this candidate's effect range is not generalised to plans where CUBRID performs far fewer buffer accesses than PostgreSQL.",
       "q_evidence": {
         "Q11": "Q11 REFUTES this candidate as a differentiator, and does so under the best possible conditions for it. In the saturated state BOTH engines take zero physical reads, so the buffer bands are pure hit-path cost with no miss confound: CUBRID 21.07% (pgbuf_fix_release 17.06, pgbuf_unfix 2.45, pgbuf_ordered_fix_release 0.71, pgbuf_ordered_unfix 0.47, pgbuf_set_dirty 0.38) plus 3.06% libpthread = 24.13%, against PostgreSQL 23.72% (hash_search_with_hash_value 12.73 - which the call graph resolves to BufTableLookup through StartReadBuffer -> PinBufferForBlock -> BufferAlloc, NOT to the HashAggregate - plus PinBuffer 4.41, LWLockAttemptLock 1.70, LockBufferInternal 0.76, UnpinBufferNoOwner 0.74, GetPrivateRefCountEntrySlow 0.70, LWLockRelease 0.68, StartReadBuffer 0.65, BufferLockUnlock 0.53, hash_bytes 0.47, ResourceOwnerForget 0.35). Shares are equal to 1.017x. Per page fix CUBRID spends 1339.0 ns of TOTAL QUERY CPU against PostgreSQL's 1475.2 ns, i.e. CUBRID is 1.1017x CHEAPER, and CUBRID's IPC is 1.65 against PostgreSQL's 1.39. Q11's CPU factor is therefore a fix-COUNT factor (F_work 1.496357x, owned by IMP-006) and not a per-fix cost factor. Q11 does not contradict Q08/Q09/Q10, where the unfix/boost path was measured on a different access pattern; it bounds the claim: on a single-threaded index-probe workload with no misses, CUBRID's buffer manager is not the more expensive one. IMP-013's priority should be re-derived from the queries where it IS separable, and Q11 added as a regression control.",
         "Q15": "Q15 adds a HIT-path measurement taken while the miss path is simultaneously at its worst, so the two are separable in the same profile. Per logical session CUBRID spends pgbuf_fix_release 1.88% + pgbuf_unfix 0.92% + pgbuf_unlatch_void_zone_bcb 0.92% + __pthread_mutex_lock 1.22% = 4.94% = 1.936 core-s on fix/unfix/latch/LRU surgery, against PostgreSQL's clock-sweep PinBuffer 0.93% + LWLockAttemptLock 0.69% = 1.62% = 0.338 core-s - a 5.7x ratio, on a workload where CUBRID performs FEWER total page fetches than PostgreSQL (1,388,220 against 2,250,257) because its pages are twice the size. Ranked below IMP-002/IMP-007 for Q15 because much of this volume is a consequence of the miss rate those two govern. Raw: profile-cubrid-flat-nocg.txt, profile-pg-flat-nocg.txt, q15-bands.txt. Evidence type: profile attribution."
@@ -1492,43 +1520,46 @@
       ],
       "ranking_rationale": "Ranked 2 of 2 new Q08 candidates. It owns the largest profile band on either engine and is the lever that converts CUBRID's 6.6x work advantage into a wall win rather than a 16% CPU margin, but it is not the factor that loses Q08 - F_cpu = 0.838224x already favours CUBRID, and only F_units = 1.373763x is above 1.0, which is IMP-012's. Explanations rejected in favour of this one: 'CUBRID is CPU-hungrier' (rejected by F_cpu = 0.838224x and 0.7391x the instructions) and 'IMP-008's generic DB_VALUE comparator dominates' (rejected by tp_value_compare_with_error 0.59% + eval_value_rel_cmp 0.50% + mr_cmpval_* 1.02% = 2.11%, an order of magnitude below the 27.41% buffer band).",
       "raw_evidence": [
-        "raw/Q08/profile-cubrid-flat-nog.txt",
-        "raw/Q08/profile-cubrid-callgraph.txt",
-        "raw/Q08/profile-pg-flat-nog.txt",
-        "raw/Q08/profile-pg-callgraph.txt",
-        "raw/Q08/perf-stat-cubrid.txt",
-        "raw/Q08/perf-stat-pg.txt",
-        "raw/Q08/q8-groundtruth-cubrid.out",
-        "raw/Q08/q8-groundtruth-pg.out",
-        "raw/Q08/q8-card-calc.txt",
         "raw/Q08/Q08-causal-card.json",
         "raw/Q08/Q08-cubrid-headline-telemetry-run5.json",
         "raw/Q08/Q08-postgresql-headline-telemetry-run3.json",
-        "raw/Q10/Q10-cubrid-headline-block1.json",
-        "raw/Q10/Q10-postgresql-headline-block1.json",
-        "raw/Q10/Q10-cubrid-nohashagg-headline.json",
-        "raw/Q10/Q10-postgresql-idxnl-headline.json",
-        "raw/Q10/Q10-cubrid-headline-telemetry-run3.json",
-        "raw/Q10/Q10-postgresql-headline-telemetry-run2.json",
-        "raw/Q10/Q10-cubrid-nohashagg-headline-telemetry.json",
-        "raw/Q10/Q10-postgresql-idxnl-headline-telemetry.json",
-        "raw/Q10/q10-trace-cubrid.out",
-        "raw/Q10/variants/trace-cubrid-NO_HASH_AGGREGATE.out",
-        "raw/Q10/q10-plan-act-pg.out",
-        "raw/Q10/variants/plan-act-pg-idxnl.out",
-        "raw/Q10/q10-plan-est-cubrid.out",
-        "raw/Q10/variants/plan-cubrid-NO_HASH_AGGREGATE.out",
-        "raw/Q10/q10-selectivity-probe-cubrid.out",
-        "raw/Q10/q10-bigagghash-trace.out",
-        "raw/Q10/q10-groundtruth-cubrid.out",
-        "raw/Q10/q10-groundtruth-pg.out",
+        "raw/Q08/perf-stat-cubrid.txt",
+        "raw/Q08/perf-stat-pg.txt",
+        "raw/Q08/profile-cubrid-callgraph.txt",
+        "raw/Q08/profile-cubrid-flat-nog.txt",
+        "raw/Q08/profile-pg-callgraph.txt",
+        "raw/Q08/profile-pg-flat-nog.txt",
+        "raw/Q08/q8-card-calc.txt",
+        "raw/Q08/q8-groundtruth-cubrid.out",
+        "raw/Q08/q8-groundtruth-pg.out",
+        "raw/Q10/Q10-causal-card.json",
         "raw/Q10/Q10-cubrid-buffer-io-diag.json",
+        "raw/Q10/Q10-cubrid-headline-block1.json",
+        "raw/Q10/Q10-cubrid-headline-telemetry-run3.json",
+        "raw/Q10/Q10-cubrid-nohashagg-headline-telemetry.json",
+        "raw/Q10/Q10-cubrid-nohashagg-headline.json",
         "raw/Q10/Q10-postgresql-buffer-io-diag.json",
+        "raw/Q10/Q10-postgresql-headline-block1.json",
+        "raw/Q10/Q10-postgresql-headline-telemetry-run2.json",
+        "raw/Q10/Q10-postgresql-idxnl-headline-telemetry.json",
+        "raw/Q10/Q10-postgresql-idxnl-headline.json",
         "raw/Q10/perf-stat-cubrid.txt",
         "raw/Q10/perf-stat-pg.txt",
-        "raw/Q10/q10-profile-bands.txt",
+        "raw/Q10/q10-bigagghash-trace.out",
         "raw/Q10/q10-card-calc.txt",
-        "raw/Q10/Q10-causal-card.json"
+        "raw/Q10/q10-groundtruth-cubrid.out",
+        "raw/Q10/q10-groundtruth-pg.out",
+        "raw/Q10/q10-plan-act-pg.out",
+        "raw/Q10/q10-plan-est-cubrid.out",
+        "raw/Q10/q10-profile-bands.txt",
+        "raw/Q10/q10-selectivity-probe-cubrid.out",
+        "raw/Q10/q10-trace-cubrid.out",
+        "raw/Q10/variants/plan-act-pg-idxnl.out",
+        "raw/Q10/variants/plan-cubrid-NO_HASH_AGGREGATE.out",
+        "raw/Q10/variants/trace-cubrid-NO_HASH_AGGREGATE.out",
+        "raw/Q17/profile-cubrid-flat.txt",
+        "raw/Q17/profile-pg-nlj-flat.txt",
+        "raw/Q17/q17-plan-act-pg-nlj.out"
       ],
       "relations": {
         "alternative": [
@@ -2162,10 +2193,18 @@
       ],
       "priority": "P1",
       "priority_justification": "Costs 33,243,739 excess predicate-term evaluations per Q12 statement (+45.57% over the order CUBRID would itself choose with a correct estimate), worth 1.2998 core-s at the measured 39.1 ns per term evaluation = 19.2% of Q12's 6.7771 core-s CPU excess and 5.46% of CUBRID's query CPU. P1 not P0 because the effect is 2.5x smaller than IMP-020's and because it is a plan-quality defect whose size depends entirely on how wrong 0.1 happens to be for the particular columns.",
+      "q17_evidence": "Q17 WIDENS the arm coverage of this root cause and BOUNDS its priority with an explicit zero. The same function returns the same hardcoded DEFAULT_COMP_SELECTIVITY=0.1 (src/optimizer/query_planner.h:118) from its final fallback at src/optimizer/query_planner.c:10624, but Q17 reaches it through a DIFFERENT unhandled operand-class arm than the PC_ATTR/PC_ATTR 'TODO: add histogram selectivity' at :10524 that Q12 documented: here pc_lhs=PC_ATTR and the right-hand side is a correlated scalar subquery, which matches no case and falls to 'default: break' at :10558-10559. Visible in the estimated plan as term[0] ... (sel 0.1) for l_quantity < (select 0.2*avg(l_quantity) ...). MEASURED EFFECT ON Q17: NONE. CUBRID selected the optimal plan regardless and estimated the join output at 5,975 against an independently measured true 5,526 (8.1% error), and CUBRID beats PostgreSQL 59.9656x on this query. Recorded as an upper bound of ~0 so the candidate's effect range is not overstated by counting an arm that costs nothing; ranked LAST of Q17's relations. PostgreSQL guesses in the same situation too (DEFAULT_INEQ_SEL 0.3333 -> rows=18496 against 5,526), so on Q17 this is 'common to both engines' rather than a CUBRID-specific gap.",
       "q_relations": [
-        "Q12"
+        "Q12",
+        "Q17"
       ],
       "ranking_rationale": "Ranked SECOND of Q12's candidates, behind IMP-020 (19.2% versus 69.5% of the measured CPU excess) but ahead of Q12's IMP-010 relation on addressable size (1.2998 core-s versus the +0.5360 core-s kernel-band delta) and ahead of everything on cost-to-fix: it is one empty switch arm with an accepted upstream precedent for exactly the same construction. It is a PROJECTION rather than a direct A/B because CUBRID offers no switch that changes sarg order without also changing the estimate -- /*+ NO_PARALLEL_SCAN */ and /*+ PARALLEL(n) */ leave the term order untouched -- so the direct A/B requires the patch itself and is recorded as validation criterion (3).",
+      "raw_evidence": [
+        "raw/Q17/q17-groundtruth-cubrid.out",
+        "raw/Q17/q17-groundtruth-pg.out",
+        "raw/Q17/q17-plan-est-cubrid.out",
+        "raw/Q17/q17-plan-est-pg.out"
+      ],
       "relations": {
         "alternative": [
           "IMP-020 (reduce the cost of each materialised row rather than the number of predicate evaluations). Disjoint profile bands (C versus A+B); effects add but are not summed against the same core-seconds."
@@ -2252,11 +2291,13 @@
       "priority_justification": "The two bands this names are 8.1904 + 1.5019 = 9.6923 core-s of CUBRID's 23.8024 core-s total query CPU on Q12, and +4.7073 core-s against PostgreSQL's comparable 4.9850 core-s -- 69.5% of Q12's entire 6.7771 core-s CPU excess and the largest single measured effect on this query. It is P0 rather than P1 because the excess is paid on EVERY row of a 59,986,052-row scan whose predicates reject 99.48% of them, i.e. it is paid almost entirely on rows that are then discarded.",
       "q14_evidence": "Q14 quantifies this candidate on a plan-shape-controlled pair, which is the cleanest denominator it has had. After F_plan is anchored away (CUBRID hash-join at 8 MB vs PostgreSQL's parallel hash join -- the SAME shape), the entire residual is F_cpu 1.679358x on F_work exactly 1.000000x: both engines scan all 59,986,052 lineitem rows, a ground-truth count(*) both engines answer identically, and CUBRID's trace reproduces it as the sum over its 6 workers (9,938,887..10,011,920) while PostgreSQL's reproduces it as Rows Removed by Filter 9,872,805 x 6 plus 124,870.5 x 6 output rows. So Q14's residual is purely CPU-per-row: 277.17 ns/row (CUBRID) vs 165.04 ns/row (PostgreSQL) of total query CPU. The profile attributes it: CUBRID's row-materialisation + predicate band (heap_attrinfo_read_dbvalues 9.64%, eval_pred 8.94%, tp_value_compare_with_error 3.66%, eval_value_rel_cmp 3.03%, or_mvcc_get_header 2.22%, spage_get_record 2.52%, pr_clear_value 1.25%, heap_scan_get_visible_version 2.40% and siblings) is 44.22% of 19.2536 core-s = 8.514 core-s per statement, against PostgreSQL's tts_buffer_heap_getsomeattrs 36.73% + ExecInterpExpr 8.69% and siblings = 60.06% of 9.9003 core-s = 5.946 core-s -- a 1.4318x like-for-like ratio on the same 59,986,052 rows. PostgreSQL spends a LARGER SHARE of a much SMALLER budget on the same work, which is this candidate's thesis stated as a measurement. Instruction counts agree independently: perf stat gives 98.674e9 instructions per CUBRID statement against 46.715e9 per PostgreSQL statement (2.112x) at IPC 1.887 vs 1.705.",
       "q16_evidence": "Q16 adds a fourth instance, again on a plan-controlled pair. Profile band E: CUBRID pr_clear_value 2.63% + heap_attrinfo_read_dbvalues 1.86% + mr_data_readval_int 1.26% + spage_get_record 0.96% + scan/or_/mr_readval siblings = 12.44% of 9.4929 core-s = 1.1809 core-s per statement, against PostgreSQL's tts_buffer_heap_getsomeattrs 3.06% + heapgettup_pagemode 0.43% + ExecScan/ExecStoreBufferHeapTuple siblings = 4.77% of 3.67115 = 0.1751 core-s -- 6.74x on an identical 2,000,000 part rows plus 1,186,602 index-only partsupp tuples. Q16 sharpens the teardown half of this candidate's thesis: pr_clear_value alone is 2.63% of CUBRID's profile (0.2497 core-s per statement) and PostgreSQL has NO corresponding symbol anywhere in its profile, because a deformed slot is a flat Datum/isnull array with nothing to destroy.",
+      "q17_evidence": "Q17 measures this on the campaign's cleanest denominator: a plan-shape-CONTROLLED cross-engine pair. PostgreSQL was forced into CUBRID's own plan shape with enable_hashjoin=off (the only change; query text untouched), so F_plan=8.9166x is anchored away on a same-engine A/B and the remaining pair -- CUBRID native 0.146000 s vs PostgreSQL-nlj 0.981877 s -- is structurally identical (part-driven index nested loop) AND takes zero physical reads on BOTH sides, removing residency as a confound. On that pair F_cpu=1.3667x (CPU_C 0.718958 vs CPU_Pc 0.982574 core-s) decomposes into F_work 0.535303x x F_cost 1.366905x, i.e. CUBRID reads 1.8681x FEWER executor tuples (2,122,770 vs 3,965,548) yet costs 1.3669x MORE per tuple read (338.69 ns vs 247.78 ns). Band A+B (attribute materialisation + value lifecycle) is 27.51% of CUBRID's profile -> 0.19779 core-s: heap_attrinfo_read_dbvalues 15.18% + mr_readval_char_internal 5.43% + mr_data_readval_char 0.75% + pr_clear_value 3.07% + db_value_domain_init 2.28% + pr_type_from_id(+plt) 0.80%, reached once per part row from eval_data_filter inside parallel_scan::slot_iterator::next_qualified_slot_with_peek. PostgreSQL's counterpart band is 13.25% -> 0.13019 core-s (tts_buffer_heap_getsomeattrs 12.19% + detoast_attr 0.74% + pg_detoast_datum_packed 0.32%). Per executor tuple read: CUBRID 93.2 ns vs PostgreSQL 32.8 ns = 2.84x. CUBRID therefore spends 1.52x the core-seconds on this band while touching 1.87x FEWER tuples. Profile: 132,837 samples, 0 lost, 0 unresolved symbols, bands exhaustive over the >=0.3% lines with a 0.00% unbanded remainder. Ranked FIRST of Q17's relations: 0.19779 core-s is the largest single CUBRID band and carries the largest cross-engine ratio.",
       "q_relations": [
         "Q12",
         "Q13",
         "Q14",
-        "Q16"
+        "Q16",
+        "Q17"
       ],
       "ranking_rationale": "Ranked FIRST of Q12's candidates. It is 69.5% of the measured CPU excess against IMP-019's 19.2% and IMP-010's Q12 share, it is proved by a profile with zero unresolved symbols and an empty unbanded remainder, and its denominator (attributes materialised) is a ground-truth count rather than an estimate. It ranks above IMP-010 on Q12 specifically because IMP-010's whole kernel band on this query is 2.4326 core-s of which only the +0.5360 core-s delta over PostgreSQL is addressable, while this candidate's delta is 8.8x larger.",
       "raw_evidence": [
@@ -2269,7 +2310,18 @@
         "raw/Q16/profile-pg-flat-nocg.txt",
         "raw/Q16/q16-bands.txt",
         "raw/Q16/q16-plan-act-pg.out",
-        "raw/Q16/q16-trace-cubrid.out"
+        "raw/Q16/q16-trace-cubrid.out",
+        "raw/Q17/Q17-cubrid-headline-block1.json",
+        "raw/Q17/Q17-cubrid-headline-telemetry.json",
+        "raw/Q17/Q17-postgresql-nlj-headline-block1.json",
+        "raw/Q17/Q17-postgresql-nlj-headline-telemetry.json",
+        "raw/Q17/perf-stat-cubrid.txt",
+        "raw/Q17/perf-stat-pg-nlj.txt",
+        "raw/Q17/profile-cubrid-flat.txt",
+        "raw/Q17/profile-pg-nlj-flat.txt",
+        "raw/Q17/q17-causal-card.txt",
+        "raw/Q17/q17-plan-act-pg-nlj.out",
+        "raw/Q17/q17-trace-cubrid.out"
       ],
       "relations": {
         "alternative": [
@@ -2534,5 +2586,6 @@
       ]
     }
   ],
-  "next_id": "IMP-024"
+  "next_id": "IMP-024",
+  "q17_dedup_note": "Q17 allocated NO new IMP ID. The ledger was synced and searched by root-cause title, CUBRID source location, PostgreSQL source location and mechanism before deciding; every measured CUBRID-side effect matched an existing root cause, so per SSOT section 18 the existing entries received Q17 relations and evidence rather than a duplicate ID. next_id remains IMP-024. Two candidate hypotheses were raised during Q17 and REJECTED BY MEASUREMENT rather than filed: (1) 'the subquery cache is one entry from the subquery_cache.c:378-383 disable cliff at SF10' -- rejected because a probe with 16,030 distinct keys, 7.8x Q17's 2,044, still reported status=enabled under the same 2 MB default, and the traced size that motivated the hypothesis is itself inflated by IMP-005; (2) 'CUBRID takes zero data-page fetches on Q17' -- rejected because a statdump delta taken with adequate flush latency shows +161,531 fetches and +1 ioread per execution, so the zero deltas seen around the 0.59 s block were a statistics-flush-latency artifact. Q17's largest engineering finding is a PostgreSQL weakness (no memo for a correlated SubPlan at src/backend/executor/nodeSubplan.c:198-241, against CUBRID's sq_get/sq_put at src/query/fetch.c:4086-4111, plus an unparallelisable join at src/backend/optimizer/util/clauses.c:931-950 and :960-973) and is recorded in reports/Q17/report.md sections 7-8 rather than in this ledger, which allocates CUBRID improvement candidates."
 }
