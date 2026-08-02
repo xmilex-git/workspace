@@ -244,7 +244,8 @@
      "trace_ioread_resident": 0,
      "working_set_pages": 490005,
      "working_set_pct_of_pool": 93.46
-    }
+    },
+    "Q21: a NON-resident case for BOTH engines, which bounds this entry rather than extending it. The working set is 13.0 GB (lineitem 10,671 MiB + orders 2,370 MiB) against the contracted 8192 MB pool, so residency is impossible by construction on either side and neither engine's replacement policy can be blamed for missing. What Q21 does measure is the SIZE of the resulting re-read traffic at MATCHED plan shape: CUBRID controlled re-reads 1,018,456 pages = 15.54 GiB per statement from the OS page cache (telemetry syscr/rchar) against PostgreSQL's 349,789 pages = 2.24 GiB, a 6.94x page-count and 5.42x byte ratio for the same tuples, of which 2x is the 16 KiB vs 8 KiB page size. Device reads are ZERO on both engines (/proc read_bytes delta 0), so this is pool-miss traffic, not disk. The 76-statement steady-state series also wanders 4.3840% peak-to-peak with no trend (q21-warm-gate-bootstrap.txt), which is the history-dependent equilibrium this entry describes, seen here as noise rather than as a bistable level."
    ],
    "postgresql_source": [
     "src/backend/storage/buffer/freelist.c (BufferAccessStrategy BAS_BULKREAD ring for large sequential scans)"
@@ -295,7 +296,8 @@
     "Q11",
     "Q12",
     "Q15",
-    "Q20"
+    "Q20",
+    "Q21"
    ],
    "ranking_rationale": "Now ranked above IMP-007, which it used to sit beside: IMP-002 removes misses, IMP-007 makes each remaining miss cheaper, and on Q04 the miss COUNT is the larger lever - 342,384 misses per statement against PostgreSQL's 0 at the same budget, so the entire 1.160 core-s kernel band is addressable by retention while asynchrony could only move it off the critical path. Effects are explicitly NOT summed with IMP-007 (same core-seconds, different levers) and not with IMP-008 (disjoint symbol sets: kernel copy and buffer manager versus predicate evaluation).",
    "raw_evidence": [
@@ -303,7 +305,32 @@
     "raw/Q08/q8-iobisect.txt",
     "raw/Q08/Q08-cubrid-buffer-io-diag.json",
     "raw/Q08/Q08-postgresql-buffer-io-diag.json",
-    "raw/Q08/q8-plan-act-pg.out"
+    "raw/Q08/q8-plan-act-pg.out",
+    "raw/Q21/q21-causal-card.json",
+    "raw/Q21/q21-causal-card.txt",
+    "raw/Q21/q21-bands.json",
+    "raw/Q21/q21-bands.txt",
+    "raw/Q21/Q21-cubrid-headline-block1.json",
+    "raw/Q21/Q21-cubrid-late-headline-block1.json",
+    "raw/Q21/Q21-postgresql-headline-block1.json",
+    "raw/Q21/Q21-cubrid-headline-telemetry.json",
+    "raw/Q21/Q21-cubrid-late-headline-telemetry.json",
+    "raw/Q21/Q21-postgresql-headline-telemetry.json",
+    "raw/Q21/q21-trace-cubrid.out",
+    "raw/Q21/q21-trace-late.out",
+    "raw/Q21/q21-plan-act-pg.out",
+    "raw/Q21/q21-plan-est-cubrid.out",
+    "raw/Q21/q21-plan-est-pg.out",
+    "raw/Q21/q21-plan-est-late.out",
+    "raw/Q21/q21-groundtruth-cubrid.out",
+    "raw/Q21/q21-groundtruth-pg.out",
+    "raw/Q21/q21-groundtruth.json",
+    "raw/Q21/perf-stat-cubrid.txt",
+    "raw/Q21/perf-stat-cubrid-late.txt",
+    "raw/Q21/perf-stat-pg.txt",
+    "raw/Q21/profile-cubrid-flat.txt",
+    "raw/Q21/profile-cubrid-late-flat.txt",
+    "raw/Q21/profile-pg-flat.txt"
    ],
    "relations": {
     "alternative": [
@@ -552,7 +579,8 @@
    "implementation_direction": "In px_scan_trace_handler.cpp:492-500, stop the double traversal. Either (a) merge only the node itself per level by extracting the single-node body of xasl_merge_stats into a merge_one_node() helper and calling that inside the scan_ptr loop, or (b) keep xasl_merge_stats' subtree semantics and drop the caller's scan_ptr loop, calling it once on xasl_tree->scan_ptr. Option (b) is the smaller diff; option (a) is clearer about intent. The dptr_list loop at :496-499 needs the same review, since dptr subtrees reached from a level that was already subtree-merged are duplicated by the same mechanism.",
    "measurement": [
     "Three independent scales, all with engine-independent ground truth:\n(1) Q03 full scale, parallel outer scan (q3-trace-cubrid.out): lineitem index entries reported 11,691,206 vs true 5,845,603 (2.0000x) and heap lookups 604,228 vs true 302,114 (2.0000x, ground truth q3-groundtruth-cubrid.out and PostgreSQL's own 302,114 at q3-plan-act-pg.out); the orders level (depth 2) is exact at 1,461,923 on both engines.\n(2) Small slice, SERIAL control (q3-doubling-trace.out, index outer scan so no parallel scan): every level exact - customer 1,079, orders 5,422, lineitem entries 21,847, lineitem qualifying 1,056, all equal to ground truth q3-doubling-groundtruth.out.\n(3) Same slice with a PARALLEL outer scan forced by c_custkey-0<5000 (q3-doubling-parallel-trace.out): depth 2 still exact (readkeys 1,079, rows 11,054, lookups 5,422) while depth 3 is exactly 2x (readkeys 10,844, rows 43,694, lookups 2,112).\n(4) Falsifiable prediction of the code reading, tested: a depth-4 chain must report 3x. Measured (q3-doubling-depth4-trace.out vs q3-doubling-depth4-groundtruth.out): depth-3 lineitem 17,810 vs true 8,905 (2.0000x) and depth-4 partsupp 26,715 vs true 8,905 (3.0000x).\n\n(5) Q04 NEGATIVE CONTROL - no duplication, every counter exact under a 6-worker parallel outer scan:\norders scan readrows reported 15,000,000 vs true cardinality 15,000,000; correlated-subquery readkeys reported 573,671 vs true probe count 573,671 (q4-groundtruth-{cubrid,pg}.out, identical on both engines); lookup rows reported 526,040 vs true answer row count 526,040.\nWHY: Q04's XASL hangs the correlated EXISTS subquery off the ROOT node's dptr_list and has NO scan_ptr chain (single-table driving scan, no nested-loop join). merge_xasl_tree() therefore merges it exactly once at src/query/parallel/px_scan/px_scan_trace_handler.cpp:467-470, and the duplicating loop at :493-500 never executes because xasl_tree->scan_ptr is nullptr.\nWHAT THIS PINS: this is the negative control the Q03 entry asked for. It SCOPES the defect - the (depth-1) multiplication requires a non-empty scan_ptr chain, so a correlated subquery under the root is unaffected - and it pins the root-dptr merge path with exact numbers a fix must preserve. It does NOT clear the :496-499 inner dptr_list loop, which merges a dptr hanging off a scan_ptr LEVEL and is still double-counted by construction, because the outer xasl_merge_stats(xptr1) has already recursed into xptr1's dptr_list via iterate_xasl_tree (src/xasl/xasl_iteration.hpp:180-187, called from src/xasl/xasl_iteration.cpp:205); Q04 simply does not exercise it.\nRaw: q4-trace-cubrid.out, q4-groundtruth-cubrid.out, q4-groundtruth-pg.out.",
-    "Q13: new instance on a new plan shape. q13-trace-cubrid.out reports 'ORDERBY (time: 0, sort: true, page: 20861, ioread: 0)' for a 46-ROW sort; 20,861 is the inner GROUPBY node's temp page count re-reported at an ancestor node. Excluded from every calculation in the Q13 report."
+    "Q13: new instance on a new plan shape. q13-trace-cubrid.out reports 'ORDERBY (time: 0, sort: true, page: 20861, ioread: 0)' for a 46-ROW sort; 20,861 is the inner GROUPBY node's temp page count re-reported at an ancestor node. Excluded from every calculation in the Q13 report.",
+    "Q21: the depth-dependent trace double count is confirmed again and, for the first time, CALIBRATED against an independent COUNT(*). In q21-trace-cubrid.out the correlated l2/l3 index scans sit one level deeper than in q21-trace-late.out. The deep trace reports readkeys 36,642,798 (l2) where the true count is 18,321,400 (late_lineitems_in_F_orders, independent COUNT(*) identical on both engines) -- a factor of exactly 2.0000 -- while the shallow trace reports 734,523, which equals the independent COUNT(*) late_lineitems_saudi_F exactly, a factor of 1. The halved deep figures also close the arithmetic internally: 17,654,362 - 16,663,790 = 990,572, the trace's own post-filter row count. Every Q21 work number is therefore reported halved at depth 3 and unhalved at depth 2, with the ground-truth probe as the arbiter."
    ],
    "mechanism_cubrid": "Each parallel worker executes a private clone of the sub-plan below the parallel scan. When a worker finishes, merge_xasl_tree() folds its XASL clone into the coordinator's tree. For the nested-loop chain it iterates the scan_ptr list and calls xasl_merge_stats(xptr1, main) for every level. xasl_merge_stats does not merge a single node: its last statement is iterate_xasl_tree(src, merge_stats, true), which recurses through scan_ptr (xasl_iteration.hpp:189-191) and merges every node in the subtree by header.id with +=. So the level-2 node is merged once (from the caller's first iteration), the level-3 node twice (once inside level-2's subtree walk, once from the caller's second iteration), the level-4 node three times, and a level-k node (k-1) times. The output row counts, and therefore query results, are unaffected - only the trace counters are.",
    "mechanism_postgresql": "PostgreSQL keeps a per-worker NodeInstrumentation array in DSM and merges it with planstate_tree_walker (execParallel.c:1173), which visits every PlanState exactly once; for the node being visited it loops over the worker slots and calls InstrAggNode once per worker (execParallel.c:1115). The merge primitive itself (instrument.c:232) touches only the node handed to it and never re-walks children, so no node can be visited by two overlapping traversals.",
@@ -618,7 +646,8 @@
     "Q13",
     "Q15",
     "Q17",
-    "Q19"
+    "Q19",
+    "Q21"
    ],
    "ranking_rationale": "Ranked below IMP-006 and IMP-007 on runtime effect, which is zero, and above nothing on that axis. It is recorded at P2 rather than P3 because it is a precondition for trusting the other two: Q03's own F_work would have been wrong by 1.54x on the native side if the trace had been believed. It is also the cheapest fix in the registry (a one-loop change) with the lowest risk.",
    "raw_evidence": [
@@ -658,7 +687,32 @@
     "raw/Q17/q17-sqcache-1500000.out",
     "raw/Q17/q17-sqcache-16M.out",
     "raw/Q17/q17-sqcache-2M.out",
-    "raw/Q17/q17-trace-cubrid.out"
+    "raw/Q17/q17-trace-cubrid.out",
+    "raw/Q21/q21-causal-card.json",
+    "raw/Q21/q21-causal-card.txt",
+    "raw/Q21/q21-bands.json",
+    "raw/Q21/q21-bands.txt",
+    "raw/Q21/Q21-cubrid-headline-block1.json",
+    "raw/Q21/Q21-cubrid-late-headline-block1.json",
+    "raw/Q21/Q21-postgresql-headline-block1.json",
+    "raw/Q21/Q21-cubrid-headline-telemetry.json",
+    "raw/Q21/Q21-cubrid-late-headline-telemetry.json",
+    "raw/Q21/Q21-postgresql-headline-telemetry.json",
+    "raw/Q21/q21-trace-cubrid.out",
+    "raw/Q21/q21-trace-late.out",
+    "raw/Q21/q21-plan-act-pg.out",
+    "raw/Q21/q21-plan-est-cubrid.out",
+    "raw/Q21/q21-plan-est-pg.out",
+    "raw/Q21/q21-plan-est-late.out",
+    "raw/Q21/q21-groundtruth-cubrid.out",
+    "raw/Q21/q21-groundtruth-pg.out",
+    "raw/Q21/q21-groundtruth.json",
+    "raw/Q21/perf-stat-cubrid.txt",
+    "raw/Q21/perf-stat-cubrid-late.txt",
+    "raw/Q21/perf-stat-pg.txt",
+    "raw/Q21/profile-cubrid-flat.txt",
+    "raw/Q21/profile-cubrid-late-flat.txt",
+    "raw/Q21/profile-pg-flat.txt"
    ],
    "relations": {
     "alternative": [
@@ -696,7 +750,10 @@
    "explanation": "At an identical plan shape with identical per-node row counts, CUBRID needs 2.29x the instructions per tuple that PostgreSQL needs, and the largest single identifiable component is copying every intermediate tuple into a list-file record instead of passing a slot by reference.",
    "id": "IMP-006",
    "implementation_direction": "Introduce a pass-by-reference tuple between adjacent pipelined operators so that a list file is written only where a node must retain or re-read tuples (sort input, hash build, subquery cache, client fetch). Concretely: give BUILDLIST_PROC a streaming output mode that hands the parent a value-array view instead of calling qfile_generate_tuple_into_list (query_executor.c:1255), and let the hash-join probe (query_hash_join.c:4277) emit that view directly to its parent when the parent is a group-by that consumes tuples in order. Cheaper first step with the same direction: cache the tuple descriptor across tuples rather than rebuilding it per tuple in qdata_generate_tuple_desc_for_valptr_list (query_opfunc.c:625), which is 3.04% of profiled cost on its own.",
-   "measurement": "Controlled same-shape A/B (the only way to compare per-tuple cost without plan confounding): CUBRID with /*+ USE_HASH */ reaches PostgreSQL's shape with identical counts at every node - customer 1,500,000 scanned / 300,276 built, orders 15,000,000 scanned / 7,289,442 probes / 1,461,923 matched, lineitem 59,986,052 scanned / 32,334,250 probes / 302,114 matched, 114,003 groups (q3-trace-cubrid-hash.out vs q3-plan-act-pg.out). At that shape: total_query_cpu 50.36 vs 22.32 core-seconds (F_cpu 2.2563), F_work 0.9981, F_cost 2.2606, 424.7 vs 187.8 ns per tuple touch. perf decomposes F_cost cleanly: instructions per tuple 2,274.3 vs 991.4 (2.294x) at essentially equal instruction throughput (5.3557e9 vs 5.2776e9 instructions per core-second, 1.015x; IPC 1.96 vs 1.95), so the deficit is instruction count, not stalling. Band: 12.43% x 50.36 = 6.26 core-seconds versus PostgreSQL's comparable spill band 5.36% x 19.28 = 1.03 core-seconds.",
+   "measurement": [
+    "Controlled same-shape A/B (the only way to compare per-tuple cost without plan confounding): CUBRID with /*+ USE_HASH */ reaches PostgreSQL's shape with identical counts at every node - customer 1,500,000 scanned / 300,276 built, orders 15,000,000 scanned / 7,289,442 probes / 1,461,923 matched, lineitem 59,986,052 scanned / 32,334,250 probes / 302,114 matched, 114,003 groups (q3-trace-cubrid-hash.out vs q3-plan-act-pg.out). At that shape: total_query_cpu 50.36 vs 22.32 core-seconds (F_cpu 2.2563), F_work 0.9981, F_cost 2.2606, 424.7 vs 187.8 ns per tuple touch. perf decomposes F_cost cleanly: instructions per tuple 2,274.3 vs 991.4 (2.294x) at essentially equal instruction throughput (5.3557e9 vs 5.2776e9 instructions per core-second, 1.015x; IPC 1.96 vs 1.95), so the deficit is instruction count, not stalling. Band: 12.43% x 50.36 = 6.26 core-seconds versus PostgreSQL's comparable spill band 5.36% x 19.28 = 1.03 core-seconds.",
+    "Q21, at matched plan shape: CUBRID's intermediate list-file materialisation band is 4.7871 core-s per statement (9.71% of 49.3004) against PostgreSQL's 0.3062 core-s executor-node-dispatch band (1.57% of 19.5061) -- 15.63x, the largest per-band ratio on Q21. Honest scope: the controlled CUBRID variant materialises its derived spec into a list file by construction, so part of this band is the price of the counterfactual rather than of the campaign query; in the NATIVE plan the same band is 3.1255 core-s (1.10% of 284.1385), still paid, for the rewriter's own nested uncorrelated derived specs. Symbols: qdata_generate_tuple_desc_for_valptr_list, qdata_copy_db_value_to_tuple_value, qfile_generate_tuple_into_list, qdata_get_tuple_value_size_from_dbval, pr_data_writeval_disk_size."
+   ],
    "mechanism_cubrid": "For each tuple crossing a node boundary CUBRID (a) calls fetch_val_list() to evaluate every regu variable into DB_VALUEs, (b) calls qdata_generate_tuple_desc_for_valptr_list() to rebuild a tuple descriptor, (c) computes each value's on-tuple size, (d) memcpy's each value into the list-file page via qdata_copy_db_value_to_tuple_value(), and (e) clears the DB_VALUEs. Every downstream node then re-reads and re-decodes that record. The Q03 controlled-plan profile shows the band as fetch_val_list 3.81% + qdata_generate_tuple_desc_for_valptr_list 3.04% + qdata_copy_db_value_to_tuple_value 2.84% + qfile_generate_tuple_into_list 1.51% + qdata_get_tuple_value_size_from_dbval 1.23% = 12.43%, with heap_attrinfo_read_dbvalues a further 10.52% feeding it.",
    "mechanism_postgresql": "ExecProcNode returns a pointer to the child's TupleTableSlot (executor.h:322). Attributes are deformed lazily and only as far as needed (execTuples.c:1017 slot_deform_heap_tuple, called from tts_buffer_heap_getsomeattrs at :751). A copy happens only where a node must retain the tuple: the hash table stores a MinimalTuple (nodeHash.c:1774/1779) and a spilling batch writes to a SharedTuplestore. Its top symbol is therefore the same *kind* of work (tts_buffer_heap_getsomeattrs 21.62% of the executor) but it is paid once per tuple per scan rather than once per pipeline edge.",
    "postgresql_source": [
@@ -714,7 +771,8 @@
    "q_relations": [
     "Q03",
     "Q10",
-    "Q11"
+    "Q11",
+    "Q21"
    ],
    "ranking_rationale": "Ranked first among the Q03 candidates on measured share of the matched-shape CPU excess (18.7%, versus IMP-007's critical-path difference of 2.22 core-seconds = 7.9%) and first on generality: every multi-node plan in the workload pays it, whereas IMP-007 only bites when the working set exceeds the buffer pool. It is ranked below IMP-007 on cost-effectiveness, because IMP-007's first step is an advisory fadvise call with upstream precedent while this is a structural executor change - which is why the tuple-descriptor caching sub-step (3.04% of profiled cost on its own) is called out separately as the cheap first move. Not summed with IMP-007: they are disjoint bands of the same profile (qdata/qfile versus kernel page copy), verified disjoint by symbol.",
    "raw_evidence": [
@@ -742,7 +800,32 @@
     "raw/Q10/perf-stat-pg.txt",
     "raw/Q10/q10-profile-bands.txt",
     "raw/Q10/q10-card-calc.txt",
-    "raw/Q10/Q10-causal-card.json"
+    "raw/Q10/Q10-causal-card.json",
+    "raw/Q21/q21-causal-card.json",
+    "raw/Q21/q21-causal-card.txt",
+    "raw/Q21/q21-bands.json",
+    "raw/Q21/q21-bands.txt",
+    "raw/Q21/Q21-cubrid-headline-block1.json",
+    "raw/Q21/Q21-cubrid-late-headline-block1.json",
+    "raw/Q21/Q21-postgresql-headline-block1.json",
+    "raw/Q21/Q21-cubrid-headline-telemetry.json",
+    "raw/Q21/Q21-cubrid-late-headline-telemetry.json",
+    "raw/Q21/Q21-postgresql-headline-telemetry.json",
+    "raw/Q21/q21-trace-cubrid.out",
+    "raw/Q21/q21-trace-late.out",
+    "raw/Q21/q21-plan-act-pg.out",
+    "raw/Q21/q21-plan-est-cubrid.out",
+    "raw/Q21/q21-plan-est-pg.out",
+    "raw/Q21/q21-plan-est-late.out",
+    "raw/Q21/q21-groundtruth-cubrid.out",
+    "raw/Q21/q21-groundtruth-pg.out",
+    "raw/Q21/q21-groundtruth.json",
+    "raw/Q21/perf-stat-cubrid.txt",
+    "raw/Q21/perf-stat-cubrid-late.txt",
+    "raw/Q21/perf-stat-pg.txt",
+    "raw/Q21/profile-cubrid-flat.txt",
+    "raw/Q21/profile-cubrid-late-flat.txt",
+    "raw/Q21/profile-pg-flat.txt"
    ],
    "relations": {
     "alternative": [
@@ -784,7 +867,10 @@
    "explanation": "CUBRID pays for every buffer miss with a blocking single-page read on the thread that needs the page, so page-cache copy time is serialized into query execution; PostgreSQL performs the equivalent work in io worker processes and keeps its executor free, which is worth 2.22 core-seconds of critical-path CPU at matched plan shape even though PostgreSQL spends more total CPU per byte.",
    "id": "IMP-007",
    "implementation_direction": "Ordered by evidence strength. (1) Per-scan readahead: issue posix_fadvise(POSIX_FADV_WILLNEED) for the next run of pages of a sequential or index-range scan, reusing the parameter machinery already present for the mount-time advise (file_io.c:3050) - this overlaps the kernel copy with executor work without any new buffer state, and has direct upstream precedent. (2) Batch the miss path: when the requesting scan is sequential, fetch a run of adjacent pages with the existing fileio_read_pages() (file_io.c:4211) in one call - justified by call-overhead reduction only, NOT by submission-count parity, which the measurement refutes. (3) Only if (1) and (2) prove insufficient, scope genuine asynchronous data-page I/O with in-flight buffer states; the measured total-CPU-per-byte comparison says this must be justified by critical-path latency, not by CPU savings.",
-   "measurement": "Matched plan shape (/*+ USE_HASH */ versus PostgreSQL native, identical per-node row counts).\nCritical-path kernel I/O cost: CUBRID rep_movs_alternative 5.95% x 50.36 = 3.00 core-seconds inside cub_server's query threads (profile-cubrid-hash-flat.txt); PostgreSQL next_uptodate_folio 2.48% + rep_movs_alternative 1.58% = 4.06% x 19.28 = 0.78 core-seconds inside leader+workers (profile-pg-flat.txt), plus 2.72 core-seconds of pg_io_worker CPU recorded as auxiliary (Q03-postgresql-telemetry-run1.json). Difference on the critical path: 2.22 core-seconds = 7.9% of the 28.04 core-second excess.\nBytes and syscalls per statement (/proc/<pid>/io): CUBRID rchar 13,594,346,680 (12.66 GiB) in syscr 829,884 read calls = 17.2 KiB per call; PostgreSQL rchar 8,694,806,235 (8.10 GiB) in syscr 551,551 = 15.4 KiB per call. Device read_bytes ~0 on both sides (CUBRID 0.00 MiB, PostgreSQL 0.12 MiB), so this is page-cache copy and syscall cost, never disk latency.\nNative CUBRID plan for context: 831,427 corrected page misses (IMP-005 correction applied; the corrected count x 16 KiB = 12.69 GiB matches the independently measured rchar of 13.09 GiB per statement to 3.3%, whereas the uncorrected trace count would imply 25.4 GiB, i.e. 1.92x more than the measured syscall bytes - which is what proves the correction), kernel band 18.07% x 21.91 = 3.96 core-seconds, and IPC collapses to 0.94 versus 1.96 at matched shape.\nREJECTED sub-hypothesis, with the number that rejected it: 'CUBRID lacks read combining, so it issues far more I/O submissions than PostgreSQL at io_combine_limit=16.' The code fact is real (fileio_read reads exactly one page; fileio_read_pages is log-only), but the measurement refutes any submission-count penalty: CUBRID moves 17.2 KiB per read syscall versus PostgreSQL's 15.4 KiB, and PostgreSQL's 551,551 calls for ~900,213 block reads (746,768 heap + 153,445 temp) average only 1.63 blocks per call, not 16. Read combining is therefore NOT claimed as an effect here.\n\nQ04 (structurally identical plans on both engines, no hint needed):\n276,950 blocking pread() calls per statement at 16,377 bytes each - exactly one 16 KiB page per call, confirming the single-page read path - all issued from cub_server 'parallel-query' executor threads, against 415 read syscalls on PostgreSQL (667.3x). rchar 4,535,681,928 B/statement vs 1,390,736 B. The call graph resolves 10.18% of CUBRID's CPU to rep_movs_alternative reached ONLY via __libc_pread64 <- fileio_read <- pgbuf_claim_bcb_for_fix <- pgbuf_fix_release; with filemap_get_read_batch 1.26% and filemap_read 0.69% the band is 12.13% = 1.160 core-s against PostgreSQL's 0.000 core-s.\nSCOPE NOTE: on Q04 the io-worker contrast that motivated this candidate on Q03 does NOT apply, because PostgreSQL performs zero physical reads and so has nothing to overlap. Q04 therefore does not strengthen the ASYNCHRONY argument; it strengthens IMP-002 (do not miss in the first place). Recorded explicitly so the Q04 relation is not misread as evidence for asynchrony.\nRaw: Q04-cubrid-headline-telemetry-run2.json, profile-cubrid-callgraph.txt, q4-trace-cubrid.out.",
+   "measurement": [
+    "Matched plan shape (/*+ USE_HASH */ versus PostgreSQL native, identical per-node row counts).\nCritical-path kernel I/O cost: CUBRID rep_movs_alternative 5.95% x 50.36 = 3.00 core-seconds inside cub_server's query threads (profile-cubrid-hash-flat.txt); PostgreSQL next_uptodate_folio 2.48% + rep_movs_alternative 1.58% = 4.06% x 19.28 = 0.78 core-seconds inside leader+workers (profile-pg-flat.txt), plus 2.72 core-seconds of pg_io_worker CPU recorded as auxiliary (Q03-postgresql-telemetry-run1.json). Difference on the critical path: 2.22 core-seconds = 7.9% of the 28.04 core-second excess.\nBytes and syscalls per statement (/proc/<pid>/io): CUBRID rchar 13,594,346,680 (12.66 GiB) in syscr 829,884 read calls = 17.2 KiB per call; PostgreSQL rchar 8,694,806,235 (8.10 GiB) in syscr 551,551 = 15.4 KiB per call. Device read_bytes ~0 on both sides (CUBRID 0.00 MiB, PostgreSQL 0.12 MiB), so this is page-cache copy and syscall cost, never disk latency.\nNative CUBRID plan for context: 831,427 corrected page misses (IMP-005 correction applied; the corrected count x 16 KiB = 12.69 GiB matches the independently measured rchar of 13.09 GiB per statement to 3.3%, whereas the uncorrected trace count would imply 25.4 GiB, i.e. 1.92x more than the measured syscall bytes - which is what proves the correction), kernel band 18.07% x 21.91 = 3.96 core-seconds, and IPC collapses to 0.94 versus 1.96 at matched shape.\nREJECTED sub-hypothesis, with the number that rejected it: 'CUBRID lacks read combining, so it issues far more I/O submissions than PostgreSQL at io_combine_limit=16.' The code fact is real (fileio_read reads exactly one page; fileio_read_pages is log-only), but the measurement refutes any submission-count penalty: CUBRID moves 17.2 KiB per read syscall versus PostgreSQL's 15.4 KiB, and PostgreSQL's 551,551 calls for ~900,213 block reads (746,768 heap + 153,445 temp) average only 1.63 blocks per call, not 16. Read combining is therefore NOT claimed as an effect here.\n\nQ04 (structurally identical plans on both engines, no hint needed):\n276,950 blocking pread() calls per statement at 16,377 bytes each - exactly one 16 KiB page per call, confirming the single-page read path - all issued from cub_server 'parallel-query' executor threads, against 415 read syscalls on PostgreSQL (667.3x). rchar 4,535,681,928 B/statement vs 1,390,736 B. The call graph resolves 10.18% of CUBRID's CPU to rep_movs_alternative reached ONLY via __libc_pread64 <- fileio_read <- pgbuf_claim_bcb_for_fix <- pgbuf_fix_release; with filemap_get_read_batch 1.26% and filemap_read 0.69% the band is 12.13% = 1.160 core-s against PostgreSQL's 0.000 core-s.\nSCOPE NOTE: on Q04 the io-worker contrast that motivated this candidate on Q03 does NOT apply, because PostgreSQL performs zero physical reads and so has nothing to overlap. Q04 therefore does not strengthen the ASYNCHRONY argument; it strengthens IMP-002 (do not miss in the first place). Recorded explicitly so the Q04 relation is not misread as evidence for asynchrony.\nRaw: Q04-cubrid-headline-telemetry-run2.json, profile-cubrid-callgraph.txt, q4-trace-cubrid.out.",
+    "Q21 is this entry's clearest cross-engine contrast so far, because PostgreSQL's side of it is now VISIBLE as a separate process class. At matched plan shape CUBRID issues 1,018,456 synchronous pread() calls per statement on the query threads themselves (telemetry syscr 4,073,824 over the 4-statement block), and the kernel page-cache read path costs 11.24% = 5.5414 core-s of its 49.3004 core-s. PostgreSQL issues 349,789 reads per statement and its equivalent band is 11.85% = 2.3115 core-s of 19.5061 -- but 6.51 core-s of PostgreSQL's total query CPU sits in pg_io_worker processes (auxiliary bucket 'auxiliary:pg_io_worker:postgres'), i.e. PostgreSQL moved the submission off the executor path entirely, which is precisely the asynchronous submission this entry says CUBRID lacks. CUBRID's auxiliary bucket over the same block is 2.52 core-s and contains no I/O submitter at all."
+   ],
    "mechanism_cubrid": "pgbuf_fix_release() (page_buffer.c:2211) looks the page up; on a miss it calls fileio_read() (page_buffer.c:8464), which performs one pread of exactly one 16 KiB page (file_io.c:3935) on the calling query thread and blocks until the kernel has copied it. There is no asynchronous submission anywhere in the data path - the only aio_read in the tree is inside a pread() compatibility shim that immediately calls aio_suspend (file_io.c:3745-3767) - and no per-scan readahead hint, the single posix_fadvise being a mount-time whole-volume advise (file_io.c:3050). The multi-page primitive fileio_read_pages() (file_io.c:4211) exists but is wired only to the log paths. Consequently the page-cache copy and lookup cost appears as kernel time inside cub_server's query threads: at matched plan shape rep_movs_alternative 5.95%; in the native index-nested-loop plan rep_movs_alternative 13.83% plus filemap_get_read_batch 1.82%, filemap_read 0.98%, xas_load 0.74% and xas_descend 0.70%.",
    "mechanism_postgresql": "A sequential scan pulls buffers from a ReadStream (read_stream.c:1030), which looks ahead over the scan's block sequence and submits I/O through io_method=worker, so a separate io worker process (method_worker.c:482/687) performs the wait and the copy while the executor keeps processing buffers that are already available. Q03 measures 2.72 core-seconds of io worker CPU classified as auxiliary against only 0.78 core-seconds of kernel I/O inside the executor itself (next_uptodate_folio 2.48% + rep_movs_alternative 1.58% of 19.28 executor core-seconds). BAS_BULKREAD (freelist.c:442) separately confines a large scan to a small ring so it does not evict the rest of the pool - that effect belongs to IMP-002, not here.",
    "postgresql_source": [
@@ -848,7 +934,8 @@
     "Q11",
     "Q12",
     "Q15",
-    "Q19"
+    "Q19",
+    "Q21"
    ],
    "ranking_rationale": "Ranked third of the three Q03 candidates. Below IMP-006 on measured share of the matched-shape CPU excess (7.9% versus 18.7%) and below it on generality, since this only bites when the working set exceeds the buffer pool - true for Q03 (13.06 GiB against an 8 GiB pool) but not for Q02 (1.86 GiB). Above IMP-005 on runtime effect, which IMP-005 does not have at all. It was initially ranked P1 alongside IMP-006 on a read-combining argument; that argument was withdrawn when the syscall measurement showed CUBRID already moves more bytes per read call than PostgreSQL (17.2 versus 15.4 KiB), leaving only the critical-path placement effect, which is smaller and bounded. Its first implementation step is nevertheless the cheapest of the three candidates and has direct upstream precedent. Q04 demotes this relative to IMP-002: with PostgreSQL at zero physical reads there is no cross-engine asynchrony contrast on Q04, and the same 1.160 core-s is fully addressable by retention, so the marginal value of asynchrony on this query is bounded by what IMP-002 leaves behind, not added to it.",
    "raw_evidence": [
@@ -881,7 +968,32 @@
     "raw/Q10/perf-stat-pg.txt",
     "raw/Q10/q10-profile-bands.txt",
     "raw/Q10/q10-card-calc.txt",
-    "raw/Q10/Q10-causal-card.json"
+    "raw/Q10/Q10-causal-card.json",
+    "raw/Q21/q21-causal-card.json",
+    "raw/Q21/q21-causal-card.txt",
+    "raw/Q21/q21-bands.json",
+    "raw/Q21/q21-bands.txt",
+    "raw/Q21/Q21-cubrid-headline-block1.json",
+    "raw/Q21/Q21-cubrid-late-headline-block1.json",
+    "raw/Q21/Q21-postgresql-headline-block1.json",
+    "raw/Q21/Q21-cubrid-headline-telemetry.json",
+    "raw/Q21/Q21-cubrid-late-headline-telemetry.json",
+    "raw/Q21/Q21-postgresql-headline-telemetry.json",
+    "raw/Q21/q21-trace-cubrid.out",
+    "raw/Q21/q21-trace-late.out",
+    "raw/Q21/q21-plan-act-pg.out",
+    "raw/Q21/q21-plan-est-cubrid.out",
+    "raw/Q21/q21-plan-est-pg.out",
+    "raw/Q21/q21-plan-est-late.out",
+    "raw/Q21/q21-groundtruth-cubrid.out",
+    "raw/Q21/q21-groundtruth-pg.out",
+    "raw/Q21/q21-groundtruth.json",
+    "raw/Q21/perf-stat-cubrid.txt",
+    "raw/Q21/perf-stat-cubrid-late.txt",
+    "raw/Q21/perf-stat-pg.txt",
+    "raw/Q21/profile-cubrid-flat.txt",
+    "raw/Q21/profile-cubrid-late-flat.txt",
+    "raw/Q21/profile-pg-flat.txt"
    ],
    "relations": {
     "alternative": [
@@ -1039,7 +1151,8 @@
       "mr_cmpval_string 1.71%",
       "pr_midxkey_compare 1.45%"
      ]
-    }
+    },
+    "Q21 CONSTRAINS this entry rather than confirming it. At matched plan shape the generic predicate/comparator band is 5.39% = 2.6573 core-s on CUBRID against PostgreSQL's expression+index-compare band 16.14% = 3.1483 core-s: a ratio of 0.84x, i.e. CUBRID is CHEAPER here on this query. The reason is visible in the plans: Q21's surviving quals after the join conversion are one date-vs-date column comparison and one integer inequality, and CUBRID evaluates them at the scan (eval_pred/eval_pred_comp0/mr_cmpval_date, 2.6573 core-s) while PostgreSQL pays ExecInterpExpr plus 4.73% of _bt_compare on 1.66 million index probes. The native CUBRID plan's 13.7523 core-s in the same band is 5.18x larger, but that inflation is caused by IMP-028's 24.95x extra evaluations and is attributed there, not here. Q21 therefore bounds IMP-008's cross-engine value at ~0 for a low-arity integer/date predicate mix."
    ],
    "postgresql_source": [
     "src/backend/executor/execExpr.c:229 ExecInitQual() compiles the qual ONCE into a linear ExprEvalStep program",
@@ -1074,7 +1187,8 @@
     "Q16",
     "Q17",
     "Q19",
-    "Q20"
+    "Q20",
+    "Q21"
    ],
    "ranking_rationale": "Ranked immediately below IMP-002 on Q04 (18.1% vs 25.5% of the CPU excess) and above IMP-007, whose Q04 asynchrony argument does not apply because PostgreSQL takes zero physical reads. Bands are verified disjoint by symbol: IMP-002 and IMP-007 are kernel copy plus buffer manager, IMP-008 is predicate evaluation, IMP-006 is intermediate-tuple materialization (small on Q04 - fetch_val_list 0.55% - because this plan materializes only 526,040 result tuples). The bands are NOT summed.",
    "raw_evidence": [
@@ -1118,7 +1232,32 @@
     "raw/Q17/q17-causal-card.txt",
     "raw/Q17/q17-groundtruth-pg.out",
     "raw/Q17/q17-plan-act-pg-nlj.out",
-    "raw/Q17/q17-trace-cubrid.out"
+    "raw/Q17/q17-trace-cubrid.out",
+    "raw/Q21/q21-causal-card.json",
+    "raw/Q21/q21-causal-card.txt",
+    "raw/Q21/q21-bands.json",
+    "raw/Q21/q21-bands.txt",
+    "raw/Q21/Q21-cubrid-headline-block1.json",
+    "raw/Q21/Q21-cubrid-late-headline-block1.json",
+    "raw/Q21/Q21-postgresql-headline-block1.json",
+    "raw/Q21/Q21-cubrid-headline-telemetry.json",
+    "raw/Q21/Q21-cubrid-late-headline-telemetry.json",
+    "raw/Q21/Q21-postgresql-headline-telemetry.json",
+    "raw/Q21/q21-trace-cubrid.out",
+    "raw/Q21/q21-trace-late.out",
+    "raw/Q21/q21-plan-act-pg.out",
+    "raw/Q21/q21-plan-est-cubrid.out",
+    "raw/Q21/q21-plan-est-pg.out",
+    "raw/Q21/q21-plan-est-late.out",
+    "raw/Q21/q21-groundtruth-cubrid.out",
+    "raw/Q21/q21-groundtruth-pg.out",
+    "raw/Q21/q21-groundtruth.json",
+    "raw/Q21/perf-stat-cubrid.txt",
+    "raw/Q21/perf-stat-cubrid-late.txt",
+    "raw/Q21/perf-stat-pg.txt",
+    "raw/Q21/profile-cubrid-flat.txt",
+    "raw/Q21/profile-cubrid-late-flat.txt",
+    "raw/Q21/profile-pg-flat.txt"
    ],
    "relations": {
     "alternative": null,
@@ -1210,7 +1349,8 @@
      "serial_fraction_pct": 90.31,
      "serial_tail_s": 1.799,
      "statement_s": 1.992
-    }
+    },
+    "Q21 gives this entry its largest measured CROSS-ENGINE cost in the campaign, and a clean one, because it is an entire card factor: F_units = U_P / U_Cc = 6.32660 / 3.05834 = 2.068640x of the 5.228355x that remains after the plan anchor. The trace shows the mechanism directly: in q21-trace-late.out the phase that evaluates the 1,442,116 correlated subqueries is the scan of the materialised derived spec and runs at '(parallel workers: 2)', which is px_parallel.cpp:85-92 'case parallel_type::SUBQUERY ... auto_degree = 1' plus the gather thread, while the lineitem heap scan INSIDE the same statement runs at '(parallel workers: 6)' and parallelism is configured at 6. PostgreSQL runs the whole equivalent region under one Gather at 5 launched workers plus a participating leader, measured U 6.32660 with peak 7.5883. Same defect as Q05/Q11/Q16/Q20; unlike Q20, where the matched-plan PostgreSQL counterpart was equally serial and the cross-engine cost was zero, here PostgreSQL parallelises the counterpart fully and CUBRID pays the whole 2.068640x."
    ],
    "postgresql_source": [
     "src/backend/optimizer/path/allpaths.c:830 set_rel_consider_parallel() marks a relation parallel-safe; :2919-2922 extends the same marking to subquery rels, so a subquery is not a parallelism barrier",
@@ -1228,7 +1368,8 @@
     "Q05",
     "Q11",
     "Q16",
-    "Q20"
+    "Q20",
+    "Q21"
    ],
    "ranking_rationale": "Ranks above every other Q05 finding by an order of magnitude: 5.2771x versus 1.278x for all CPU effects combined at the matched plan. It also outranks IMP-002's Q05 relation, which costs nothing at steady state (0.87% miss rate) and only manifests as a warm-up hazard.",
    "raw_evidence": [
@@ -1241,7 +1382,32 @@
     "raw/Q16/profile-pg-flat-nocg.txt",
     "raw/Q16/q16-bands.txt",
     "raw/Q16/q16-plan-act-pg.out",
-    "raw/Q16/q16-trace-cubrid.out"
+    "raw/Q16/q16-trace-cubrid.out",
+    "raw/Q21/q21-causal-card.json",
+    "raw/Q21/q21-causal-card.txt",
+    "raw/Q21/q21-bands.json",
+    "raw/Q21/q21-bands.txt",
+    "raw/Q21/Q21-cubrid-headline-block1.json",
+    "raw/Q21/Q21-cubrid-late-headline-block1.json",
+    "raw/Q21/Q21-postgresql-headline-block1.json",
+    "raw/Q21/Q21-cubrid-headline-telemetry.json",
+    "raw/Q21/Q21-cubrid-late-headline-telemetry.json",
+    "raw/Q21/Q21-postgresql-headline-telemetry.json",
+    "raw/Q21/q21-trace-cubrid.out",
+    "raw/Q21/q21-trace-late.out",
+    "raw/Q21/q21-plan-act-pg.out",
+    "raw/Q21/q21-plan-est-cubrid.out",
+    "raw/Q21/q21-plan-est-pg.out",
+    "raw/Q21/q21-plan-est-late.out",
+    "raw/Q21/q21-groundtruth-cubrid.out",
+    "raw/Q21/q21-groundtruth-pg.out",
+    "raw/Q21/q21-groundtruth.json",
+    "raw/Q21/perf-stat-cubrid.txt",
+    "raw/Q21/perf-stat-cubrid-late.txt",
+    "raw/Q21/perf-stat-pg.txt",
+    "raw/Q21/profile-cubrid-flat.txt",
+    "raw/Q21/profile-cubrid-late-flat.txt",
+    "raw/Q21/profile-pg-flat.txt"
    ],
    "relations": {
     "alternative": "IMP-005 must be resolved or co-validated because raising this degree first exercises the buggy nested-chain trace merge",
@@ -1642,7 +1808,8 @@
       "pgbuf_unfix 1.97%",
       "__pthread_mutex_unlock_usercnt 1.59%"
      ]
-    }
+    },
+    "Q21, at matched plan shape and zero device reads on both sides: CUBRID's buffer fix/unfix + LRU surgery + buffer mutex band is 13.94% = 6.8725 core-s per statement against PostgreSQL's buffer lookup/pin/replacement band 15.02% = 2.9298 core-s, a ratio of 2.35x. In the NATIVE plan the same band is 29.30% = 83.2526 core-s, the single largest band anywhere in Q21, because IMP-028's 35,975,762 subquery evaluations each fix and unfix index and heap pages; that inflation is attributed to IMP-028. The mutex share is unusually explicit here: __pthread_mutex_lock alone is 8.12% of the native profile and __pthread_mutex_unlock_usercnt 4.15%, against PostgreSQL's LWLockAttemptLock 4.04% + LWLockRelease 0.88%."
    ],
    "mechanism_cubrid": "pgbuf_lru_boost_bcb() is called on unfix of any BCB that lives in LRU zone 2 or 3. It takes pthread_mutex_lock(&lru_list->mutex), calls pgbuf_remove_from_lru_list() to unlink the BCB from its current position, pgbuf_lru_add_bcb_to_top() to relink it at the head, and then pgbuf_lru_adjust_zone1() or pgbuf_lru_adjust_zones(), which walk the list to re-balance zone boundaries through pgbuf_bcb_change_zone(). On Q08's dominant path this runs once PER HEAP ROW: heap_get_visible_version() -> heap_clean_get_context -> pgbuf_unfix -> pgbuf_lru_boost_bcb, verified in the call graph at 5.38% of the parallel-query threads' cost. Q08 performs about 1.35 M fix/unfix pairs per statement (403,487 lineitem + 403,487 orders + 122,404 customer + 24,254 supplier heap lookups, each preceded by its index descent), so the list is reordered under a mutex about a million times per statement on pages that were already resident.",
    "mechanism_postgresql": "UnpinBuffer() / UnpinBufferNoOwner() decrement a PROCESS-LOCAL PrivateRefCountEntry->refcount and, only when it reaches zero, issue one pg_atomic_fetch_sub_u64(&buf->state, BUF_REFCOUNT_ONE). PinBuffer() bumps usagecount INSIDE the same compare-and-swap that takes the pin ('Default case: increase usagecount unless already max'). PostgreSQL's replacement algorithm is a clock sweep over the buffer array, so there is no ordered list to maintain, no per-list mutex to acquire and no zone rebalance to run. Searched src/storage/page_buffer.c for clock / sweep / usage_count / usagecount: CUBRID has no clock-sweep equivalent - the file implements private and shared LRU lists with zones 1/2/3.",
@@ -1670,7 +1837,8 @@
     "Q13",
     "Q15",
     "Q19",
-    "Q20"
+    "Q20",
+    "Q21"
    ],
    "ranking_rationale": "Ranked 2 of 2 new Q08 candidates. It owns the largest profile band on either engine and is the lever that converts CUBRID's 6.6x work advantage into a wall win rather than a 16% CPU margin, but it is not the factor that loses Q08 - F_cpu = 0.838224x already favours CUBRID, and only F_units = 1.373763x is above 1.0, which is IMP-012's. Explanations rejected in favour of this one: 'CUBRID is CPU-hungrier' (rejected by F_cpu = 0.838224x and 0.7391x the instructions) and 'IMP-008's generic DB_VALUE comparator dominates' (rejected by tp_value_compare_with_error 0.59% + eval_value_rel_cmp 0.50% + mr_cmpval_* 1.02% = 2.11%, an order of magnitude below the 27.41% buffer band).",
    "raw_evidence": [
@@ -1713,7 +1881,32 @@
     "raw/Q10/variants/trace-cubrid-NO_HASH_AGGREGATE.out",
     "raw/Q17/profile-cubrid-flat.txt",
     "raw/Q17/profile-pg-nlj-flat.txt",
-    "raw/Q17/q17-plan-act-pg-nlj.out"
+    "raw/Q17/q17-plan-act-pg-nlj.out",
+    "raw/Q21/q21-causal-card.json",
+    "raw/Q21/q21-causal-card.txt",
+    "raw/Q21/q21-bands.json",
+    "raw/Q21/q21-bands.txt",
+    "raw/Q21/Q21-cubrid-headline-block1.json",
+    "raw/Q21/Q21-cubrid-late-headline-block1.json",
+    "raw/Q21/Q21-postgresql-headline-block1.json",
+    "raw/Q21/Q21-cubrid-headline-telemetry.json",
+    "raw/Q21/Q21-cubrid-late-headline-telemetry.json",
+    "raw/Q21/Q21-postgresql-headline-telemetry.json",
+    "raw/Q21/q21-trace-cubrid.out",
+    "raw/Q21/q21-trace-late.out",
+    "raw/Q21/q21-plan-act-pg.out",
+    "raw/Q21/q21-plan-est-cubrid.out",
+    "raw/Q21/q21-plan-est-pg.out",
+    "raw/Q21/q21-plan-est-late.out",
+    "raw/Q21/q21-groundtruth-cubrid.out",
+    "raw/Q21/q21-groundtruth-pg.out",
+    "raw/Q21/q21-groundtruth.json",
+    "raw/Q21/perf-stat-cubrid.txt",
+    "raw/Q21/perf-stat-cubrid-late.txt",
+    "raw/Q21/perf-stat-pg.txt",
+    "raw/Q21/profile-cubrid-flat.txt",
+    "raw/Q21/profile-cubrid-late-flat.txt",
+    "raw/Q21/profile-pg-flat.txt"
    ],
    "relations": {
     "alternative": [
@@ -2490,7 +2683,8 @@
       "mr_readval_string_internal 1.86%",
       "__memmove_evex_unaligned_erms 3.67%"
      ]
-    }
+    },
+    "Q21, at matched plan shape, on the same tuples: CUBRID's per-row DB_VALUE materialisation band is 30.77% = 15.1697 core-s per statement -- the largest band of the controlled configuration -- against PostgreSQL's tuple deform + heap access band 31.90% = 6.2224 core-s, a ratio of 2.44x. Both engines deform the same 59,986,052 lineitem rows in this shape. CUBRID's top single symbol is heap_attrinfo_read_dbvalues at 10.29% with or_mvcc_get_repid_and_flags 1.24%, or_header_size 0.96%, pr_type_from_id 0.58% and pr_clear_value 1.60% around it -- the per-attribute domain resolution and per-value teardown this entry describes -- against PostgreSQL's single tts_buffer_heap_getsomeattrs at 23.77%."
    ],
    "postgresql_source": [
     "src/backend/executor/execTuples.c:751 tts_buffer_heap_getsomeattrs() -> :1017 slot_deform_heap_tuple() - 26.61% of Q12's PostgreSQL profile (4.9050 core-s band A). Deforms into flat Datum/isnull arrays; for a run of fixed-width, NOT NULL-so-far attributes it advances by the cached attcacheoff instead of re-deriving each offset",
@@ -2511,7 +2705,8 @@
     "Q16",
     "Q17",
     "Q19",
-    "Q20"
+    "Q20",
+    "Q21"
    ],
    "ranking_rationale": "Ranked FIRST of Q12's candidates. It is 69.5% of the measured CPU excess against IMP-019's 19.2% and IMP-010's Q12 share, it is proved by a profile with zero unresolved symbols and an empty unbanded remainder, and its denominator (attributes materialised) is a ground-truth count rather than an estimate. It ranks above IMP-010 on Q12 specifically because IMP-010's whole kernel band on this query is 2.4326 core-s of which only the +0.5360 core-s delta over PostgreSQL is addressable, while this candidate's delta is 8.8x larger.",
    "raw_evidence": [
@@ -2535,7 +2730,32 @@
     "raw/Q17/profile-pg-nlj-flat.txt",
     "raw/Q17/q17-causal-card.txt",
     "raw/Q17/q17-plan-act-pg-nlj.out",
-    "raw/Q17/q17-trace-cubrid.out"
+    "raw/Q17/q17-trace-cubrid.out",
+    "raw/Q21/q21-causal-card.json",
+    "raw/Q21/q21-causal-card.txt",
+    "raw/Q21/q21-bands.json",
+    "raw/Q21/q21-bands.txt",
+    "raw/Q21/Q21-cubrid-headline-block1.json",
+    "raw/Q21/Q21-cubrid-late-headline-block1.json",
+    "raw/Q21/Q21-postgresql-headline-block1.json",
+    "raw/Q21/Q21-cubrid-headline-telemetry.json",
+    "raw/Q21/Q21-cubrid-late-headline-telemetry.json",
+    "raw/Q21/Q21-postgresql-headline-telemetry.json",
+    "raw/Q21/q21-trace-cubrid.out",
+    "raw/Q21/q21-trace-late.out",
+    "raw/Q21/q21-plan-act-pg.out",
+    "raw/Q21/q21-plan-est-cubrid.out",
+    "raw/Q21/q21-plan-est-pg.out",
+    "raw/Q21/q21-plan-est-late.out",
+    "raw/Q21/q21-groundtruth-cubrid.out",
+    "raw/Q21/q21-groundtruth-pg.out",
+    "raw/Q21/q21-groundtruth.json",
+    "raw/Q21/perf-stat-cubrid.txt",
+    "raw/Q21/perf-stat-cubrid-late.txt",
+    "raw/Q21/perf-stat-pg.txt",
+    "raw/Q21/profile-cubrid-flat.txt",
+    "raw/Q21/profile-cubrid-late-flat.txt",
+    "raw/Q21/profile-pg-flat.txt"
    ],
    "relations": {
     "alternative": [
@@ -3082,11 +3302,120 @@
    "status": "measured",
    "upstream_precedent": "No CBRD issue or PR was found doing this kind of change; the searched CUBRID paths were src/optimizer/query_graph.c, src/optimizer/query_planner.c, src/optimizer/plan_generation.c, src/optimizer/rewriter/query_rewrite*.c and src/parser/cnf.c, and the searched symbols/patterns were CNF, 'conjunctive normal', or_next, PT_OR, QO_TC_SARG, QO_TC_JOIN, qo_analyze_term and count_and_or. The precedent is on the PostgreSQL side and is unusually clean: orclauses.c is a self-contained 330-line file introduced for exactly this transformation, and its header comment states the rewrite on the same OR-of-ANDs shape TPC-H Q19 uses.",
    "validation_criteria": "(1) Q19 CUBRID native median falls from 46.5 s to under 0.5 s with queries/q19-cubrid.sql UNMODIFIED, measured in the same section 12 block regime. (2) The estimated plan shows a non-empty sarg list on node[1] (part) and the trace's lineitem index band falls from rows: 59986052 to rows: 142584 with ioread: 0 and /proc syscr under 1000 per statement. (3) The result stays byte-identical at 30104438.0911 and the full Q01-Q22 correctness gate still passes on both engines. (4) No other query's estimated plan shape changes, checked against the plan-est artifacts already captured for Q01-Q18. (5) Joinrel cardinality estimates do not regress: CUBRID's current Q19 join estimate is card 142 against a true 1,134, and the compensated estimate must not become worse."
+  },
+  {
+   "category": [
+    "optimizer"
+   ],
+   "correctness_risk": "High if done as a rewrite, and this is the reason the intermediate step exists. A semi-join conversion must (1) preserve duplicate multiplicity of the OUTER side exactly -- Q21 counts rows, so emitting one row per inner match instead of one per outer row changes numwait; (2) get NULL semantics right for NOT EXISTS, which is an anti-join only because EXISTS is not NULL-sensitive (unlike NOT IN); (3) not fire when the subquery has its own aggregate, LIMIT, HAVING or set operation -- note that query_rewrite.c:249 has ALREADY injected a LIMIT 1 (qo_add_limit_clause) into every EXISTS subquery, so the conversion must run before that injection or be taught to ignore it; (4) leave correlated references that reach more than one outer level alone. The deferral-only variant carries none of these: it changes evaluation position, not row multiplicity, and its correctness argument is the same one that already justifies QO_TC_AFTER_JOIN at query_graph.c:6375-6392.",
+   "cubrid_source": [
+    "src/query/query_list.h:37-45 -- 'typedef enum { NO_JOIN = -1, JOIN_INNER, JOIN_LEFT, JOIN_RIGHT, JOIN_OUTER, JOIN_CSELECT } JOIN_TYPE;'. There is no semi-join and no anti-join code point anywhere in the executor's join vocabulary; a case-insensitive search of the whole src/ tree for 'semi join'/'semijoin'/'anti join'/'antijoin' in any spelling returns 0 matches.",
+    "src/optimizer/rewriter/query_rewrite.c:246-251 -- the ONLY thing done to a PT_EXISTS at rewrite time: 'case PT_EXISTS: if (pt_is_query (node->info.expr.arg1)) { qo_add_limit_clause (parser, node->info.expr.arg1); } break;'. A LIMIT 1 is pushed into the subquery; the sublink itself is left in place as a predicate.",
+    "src/optimizer/rewriter/query_rewrite_subquery.c:73-75 -- the flattening path that DOES exist admits only 'op_type == PT_EQ || PT_IS_IN || PT_EQ_SOME || PT_GT_SOME || PT_GE_SOME || PT_LT_SOME || PT_LE_SOME'; PT_EXISTS is not in the list. :123 further requires 'arg2->info.query.correlation_level == 0', so even those forms are flattened only when UNCORRELATED, and then into a derived spec (mq_make_derived_spec, src/parser/view_transform.c:10918) rather than into a join.",
+    "src/optimizer/query_graph.c:2535-2537 -- 'else if (n == 1) { QO_TERM_CLASS (term) = QO_TC_SARG; head_node = QO_ENV_NODE (env, bitset_iterate (&(QO_TERM_NODES (term)), &iter)); }'. n is the number of relations the term references. Both Q21 sublinks reference only lineitem l1, so both become sargs of the l1 scan. The classification looks at cardinality of the node set and NOTHING ELSE -- not at the term's rank, not at QO_TERM_SUBQUERIES, not at any cost. src/optimizer/query_graph.c:6375-6392 shows the only later escape: a sarg is re-classified to QO_TC_AFTER_JOIN solely when its node is the null-supplying side of an OUTER join. An inner join can never move it.",
+    "src/optimizer/query_planner.c:10005-10007 -- 'case PT_EXISTS: selectivity = DEFAULT_EXISTS_SELECTIVITY; /* make a guess */ break;', with the constant defined at src/optimizer/query_planner.h:114 as 0.1. Visible in q21-plan-est-cubrid.out as 'term[4] ... (sel 0.1) (rank 9)' for EXISTS and 'term[7] ... (sel 0.9) (rank 10)' for NOT EXISTS. Both are placeholders, so the cost model cannot even see that this sarg is 34.5 million subquery executions.",
+    "src/parser/xasl_generation.c:1685-1698 -- PT_EXISTS becomes 'pt_make_pred_term_comp (regu_var1, NULL, R_EXISTS, data_type)', i.e. a predicate node holding a linked XASL.",
+    "src/query/query_evaluator.c:1840-1885 -- eval_pred()'s R_EXISTS arm: per row, either sq_get() from the subquery cache or EXECUTE_REGU_VARIABLE_XASL (src/query/xasl.h:539) which re-runs the whole subquery XASL.",
+    "src/query/subquery_cache.c:407-434 -- the mitigation, and why it cannot help here: once the cache passes 60% of max_subquery_cache_size it self-disables unless hit/miss >= SQ_CACHE_MIN_HIT_RATIO (subquery_cache.h:40, = 9, i.e. 90%). Q21's key is the correlated pair (l1.l_orderkey, l1.l_suppkey), which is near-unique across 18,321,400 evaluations, so the measured cache state in q21-trace-cubrid.out is 'SUBQUERY_CACHE (hit: 2, miss: 110772, size: 15101184, status: disabled)' -- a hit rate of 0.0018%. The disable logic is behaving correctly; caching is structurally hopeless for a per-row-distinct key, which is exactly why the fix has to be the join conversion and not a bigger cache."
+   ],
+   "difficulty": "high",
+   "difficulty_reason": "The full fix adds a join type to the optimizer's join graph, the plan generator, the XASL layer and both join scan procedures -- a structural dispatch change, not a localized early return. The intermediate deferral variant is medium: it is contained in qo_analyze_term()'s classification and plan_generation.c's sarg placement, both of which already have an AFTER_JOIN code path to imitate.",
+   "effect_range": "3.064206x wall on Q21 (49.394998 s -> 16.120000 s), measured by same-engine controlled A/B, i.e. 82.6% of CUBRID's total query CPU (234.838 of 284.139 core-s) is work that the conversion removes. This is the whole of Q21's plan factor; it does NOT close the cross-engine gap, which needs the remaining 5.228355x of F_units x F_cpu (IMP-009, IMP-013, IMP-020, IMP-007). No other Q01-Q20 query exhibited a CORRELATED EXISTS/NOT EXISTS, so the effect is not projected onto them; TPC-H Q04 and Q22 contain correlated EXISTS/NOT EXISTS shapes and are the natural validation set.",
+   "evidence_event": "evaluations of the two correlated lineitem subqueries (EXISTS on l2 + NOT EXISTS on l3) per statement; denominator = one measured WARM statement of the section 12 block",
+   "evidence_type": "direct A/B (same-engine controlled, three gated blocks per configuration, byte-identical result, corroborated by the engine trace, by PostgreSQL EXPLAIN (ANALYZE) loops and by an independent COUNT(*) ground truth that returns identical cardinalities on BOTH engines)",
+   "explanation": "CUBRID keeps a correlated EXISTS as a row predicate instead of a join, so it must run the subquery once per row of the relation the predicate mentions, at whatever point in the join order that relation is scanned; PostgreSQL turns the same sublink into a semi/anti join that the cost model is free to place after the joins that shrink the input, and on Q21 that difference is 21.70x fewer evaluations.",
+   "id": "IMP-028",
+   "implementation_direction": "Two layers, and the first is useless without the second. (1) Add JOIN_SEMI/JOIN_ANTI to JOIN_TYPE (src/query/query_list.h:37-45) with executor support in the nested-loop and hash-join scan procedures -- semi = stop after the first inner match, anti = emit the outer row only when no inner match -- mirroring nodeNestloop.c:210-222. (2) In qo_rewrite_subqueries() (src/optimizer/rewriter/query_rewrite_subquery.c), add a PT_EXISTS arm that, when the subquery's WHERE contains an equality between a subquery column and an outer column, pulls the subquery's FROM item into the outer FROM as a semi-joined (or, under NOT, anti-joined) node and moves the residual predicate onto the new join term, so qo_analyze_term() sees an n==2 QO_TC_JOIN term instead of an n==1 QO_TC_SARG. A strictly cheaper intermediate step that captures most of the measured effect without a new join type: allow qo_analyze_term() to mark a SARG whose QO_TERM_SUBQUERIES bitset is non-empty as deferrable, and let plan generation place it at the highest join level whose available segments still cover it -- Q21's controlled variant proves that placement alone is worth 3.064206x.",
+   "measurement": [
+    "F_plan = T_C / T_Cc = 49.394998 s / 16.120000 s = 3.064206x. Same engine, same section 12 block regime, same section 9 load gate, same 12-statement WARM gate, byte-identical 100-row result. The controlled variant q21-late.sql changes nothing but where the two sublinks are attached: the four-way join is written as a derived table so the predicates reference the derived spec instead of lineitem l1.",
+    "Work: 35,975,762 correlated-subquery evaluations natively against 1,442,116 in the controlled variant (24.95x) and 1,658,082 semi/anti probes in PostgreSQL (21.70x). CUBRID counts come from q21-trace-cubrid.out (l2 iscan readkeys 36,642,798 and l3 iscan readkeys 35,308,724, each halved for the IMP-005 depth-3 double count) and q21-trace-late.out (734,523 and 707,593, undoubled at that depth); PostgreSQL's from q21-plan-act-pg.out ('Index Searches: 1522366' on l3, 'Index Searches: 135716' on l2). The independent COUNT(*) probe returns late_lineitems_in_F_orders = 18,321,400, late_lineitems_saudi = 1,522,366 and late_lineitems_saudi_F = 734,523 -- identical on both engines -- which reproduces each instrument to within one row.",
+    "CPU: 284.138545 core-s per statement natively against 49.300410 core-s controlled. The 234.838 core-s difference over the 34,533,646 extra evaluations is 6.80 us (19,470 cycles at the measured 2.861 GHz) of marginal cost per correlated-subquery evaluation. PostgreSQL's counterpart from q21-plan-act-pg.out is 0.003 ms/loop on the anti join and 0.005 ms/loop on the semi join = 5.25 core-s over 1,658,082 probes = 3.17 us per probe, i.e. CUBRID pays 2.15x per evaluation AND performs 21.70x as many.",
+    "Profile attribution (q21-bands.txt, 289,785 samples, 0 unknown-symbol lines): the native plan spends 11.13% = 31.62 core-s per statement purely in subquery open/execute/teardown machinery (scan_open_index_scan 1.77%, qexec_execute_mainblock 1.33%, scan_next_scan_local 0.87%, btree_prepare_bts 0.58%, scan_get_index_oidset 0.57%, qexec_intprt_fnc 0.52%, qexec_start_mainblock_iterations 0.48%, qexec_open_scan 0.33%, qexec_execute_scan 0.31%, malloc/mspace_malloc/mspace_free/_int_free 2.08%, logtb_get_mvcc_snapshot + mvcc_satisfies_snapshot 0.79%, heap_hfid_cache_get 0.31%), against 4.37% = 2.15 core-s in the controlled variant. Every other CUBRID band grows in the same proportion because the same 34.5 million extra evaluations drag B-tree descent (+35.31 core-s), buffer fix/unfix (+76.38 core-s) and DB_VALUE materialisation (+18.96 core-s) with them.",
+    {
+     "CPU_C_core_s": 284.138545,
+     "CPU_Cc_core_s": 49.30041,
+     "CPU_P_core_s": 19.506097,
+     "F_plan": 3.064206,
+     "T_C_s": 49.394998,
+     "T_Cc_s": 16.12,
+     "T_P_s": 3.083188,
+     "W_C": 35975762,
+     "W_Cc": 1442116,
+     "W_P": 1658082,
+     "marginal_us_per_evaluation_cubrid": 6.8,
+     "subquery_cache": {
+      "hit": 2,
+      "hit_ratio": 1.806e-05,
+      "miss": 110772,
+      "size_bytes": 15101184,
+      "status": "disabled"
+     },
+     "us_per_probe_postgresql": 3.17
+    }
+   ],
+   "mechanism_cubrid": "Per candidate row of lineitem l1: eval_pred() reaches the R_EXISTS arm, builds the correlated key, misses the (already disabled) subquery cache, and executes a complete subquery XASL -- scan_open_index_scan on fk_lineitem_orders, a B-tree descent for l_orderkey, a heap lookup per matching entry to fetch l_suppkey (and l_receiptdate / l_commitdate for l3), the generic DB_VALUE comparator for '<>', then teardown. Because the term references only l1 it is a QO_TC_SARG of the l1 scan, and the l1 scan is the inner of the orders-driven index join, so the predicate is evaluated on every late lineitem of every 'F' order: 18,321,400 EXISTS evaluations and 17,654,362 NOT EXISTS evaluations, 35,975,762 in total, per statement.",
+   "mechanism_postgresql": "pull_up_sublinks turns the two sublinks into a JOIN_ANTI (l3) and a JOIN_SEMI (l2). They are then join nodes whose position the cost model chooses, and it places both ABOVE the hash join that restricts lineitem to the 4,010 Saudi suppliers. The anti join therefore probes 1,522,366 times and the semi join 135,716 times -- 1,658,082 probes, 21.70x fewer than CUBRID -- and each probe is an ExecProcNode on an already open index scan with a JOIN_ANTI/single_match early exit, not a subquery open and teardown.",
+   "postgresql_source": [
+    "src/include/nodes/nodes.h:315-316 -- 'JOIN_SEMI, /* 1 copy of each LHS row that has match(es) */ JOIN_ANTI, /* 1 copy of each LHS row that has no match */', with the comment at :309-310 stating the design directly: 'The planner recognizes these cases and converts them to joins. So the planner and executor must support these codes.'",
+    "src/backend/optimizer/prep/prepjointree.c:936-964 -- pull_up_sublinks_qual_recurse(): 'else if (sublink->subLinkType == EXISTS_SUBLINK) { if ((j = convert_EXISTS_sublink_to_join(root, sublink, false, available_rels)) != NULL) ...'; :1056-1084 is the same call with under_not = true, reached through the NOT arm.",
+    "src/backend/optimizer/plan/subselect.c:1593 convert_EXISTS_sublink_to_join(), :1758 'result->jointype = under_not ? JOIN_ANTI : JOIN_SEMI;'. From that point the sublink is a RELATION in the join graph: every join order over {supplier, nation, orders, lineitem l1, l2, l3} is in the search space and each is costed.",
+    "src/backend/executor/nodeNestloop.c:210-222 -- 'if (ExecQual(joinqual, econtext)) { node->nl_MatchedOuter = true; /* In an antijoin, we never return a matched tuple */ if (node->js.jointype == JOIN_ANTI) { node->nl_NeedNewOuter = true; continue; } ... if (node->js.single_match) node->nl_NeedNewOuter = true;' -- the semi/anti early exit in the executor, and :169-172 the anti-join's no-match emission.",
+    "src/backend/optimizer/plan/createplan.c:5293 order_qual_clauses() -- PostgreSQL also orders the remaining quals by cost, but on Q21 it never has to: the expensive terms are joins, not quals."
+   ],
+   "priority": "P0",
+   "priority_justification": "P0 on a measured same-engine number, not a projection: 3.064206x of Q21's 16.020754x gap, and 82.6% of CUBRID's total query CPU on the query. It is also the largest single factor in any Q01-Q21 card that is fixable inside the optimizer without touching the executor's data path.",
+   "q_relations": [
+    "Q21"
+   ],
+   "ranking_rationale": "Ranked first among Q21's candidates: it is the only one whose Q21 effect is a measured WALL number from a same-engine A/B (3.064206x) rather than a profile band, and it subsumes no other entry -- the bands it inflates (IMP-013 +76.38, IMP-020 +18.96, IMP-008 +11.10 core-s) are counted separately at the CONTROLLED plan only, so nothing is double counted. Second is IMP-009 (F_units 2.068640x, an independent factor of the same card), third IMP-020 (2.44x band ratio at matched plan), fourth IMP-013 (2.35x), fifth IMP-007/IMP-002 (5.42x the page-cache read traffic at matched plan), and IMP-008 ranks LAST on Q21 because its band measures 0.84x, i.e. CUBRID is cheaper than PostgreSQL there on this query.",
+   "raw_evidence": [
+    "raw/Q21/q21-causal-card.json",
+    "raw/Q21/q21-causal-card.txt",
+    "raw/Q21/q21-bands.json",
+    "raw/Q21/q21-bands.txt",
+    "raw/Q21/Q21-cubrid-headline-block1.json",
+    "raw/Q21/Q21-cubrid-late-headline-block1.json",
+    "raw/Q21/Q21-postgresql-headline-block1.json",
+    "raw/Q21/Q21-cubrid-headline-telemetry.json",
+    "raw/Q21/Q21-cubrid-late-headline-telemetry.json",
+    "raw/Q21/Q21-postgresql-headline-telemetry.json",
+    "raw/Q21/q21-trace-cubrid.out",
+    "raw/Q21/q21-trace-late.out",
+    "raw/Q21/q21-plan-act-pg.out",
+    "raw/Q21/q21-plan-est-cubrid.out",
+    "raw/Q21/q21-plan-est-pg.out",
+    "raw/Q21/q21-plan-est-late.out",
+    "raw/Q21/q21-groundtruth-cubrid.out",
+    "raw/Q21/q21-groundtruth-pg.out",
+    "raw/Q21/q21-groundtruth.json",
+    "raw/Q21/perf-stat-cubrid.txt",
+    "raw/Q21/perf-stat-cubrid-late.txt",
+    "raw/Q21/perf-stat-pg.txt",
+    "raw/Q21/profile-cubrid-flat.txt",
+    "raw/Q21/profile-cubrid-late-flat.txt",
+    "raw/Q21/profile-pg-flat.txt"
+   ],
+   "relations": {
+    "alternative": [
+     "Enlarging max_subquery_cache_size (2 MB default, 16 MB max, system_parameter.c:4995-5001). REJECTED BY MEASUREMENT: Q21's cache key is near-unique per row, measured hit rate 2 / 110,774 = 0.0018%, so no cache size helps; the self-disable at subquery_cache.c:415-421 is the correct behaviour.",
+     "Fixing the PT_EXISTS selectivity guess (query_planner.c:10005, DEFAULT_EXISTS_SELECTIVITY = 0.1). REJECTED as a fix on its own: a better estimate changes the COST of the plan but not the SET of plans, because a single-relation term is a sarg by construction (query_graph.c:2535-2537). It would be needed only AFTER the conversion exists, to rank the new join orders."
+    ],
+    "containment": [
+     "Disjoint from IMP-009 by construction: IMP-028 is measured as F_plan on the SAME engine at constant utilization-independent wall, IMP-009 as F_units on the REMAINING controlled cross-engine pair. Their product plus F_cpu reconstructs R_wall to +0.0000%.",
+     "Contains none of IMP-013/IMP-020/IMP-008. Those are charged at the CONTROLLED plan level (6.87, 15.17 and 2.66 core-s), i.e. after IMP-028's effect has already been removed; the native-plan inflation of the same bands is attributed to IMP-028 and is not counted twice."
+    ],
+    "predecessor": "None. IMP-025 (Q16) is the nearest neighbour and is deliberately NOT merged: that entry is about an UNCORRELATED NOT IN whose RHS is materialised once and then probed by eval_some_list_eval()'s O(n) linear scan (query_evaluator.c:549). Q21's defect is upstream of any probe algorithm -- the subquery is not materialised at all, it is re-executed per row, and the reason is that a CORRELATED sublink has no join representation. Fixing IMP-025 (hash the materialised list) would not touch a single Q21 evaluation."
+   },
+   "root_cause_title": "A correlated EXISTS / NOT EXISTS sublink is never turned into a semi-join or an anti-join -- CUBRID has no such join type at all (query_list.h:37-45) -- so it survives into planning as a PT_EXISTS predicate over ONE relation, which qo_analyze_term() classifies unconditionally as QO_TC_SARG on that relation's scan; the subquery is therefore opened, executed and torn down once per scanned row and can never be deferred past the join that would have reduced the driving relation 24.95x",
+   "status": "measured",
+   "upstream_precedent": "None found. Searched paths: src/optimizer/rewriter/query_rewrite.c, src/optimizer/rewriter/query_rewrite_subquery.c, src/optimizer/query_graph.c, src/optimizer/query_planner.c, src/optimizer/plan_generation.c, src/parser/view_transform.c, src/parser/xasl_generation.c, src/query/query_list.h, src/query/query_evaluator.c, src/query/subquery_cache.c. Searched symbols and patterns: 'semi join', 'semijoin', 'anti join', 'antijoin', 'JOIN_SEMI', 'JOIN_ANTI', 'PT_EXISTS', 'qo_rewrite_subqueries', 'mq_make_derived_spec', 'QO_TC_SARG', 'DEFAULT_EXISTS_SELECTIVITY'. The join-type enum has five members and none is a semi/anti join; the whole-tree case-insensitive search for any spelling of semi/anti join returns 0 matches. The only related upstream work in the pinned tree is the subquery result cache (src/query/subquery_cache.c), which is a mitigation of the per-row execution cost rather than a removal of it, and which measurably disables itself on this query.",
+   "validation_criteria": "(a) Q21 returns the byte-identical 100 rows and the identical total numwait 39,448; (b) the trace's l2/l3 iscan readkeys fall from 36,642,798/35,308,724 to at most 2x734,523/2x707,593, i.e. the subqueries fire on the supplier-restricted stream; (c) median WARM wall over three gated blocks reaches at most 16.12 s, the measured controlled level; (d) no regression on the uncorrelated-IN queries that already go through mq_make_derived_spec (Q02, Q16, Q18, Q20 unchanged within their measured block-to-block spread); (e) TPC-H Q04 and Q22, which also carry correlated EXISTS/NOT EXISTS, must not regress."
   }
  ],
- "next_id": "IMP-028",
+ "next_id": "IMP-029",
  "q17_dedup_note": "Q17 allocated NO new IMP ID. The ledger was synced and searched by root-cause title, CUBRID source location, PostgreSQL source location and mechanism before deciding; every measured CUBRID-side effect matched an existing root cause, so per SSOT section 18 the existing entries received Q17 relations and evidence rather than a duplicate ID. next_id remains IMP-024. Two candidate hypotheses were raised during Q17 and REJECTED BY MEASUREMENT rather than filed: (1) 'the subquery cache is one entry from the subquery_cache.c:378-383 disable cliff at SF10' -- rejected because a probe with 16,030 distinct keys, 7.8x Q17's 2,044, still reported status=enabled under the same 2 MB default, and the traced size that motivated the hypothesis is itself inflated by IMP-005; (2) 'CUBRID takes zero data-page fetches on Q17' -- rejected because a statdump delta taken with adequate flush latency shows +161,531 fetches and +1 ioread per execution, so the zero deltas seen around the 0.59 s block were a statistics-flush-latency artifact. Q17's largest engineering finding is a PostgreSQL weakness (no memo for a correlated SubPlan at src/backend/executor/nodeSubplan.c:198-241, against CUBRID's sq_get/sq_put at src/query/fetch.c:4086-4111, plus an unparallelisable join at src/backend/optimizer/util/clauses.c:931-950 and :960-973) and is recorded in reports/Q17/report.md sections 7-8 rather than in this ledger, which allocates CUBRID improvement candidates.",
  "q18_dedup_note": "Q18 allocated NO new improvement ID. Searched the ledger by title, CUBRID source location, PostgreSQL source location and root cause before considering allocation. Q18's dominant finding (63.4% of block wall at one active unit during a sort-based GROUP BY) is IMP-015's existing root cause at external_sort.c sort_check_parallelism(), so Q18 was added as a relation with new evidence plus a measured rejection of one of that entry's own alternatives. The spill-size finding belongs to the existing IMP-016/IMP-017 aggregation-memory root cause. One genuinely NEW CUBRID/PostgreSQL asymmetry was found and deliberately NOT allocated: src/parser/type_checking.c:5037 adds PT_DISTINCT to every IN-subquery unconditionally where PostgreSQL proves the subquery already distinct at analyzejoins.c:1372-1389 (query_is_distinct_for) and reduces SEMI to an inner join. Its measured Q18 effect is +0.188% (34.570999 s vs 34.505999 s, direct same-engine A/B), which is about one within-block sd and inside the 1.6% error band, because Q18's DISTINCT runs AFTER the HAVING filter on 624 rows. SSOT section 18 requires a candidate to state an evidence event and denominator that actually moved, so it is recorded in the Q18 report's section 7 source contrast with an explicit 'no measured effect on Q18' instead of being allocated an ID from evidence that does not support one.",
  "q19_dedup_note": "Q19 ALLOCATED ONE NEW ID, IMP-027. The ledger was synced and searched by root-cause title, CUBRID source location, PostgreSQL source location and mechanism before allocating. The closest existing optimizer entries -- IMP-011 (parallel-degree-blind join costing), IMP-014 (multi-column FK join selectivity), IMP-019 (qo_comp_selectivity fallback), IMP-003 and IMP-022 (LIKE selectivity) -- are all COSTING defects that mis-rank plans the optimizer can already build. Q19's defect is different in kind: the better plan is ABSENT FROM THE SEARCH SPACE, and CUBRID's own cost model prefers it 65.7x (29,357 against 1,929,147) the moment it is handed over. Six existing candidates received Q19 relations (IMP-005 negative/scope-bounding, IMP-007 and IMP-013 scoped as amplifiers of IMP-027 rather than independent findings, IMP-020 as the campaign's cleanest denominator at F_work exactly 1.000000, IMP-008 as an upper bound with its conjunct-count confound stated, IMP-012 with a measured non-binding verdict). THREE were considered and explicitly NOT added, each rejected by a number: IMP-002, because Q19's working set is ~1.8x the pool so non-residency is arithmetic rather than a policy failure and the measured 78.33% hit rate is BETTER than a pool-size bound would predict; IMP-018, because a 5,000-BCB (78 MiB) per-session retention cap would predict a hit rate near zero on a 14.2 GiB working set against the 78.33% measured, so Q19 does not reproduce the mechanism; IMP-011, because both engines chose the same join method, the same driving relation and the same index, so there is no plan-choice disagreement. Three hypotheses were also raised during Q19 and REJECTED BY MEASUREMENT rather than filed: (1) 'CUBRID picked the wrong plan' -- rejected because its cost model prefers the filtered plan 65.7x; (2) 'the emulation's 27 CNF conjuncts are the cost' -- rejected because a 3-conjunct envelope form is SLOWER (0.804 s vs 0.387 s traced) since it passes 646,526 index rows instead of 142,584; (3) 'therefore conjunct form is irrelevant' -- also rejected, in the other direction, because a third form with identical selectivity and an identical index band runs 1.31x faster (0.293 s vs 0.383 s), which is why IMP-027's implementation direction carries an explicit constraint on the emitted representation.",
- "q20_dedup_note": "Q20 allocated NO new improvement ID. The ledger was synced and searched by root-cause title, CUBRID source location, PostgreSQL source location and mechanism before deciding; next_id remains IMP-028. Q20's headline is a 3.4326x CUBRID WIN (1.992000 s against 6.837673 s), but the report's central claim is that the win is entirely a PostgreSQL PLAN-CHOICE defect and not a CUBRID execution advantage: measured against PostgreSQL's own better plan -- a MATERIALIZED CTE expressing the shape CUBRID's rewriter forces, byte-identical result, 1.096253 s -- CUBRID is 1.8171x SLOWER, using 2.1853x the CPU on exactly 86,204 correlated-subquery executions per side (F_work = 1.000000 measured, not assumed). F_plan is therefore 0.160325x, i.e. PostgreSQL's plan choice costs PostgreSQL 6.2373x. Its root cause is on the PostgreSQL side and is recorded in report sections 7-8 as a source contrast rather than a registry entry, because this ledger records CUBRID improvements: pg_stats.n_distinct(partsupp.ps_partkey) reads 444,930 against a true 2,000,000 (4.4952x underestimate, the column being perfectly clustered at correlation 0.9999991) while ps_suppkey is accurate to 0.29%, and that single asymmetry inverts the join-order ranking. On the CUBRID side, all four profile bands and the one wall-level finding matched existing root causes and were added as relations with new evidence: IMP-002 (the residency hysteresis, 1.5874x, with a cold-pool A/B), IMP-013 (0.5944 core-s buffer fix/unfix/LRU), IMP-020 (0.4720 core-s row materialisation), IMP-008 (0.2838 core-s predicate dispatch) and IMP-009 (a constraint: binds on 90.3% of the statement, contributes zero cross-engine). Candidate hypotheses raised during Q20 and REJECTED BY MEASUREMENT rather than filed: (1) 'the residency hysteresis is IMP-018's private-LRU 5,000-BCB cap' -- rejected by the cold-pool A/B, in which a single cold session accumulates 7.5 GB in ONE statement and holds it for 30, and a foreign session's touch changes nothing; (2) 'CUBRID wins because it parallelises the query' -- rejected, 90.3% of its statement is serial and F_units is worth only 1.2026x; (3) 'CUBRID wins because it does less I/O' -- rejected as a cause, both sides of the controlled pair take ZERO physical reads and the I/O difference is a consequence of PostgreSQL's plan choice already counted inside F_plan; (4) 'CUBRID's optimizer made a better decision' -- rejected, query_rewrite_subquery.c:165 appends a derived spec unconditionally for any uncorrelated IN and a derived spec cannot be reordered, so the good plan is the ONLY plan CUBRID can build."
+ "q20_dedup_note": "Q20 allocated NO new improvement ID. The ledger was synced and searched by root-cause title, CUBRID source location, PostgreSQL source location and mechanism before deciding; next_id remains IMP-028. Q20's headline is a 3.4326x CUBRID WIN (1.992000 s against 6.837673 s), but the report's central claim is that the win is entirely a PostgreSQL PLAN-CHOICE defect and not a CUBRID execution advantage: measured against PostgreSQL's own better plan -- a MATERIALIZED CTE expressing the shape CUBRID's rewriter forces, byte-identical result, 1.096253 s -- CUBRID is 1.8171x SLOWER, using 2.1853x the CPU on exactly 86,204 correlated-subquery executions per side (F_work = 1.000000 measured, not assumed). F_plan is therefore 0.160325x, i.e. PostgreSQL's plan choice costs PostgreSQL 6.2373x. Its root cause is on the PostgreSQL side and is recorded in report sections 7-8 as a source contrast rather than a registry entry, because this ledger records CUBRID improvements: pg_stats.n_distinct(partsupp.ps_partkey) reads 444,930 against a true 2,000,000 (4.4952x underestimate, the column being perfectly clustered at correlation 0.9999991) while ps_suppkey is accurate to 0.29%, and that single asymmetry inverts the join-order ranking. On the CUBRID side, all four profile bands and the one wall-level finding matched existing root causes and were added as relations with new evidence: IMP-002 (the residency hysteresis, 1.5874x, with a cold-pool A/B), IMP-013 (0.5944 core-s buffer fix/unfix/LRU), IMP-020 (0.4720 core-s row materialisation), IMP-008 (0.2838 core-s predicate dispatch) and IMP-009 (a constraint: binds on 90.3% of the statement, contributes zero cross-engine). Candidate hypotheses raised during Q20 and REJECTED BY MEASUREMENT rather than filed: (1) 'the residency hysteresis is IMP-018's private-LRU 5,000-BCB cap' -- rejected by the cold-pool A/B, in which a single cold session accumulates 7.5 GB in ONE statement and holds it for 30, and a foreign session's touch changes nothing; (2) 'CUBRID wins because it parallelises the query' -- rejected, 90.3% of its statement is serial and F_units is worth only 1.2026x; (3) 'CUBRID wins because it does less I/O' -- rejected as a cause, both sides of the controlled pair take ZERO physical reads and the I/O difference is a consequence of PostgreSQL's plan choice already counted inside F_plan; (4) 'CUBRID's optimizer made a better decision' -- rejected, query_rewrite_subquery.c:165 appends a derived spec unconditionally for any uncorrelated IN and a derived spec cannot be reordered, so the good plan is the ONLY plan CUBRID can build.",
+ "q21_allocation_note": "Q21 allocated ONE new ID, IMP-028, and next_id moved to IMP-029. Before allocating, the Git ledger was synced and searched by root-cause title, CUBRID source location, PostgreSQL source location and root cause, per SSOT section 18. Nearest existing neighbours and why each is NOT the same root cause: IMP-025 (Q16) is an UNCORRELATED NOT IN whose RHS is materialised once and probed by an O(n) linear scan in eval_some_list_eval() -- Q21's subquery is never materialised, it is re-executed per row, and the cause is the absence of a join representation for a CORRELATED sublink; IMP-019 is about a placeholder selectivity reordering sargs WITHIN one scan, whereas Q21's defect fixes WHICH SCAN the term is attached to and no reordering inside that scan can move it; IMP-011/IMP-014 are cost-model defects that pick the wrong join order among orders the search space contains, whereas here the good order is not in the search space at all. Two further Q21 hypotheses were raised and REJECTED BY MEASUREMENT rather than filed: (1) 'the subquery result cache just needs to be bigger than its 2 MB default' -- rejected because the measured cache state is hit 2 / miss 110,772 (0.0018%) on a near-unique per-row key, so no size helps and the self-disable is correct; (2) 'DEFAULT_EXISTS_SELECTIVITY = 0.1 is the root cause' -- rejected because a single-relation term is classified QO_TC_SARG on node-set cardinality alone (query_graph.c:2535-2537), so a better estimate changes the plan's cost but not the set of available plans. Q21 added relations and evidence to IMP-002, IMP-005, IMP-006, IMP-007, IMP-008, IMP-009, IMP-013 and IMP-020; two of those (IMP-002 and IMP-008) are recorded as CONSTRAINTS on the entry, not confirmations."
 }
