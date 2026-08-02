@@ -965,9 +965,9 @@ TPCH_SSPQ_STATUS:
   session_id: gajae_code_msbqesrv_8od37q3s
   stage: 14.13-completion-checklist
   state: complete
-  report_commit: RECORDED_IN_BACKFILL
-  artifact_fingerprint: RECORDED_IN_BACKFILL
-  timestamp: TIMESTAMP
+  report_commit: 802b892e3b1b5ae32afd4496ba7dca902fc235cc
+  artifact_fingerprint: 8573a23b91d14c3582ba4a6304ea445900573114c6a03dfa4562a513d09d6a22
+  timestamp: 2026-08-02T22:23:15+09:00
   next_action: QUERY_COMPLETE
 ```
 
