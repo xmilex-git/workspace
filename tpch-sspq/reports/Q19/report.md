@@ -954,7 +954,7 @@ sequence and is likewise owned by the Notion-capable subagent.
 - [x] Improvement registry deduplicated: searched by title, both source locations and root cause;
       one new root cause allocated (**IMP-027**), six existing candidates given Q19 relations,
       three explicitly **not** added with reasons (stage 14.11)
-- [x] Raw manifest written (237 artifacts, 18,400,721 bytes), every claim indexed to a raw file and
+- [x] Raw manifest written (237 artifacts, 18,401,199 bytes), every claim indexed to a raw file and
       SHA-256 (stage 14.12)
 - [x] Report, manifest and registry committed and pushed to `origin/main`
 - [ ] Notion sync — **owned by the section 21/23 reconciler subagent, not by this session**

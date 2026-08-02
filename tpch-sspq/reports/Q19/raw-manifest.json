@@ -1942,7 +1942,7 @@
   {
    "absolute_remote_path": "/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q19/promote_and_manifest.py",
    "artifact_type": "driver script",
-   "bytes": 8726,
+   "bytes": 9204,
    "campaign_id": "tpch-sspq-fk-r1-20260730",
    "creation_command": "written by the Q19 session",
    "cubrid_source_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
@@ -1951,7 +1951,7 @@
    "postgresql_source_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
    "producing_stage": "campaign driver",
    "qnn": "Q19",
-   "sha256": "7cb2a2cb50b66baa7a20c570eb07276c708afd52c157dc07ae8d49792d8052ca",
+   "sha256": "12f88d4baf443be1e965db91b9f8d4ab8fcfb6b246af373d80d5fb826a47043b",
    "ssot_blob_sha": "510478846bff081d3223d3835069283a7cd2e47b",
    "ssot_commit": "84d0d39c1d2c40d330cc55c1d13dbe4cc458355f",
    "valid": true
@@ -4008,7 +4008,7 @@
    "postgresql_source_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
    "producing_stage": "campaign driver",
    "qnn": "Q19",
-   "sha256": "35b629e49aaca9d3c490126be423d4accea4bbe613320a0ebd429aa06cb34872",
+   "sha256": "ab85b8bd4e1125e2fa11298d16a7d04ad08e128c91cfaf272df17aa9905fc407",
    "ssot_blob_sha": "510478846bff081d3223d3835069283a7cd2e47b",
    "ssot_commit": "84d0d39c1d2c40d330cc55c1d13dbe4cc458355f",
    "valid": true
@@ -4034,7 +4034,7 @@
  "campaign_id": "tpch-sspq-fk-r1-20260730",
  "excluded_from_promotion": {
   "csql.err": "CUBRID client-side connect log. Inspected before exclusion: it contains only 'Program csql ... connected' NOTIFICATION lines and boot_cl.c:875 CODE=-971 notifications, i.e. one entry per client connection this session opened. No error, no failed statement.",
-  "perf-*.data": "raw perf sample files (1.2-2.5 GB each, 4.6 GB total) stay on the measurement host; the derived profile-*.txt reports and perf-stat-*.txt counters are promoted and hashed"
+  "perf-*.data": "raw perf sample files (1.2-2.5 GB each, 4.6 GB total). The derived profile-*-flat.txt / profile-*-callgraph.txt reports and the perf-stat-*.txt counters are promoted and hashed, and every profile number in the report is read from those. The .data files themselves are dispensable work and were DELETED at query completion together with the rest of work/Q19 (SSOT section 19: 'promote required files to raw and delete dispensable work'). They are reproducible from raw/Q19/profile_driver.sh against the pinned binaries."
  },
  "gjc_session_id": "gajae_code_msb674z8_0rfkosdv",
  "notes": [
@@ -4047,5 +4047,5 @@
  "raw_root": "/data/tpch-sspq/tpch-sspq-fk-r1-20260730/raw/Q19",
  "ssot_blob_sha": "510478846bff081d3223d3835069283a7cd2e47b",
  "ssot_commit": "84d0d39c1d2c40d330cc55c1d13dbe4cc458355f",
- "total_bytes": 18400721
+ "total_bytes": 18401199
 }
