@@ -16044,7 +16044,7 @@
    "postgresql_source_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
    "producing_stage": "campaign driver",
    "qnn": "Q22",
-   "sha256": "a85d9557d40f7ef6cc17560fb828280cfb6f4288ae427e71ad99e9d085b5a5cd",
+   "sha256": "5ca466fb3df8c86caf45d79843294c127fea430f9793d7ae6198f14488ab869b",
    "ssot_blob_sha": "510478846bff081d3223d3835069283a7cd2e47b",
    "ssot_commit": "c6b037f7bd7b4cc1a656bc0cfabad0d81de63e9d",
    "valid": true
