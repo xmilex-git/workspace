@@ -956,8 +956,21 @@ sequence and is likewise owned by the Notion-capable subagent.
       three explicitly **not** added with reasons (stage 14.11)
 - [x] Raw manifest written (237 artifacts, 18,401,199 bytes), every claim indexed to a raw file and
       SHA-256 (stage 14.12)
-- [x] Report, manifest and registry committed and pushed to `origin/main`
-- [ ] Notion sync — **owned by the section 21/23 reconciler subagent, not by this session**
+- [x] Report, manifest and registry committed and pushed to `origin/main`, and verified reachable
+      from it (`git merge-base --is-ancestor HEAD origin/main`)
+- [x] Dispensable work deleted (SSOT section 19): `work/Q19` removed in full after every
+      non-dispensable file was SHA-256-verified against `raw/Q19`; the 4.6 GB of `perf-*.data`
+      is the only measurement output not promoted and the manifest records why
+- [x] Child block-driver tmux sessions consumed (SSOT section 24): all six — `q19conv`,
+      `q19blocks`, `q19plans`, `q19tel`, `q19tel1`, `q19perf` — verified absent by
+      `tmux has-session`; 0 orphan `csql`/`psql`/`perf` processes and 0 active PostgreSQL
+      backends remain
+- [ ] Notion sync — ⏭ **deferred to the section 21/23 reconciler subagent by contract.** Section 21
+      bars this worker from every Notion write path, and the backfill idempotency key needs
+      `report_commit`, which does not exist until this work is pushed. Handoff values are in
+      section 11; the new registry page to create is **IMP-027**
 - [x] `QUERY_COMPLETE` emitted
-- [x] Current GJC session removed and absence verified — performed by the controller after this
-      report is durable (stage 14.14)
+- [ ] Current measurement session removed and absence verified — ⏭ **controller step, not this
+      worker's.** Section 22 has the controlling session remove the worker after durable
+      completion and verify with both `gjc session status <id>` and `tmux has-session -t <id>`.
+      This session is `gajae_code_msb674z8_0rfkosdv`; it reports `QUERY_COMPLETE` and stops.
