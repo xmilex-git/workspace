@@ -1,0 +1,21 @@
+{
+ "schemaVersion": 1,
+ "kind": "cli-replay",
+ "replaySafe": false,
+ "command": [
+  "csql",
+  "-u",
+  "dba",
+  "tpch_sf10_q1",
+  "-i",
+  "<q10 trace probe>"
+ ],
+ "replayExempt": {
+  "reasonCode": "unsafe_side_effect",
+  "reason": "The CLI surface under test is CUBRID csql against a live cub_server on the 100GB campaign database tpch_sf10_q1; replaying it requires starting a database server process with pinned affinity/NUMA bindings and campaign-owned socket/tmp state \u2014 far outside the pinned Bun-only safe replay surface, and re-execution mutates server-side query/trace state. Live execution is instead proven by the attached PTY terminal capture of the same csql session on the patched binary.",
+  "approvedBy": "user directive 2026-08-03 (authority order 1, IMP-015 Phase 2 approval + conclude directive); leader se18608b1a09d",
+  "fallbackArtifactRefs": [
+   "pty-capture"
+  ]
+ }
+}
