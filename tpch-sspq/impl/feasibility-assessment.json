@@ -1,0 +1,2162 @@
+{
+  "campaign_id": "tpch-sspq-impl-r1-20260803",
+  "phase": "1B (feasibility only; no benefit score, no expected saved seconds, no total score, no ranking)",
+  "pinned_impl_ssot_commit": "783d2f0b84327c7fc3cb9c55a816e6c74b62cd64",
+  "pinned_impl_ssot_blob": "d9fcc3f575be4bc7d34cc3d5881b6eb6bb540749",
+  "pin_verification": "VERIFIED. git rev-parse 783d2f0:tpch-sspq/IMPL-SSOT.md == d9fcc3f575be4bc7d34cc3d5881b6eb6bb540749; 1212 lines; git merge-base --is-ancestor 783d2f0 origin/main succeeded.",
+  "cubrid_base_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+  "cubrid_base_sha_verified_at": "34-ilhansong:/home/cubrid/dev/tpch-sspq-fk-r1/cubrid-src (git rev-parse HEAD matched, read-only)",
+  "postgresql_reference_sha": "5713b437abed7085e7d59849c6e9e0f4f469633d",
+  "postgresql_reference_verified_at": "34-ilhansong:/home/cubrid/dev/postgres (git rev-parse HEAD matched, read-only)",
+  "generated_utc": "2026-08-03T00:32:48Z",
+  "lane_vocabulary_note": "The pinned IMPL-SSOT section 4-a names the lanes 'Performance', 'Enabler-Predecessor', 'Diagnostic-Measurement-correctness' and 'Deferred research'. This file uses the machine-readable tokens performance / enabler / diagnostic / deferred_research as a 1:1 mapping of those four.",
+  "scoring_rubric_note": "Calibrated in three passes as instructed. Pass 1: all 31 registry entries were skimmed and every named cubrid_source file:line was opened read-only at the frozen base SHA (plus PostgreSQL counterparts where cited), so no score rests on registry prose alone. Pass 2: sub-scores assigned on a shared anchor set. loc_score follows the guide curve 100 - 30*log10(loc_high/10) evaluated on the HIGH estimate only, per section 2-a (10 LOC -> 100, 100 -> 70, 300 -> 56, 1000 -> 40, 3000 -> 26, 6000 -> 17), rounded to integers. blast_radius_score anchors: 95 = one small file / one subsystem / no serialization; 70 = 3-4 files / two subsystems; 45 = 5+ files or a packed XASL struct; 15 = a tree-wide interface (59+ call sites) or a new join type. risk_score anchors: 90 = cannot affect results at all; 65 = estimate-only, plan regressions possible; 45 = a bounded semantic obligation on one operator/domain family; 30 = a soundness proof obligation that can silently drop or merge rows; 15 = corruption-class or concurrency-race exposure in the buffer manager. test_dependency_score anchors: 80 = one new small test; 55 = a new matrix over one feature; 35 = whole-subsystem regression plus new stress; 10 = no bounded test set exists. Section 2-a's override rule was applied literally: KLOC never decided a score by itself, and for IMP-010, IMP-013, IMP-018 and IMP-030 the risk component deliberately overrides a small LOC band (these are the four places where I score materially below the registry's own difficulty field). Pass 3: all 31 scores were re-read against each other and against the anchor set; the resulting order is transitive by construction, e.g. IMP-017 (86.7, one line, per-statement scope) > IMP-015 (73.0, three files, existing parallel path) > IMP-022 (68.8, one estimator arm, operator-conditional) > IMP-025 (47.5, new hash plus NOT IN NULL semantics) > IMP-028 (12.8, a join type that does not exist).",
+  "method_note": "All remote access was read-only (cat/sed/grep/wc/ls and git rev-parse only) against /home/cubrid/dev/tpch-sspq-fk-r1/cubrid-src and /home/cubrid/dev/postgres. Nothing under /home/cubrid/dev/tpch-sspq-impl-r1/ was read or touched; no build, no server control, no benchmark, no branch, no worktree. No benefit score, expected saved seconds, total score or ranking is produced here — those require the Phase 1A fresh baseline, which does not yet exist.",
+  "candidates": [
+    {
+      "id": "IMP-001",
+      "root_cause_title": "Aggregate accumulation performs a fully generalized per-row NUMERIC add/mul (buffer zeroing, byte<->word conversion, precision recomputation, overflow check, round-and-pack, DB_VALUE construction) instead of a deferred-carry fast sum accumulator",
+      "category": [
+        "expression/type",
+        "aggregation/sort"
+      ],
+      "q_relations": [
+        "Q01",
+        "Q11"
+      ],
+      "lane": "performance",
+      "loc_low": 150,
+      "loc_likely": 350,
+      "loc_high": 700,
+      "files_affected": [
+        "src/query/numeric_opfunc.c",
+        "src/query/numeric_opfunc.h",
+        "src/query/query_opfunc.c",
+        "src/query/query_aggregate.cpp",
+        "src/xasl/xasl_aggregate.hpp",
+        "src/query/parallel/px_scan/px_scan_result_handler.cpp"
+      ],
+      "files_affected_count": 6,
+      "subsystems_affected": [
+        "expression/type (NUMERIC)",
+        "executor / aggregation",
+        "XASL runtime state",
+        "parallel query"
+      ],
+      "subsystems_affected_count": 4,
+      "blast_radius_flags": {
+        "touches_header_widely": true,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "xasl_aggregate.hpp is an XASL header included by the executor, the parallel result handler and both XASL (de)serializers. cubxasl::aggregate_accumulator IS packed (xasl_to_stream.c:5567-5581, stream_to_xasl.c:5964-6003); a deferred-carry field can be kept runtime-only and left unpacked, but the boundary is one line away, so touches_xasl_serialization is recorded false only conditionally on that design choice.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "float_numeric_db_value_add() (numeric_opfunc.c:2477, read at the pin) recomputes result precision/scale per call, sizes VLA word buffers from _gv_numeric_precision_to_bytes_lookup[result_prec], and rounds when the result exceeds DB_MAX_NUMERIC_PRECISION. A deferred-carry accumulator must reproduce that rounding, the overflow error (ER_QPROC_OVERFLOW_ADDITION raised at query_opfunc.c:2073) and -0 normalization exactly, or SUM/AVG silently return a differently-rounded number. The parallel partial-aggregate merge in px_scan_result_handler.cpp:1087-1116 clones accumulator values across workers and must merge the new state consistently.",
+      "test_burden": "high",
+      "test_burden_detail": "New NUMERIC precision/scale/overflow unit set; existing SQL regression aggregate suite; a parallel vs serial partial-aggregate equivalence test; Q01/Q11 byte-identical result check per the registry's validation_criteria.",
+      "predecessors": [],
+      "alternatives": [],
+      "containment": [],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 45,
+      "blast_radius_score": 45,
+      "risk_score": 35,
+      "test_dependency_score": 40,
+      "feasibility_score": 41.8,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "Not a localized change: the per-row cost is inside a generalized operator whose contract (precision recomputation, DB_MAX_NUMERIC_PRECISION rounding, overflow error) must be preserved at finalization, and the accumulator state it would add is the same struct the parallel merge and both XASL serializers touch.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "agree (registry: high)"
+    },
+    {
+      "id": "IMP-002",
+      "root_cause_title": "Data buffer replacement fails to retain a working set that marginally exceeds the pool, for repeated sequential scans (Q01/Q03) and now also for random index-driven access (Q04), where PostgreSQL under an identical 8192MB budget retains the whole set and takes zero physical reads; Q05 adds a distinct failure mode of the same replacement policy - the pool settles into a history-dependent equilibrium that it cannot leave without a server restart",
+      "category": [
+        "buffer/IO"
+      ],
+      "q_relations": [
+        "Q01",
+        "Q03",
+        "Q04",
+        "Q05",
+        "Q06",
+        "Q07",
+        "Q08",
+        "Q09",
+        "Q11",
+        "Q12",
+        "Q15",
+        "Q20",
+        "Q21"
+      ],
+      "lane": "deferred_research",
+      "loc_low": 200,
+      "loc_likely": 600,
+      "loc_high": 1500,
+      "files_affected": [
+        "src/storage/page_buffer.c",
+        "src/storage/page_buffer.h",
+        "src/storage/heap_file.c",
+        "src/storage/btree.c",
+        "src/base/system_parameter.c"
+      ],
+      "files_affected_count": 5,
+      "subsystems_affected": [
+        "buffer manager",
+        "heap",
+        "btree",
+        "storage / scan"
+      ],
+      "subsystems_affected_count": 4,
+      "blast_radius_flags": {
+        "touches_header_widely": true,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": true,
+        "touches_lock_or_latch_protocol": true
+      },
+      "blast_radius_flags_justification": "A replacement-policy change reaches pgbuf_fix/pgbuf_unfix, which have 220 call sites tree-wide and serve dirty (write-fixed) pages as well as read-fixed ones, so the write/flush/victimize path is affected. Victim selection runs under the per-LRU-list mutex (29 pthread_mutex_lock sites in page_buffer.c).",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "Retention policy changes which page is victimized; a mistake in the victim path can victimize a page that is fixed or dirty-but-unflushed, which is a corruption class of bug, not a performance one. Concurrency: quota adjustment and zone rebalance run under list mutexes touched by every server thread.",
+      "test_burden": "high",
+      "test_burden_detail": "Full storage regression suite, crash/recovery tests, concurrent multi-session buffer stress; no existing regression test asserts a retention property, so a new one must be authored.",
+      "predecessors": [],
+      "alternatives": [
+        "IMP-007"
+      ],
+      "containment": [
+        "IMP-010 re-scopes this to the parallel-scan path",
+        "IMP-013",
+        "IMP-018"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 35,
+      "blast_radius_score": 20,
+      "risk_score": 15,
+      "test_dependency_score": 25,
+      "feasibility_score": 25.5,
+      "eligibility": "blocked",
+      "blockers": "Requires a design decision the campaign has not taken: CUBRID has NO BufferAccessStrategy/scan-ring equivalent (grep for access_strategy|bulkread|scan_ring in page_buffer.c returns 0 hits), so 'fix retention' means inventing a new mechanism. IMP-010's serial control also refutes the retention claim for the serial path, so the scope of the defect itself is unsettled. Alternative IMP-007 attacks the same cost differently; only one should be queued.",
+      "feasibility_rationale": "The named site (pgbuf_fix_release miss branch, page_buffer.c:2211) is a symptom, not a knob; the actual change lives in victim selection and quota policy, both under list mutexes, in a 17,507-line file with no existing scan-resistance concept to extend.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "agree (registry: high) — and stronger: I judge it beyond a bounded patch, hence deferred_research rather than a ranked performance candidate."
+    },
+    {
+      "id": "IMP-003",
+      "root_cause_title": "Leading-wildcard LIKE selectivity is estimated from histogram bucket *upper-boundary* values only, producing a 21.7x under-estimate that then decides conjunctive predicate evaluation order, so an expensive UTF-8 LIKE is evaluated on all rows instead of the few surviving a cheap integer equality",
+      "category": [
+        "optimizer"
+      ],
+      "q_relations": [
+        "Q02",
+        "Q09",
+        "Q16"
+      ],
+      "lane": "performance",
+      "loc_low": 30,
+      "loc_likely": 80,
+      "loc_high": 180,
+      "files_affected": [
+        "src/optimizer/histogram/histogram_cl.cpp",
+        "src/optimizer/query_planner.c"
+      ],
+      "files_affected_count": 2,
+      "subsystems_affected": [
+        "query optimizer / statistics"
+      ],
+      "subsystems_affected_count": 1,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Confined to the client-side selectivity estimator. No serialization, no format, no runtime data path; the output is a double that feeds plan cost and predicate ordering.",
+      "correctness_concurrency_risk": "medium",
+      "correctness_concurrency_risk_reason": "Cannot produce a wrong row: selectivity only sizes and orders. But it changes plan choice for EVERY LIKE predicate in the system, so the risk is plan regression on untested shapes, and the [0.0001,0.9999] clamp at :1529-1536 plus the histogram-size gate at :1508-1526 interact — moving the non-MCV arm without re-checking the small-histogram blend can make short histograms worse.",
+      "test_burden": "medium",
+      "test_burden_detail": "Plan-shape regression set over LIKE predicates on histogrammed and non-histogrammed columns; existing SQL regression covers correctness but not plan identity, so plan assertions must be authored.",
+      "predecessors": [],
+      "alternatives": [
+        "promote rank above selectivity in make_pred_from_bitset() (plan_generation.c:1615-1640)"
+      ],
+      "containment": [
+        "IMP-004 (for Q02)"
+      ],
+      "relations_disagreement_with_registry": "Registry says make_pred_from_bitset orders by 'selectivity primary :1630, rank only on exact tie :1635'. Reading plan_generation.c:1615-1640 at the pin, the primary key is pred_order, then selectivity, then rank. The candidate's conclusion is unaffected but the cited ordering is imprecise.",
+      "loc_score": 62,
+      "blast_radius_score": 85,
+      "risk_score": 65,
+      "test_dependency_score": 60,
+      "feasibility_score": 67.0,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "I read histogram_cl.cpp:1474-1560 at the pin: the non-MCV arm really is matched_bucket_hi/bucket_count, i.e. the estimate is the fraction of bucket UPPER BOUNDARIES matching, and the fix is local to that block plus the blend gate. One file, one subsystem, no runtime path.",
+      "registry_difficulty": "low-to-medium",
+      "registry_difficulty_agreement": "agree (registry: low-to-medium)"
+    },
+    {
+      "id": "IMP-004",
+      "root_cause_title": "UTF-8 LIKE matcher decodes both operands to codepoints per character through non-inlined PLT calls and maps each codepoint through a collation weight table, with no byte-lockstep comparison and no ASCII fast path",
+      "category": [
+        "expression/type"
+      ],
+      "q_relations": [
+        "Q02",
+        "Q13",
+        "Q16"
+      ],
+      "lane": "performance",
+      "loc_low": 60,
+      "loc_likely": 120,
+      "loc_high": 260,
+      "files_affected": [
+        "src/base/language_support.c",
+        "src/query/string_opfunc.c"
+      ],
+      "files_affected_count": 2,
+      "subsystems_affected": [
+        "collation / i18n",
+        "expression/type (string)"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Two files, no serialization or format. But language_support.c is the collation core shared by every string comparison, LIKE and sort in the engine, so a mistake is broad even though the diff is narrow.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "lang_strmatch_utf8() (read at :2831-2900) maps every codepoint through lang_coll->coll.weights (or weights_ti when ignore_trailing_space), special-cases SPACE->ZERO, and handles escape sequences mid-loop. A byte-lockstep fast path is only valid for collations whose weight table is order-preserving on the byte encoding and which have no contractions/expansions; guessing that gate wrong silently changes LIKE results for non-default collations. The fallbacks at :2995 (w_contr) and :3583 (uca_w_level) must remain reachable.",
+      "test_burden": "high",
+      "test_burden_detail": "Full collation matrix LIKE tests (built-in and UCA collations, contractions, trailing-space, escapes) plus the existing i18n regression suite; a new differential test against the current matcher is effectively required.",
+      "predecessors": [],
+      "alternatives": [
+        "IMP-003"
+      ],
+      "containment": [],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 58,
+      "blast_radius_score": 80,
+      "risk_score": 45,
+      "test_dependency_score": 50,
+      "feasibility_score": 58.0,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "The defect is real and localized (per-character intl_utf8_to_cp on BOTH operands plus two weight-table lookups per position), but the fast path needs a collation-eligibility gate that must be proven, and the risk component dominates the small LOC.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "partial disagreement (registry: medium) — LOC is medium, but the correctness obligation across the collation matrix pushes my overall estimate to medium-high."
+    },
+    {
+      "id": "IMP-005",
+      "root_cause_title": "Parallel-scan trace statistics for a nested-loop subtree are merged once per scan_ptr level and again by the whole-subtree walk inside xasl_merge_stats, so a level-k scan's counters are reported (k-1) times: depth 3 is exactly 2x and depth 4 exactly 3x",
+      "category": [
+        "parallelism"
+      ],
+      "q_relations": [
+        "Q03",
+        "Q04",
+        "Q05",
+        "Q06",
+        "Q07",
+        "Q08",
+        "Q09",
+        "Q10",
+        "Q11",
+        "Q12",
+        "Q13",
+        "Q15",
+        "Q17",
+        "Q19",
+        "Q21"
+      ],
+      "lane": "enabler",
+      "loc_low": 5,
+      "loc_likely": 15,
+      "loc_high": 40,
+      "files_affected": [
+        "src/query/parallel/px_scan/px_scan_trace_handler.cpp",
+        "src/xasl/xasl_iteration.cpp"
+      ],
+      "files_affected_count": 2,
+      "subsystems_affected": [
+        "parallel query / trace",
+        "XASL iteration"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Two small files (503 and 208 lines). Statistics only; no executed work changes, no format, no protocol.",
+      "correctness_concurrency_risk": "low",
+      "correctness_concurrency_risk_reason": "Cannot affect results. The only hazard is under-counting: xasl_merge_stats() (xasl_iteration.cpp:87) ends in iterate_xasl_tree over the WHOLE subtree while the caller at px_scan_trace_handler.cpp:493-500 also loops xptr1 = xasl_tree->scan_ptr, so removing the wrong one loses dptr_list subtree counters.",
+      "test_burden": "low",
+      "test_burden_detail": "Trace-output assertions on a nested-loop plan (readkeys/rows/fetch/ioread must equal the serial run); existing trace tests do not assert these numbers, so one small test must be authored.",
+      "predecessors": [],
+      "alternatives": [
+        "drop the caller's scan_ptr loop instead of narrowing xasl_merge_stats"
+      ],
+      "containment": [],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 82,
+      "blast_radius_score": 95,
+      "risk_score": 90,
+      "test_dependency_score": 80,
+      "feasibility_score": 86.3,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "I confirmed the double traversal at the pin: the caller walks the scan_ptr chain and calls xasl_merge_stats per level, and xasl_merge_stats itself recurses the subtree with += accumulation (xasl_iteration.cpp:101-135). The fix is deleting or narrowing one of the two traversals.",
+      "registry_difficulty": "low",
+      "registry_difficulty_agreement": "agree (registry: low)"
+    },
+    {
+      "id": "IMP-006",
+      "root_cause_title": "Every intermediate join result tuple is materialized into a list-file page through a per-value DB_VALUE -> tuple copy (tuple descriptor build, per-value size computation, memcpy, clear), where PostgreSQL passes a TupleTableSlot by reference and only materializes when a node genuinely must store the tuple",
+      "category": [
+        "intermediate-result"
+      ],
+      "q_relations": [
+        "Q03",
+        "Q10",
+        "Q11",
+        "Q21"
+      ],
+      "lane": "performance",
+      "loc_low": 200,
+      "loc_likely": 500,
+      "loc_high": 1200,
+      "files_affected": [
+        "src/query/query_executor.c",
+        "src/query/list_file.c",
+        "src/query/query_opfunc.c",
+        "src/query/fetch.c",
+        "src/query/query_hash_join.c",
+        "src/storage/heap_file.c",
+        "src/query/list_file.h"
+      ],
+      "files_affected_count": 7,
+      "subsystems_affected": [
+        "executor / XASL",
+        "list file (temporary result)",
+        "heap",
+        "expression/type"
+      ],
+      "subsystems_affected_count": 4,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": true,
+        "touches_cache_format": true,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "The list-file tuple layout is a serialization format written by qfile_generate_tuple_into_list and read back by every consumer, and it spills to temporary volumes. It is not a PERSISTENT database format (temp files do not survive restart), so touches_disk_format is false, but any layout change is a format change for the duration of a query and is shared with the hash-join spill path (query_hash_join.c:4277).",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "Memory ownership: qdata_generate_tuple_desc_for_valptr_list (read at query_opfunc.c:625-660) fills tuple_desc_p->f_valp with POINTERS into DB_VALUEs owned elsewhere; caching or streaming those pointers changes lifetime assumptions across the pipeline and can produce use-after-free or stale values, not just slowness.",
+      "test_burden": "high",
+      "test_burden_detail": "Whole executor regression suite plus list-file spill tests; hash-join spill equivalence; new lifetime/valgrind runs.",
+      "predecessors": [],
+      "alternatives": [
+        "cache the tuple descriptor per node instead of rebuilding per tuple (query_opfunc.c:625) — a strict subset"
+      ],
+      "containment": [
+        "the tuple-descriptor rebuild sub-case (query_opfunc.c:625)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 38,
+      "blast_radius_score": 30,
+      "risk_score": 25,
+      "test_dependency_score": 35,
+      "feasibility_score": 32.7,
+      "eligibility": "eligible",
+      "blockers": "Eligible only in its contained sub-case (per-node tuple-descriptor caching). The full 'stop materializing intermediate results' direction is an executor redesign and would trip the section 5-d hard stop.",
+      "feasibility_rationale": "Seven files across executor, list file and heap; the change alters where per-tuple DB_VALUEs are copied, which is exactly the ownership boundary qdata_generate_tuple_desc_for_valptr_list relies on. LOC is large and the risk component, not the size, dominates.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "agree (registry: high)"
+    },
+    {
+      "id": "IMP-007",
+      "root_cause_title": "Every data-page buffer miss is served by a synchronous single-page pread on the query thread itself, with no asynchronous submission and no per-scan readahead, so page-cache copy and lookup cost is paid inside the executor's critical path instead of being overlapped by separate I/O processes",
+      "category": [
+        "buffer/IO"
+      ],
+      "q_relations": [
+        "Q03",
+        "Q04",
+        "Q06",
+        "Q07",
+        "Q08",
+        "Q09",
+        "Q10",
+        "Q11",
+        "Q12",
+        "Q15",
+        "Q19",
+        "Q21"
+      ],
+      "lane": "deferred_research",
+      "loc_low": 250,
+      "loc_likely": 700,
+      "loc_high": 1600,
+      "files_affected": [
+        "src/storage/file_io.c",
+        "src/storage/file_io.h",
+        "src/storage/page_buffer.c",
+        "src/storage/heap_file.c",
+        "src/base/system_parameter.c"
+      ],
+      "files_affected_count": 5,
+      "subsystems_affected": [
+        "file I/O",
+        "buffer manager",
+        "heap / scan",
+        "thread pool (if async workers are added)"
+      ],
+      "subsystems_affected_count": 4,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": true,
+        "touches_lock_or_latch_protocol": true
+      },
+      "blast_radius_flags_justification": "Prefetch means fixing pages the requesting thread does not yet own, which changes the fix/latch protocol, and fileio_read/fileio_write share the same volume descriptors and retry logic.",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "There is no asynchronous I/O infrastructure to build on: the only aio_read in the tree is a pread() shim that immediately aio_suspends (file_io.c:3745-3767), and fileio_read_pages() exists but I verified at the pin that its only callers are double_write_buffer.cpp:3244, log_page_buffer.c:2180 and log_writer.c:803/1399 — log/DWB pages only. Introducing background readers adds a new concurrency domain (prefetched-but-unclaimed BCBs, cancellation on scan abort, error attribution) to the buffer manager.",
+      "test_burden": "high",
+      "test_burden_detail": "Storage + recovery regression, I/O error injection, concurrent scan stress; nothing existing covers prefetch.",
+      "predecessors": [],
+      "alternatives": [
+        "IMP-002"
+      ],
+      "containment": [
+        "IMP-010 (composes multiplicatively, must not be summed)",
+        "IMP-013"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 34,
+      "blast_radius_score": 25,
+      "risk_score": 20,
+      "test_dependency_score": 30,
+      "feasibility_score": 28.1,
+      "eligibility": "blocked",
+      "blockers": "Requires new async-I/O or prefetch infrastructure that does not exist in the tree, plus a user decision between this and IMP-002 (they are recorded alternatives on the same cost). Out of scope for a bounded, revertible patch.",
+      "feasibility_rationale": "I confirmed fileio_read() (file_io.c:3935) is a single fileio_os_read of one page in a retry loop, and that the multi-page reader is wired only to log and DWB paths. A per-scan readahead therefore has no existing call path to reuse on the data side.",
+      "registry_difficulty": "medium-to-high",
+      "registry_difficulty_agreement": "agree (registry: medium-to-high on difficulty) — but I rate the SCOPE higher than the registry does: with no async infrastructure present this is research, not a patch."
+    },
+    {
+      "id": "IMP-008",
+      "root_cause_title": "Scan-level sarg evaluation routes every row through the generic DB_VALUE comparator tp_value_compare_with_error(), with per-call domain resolution and coercion, where PostgreSQL compiles the qual once into type-specialized ExprEvalSteps and calls the resolved datum comparison directly",
+      "category": [
+        "expression/type"
+      ],
+      "q_relations": [
+        "Q04",
+        "Q06",
+        "Q10",
+        "Q12",
+        "Q15",
+        "Q16",
+        "Q17",
+        "Q19",
+        "Q20",
+        "Q21",
+        "Q22"
+      ],
+      "lane": "performance",
+      "loc_low": 120,
+      "loc_likely": 300,
+      "loc_high": 700,
+      "files_affected": [
+        "src/query/query_evaluator.c",
+        "src/query/scan_manager.c",
+        "src/object/object_domain.c",
+        "src/object/object_primitive.c",
+        "src/query/query_evaluator.h"
+      ],
+      "files_affected_count": 5,
+      "subsystems_affected": [
+        "executor / predicate evaluation",
+        "object domain / type system",
+        "scan manager"
+      ],
+      "subsystems_affected_count": 3,
+      "blast_radius_flags": {
+        "touches_header_widely": true,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "object_domain.c / object_primitive.c are the type-system core used by every subsystem; specializing the comparator means adding dispatch that scan_manager.c:3282/:3402 installs via eval_fnc(). No format or protocol changes.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "eval_value_rel_cmp() (read at query_evaluator.c:152-290) delegates to tp_value_compare_with_error(), which performs coercion. A domain-specialized comparator must reproduce coercion semantics, three-valued NULL handling, R_EQ_TORDER total order, the R_NULLSAFE_EQ special case and the 'not comparable' -> V_ERROR path for every domain pair it claims; any pair it gets wrong silently changes which rows qualify. Note the dead #if 0 constant-coercion block at :183-220 — a previous attempt at this optimization that was disabled.",
+      "test_burden": "high",
+      "test_burden_detail": "A domain-pair comparison matrix test (the pairs the fast path claims vs the generic path), full SQL regression, plus predicate/NULL semantics tests. No existing test asserts comparator equivalence.",
+      "predecessors": [],
+      "alternatives": [],
+      "containment": [
+        "IMP-029 (complementary, shares the tp_value_compare_with_error callee — not additive)",
+        "IMP-030 (a specialized NUMERIC/DOUBLE comparator would subsume it)",
+        "IMP-025 (lowers cost per compare where IMP-025 lowers the number of compares)"
+      ],
+      "relations_disagreement_with_registry": "The registry records IMP-008 as a PREDECESSOR of IMP-020. Reading both sites, there is no build-order dependency: the two are disjoint by symbol and either can land first. The relation is a re-scoping note, not a predecessor.",
+      "loc_score": 45,
+      "blast_radius_score": 55,
+      "risk_score": 40,
+      "test_dependency_score": 40,
+      "feasibility_score": 45.0,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "The dispatch really is per row and generic, and there is visible evidence (the #if 0 block) that a prior attempt was abandoned. Risk dominates: the fast path must be provably equivalent for every domain pair it intercepts.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "disagree (registry: medium) — I rate it medium-to-high. The registry's 'medium' reflects the size of the fast path, not the equivalence obligation across the whole type system, and the abandoned #if 0 attempt is direct evidence the obligation is nontrivial."
+    },
+    {
+      "id": "IMP-009",
+      "root_cause_title": "The parallel degree of an uncorrelated subquery is hardcoded to 1 and explicitly ignores both the parallelism parameter and an explicit PARALLEL hint, so when the optimizer folds an entire multi-table join chain into an uncorrelated subquery that whole chain executes single-threaded",
+      "category": [
+        "parallelism"
+      ],
+      "q_relations": [
+        "Q05",
+        "Q11",
+        "Q16",
+        "Q20",
+        "Q21"
+      ],
+      "lane": "performance",
+      "loc_low": 20,
+      "loc_likely": 60,
+      "loc_high": 150,
+      "files_affected": [
+        "src/query/parallel/px_parallel.cpp",
+        "src/query/parallel/px_parallel.hpp",
+        "src/optimizer/plan_generation.c"
+      ],
+      "files_affected_count": 3,
+      "subsystems_affected": [
+        "parallel query",
+        "query optimizer (degree annotation)"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "px_parallel.cpp is 176 lines in total and the SUBQUERY branch is ~25 of them. Blast radius is small in code but large in behaviour: it turns on worker recruitment for a query shape that has never run parallel.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "Raising the degree engages the pooled-worker path for uncorrelated subqueries. Worker lifecycle is the hazard: px_scan_task.cpp:94 propagates only m_px_orig_thread_entry from the parent, so a worker starts a task without the parent's private LRU identity (the IMP-010 defect) and with its own thread-entry state; worker reservation can also partially fail (try_reserve_workers returns fewer workers than asked). Deadlock risk if a parallel subquery nests inside another parallel construct competing for the same worker pool.",
+      "test_burden": "medium",
+      "test_burden_detail": "Parallel-vs-serial result equivalence on uncorrelated subqueries, worker-exhaustion and nested-parallelism stress, plus the trace assertions that IMP-005 must fix first for the numbers to be readable.",
+      "predecessors": [
+        "IMP-005 (measurement prerequisite: the nested-chain trace merge is corrupt, so degree changes cannot be honestly read until it is fixed)"
+      ],
+      "alternatives": [],
+      "containment": [
+        "IMP-012 (the sibling SCAN branch of the same function compute_parallel_degree)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 65,
+      "blast_radius_score": 75,
+      "risk_score": 40,
+      "test_dependency_score": 45,
+      "feasibility_score": 57.8,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "I read compute_parallel_degree() in full at the pin: the SUBQUERY case is a literal 'auto_degree = 1' with a TODO and an explicit 'hint ignored' return. The code change is small and obvious; the risk is entirely in what turning it on exercises.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "disagree (registry: high) — I rate it medium. The registry's 'high' appears to be about consequences, not about the change: the decision is ~25 lines in a 176-line file. The consequences are captured in my risk sub-score instead, which is the methodology the pinned document (section 2-a) prescribes."
+    },
+    {
+      "id": "IMP-010",
+      "root_cause_title": "A heap scan's newly read pages are inserted at the TOP of the session's private LRU list when the scan runs on the client transaction thread, but only into the MIDDLE of a round-robin SHARED LRU list when the same scan runs on pooled parallel-query workers, because a worker's thread entry is recycled with private_lru_index = -1 and the parallel-scan task never propagates its parent's LRU identity - so going parallel silently discards the buffer pool's scan-resistance and re-reads 2.88x the pages",
+      "category": [
+        "buffer/IO",
+        "parallelism"
+      ],
+      "q_relations": [
+        "Q06",
+        "Q12",
+        "Q13"
+      ],
+      "lane": "performance",
+      "loc_low": 20,
+      "loc_likely": 60,
+      "loc_high": 150,
+      "files_affected": [
+        "src/query/parallel/px_scan/px_scan_task.cpp",
+        "src/thread/thread_entry_task.cpp",
+        "src/storage/page_buffer.c",
+        "src/thread/thread_entry.hpp"
+      ],
+      "files_affected_count": 4,
+      "subsystems_affected": [
+        "parallel query / worker lifecycle",
+        "buffer manager",
+        "thread pool"
+      ],
+      "subsystems_affected_count": 3,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": true,
+        "touches_lock_or_latch_protocol": true
+      },
+      "blast_radius_flags_justification": "Handing pooled parallel workers a private LRU index makes several threads insert into and victimize from the SAME private LRU list concurrently. The private-list quota accounting (pgbuf_adjust_quotas, page_buffer.c:14370-14385) and the void-zone insertion branch (:6902-6938) were written assuming one owning thread; that is a latch-protocol assumption. Page insertion on unfix is shared with dirty pages.",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "The naive fix — copy the parent's private_lru_index into the worker at px_scan_task.cpp:94 — makes N workers plus the parent share one private list. Every hit-registration, quota adjustment and victim search on that list then races in a way the single-owner design never had to handle, and thread_entry_task.cpp:75-95 deliberately clears private_lru_index on retire/recycle, so the clearing contract has to be revisited too. Silent corruption of the LRU list under concurrent surgery is the failure mode, not a wrong query answer.",
+      "test_burden": "high",
+      "test_burden_detail": "Concurrent parallel-scan stress with buffer pressure, private-quota invariant assertions, plus the Q06 serial control and Q11 (fully serial) negative control so a fix here does not regress IMP-018's case.",
+      "predecessors": [],
+      "alternatives": [
+        "a generic scan-resistance ring handed to pgbuf_fix per scan (the PostgreSQL freelist.c:426 design) — recorded, explicitly not costed"
+      ],
+      "containment": [
+        "IMP-002 (this re-scopes IMP-002's claim to the parallel path)",
+        "IMP-007 (composes multiplicatively)"
+      ],
+      "relations_disagreement_with_registry": "The registry records IMP-002 as a PREDECESSOR of IMP-010. I disagree: nothing in IMP-010 requires IMP-002 to land first — the relation described is a re-scoping of IMP-002's evidence by Q06's serial control. I record it as containment/overlap, not a predecessor.",
+      "loc_score": 65,
+      "blast_radius_score": 60,
+      "risk_score": 25,
+      "test_dependency_score": 35,
+      "feasibility_score": 49.5,
+      "eligibility": "eligible",
+      "blockers": "Not blocked, but the naive one-line variant is unsafe; a safe version needs either per-worker private lists or an explicit sharing protocol, which is a design choice that should be confirmed before implementation.",
+      "feasibility_rationale": "I verified the loss point: thread_entry_task.cpp retire/recycle set private_lru_index = -1, px_scan_task.cpp propagates only the parent thread entry, and page_buffer.c:6902 branches on thread_private_lru_index != -1. The diff is tiny; the concurrency consequence of undoing that clearing is not.",
+      "registry_difficulty": "low",
+      "registry_difficulty_agreement": "materially disagree (registry: low). The LOC estimate is genuinely low, but the registry's 'low' ignores that the fix hands a single-owner LRU list to N pooled workers. Under the pinned document's rule that KLOC alone never decides difficulty, the correctness/concurrency component must dominate here."
+    },
+    {
+      "id": "IMP-011",
+      "root_cause_title": "Join plan selection is parallel-degree blind: qo_nljoin_cost() and qo_hjoin_cost() compare candidate plans on a single-threaded cost scale while scan_check_parallel_scan_possible() force-blocks parallel scan on every inner join level, so a serial index-nested-loop chain is preferred over a hash-join plan the same executor runs at 7.20 active units - 3.6694x measured wall loss on Q07, plus a hard-coded HJ_MEM_ALLOC_CONSTANT 'heuristic offset to prefer NL join over hash join' and a per-row hash spill penalty that together make the winning plan look 872x more expensive",
+      "category": [
+        "optimizer",
+        "parallelism"
+      ],
+      "q_relations": [
+        "Q07",
+        "Q09",
+        "Q10",
+        "Q11",
+        "Q14"
+      ],
+      "lane": "deferred_research",
+      "loc_low": 100,
+      "loc_likely": 300,
+      "loc_high": 800,
+      "files_affected": [
+        "src/optimizer/query_planner.c",
+        "src/optimizer/plan_generation.c",
+        "src/parser/xasl_generation.c",
+        "src/query/parallel/px_scan/px_scan_checker.cpp",
+        "src/optimizer/query_planner.h"
+      ],
+      "files_affected_count": 5,
+      "subsystems_affected": [
+        "query optimizer / cost model",
+        "XASL generation",
+        "parallel query"
+      ],
+      "subsystems_affected_count": 3,
+      "blast_radius_flags": {
+        "touches_header_widely": true,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "The cost model is consumed by every plan decision in the engine; a parallel divisor changes the cost scale globally. It also requires moving the parallelism decision BEFORE plan selection — today xasl_generation.c:17214 and plan_generation.c:2840 assign xasl->parallelism AFTER the plan is chosen, so the phase ordering itself changes.",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "No wrong rows, but a global cost-scale change reorders plans for every join in every workload, and the payoff is conditional: px_scan_checker.cpp:874-877 force-blocks parallelism on every inner join level, so a plan the new cost model prefers may still execute serially. Fixing the model without fixing the executor can make things worse.",
+      "test_burden": "high",
+      "test_burden_detail": "Whole plan-regression corpus, both TPC-H shapes and OLTP shapes; there is no existing plan-stability harness, so one must be built before this can be judged.",
+      "predecessors": [],
+      "alternatives": [
+        "teach px_scan_checker.cpp to parallelize inner join levels instead of force-blocking them (:874-877)"
+      ],
+      "containment": [
+        "IMP-014 (supplies the cardinality this candidate costs; Q09 effects overlap completely and must never be summed)",
+        "IMP-009 (same class of defect at a different decision point)",
+        "IMP-007"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 43,
+      "blast_radius_score": 40,
+      "risk_score": 25,
+      "test_dependency_score": 25,
+      "feasibility_score": 35.2,
+      "eligibility": "blocked",
+      "blockers": "Requires a design decision (where the parallelism decision moves to in the planning phase order) and is entangled with an executor restriction that may nullify it. Also requires a user decision against IMP-014, which addresses the same Q09 plan choice from the cardinality side at far lower cost.",
+      "feasibility_rationale": "I read qo_nljoin_cost() at query_planner.c:3340 and the HJ_* constants at :84-92; there is genuinely no parallel-degree term anywhere, and HJ_MEM_ALLOC_CONSTANT 1500 is a hand-tuned thumb on the scale. Adding a divisor is small; making it correct requires re-ordering the planning phases.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "agree (registry: high)"
+    },
+    {
+      "id": "IMP-012",
+      "root_cause_title": "The parallel-scan coordinator is a pure consumer and the SCAN auto-degree formula saturates below the configured parallelism cap, so a plan CUBRID does parallelise runs at 5 active units where PostgreSQL runs the identical shape at 6 (5 workers plus a participating leader) - the sole factor above 1.0 in Q08's causal card, F_units 1.373763x of a 1.111086x gap",
+      "category": [
+        "parallelism",
+        "optimizer"
+      ],
+      "q_relations": [
+        "Q08",
+        "Q17",
+        "Q19"
+      ],
+      "lane": "performance",
+      "loc_low": 80,
+      "loc_likely": 200,
+      "loc_high": 450,
+      "files_affected": [
+        "src/query/parallel/px_parallel.cpp",
+        "src/query/parallel/px_scan/px_scan.cpp",
+        "src/optimizer/plan_generation.c",
+        "src/base/system_parameter.c"
+      ],
+      "files_affected_count": 4,
+      "subsystems_affected": [
+        "parallel query",
+        "query optimizer (degree annotation)"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Four files, one subsystem plus the client-side degree formula at plan_generation.c:3204-3234 that must stay consistent. No serialization or format.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "Two independent changes are bundled: a work-aware degree formula, and making the coordinator a producer. I read manager::start_tasks() (px_scan.cpp:1794-1812) — it pushes exactly m_parallelism tasks and never executes one on the calling thread, and manager::next() is a pure consumer of the merged result. Making the coordinator also run a task changes the interrupt/error-message/result-merge lifecycle (m_interrupt, m_err_messages, result handler ordering) that currently assumes the caller is only draining. Over-parallelizing also risks worker starvation for concurrent sessions.",
+      "test_burden": "medium",
+      "test_burden_detail": "Parallel result equivalence and ordering, worker-pool exhaustion under concurrency, degree-formula unit tests, and the IMP-005 trace fix so the reported worker counts are trustworthy.",
+      "predecessors": [
+        "IMP-005 (measurement prerequisite, same reason as IMP-009)"
+      ],
+      "alternatives": [
+        "raise parallel_scan_page_threshold from its hidden 2048 default — rejected by the registry as too coarse"
+      ],
+      "containment": [
+        "IMP-009 (the SUBQUERY branch of the same function)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 50,
+      "blast_radius_score": 60,
+      "risk_score": 40,
+      "test_dependency_score": 40,
+      "feasibility_score": 48.0,
+      "eligibility": "eligible",
+      "blockers": "Should be split: the degree formula and the participating coordinator are separable changes and the one-branch rule (section 5-b) argues for two hypotheses, which needs user confirmation.",
+      "feasibility_rationale": "compute_parallel_degree()'s SCAN ladder (auto_degree = 63 - clzll(num_pages/threshold) + 2, then MIN with parallelism) is exactly as described and is ~10 lines; the coordinator change in px_scan.cpp is the larger and riskier half.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "partial disagreement (registry: high) — I rate the degree-formula half medium and the coordinator half high. As a single bundled candidate 'high' is defensible; split, half of it is cheap."
+    },
+    {
+      "id": "IMP-013",
+      "root_cause_title": "Every page unfix on a HIT path performs mutex-protected LRU doubly-linked-list surgery plus zone rebalancing (pgbuf_lru_boost_bcb), so a plan that touches 6.6x fewer tuples than PostgreSQL's nets only a 16% total-CPU advantage: 27.41% of CUBRID's profile sits in pgbuf fix/unfix/LRU and 5.32% in libpthread, against PostgreSQL's 3.70% clock-sweep pin/unpin with no list and no mutex",
+      "category": [
+        "buffer/IO",
+        "parallelism"
+      ],
+      "q_relations": [
+        "Q08",
+        "Q09",
+        "Q10",
+        "Q11",
+        "Q13",
+        "Q15",
+        "Q19",
+        "Q20",
+        "Q21",
+        "Q22"
+      ],
+      "lane": "performance",
+      "loc_low": 30,
+      "loc_likely": 80,
+      "loc_high": 200,
+      "files_affected": [
+        "src/storage/page_buffer.c"
+      ],
+      "files_affected_count": 1,
+      "subsystems_affected": [
+        "buffer manager"
+      ],
+      "subsystems_affected_count": 1,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": true,
+        "touches_lock_or_latch_protocol": true
+      },
+      "blast_radius_flags_justification": "pgbuf_lru_boost_bcb() takes lru_list->mutex and performs doubly-linked-list surgery plus zone rebalancing; suppressing boosts changes the shared latch traffic pattern for every thread. The unfix path is shared by dirty pages, hence the write-path flag.",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "The boost decides which pages survive victimization. Suppressing it for single-touch random probes without an equivalent aging signal makes the pool evict hot pages, which is a large silent regression rather than a wrong answer; and because the change is inside the mutex-protected zone bookkeeping, an inconsistent zone count (pgbuf_bcb_change_zone / pgbuf_lru_adjust_zones) is a corruption-class outcome.",
+      "test_burden": "high",
+      "test_burden_detail": "Concurrent buffer stress with mixed hit/miss ratios, zone-invariant assertions, and OLTP-shaped negative controls (Q11 is recorded as a negative control where CUBRID is already cheaper per fix).",
+      "predecessors": [],
+      "alternatives": [
+        "IMP-010 (same subsystem: where new pages land, vs whether the list is touched on a hit)"
+      ],
+      "containment": [
+        "IMP-002",
+        "IMP-007"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 61,
+      "blast_radius_score": 65,
+      "risk_score": 25,
+      "test_dependency_score": 35,
+      "feasibility_score": 48.9,
+      "eligibility": "eligible",
+      "blockers": "Eligible, but it is the third candidate queued into page_buffer.c alongside IMP-010 and IMP-018; the one-branch rule means their interaction has to be sequenced, and a shared-file collision plan is needed.",
+      "feasibility_rationale": "I read pgbuf_lru_boost_bcb() at :10073-10125: the existing age-based suppression is documented in-file and is implemented in the caller (pgbuf_unlatch_bcb_upon_unfix), so the extension point exists. The diff is small; it sits inside the hottest mutex in the server.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "partial disagreement (registry: medium) — I agree on LOC but rate the concurrency risk higher than 'medium' implies, since the edit is inside mutex-protected zone bookkeeping."
+    },
+    {
+      "id": "IMP-014",
+      "root_cause_title": "Join selectivity for a multi-column foreign-key match is formed as the product of the per-column selectivities, so a two-column FK join is under-estimated by the ratio between the parent's row count and the product of the column NDVs (24,920x on Q09, collapsing a 3,261,613-row join to an estimated 2 rows) and the cost model then prefers an index-nested-loop chain that measurement shows is 1.5425x slower than the hash plan the same executor already implements",
+      "category": [
+        "optimizer"
+      ],
+      "q_relations": [
+        "Q09"
+      ],
+      "lane": "performance",
+      "loc_low": 80,
+      "loc_likely": 200,
+      "loc_high": 450,
+      "files_affected": [
+        "src/optimizer/query_planner.c",
+        "src/optimizer/query_graph.c",
+        "src/optimizer/query_graph.h"
+      ],
+      "files_affected_count": 3,
+      "subsystems_affected": [
+        "query optimizer / cardinality estimation",
+        "schema constraint lookup (read-only)"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Reads FK/PK constraint metadata that qo_is_pk_fk_full_join() (query_graph.c:9955) already reads — no catalog format change, only a new consumer of an existing predicate. Three optimizer files, one subsystem.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "No wrong rows possible, but this changes join cardinality for every multi-column FK join in the system, which changes join order and method broadly. The specific hazard is over-correction: applying an FK selectivity when the FK does not fully cover the join clause set produces a large UNDER-estimate in the other direction. PostgreSQL guards this with an all-clauses-or-nothing rule (costsize.c:5940-5960) that must be reproduced.",
+      "test_burden": "medium",
+      "test_burden_detail": "Cardinality-estimate assertions on single- and multi-column FK joins, partial-FK-coverage negative cases, plus a plan-regression corpus.",
+      "predecessors": [],
+      "alternatives": [
+        "IMP-011 (the other candidate that changes Q09's join-method selection; the registry rejects IMP-011 as Q09's deciding term)",
+        "IMP-003 (rejected as Q09's deciding term by measurement)"
+      ],
+      "containment": [
+        "IMP-011 (IMP-014 supplies what IMP-011 costs; Q09 effects overlap completely)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 50,
+      "blast_radius_score": 70,
+      "risk_score": 45,
+      "test_dependency_score": 45,
+      "feasibility_score": 52.0,
+      "eligibility": "eligible",
+      "blockers": "A user decision is desirable between IMP-014 and IMP-011 for Q09: they overlap completely there and IMP-014 is far cheaper, so queueing both wastes a slot.",
+      "feasibility_rationale": "planner_visit_node() at query_planner.c:7927-7936 really does multiply per-term selectivities with only a 1/cardinality floor, and the FK-coverage predicate already exists at query_graph.c:9955 but is called from exactly one place (:9927, sort/limit node exclusion). The change is to reuse an existing predicate on a new path.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "agree (registry: medium)"
+    },
+    {
+      "id": "IMP-015",
+      "root_cause_title": "sort_check_parallelism() unconditionally refuses parallelism for a SORT_GROUP_BY whenever the query was marked hash-aggregate-eligible, even after the executor has already ABANDONED hash aggregation at runtime (HS_REJECT_ALL), so the entire sort-based fallback group-by runs single-threaded while every other node of the same plan runs at 5-6 workers - 3834 ms of Q10's 8048 ms traced execution at one active unit, and a 1.313675x direct same-engine A/B",
+      "category": [
+        "parallelism",
+        "aggregation/sort"
+      ],
+      "q_relations": [
+        "Q10",
+        "Q11",
+        "Q15",
+        "Q18"
+      ],
+      "lane": "performance",
+      "loc_low": 5,
+      "loc_likely": 20,
+      "loc_high": 60,
+      "files_affected": [
+        "src/storage/external_sort.c",
+        "src/storage/external_sort.h",
+        "src/query/query_executor.c"
+      ],
+      "files_affected_count": 3,
+      "subsystems_affected": [
+        "sort",
+        "executor / group by"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Three files, a handful of lines: pass the runtime hash state (xasl->groupby_stats.groupby_hash / context->state) into SORT_LISTFILE_PX_ARG and test it instead of the static plan-time hash_eligible flag.",
+      "correctness_concurrency_risk": "medium",
+      "correctness_concurrency_risk_reason": "The veto exists so a query that WILL hash-aggregate does not also reserve sort workers. Consulting the runtime state means the decision now depends on when HS_REJECT_ALL is set relative to sort_listfile(); if the state is read too early the query loses hashing AND parallelism, or double-reserves workers. Parallel group-by sort must also produce identical grouping and identical output ordering — that is an existing code path (SORT_ORDER_BY / SORT_INDEX_LEAF already use it), which is what keeps the risk at medium rather than high.",
+      "test_burden": "medium",
+      "test_burden_detail": "GROUP BY result and ordering equivalence serial vs parallel, hash-eligible and hash-rejected variants, worker reservation under contention. The parallel sort path already has coverage; the new state plumbing does not.",
+      "predecessors": [],
+      "alternatives": [
+        "stop marking the query hash-eligible when the optimizer's group estimate cannot fit max_agg_hash_size (recorded as the cheaper mitigation IF IMP-016 lands first)",
+        "IMP-016 (fixing either recovers Q10's measured 1.313675x; IMP-015 is the measured route)"
+      ],
+      "containment": [
+        "IMP-016",
+        "IMP-021 (removes the sort IMP-015 parallelizes; not additive)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 77,
+      "blast_radius_score": 85,
+      "risk_score": 65,
+      "test_dependency_score": 60,
+      "feasibility_score": 73.0,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "I read sort_check_parallelism()'s SORT_GROUP_BY branch at external_sort.c:5228-5246: 'if (px == NULL || px->hash_eligible) return 1;' is an unconditional early return that skips a fully-implemented parallel path used by the sibling branches. The smallest genuinely-performance-bearing change in the set.",
+      "registry_difficulty": "low",
+      "registry_difficulty_agreement": "agree (registry: low)"
+    },
+    {
+      "id": "IMP-016",
+      "root_cause_title": "Hash aggregation is abandoned for the whole statement by a hardcoded 0.5f very-high-selectivity heuristic that is evaluated on a group counter which the LRU eviction path never decrements, so the 2 MB max_agg_hash_size budget makes the estimate drift upward until it crosses 0.5 on a query whose true group/tuple selectivity is 0.332243 and whose every measured input prefix is at most 0.424788",
+      "category": [
+        "aggregation/sort",
+        "optimizer"
+      ],
+      "q_relations": [
+        "Q10",
+        "Q11",
+        "Q18"
+      ],
+      "lane": "performance",
+      "loc_low": 10,
+      "loc_likely": 40,
+      "loc_high": 100,
+      "files_affected": [
+        "src/query/query_executor.c"
+      ],
+      "files_affected_count": 1,
+      "subsystems_affected": [
+        "executor / hash aggregation"
+      ],
+      "subsystems_affected_count": 1,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "One file, one function pair. The counter fix is a single decrement in the eviction loop; the heuristic redesign is larger but still local.",
+      "correctness_concurrency_risk": "medium",
+      "correctness_concurrency_risk_reason": "Decrementing group_count on eviction (query_executor.c:4830-4835, read at the pin) makes the selectivity estimate honest but changes WHEN hash aggregation is abandoned for every grouped query. The guard at HASH_AGGREGATE_VH_SELECTIVITY_THRESHOLD 0.5f protects the almost-unique-key case, where continuing to hash costs an insert plus an eviction write per row for no reduction; making the counter honest can now keep hashing in a case the guard used to catch. No wrong rows.",
+      "test_burden": "medium",
+      "test_burden_detail": "Grouped-aggregate result equivalence across group counts spanning the 2 MB budget, including an almost-unique-key regression to prove the guard still fires when it should.",
+      "predecessors": [],
+      "alternatives": [
+        "raise max_agg_hash_size so eviction never happens (rejected: blocked by IMP-017)",
+        "delete the very-high-selectivity abort entirely (rejected: the guard protects a real case)",
+        "IMP-015 (fixing either recovers Q10's 1.313675x)"
+      ],
+      "containment": [
+        "IMP-015 (IMP-016 puts the executor into HS_REJECT_ALL; IMP-015 turns that into a lost parallel sort)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 70,
+      "blast_radius_score": 85,
+      "risk_score": 55,
+      "test_dependency_score": 55,
+      "feasibility_score": 67.0,
+      "eligibility": "eligible",
+      "blockers": "The memory-limit arm of this candidate cannot be tested on a running server until IMP-017 lands (max_agg_hash_size is frozen in a function-local static). The counter arm is testable now.",
+      "feasibility_rationale": "Confirmed at the pin: context->group_count++ at :4740 on every insert, and the eviction loop at :4800-4836 adjusts hash_size but never group_count, so an evicted-and-remet group is counted twice in the selectivity ratio computed at :4839-4842.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "agree (registry: medium)"
+    },
+    {
+      "id": "IMP-017",
+      "root_cause_title": "max_agg_hash_size is read into a FUNCTION-LOCAL STATIC in the per-row hash-aggregate path, so the parameter is frozen at the first hash-aggregate tuple of the server process and can never be changed for the life of that process - a session-level SET SYSTEM PARAMETERS to 512M provably changed nothing",
+      "category": [
+        "aggregation/sort",
+        "expression/type"
+      ],
+      "q_relations": [
+        "Q10",
+        "Q18"
+      ],
+      "lane": "diagnostic",
+      "loc_low": 3,
+      "loc_likely": 10,
+      "loc_high": 30,
+      "files_affected": [
+        "src/query/query_executor.c"
+      ],
+      "files_affected_count": 1,
+      "subsystems_affected": [
+        "executor / hash aggregation",
+        "system parameter"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "One line moved out of a function-local static into the per-statement AGGREGATE_HASH_CONTEXT built at qexec_alloc_agg_hash_context() (query_executor.c:27694). Nothing else is reachable from it.",
+      "correctness_concurrency_risk": "low",
+      "correctness_concurrency_risk_reason": "The only hazards are the UINT64 -> int narrowing already present at the comparison (:4808) and re-reading a server parameter per statement instead of per process, which is what every other changeable parameter already does. No concurrency exposure: the context is per statement.",
+      "test_burden": "low",
+      "test_burden_detail": "One test that sets max_agg_hash_size mid-session and asserts the next statement observes it. No existing test covers the parameter's dynamism.",
+      "predecessors": [],
+      "alternatives": [
+        "document max_agg_hash_size as server-start-only (rejected: it is declared changeable)"
+      ],
+      "containment": [
+        "IMP-016 (this unblocks IMP-016's memory-limit hypothesis)",
+        "IMP-015 (same statement, ranked above this)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 86,
+      "blast_radius_score": 95,
+      "risk_score": 85,
+      "test_dependency_score": 80,
+      "feasibility_score": 86.7,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "I read the declaration at query_executor.c:4643 at the pin — 'static UINT64 mem_limit = prm_get_bigint_value (PRM_ID_MAX_AGG_HASH_SIZE);' is a function-local static with a dynamic initializer, so it is evaluated once per server process. Highest feasibility in the set, and it is a genuine correctness bug against the parameter's declared contract rather than a performance change — hence the diagnostic lane.",
+      "registry_difficulty": "low",
+      "registry_difficulty_agreement": "agree (registry: low)"
+    },
+    {
+      "id": "IMP-018",
+      "root_cause_title": "A single session's retainable buffer working set is capped at PGBUF_PRIVATE_LRU_MAX_HARD_QUOTA = 5000 BCBs regardless of data_buffer_size, because every page a query reads is placed on that session's PRIVATE LRU list and escapes into the shared pool only when a DIFFERENT session touches it or it reaches 64 fixes while still resident; so an 8192 MB pool retains 78 MiB for one connection, and the SAME query gets 2.6408x faster as later connections migrate its pages out",
+      "category": [
+        "buffer/IO"
+      ],
+      "q_relations": [
+        "Q11",
+        "Q14"
+      ],
+      "lane": "performance",
+      "loc_low": 10,
+      "loc_likely": 40,
+      "loc_high": 120,
+      "files_affected": [
+        "src/storage/page_buffer.c",
+        "src/base/system_parameter.c"
+      ],
+      "files_affected_count": 2,
+      "subsystems_affected": [
+        "buffer manager",
+        "system parameter"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": true,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Two constants and the quota computation in pgbuf_adjust_quotas(); the resulting quota governs where every read page lands and therefore what gets victimized, including dirty pages.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "No wrong rows. The hazard is that TWO independent ceilings coincide on this pool size and both must move: PGBUF_PRIVATE_LRU_MAX_HARD_QUOTA 5000 (page_buffer.c:1024, applied at :14379) and MIN_PRIVATE_RATIO 0.01 (:14193, feeding all_private_quota at :14363). I confirmed both at the pin; the measurement cannot separate them. Sizing private lists as a fraction of the pool changes multi-session behaviour globally — the private lists exist to protect many concurrent sessions from each other, and enlarging them for a single-session benchmark can starve a many-session workload.",
+      "test_burden": "medium",
+      "test_burden_detail": "Many-session buffer-contention benchmark as a negative control (this is precisely the workload the 5000 cap protects), single-session retention assertions, plus Q06 (parallel) as the IMP-010 cross-control.",
+      "predecessors": [],
+      "alternatives": [
+        "make num_private_chains dynamically settable so an operator can set it to 0 (rejected: workaround for a wrong default)",
+        "demote rather than victimize an over-quota private page (structurally cleanest; changes the victim path rather than one expression)"
+      ],
+      "containment": [
+        "IMP-002 (different premise: IMP-002 is a working set that EXCEEDS the pool, this is one that FITS)",
+        "IMP-007 (this removes the reads, IMP-007 makes them cheaper)",
+        "IMP-010 (bypassed vs too small)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 68,
+      "blast_radius_score": 75,
+      "risk_score": 45,
+      "test_dependency_score": 45,
+      "feasibility_score": 60.2,
+      "eligibility": "eligible",
+      "blockers": "Needs a user decision on the sizing policy: which of the two coincident ceilings to move, and what the new private quota should be as a function of data_buffer_size. Changing a global default that protects many-session workloads on the evidence of one single-session query is a judgment call, not a measurement.",
+      "feasibility_rationale": "Both ceilings are exactly where the registry says and I read both at the pin. The diff can be two constants — but the pinned document's rule that KLOC never decides difficulty applies: this is a global default governing multi-session fairness, and the evidence base is one serial query.",
+      "registry_difficulty": "low",
+      "registry_difficulty_agreement": "partial disagreement (registry: low) — the LOC is low, the policy decision is not. I score it well below the other 'low' candidates (IMP-015, IMP-017) for that reason."
+    },
+    {
+      "id": "IMP-019",
+      "root_cause_title": "The selectivity of a comparison between two ATTRIBUTES of the same table is an unconditional hardcoded DEFAULT_COMP_SELECTIVITY = 0.1 -- the attribute-vs-attribute arm of qo_comp_selectivity() is an explicit empty '/* TODO: add histogram selectivity */' -- and because qo_discover_edges() then orders sarg terms by ASCENDING estimated selectivity, every column-vs-column comparison is evaluated BEFORE genuinely selective constant predicates, inverting the evaluation order exactly where the estimate is a placeholder",
+      "category": [
+        "optimizer",
+        "expression/type"
+      ],
+      "q_relations": [
+        "Q12",
+        "Q17"
+      ],
+      "lane": "performance",
+      "loc_low": 40,
+      "loc_likely": 100,
+      "loc_high": 250,
+      "files_affected": [
+        "src/optimizer/query_planner.c",
+        "src/optimizer/histogram/histogram_cl.cpp",
+        "src/optimizer/query_graph.c"
+      ],
+      "files_affected_count": 3,
+      "subsystems_affected": [
+        "query optimizer / selectivity estimation"
+      ],
+      "subsystems_affected_count": 1,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Optimizer only. The estimate feeds both cardinality and, via qo_discover_edges() (query_graph.c:6183-6201), the physical predicate evaluation order.",
+      "correctness_concurrency_risk": "medium",
+      "correctness_concurrency_risk_reason": "No wrong rows. An attribute-vs-attribute estimator needs per-column histograms on two columns of the same table and an independence or correlation assumption between them; getting that wrong changes evaluation order for a broad class of predicates. The conservative variant (keep 0.1 but stop letting it drive evaluation order, as PostgreSQL does at createplan.c order_qual_clauses) is a different and wider change.",
+      "test_burden": "medium",
+      "test_burden_detail": "Selectivity unit tests for attr-vs-attr comparisons, evaluation-order assertions, plan-regression corpus.",
+      "predecessors": [],
+      "alternatives": [
+        "IMP-020 (reduce the cost per materialized row rather than the number of predicate evaluations; disjoint bands)"
+      ],
+      "containment": [],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 58,
+      "blast_radius_score": 80,
+      "risk_score": 60,
+      "test_dependency_score": 55,
+      "feasibility_score": 62.5,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "I read qo_comp_selectivity() at query_planner.c:10498-10530: the PC_ATTR/PC_ATTR arm is literally '/* TODO: add histogram selectivity */ break;', so 'success' is never set and DEFAULT_COMP_SELECTIVITY 0.1 is returned. Finding it is trivial; implementing a defensible two-column estimator is not.",
+      "registry_difficulty": "low",
+      "registry_difficulty_agreement": "disagree (registry: low) — I rate it medium. The registry's 'low' fits deleting the TODO, not filling it: a real attribute-vs-attribute estimator needs two histograms and a correlation assumption."
+    },
+    {
+      "id": "IMP-020",
+      "root_cause_title": "Per-row scan output is materialised into fully-typed DB_VALUEs: for every row the heap scan re-reads the MVCC/representation header, re-resolves each attribute's domain and disk size, calls a type-specific mr_data_readval_* to build a DB_VALUE, and afterwards tears each one down with pr_clear_value -- where PostgreSQL deforms the same tuple into a flat Datum/isnull array using cached attribute offsets, with no per-value type object, no per-value domain init and no per-value teardown at all",
+      "category": [
+        "expression/type",
+        "storage"
+      ],
+      "q_relations": [
+        "Q12",
+        "Q13",
+        "Q14",
+        "Q16",
+        "Q17",
+        "Q19",
+        "Q20",
+        "Q21",
+        "Q22"
+      ],
+      "lane": "deferred_research",
+      "loc_low": 400,
+      "loc_likely": 1200,
+      "loc_high": 3000,
+      "files_affected": [
+        "src/storage/heap_file.c",
+        "src/object/object_primitive.c",
+        "src/object/object_domain.c",
+        "src/storage/object_representation.h",
+        "src/query/query_evaluator.c",
+        "src/query/scan_manager.c",
+        "src/query/fetch.c"
+      ],
+      "files_affected_count": 7,
+      "subsystems_affected": [
+        "heap",
+        "object representation / type system",
+        "executor / scan",
+        "expression evaluation"
+      ],
+      "subsystems_affected_count": 4,
+      "blast_radius_flags": {
+        "touches_header_widely": true,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "heap_attrinfo_read_dbvalues() has 59 call sites tree-wide (verified at the pin). object_representation.h and object_primitive.c are the record-decode core; a deform-on-demand slot abstraction changes the interface every scan and every DML path uses. It READS the disk record format but would not change it.",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "This is an executor data-model change (typed DB_VALUE per attribute -> flat deformed slot), not a hot-path tweak. Every consumer of HEAP_CACHE_ATTRINFO assumes a fully materialized DB_VALUE with its own lifetime; changing that changes memory ownership across heap, executor and DML. The failure mode is stale or freed attribute values, which is silent wrong data.",
+      "test_burden": "high",
+      "test_burden_detail": "Effectively the whole engine regression suite plus new lifetime instrumentation; no bounded test set exists.",
+      "predecessors": [],
+      "alternatives": [
+        "IMP-019 (fewer predicate evaluations instead of cheaper rows; disjoint bands)"
+      ],
+      "containment": [
+        "IMP-029 (shares the per-row DB_VALUE alloc/copy/clear band on Q22; must not be double counted)",
+        "IMP-004"
+      ],
+      "relations_disagreement_with_registry": "The registry records IMP-008 as a PREDECESSOR of this candidate. I disagree: the two are disjoint by symbol (the registry itself says so) and neither requires the other to land first. The relation is a re-scoping note.",
+      "loc_score": 26,
+      "blast_radius_score": 15,
+      "risk_score": 15,
+      "test_dependency_score": 20,
+      "feasibility_score": 20.1,
+      "eligibility": "blocked",
+      "blockers": "Requires a design decision on an executor tuple/slot abstraction CUBRID does not have. Any real attempt would immediately trip the section 5-d hard stop (unanticipated subsystems, >150% of any honest LOC estimate).",
+      "feasibility_rationale": "I confirmed heap_attrinfo_read_dbvalues() at heap_file.c:10464 re-checks the cached representation per row and then materializes every needed attribute, and that eval_data_filter() (query_evaluator.c:2760) calls it before any predicate can look at a value. Removing that means introducing the slot abstraction PostgreSQL has and CUBRID does not — a redesign, not a patch.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "agree (registry: high) — and I go further: not implementable as a bounded, revertible patch in this campaign."
+    },
+    {
+      "id": "IMP-021",
+      "root_cause_title": "A group-by-skip index scan plan is released at birth whenever the query contains a join, because qo_check_plan_on_info() tests index->head->groupby_skip -- a flag that is only ever written later, in qo_top_plan_new(), and only when the final top plan is itself a scan -- where the ORDER BY twin six lines above it tests a candidate predicate instead; so the sort-free streaming GROUP BY is unreachable behind any join and an unconditional SORT_GROUPBY is inserted",
+      "category": [
+        "optimizer"
+      ],
+      "q_relations": [
+        "Q13"
+      ],
+      "lane": "performance",
+      "loc_low": 30,
+      "loc_likely": 90,
+      "loc_high": 220,
+      "files_affected": [
+        "src/optimizer/query_planner.c",
+        "src/query/query_executor.c",
+        "src/parser/xasl_generation.c"
+      ],
+      "files_affected_count": 3,
+      "subsystems_affected": [
+        "query optimizer / plan selection",
+        "executor / group by"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "The optimizer half is one condition plus a candidate predicate mirroring qo_plan_is_orderby_skip_candidate() (query_planner.c:12559-12610). The executor half may also be needed, which is what makes the file count uncertain.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "Admitting a group-by-skip plan for a join means the executor must actually deliver grouped input in index order. qexec_groupby_index() is reachable only when THIS xasl's own first access spec carries groupby_skip (query_executor.c:16605-16609), which a join's xasl cannot satisfy today. So the optimizer fix alone either does nothing (best case) or admits a plan the executor mis-executes (worst case, wrong grouping). This is a scope-explosion hazard: proving which of the two is true requires reading the executor path first.",
+      "test_burden": "medium",
+      "test_burden_detail": "GROUP BY over join result-and-ordering equivalence with and without the index plan, plus plan assertions that the skip is actually taken.",
+      "predecessors": [],
+      "alternatives": [],
+      "containment": [
+        "IMP-015 (removes the sort IMP-015 parallelizes; not additive)",
+        "IMP-023 (removes the input IMP-023's per-group loop consumes; not additive)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 60,
+      "blast_radius_score": 70,
+      "risk_score": 40,
+      "test_dependency_score": 45,
+      "feasibility_score": 54.8,
+      "eligibility": "eligible",
+      "blockers": "Before implementing, the executor question must be settled: whether qexec_groupby_index() can serve a join xasl at all. If it cannot, this candidate is an executor change too and its LOC band is wrong.",
+      "feasibility_rationale": "I read query_planner.c:6006-6019 at the pin and the asymmetry is exactly as described: the ORDER BY arm has a pre-top-rooted candidate predicate ('plan->top_rooted ? ... : qo_plan_is_orderby_skip_candidate (plan)') and the GROUP BY arm immediately below it has none, so it tests a flag that qo_top_plan_new() has not written yet.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "agree (registry: medium), with the caveat that the executor-support question could move it to high."
+    },
+    {
+      "id": "IMP-022",
+      "root_cause_title": "NOT LIKE selectivity silently drops the anchored literal prefix: pattern_heuristic_selectivity() deliberately skips the fixed prefix on the documented assumption that 'it is already handled by a range predicate', which holds for PT_LIKE (rewritten into a range) but NOT for PT_NOT_LIKE (never rewritten), so every anchored NOT LIKE receives the same pattern-independent selectivity -- 0.0263974 on Q16's part.p_type, a 36.6x under-estimate that is identical for a pattern matching 3.3% of rows and for one matching 0%",
+      "category": [
+        "optimizer"
+      ],
+      "q_relations": [
+        "Q16"
+      ],
+      "lane": "performance",
+      "loc_low": 20,
+      "loc_likely": 60,
+      "loc_high": 150,
+      "files_affected": [
+        "src/optimizer/histogram/histogram_cl.cpp",
+        "src/optimizer/query_planner.c"
+      ],
+      "files_affected_count": 2,
+      "subsystems_affected": [
+        "query optimizer / statistics"
+      ],
+      "subsystems_affected_count": 1,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Same one file as IMP-003, a different arm of the same outer function. No serialization, no runtime path.",
+      "correctness_concurrency_risk": "medium",
+      "correctness_concurrency_risk_reason": "No wrong rows. The prefix skip is DELIBERATE and documented in-file: the comment at histogram_cl.cpp:1313-1317 states the prefix 'is assumed to be already handled by a range predicate'. That assumption is TRUE for PT_LIKE (the optimizer really does rewrite an anchored LIKE into a range) and FALSE for PT_NOT_LIKE. So the fix must be conditional on the operator, or it will double-count the prefix for the positive LIKE case and make that estimate worse.",
+      "test_burden": "medium",
+      "test_burden_detail": "Selectivity assertions for anchored/unanchored LIKE and NOT LIKE, including the no-wildcard case that currently returns 1.0 at :1334-1337; plus a plan-regression pass.",
+      "predecessors": [],
+      "alternatives": [
+        "raise the [0.0001,0.9999] clamp (rejected: changes the number, not the cause)",
+        "rewrite NOT LIKE into NOT(range) (rejected: larger blast radius for the same outcome)"
+      ],
+      "containment": [
+        "IMP-003 (sibling arm of the same estimator; effects never additive on a single term)",
+        "IMP-004 (plan-time estimate vs runtime matcher cost; not additive)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 65,
+      "blast_radius_score": 88,
+      "risk_score": 65,
+      "test_dependency_score": 60,
+      "feasibility_score": 68.8,
+      "eligibility": "eligible",
+      "blockers": "Not blocked, but it edits the same function region as IMP-003; under the one-branch rule the two branches will conflict textually and must be sequenced.",
+      "feasibility_rationale": "I read pattern_heuristic_selectivity() at histogram_cl.cpp:1300-1345 at the pin. The prefix-skip loop and the 'if (pos >= pattern.size()) return 1.0;' early return are exactly as reported, and the fix is to score the prefix when the caller is the negated form. Small, local, and the correctness obligation is an estimate, not a row.",
+      "registry_difficulty": "low",
+      "registry_difficulty_agreement": "agree (registry: low)"
+    },
+    {
+      "id": "IMP-023",
+      "root_cause_title": "count(DISTINCT x) under a sort-based GROUP BY is executed as one temporary LIST FILE PER GROUP: every operand row is converted to its disk representation and appended to that group's file, and at each group boundary the file is sorted with duplicate elimination just to read back its tuple count -- and the whole per-row/per-group loop runs SINGLE-THREADED after the parallel sort phase, where PostgreSQL either dedups adjacent rows with one equality call or runs an in-memory per-group tuplesort inside the pipelined GroupAggregate",
+      "category": [
+        "aggregation/sort",
+        "intermediate-result",
+        "parallelism"
+      ],
+      "q_relations": [
+        "Q16"
+      ],
+      "lane": "performance",
+      "loc_low": 150,
+      "loc_likely": 400,
+      "loc_high": 900,
+      "files_affected": [
+        "src/query/query_aggregate.cpp",
+        "src/query/query_aggregate.hpp",
+        "src/xasl/xasl_aggregate.hpp",
+        "src/query/list_file.c",
+        "src/query/query_executor.c"
+      ],
+      "files_affected_count": 5,
+      "subsystems_affected": [
+        "executor / aggregation",
+        "list file",
+        "sort",
+        "XASL runtime state"
+      ],
+      "subsystems_affected_count": 4,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": true,
+        "touches_cache_format": true,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "cubxasl::aggregate_list_node is packed by xasl_to_stream.c and restored by stream_to_xasl.c; replacing the per-group list_id with in-memory dedup state changes that struct and therefore the packed XASL layout and the plan-cache representation. Per section 5-d this is a stop-and-report trigger.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "DISTINCT correctness under a memory budget: an in-memory dedup must spill correctly when a group is large, and the COUNT is read off the deduplicated set, so a spill bug silently returns a wrong count. Collation-correct hashing or ordering of the operand values is required (the current path gets it for free from qfile_sort_list with SORT_ELIM_DUP, list_file.c:4722). Memory ownership of the per-group state across group boundaries is the other hazard.",
+      "test_burden": "high",
+      "test_burden_detail": "count(DISTINCT) correctness across group sizes spanning the budget, multiple operand domains and collations, GROUP_CONCAT/percentile paths that share qdata_process_distinct_or_sort, plus spill tests.",
+      "predecessors": [],
+      "alternatives": [],
+      "containment": [
+        "IMP-006 (shares qfile_* profile symbols; bands must not be summed)",
+        "IMP-021 (removes the input this loop consumes; not additive)",
+        "IMP-015"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 41,
+      "blast_radius_score": 45,
+      "risk_score": 40,
+      "test_dependency_score": 40,
+      "feasibility_score": 41.4,
+      "eligibility": "eligible",
+      "blockers": "Touches the packed XASL aggregate node — must stop and report before implementing, per section 5-d.",
+      "feasibility_rationale": "I read qdata_process_distinct_or_sort() (query_aggregate.cpp:70-118) and the per-row body at :830-870 at the pin: per group it db_private_allocs a type list and opens a QFILE list, and per row it calls pr_data_writeval_disk_size + db_private_alloc + data_writeval + qfile_add_item_to_list + free. Replacing that means writing a new per-group dedup with its own budget and spill — a substantial new component, not a tweak.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "disagree (registry: medium) — I rate it high. The registry's 'medium' understates that the replacement is a new memory-budgeted dedup structure plus a change to a packed XASL struct."
+    },
+    {
+      "id": "IMP-024",
+      "root_cause_title": "CUBRID's GROUP BY planning path (pt_check_group_by in semantic_check.c, pt_to_groupby in xasl_generation.c) has no functional-dependency elimination pass, so Q10's GROUP BY key is carried at its full unreduced 7-column width even though 5 of the 7 columns (c_name, c_acctbal, c_phone, c_address, c_comment) are functionally dependent on the PK column (c_custkey) already present in the key, unlike PostgreSQL's remove_useless_groupby_columns() which reduces the same key to 2 columns (c_custkey, n_name)",
+      "category": [
+        "optimizer",
+        "aggregation/sort"
+      ],
+      "q_relations": [
+        "Q10"
+      ],
+      "lane": "performance",
+      "loc_low": 150,
+      "loc_likely": 350,
+      "loc_high": 800,
+      "files_affected": [
+        "src/parser/semantic_check.c",
+        "src/parser/xasl_generation.c",
+        "src/optimizer/query_graph.c",
+        "src/parser/parse_tree.h"
+      ],
+      "files_affected_count": 4,
+      "subsystems_affected": [
+        "parser / semantic analysis",
+        "query optimizer",
+        "XASL generation (SORT_LIST)",
+        "schema constraint lookup"
+      ],
+      "subsystems_affected_count": 4,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": true,
+        "touches_cache_format": true,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "pt_to_groupby() feeds pt_to_sort_list(), whose SORT_LIST is packed into the XASL stream; changing the number of group-by columns changes the packed plan and the plan-cache entry. It only READS PK/unique/NOT NULL metadata, so the catalog format is untouched.",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "Deleting a GROUP BY column is only sound if it is functionally dependent on a retained key: the proof requires a PK or all-NOT-NULL unique constraint on the SAME relation, fully contained in the GROUP BY set. A wrong proof silently merges groups and returns wrong aggregates — the worst failure class in the set. CUBRID also has PRM_ID_ONLY_FULL_GROUP_BY semantics (semantic_check.c:14569 onwards) and outer-join null-supplied sides, both of which can invalidate the dependency.",
+      "test_burden": "high",
+      "test_burden_detail": "A functional-dependency proof matrix (PK, unique+NOT NULL, unique+nullable, partial coverage, outer-join null-supplied side, views, ONLY_FULL_GROUP_BY on and off), plus the full aggregate regression suite.",
+      "predecessors": [],
+      "alternatives": [
+        "leave the key at 7 columns and rely on IMP-015 + IMP-016 (rejected as a full fix)",
+        "rewrite the query text (rejected: forbidden by SSOT section 6)"
+      ],
+      "containment": [
+        "IMP-015 (orthogonal, compounds rather than overlaps)",
+        "IMP-016 (orthogonal)",
+        "IMP-026 (additive)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 43,
+      "blast_radius_score": 45,
+      "risk_score": 30,
+      "test_dependency_score": 30,
+      "feasibility_score": 38.2,
+      "eligibility": "eligible",
+      "blockers": "Touches the packed SORT_LIST and hence XASL serialization — stop and report before implementing, per section 5-d. Also needs a decision on where the pass lives (semantic check vs a new optimizer pass); PostgreSQL puts it in the planner (planmain.c:176), and putting it in semantic_check.c would make it visible to the parse tree consumers.",
+      "feasibility_rationale": "I confirmed both halves at the pin: pt_check_group_by() (semantic_check.c:14569) never compares GROUP BY columns against each other or looks up a constraint, and pt_to_groupby() (xasl_generation.c:6024) is a one-line pass through to pt_to_sort_list with no elimination step. The absence is structural, so the whole pass must be written.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "agree (registry: high)"
+    },
+    {
+      "id": "IMP-025",
+      "root_cause_title": "Uncorrelated NOT IN anti-join membership testing is evaluated by eval_some_list_eval() (query_evaluator.c:549) as an O(n) linear scan through the materialized RHS list with a generic DB_VALUE comparator per item, with no hash table or index, unlike PostgreSQL's shared Parallel Hash anti-join probe (ExecScanHashBucket, nodeHash.c:2018) which walks only the single matching bucket chain and short-circuits JOIN_ANTI on first match (nodeHashjoin.c:593)",
+      "category": [
+        "intermediate-result",
+        "expression/type"
+      ],
+      "q_relations": [
+        "Q16"
+      ],
+      "lane": "performance",
+      "loc_low": 100,
+      "loc_likely": 250,
+      "loc_high": 600,
+      "files_affected": [
+        "src/query/query_evaluator.c",
+        "src/query/query_evaluator.h",
+        "src/xasl/xasl_predicate.hpp"
+      ],
+      "files_affected_count": 3,
+      "subsystems_affected": [
+        "executor / predicate evaluation",
+        "list file",
+        "hash structure (new)"
+      ],
+      "subsystems_affected_count": 3,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Mostly one file. A cached hash of the materialized RHS needs somewhere to live for the statement's duration, which is what may reach the predicate/XASL runtime structs.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "NOT IN is three-valued: if the RHS contains a NULL and no match is found, the result is UNKNOWN, not TRUE. The current linear scan gets this from eval_some_list_eval()'s V_UNKNOWN path (query_evaluator.c:583-600, read at the pin) plus the negation in eval_all_list_eval(). A hash rewrite that returns 'not found -> true' without carrying the has-null flag silently returns extra rows. Hashing must also be collation-correct so that two values that compare equal under tp_value_compare_with_error hash identically.",
+      "test_burden": "high",
+      "test_burden_detail": "NOT IN / IN semantics matrix with NULLs on both sides, empty RHS, collation-sensitive string RHS, and RHS sizes spanning the hash-vs-scan threshold; plus memory-budget behaviour for a large RHS.",
+      "predecessors": [],
+      "alternatives": [],
+      "containment": [
+        "IMP-008 (lowers the cost of one compare; this lowers the number of compares)",
+        "IMP-009 (Q16 side effect: how many times the RHS is built, not what a probe costs)",
+        "IMP-029 (sibling path)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 47,
+      "blast_radius_score": 70,
+      "risk_score": 35,
+      "test_dependency_score": 40,
+      "feasibility_score": 47.5,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "I read eval_some_list_eval() at query_evaluator.c:560-620: it opens a list scan and walks from the start on every call, data_readval-ing each element into a DB_VALUE before comparing. Replacing the scan is a bounded change; reproducing NOT IN's NULL semantics and collation-equality through a hash is where the risk sits.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "agree (registry: high)"
+    },
+    {
+      "id": "IMP-026",
+      "root_cause_title": "Q10's GROUP BY sort-key string comparison re-runs a full byte-by-byte collation-weighted comparison (lang_fastcmp_byte, language_support.c:5453) from scratch on every compare call, with no cached/abbreviated prefix representation, unlike PostgreSQL's varstr_sortsupport()/varstr_abbrev_convert() (varlena.c) which packs the leading 8 bytes of a strxfrm() blob into a single Datum once per tuple and resolves most comparisons with one integer compare, falling back to a full byte compare only on a tie",
+      "category": [
+        "aggregation/sort",
+        "expression/type"
+      ],
+      "q_relations": [
+        "Q10"
+      ],
+      "lane": "deferred_research",
+      "loc_low": 250,
+      "loc_likely": 600,
+      "loc_high": 1400,
+      "files_affected": [
+        "src/base/language_support.c",
+        "src/base/language_support.h",
+        "src/query/list_file.c",
+        "src/storage/external_sort.c",
+        "src/object/object_primitive.c"
+      ],
+      "files_affected_count": 5,
+      "subsystems_affected": [
+        "collation / i18n",
+        "sort",
+        "list file",
+        "object primitive comparators"
+      ],
+      "subsystems_affected_count": 4,
+      "blast_radius_flags": {
+        "touches_header_widely": true,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Abbreviated keys change the sort-key layout produced by qfile_make_sort_key() (list_file.c:3510) and consumed by qfile_compare_partial_sort_record() (:4223); those records go to temporary sort files. Not a persistent format, but a new key format across sort, list file and the collation layer.",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "An abbreviated key is only sound if the integer comparison is a strict prefix-consistent approximation of the full collation comparator for every collation, including trailing-space handling, contractions and expansions. lang_fastcmp_byte() (read at :5453-5495) special-cases SPACE->ZERO and falls back to size comparison; an abbreviation that does not reproduce those rules silently produces a wrongly ORDERED result set, which for a GROUP BY sort means wrong grouping.",
+      "test_burden": "high",
+      "test_burden_detail": "Ordering equivalence across the whole collation matrix and key lengths, abbreviation-collision cases, plus every existing sort/group-by/order-by test.",
+      "predecessors": [],
+      "alternatives": [],
+      "containment": [
+        "IMP-024 (additive: IMP-024 narrows the key, this changes how a string column in it is compared)",
+        "IMP-017"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 36,
+      "blast_radius_score": 30,
+      "risk_score": 20,
+      "test_dependency_score": 25,
+      "feasibility_score": 29.1,
+      "eligibility": "blocked",
+      "blockers": "Requires designing a sort-key abbreviation format CUBRID does not have (a repo-wide grep for 'abbreviat' at the pin returns only timezone/locale-name hits) and proving it collation-sound. Beyond a bounded patch.",
+      "feasibility_rationale": "The comparator really does restart from byte 0 on every call with no cached prefix, and there is no abbreviated-key concept anywhere in the tree, so this is 'build the mechanism', not 'fix the code'.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "agree (registry: high) — and I additionally judge it out of scope for this campaign."
+    },
+    {
+      "id": "IMP-027",
+      "root_cause_title": "A join predicate that is an OR of per-relation AND groups yields no single-relation restriction, so every base scan under it runs unfiltered and the join drives the entire inner relation: CUBRID's only routes from an OR to a sarg are full CNF distribution (switched OFF by count_and_or() > 100 exactly when the predicate is large) and factoring of TEXTUALLY IDENTICAL conjuncts, neither of which fires on a TPC-H Q19-shaped disjunction, where PostgreSQL derives a redundant per-relation OR in extract_restriction_or_clauses() and cuts the driving scan 420.7x",
+      "category": [
+        "optimizer"
+      ],
+      "q_relations": [
+        "Q19"
+      ],
+      "lane": "performance",
+      "loc_low": 150,
+      "loc_likely": 350,
+      "loc_high": 800,
+      "files_affected": [
+        "src/optimizer/query_graph.c",
+        "src/optimizer/query_graph.h",
+        "src/optimizer/query_planner.c",
+        "src/parser/cnf.c"
+      ],
+      "files_affected_count": 4,
+      "subsystems_affected": [
+        "query optimizer / term analysis",
+        "parser / CNF transformation"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "A new transformation pass plus its selectivity compensation. Four optimizer/parser files, no runtime path, no format.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "A derived single-relation restriction must be logically IMPLIED by the original disjunction, or qualifying rows are filtered out before the join and the query returns too few rows — a silent wrong-result class. PostgreSQL's own implementation calls its selectivity compensation a 'MAJOR HACK' (orclauses.c:53-58) and needs is_safe_restriction_clause_for() to reject pseudoconstant and volatile clauses; every one of those guards must be reproduced. There is no analogous machinery in CUBRID: my grep over src/optimizer for extract_or_clause|restriction_or|or_clause returned zero hits at the pin.",
+      "test_burden": "high",
+      "test_burden_detail": "Correctness tests on OR-of-AND predicates including arms that yield nothing, volatile and subquery-bearing arms, outer joins, plus a cardinality-estimate double-counting check and a plan-regression corpus.",
+      "predecessors": [],
+      "alternatives": [
+        "widen the count_and_or limit at cnf.c:988 (rejected: full distribution is exponential, 8^3 = 512 for Q19)"
+      ],
+      "containment": [
+        "IMP-007 (amplified by, not overlapping)",
+        "IMP-013 (amplified by)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 43,
+      "blast_radius_score": 55,
+      "risk_score": 30,
+      "test_dependency_score": 35,
+      "feasibility_score": 41.0,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "I confirmed the two anchors at the pin: cnf.c:988 switches to OR-compact mode above a score of 100, and query_graph.c:2536-2544 classifies a term purely by bitset_cardinality, so a 2-relation OR term can only ever be a join term. The fix is a new optimizer pass with a soundness proof obligation, not a parameter change.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "disagree (registry: medium) — I rate it high. Writing a new, provably sound restriction-extraction pass plus its selectivity compensation is not a medium change; PostgreSQL's equivalent is ~300 lines and self-described as hacky."
+    },
+    {
+      "id": "IMP-028",
+      "root_cause_title": "A correlated EXISTS / NOT EXISTS sublink is never turned into a semi-join or an anti-join -- CUBRID has no such join type at all (query_list.h:37-45) -- so it survives into planning as a PT_EXISTS predicate over ONE relation, which qo_analyze_term() classifies unconditionally as QO_TC_SARG on that relation's scan; the subquery is therefore opened, executed and torn down once per scanned row and can never be deferred past the join that would have reduced the driving relation 24.95x",
+      "category": [
+        "optimizer"
+      ],
+      "q_relations": [
+        "Q21",
+        "Q22"
+      ],
+      "lane": "deferred_research",
+      "loc_low": 1000,
+      "loc_likely": 2500,
+      "loc_high": 6000,
+      "files_affected": [
+        "src/query/query_list.h",
+        "src/optimizer/rewriter/query_rewrite.c",
+        "src/optimizer/rewriter/query_rewrite_subquery.c",
+        "src/optimizer/query_graph.c",
+        "src/optimizer/query_planner.c",
+        "src/parser/xasl_generation.c",
+        "src/query/query_executor.c",
+        "src/query/query_evaluator.c",
+        "src/query/xasl_to_stream.c",
+        "src/query/stream_to_xasl.c",
+        "src/query/query_hash_join.c"
+      ],
+      "files_affected_count": 11,
+      "subsystems_affected": [
+        "query rewriter",
+        "query optimizer / join graph",
+        "XASL generation",
+        "XASL serialization",
+        "executor / join",
+        "predicate evaluation"
+      ],
+      "subsystems_affected_count": 6,
+      "blast_radius_flags": {
+        "touches_header_widely": true,
+        "touches_xasl_serialization": true,
+        "touches_cache_format": true,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "JOIN_TYPE (query_list.h:37-45) is a packed XASL field; adding JOIN_SEMI/JOIN_ANTI code points changes the XASL stream and every plan-cache entry, and IS_OUTER_JOIN_TYPE and every switch over JOIN_TYPE in the executor must be audited. Per section 5-d this is a hard stop.",
+      "correctness_concurrency_risk": "very_high",
+      "correctness_concurrency_risk_reason": "A new join type is a new execution semantics: anti-join must emit exactly the unmatched outer rows including correct NULL handling, and semi-join must emit each qualifying outer row exactly once. Every join-order, outer-join-reordering and predicate-pushdown rule in the optimizer must learn that semi/anti joins are not freely commutable. Getting any of it wrong changes result sets.",
+      "test_burden": "high",
+      "test_burden_detail": "A new join-semantics test corpus, the entire existing SQL regression, plan-cache compatibility, plus correlated and nested EXISTS/NOT EXISTS cases.",
+      "predecessors": [],
+      "alternatives": [
+        "enlarge max_subquery_cache_size (rejected by measurement: hit rate 0.0018%)",
+        "fix the PT_EXISTS selectivity guess (rejected: changes the cost, not the plan set)"
+      ],
+      "containment": [
+        "IMP-031 (the covering-scan part of the same Q22 band; IMP-028 makes IMP-031 moot)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 17,
+      "blast_radius_score": 10,
+      "risk_score": 10,
+      "test_dependency_score": 10,
+      "feasibility_score": 12.8,
+      "eligibility": "blocked",
+      "blockers": "CUBRID has no semi-join or anti-join concept at all — I verified a case-insensitive grep for semi.?join|anti.?join across the whole src/ tree at the pin returns 0 hits, and JOIN_TYPE has no such code point. This is a multi-subsystem feature, changes the packed XASL, and would trip section 5-d immediately.",
+      "feasibility_rationale": "The rewriter genuinely does nothing to PT_EXISTS but push a LIMIT 1 (query_rewrite.c:246-251), the flattening path does not admit PT_EXISTS at all, and query_graph.c:2535-2537 turns a single-relation sublink into a sarg by construction. There is no partial version of this fix. Lowest feasibility in the set.",
+      "registry_difficulty": "high",
+      "registry_difficulty_agreement": "agree (registry: high) — and far beyond it; this is a feature, not a patch."
+    },
+    {
+      "id": "IMP-029",
+      "root_cause_title": "A constant IN-list predicate is evaluated per row by walking a generic DB_SET collection object element by element, materialising and freeing a fresh DB_VALUE copy of every element on every row, instead of being compiled once into a typed array (or hash) of the target domain",
+      "category": [
+        "expression/type",
+        "optimizer"
+      ],
+      "q_relations": [
+        "Q22"
+      ],
+      "lane": "performance",
+      "loc_low": 30,
+      "loc_likely": 90,
+      "loc_high": 220,
+      "files_affected": [
+        "src/query/query_evaluator.c",
+        "src/object/set_object.c",
+        "src/object/set_object.h"
+      ],
+      "files_affected_count": 3,
+      "subsystems_affected": [
+        "executor / predicate evaluation",
+        "collection (DB_SET) API"
+      ],
+      "subsystems_affected_count": 2,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "One hot function plus, for the peek variant, a non-copying accessor on the collection API. No format, no serialization, no protocol.",
+      "correctness_concurrency_risk": "medium",
+      "correctness_concurrency_risk_reason": "eval_some_eval() (read in full at query_evaluator.c:352-387) is 20 lines. Hoisting set_size() out of the loop is risk-free. Replacing set_get_element() with a peek accessor changes value ownership: the current code owns the copy and pr_clear_value()s it, and a peeked element must not be cleared or retained past the collection's lifetime. Set elements can be disk-resident (set_tform_disk_set appears in the profile), so a peek path needs a guard for that case. Three-valued logic (the V_UNKNOWN accumulation at :380) must be preserved exactly.",
+      "test_burden": "medium",
+      "test_burden_detail": "IN-list predicate tests with NULL elements, heterogeneous and disk-resident sets, empty sets, and the existing predicate regression.",
+      "predecessors": [],
+      "alternatives": [
+        "IMP-008 (complementary, not a substitute: IMP-008 lowers the per-element compare, this removes the per-element materialization)"
+      ],
+      "containment": [
+        "IMP-020 (shares the per-row DB_VALUE alloc/copy/clear band on Q22; must not be double counted)",
+        "IMP-025 (sibling membership test on a different path)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 60,
+      "blast_radius_score": 82,
+      "risk_score": 60,
+      "test_dependency_score": 55,
+      "feasibility_score": 63.7,
+      "eligibility": "eligible",
+      "blockers": "",
+      "feasibility_rationale": "The smallest genuine per-row waste in the set that is not already claimed by a harder candidate: 'for (i = 0; i < set_size (set); i++)' re-calls set_size every iteration and set_get_element materializes and frees a DB_VALUE copy of a compile-time-constant element per row. The hoist alone is a handful of lines.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "agree (registry: medium) — if scoped to the hoist plus a peek accessor I would call it low-to-medium."
+    },
+    {
+      "id": "IMP-030",
+      "root_cause_title": "Comparing a NUMERIC column against a DOUBLE value coerces the NUMERIC to double per row by FORMATTING IT TO A DECIMAL STRING and calling atof() on it, then dividing by pow(10, scale); and avg(NUMERIC) returning DOUBLE is what forces that coercion into the row loop in the first place",
+      "category": [
+        "expression/type"
+      ],
+      "q_relations": [
+        "Q22"
+      ],
+      "lane": "performance",
+      "loc_low": 20,
+      "loc_likely": 50,
+      "loc_high": 130,
+      "files_affected": [
+        "src/query/numeric_opfunc.c"
+      ],
+      "files_affected_count": 1,
+      "subsystems_affected": [
+        "expression/type (NUMERIC coercion)"
+      ],
+      "subsystems_affected_count": 1,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "One 9-line function in one file. But numeric_db_value_coerce_from_num() dispatches to it from eight call sites (:5965, :5978, :5991, :5999, :6025, :6078, :6091, :6103), so every NUMERIC-to-float/double coercion in the engine changes at once.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "The current implementation formats to a decimal string, atof()s it and divides by pow(10, scale) — and the code itself documents that this loses precision ('123.445 was converted to 123.444999999999999999', numeric_opfunc.c:4049-4050, read at the pin). A direct binary conversion is MORE accurate, which means results will legitimately differ in the last ULP from today's behaviour for some values. That is a visible behaviour change in comparison outcomes and in cast results, so it needs an explicit decision on whether bit-compatibility with the old rounding is required, and the campaign's own 1e-12 relative validation rule has to be checked against it.",
+      "test_burden": "medium",
+      "test_burden_detail": "NUMERIC-to-double conversion tests across the precision/scale matrix including the documented 123.445 case, plus comparison and CAST regression. The existing suite covers CAST but does not pin last-ULP behaviour.",
+      "predecessors": [],
+      "alternatives": [
+        "IMP-008 (a domain-specialized NUMERIC/DOUBLE comparator would subsume this band)"
+      ],
+      "containment": [],
+      "relations_disagreement_with_registry": "The registry lists IMP-001 as a PREDECESSOR of IMP-030, with the stated reason that 'a fix to either establishes the pattern for the other'. That is not a dependency. I record predecessors as empty; either can land alone.",
+      "loc_score": 67,
+      "blast_radius_score": 85,
+      "risk_score": 50,
+      "test_dependency_score": 50,
+      "feasibility_score": 63.8,
+      "eligibility": "eligible",
+      "blockers": "Needs a user decision on rounding compatibility: the replacement is more accurate than what it replaces, so 'unchanged results' cannot be the acceptance criterion for every value.",
+      "feasibility_rationale": "The function is exactly as described — stack char buffer, numeric_coerce_num_to_dec_str, atof, pow — with an in-code precision warning and a CUBRIDSUS-2637 TODO. Tiny diff, but it is the engine-wide NUMERIC->double path.",
+      "registry_difficulty": "low",
+      "registry_difficulty_agreement": "disagree (registry: low) — I rate it medium. The diff is small; the obligation to decide and defend a rounding change across every NUMERIC-to-double coercion in the engine is not."
+    },
+    {
+      "id": "IMP-031",
+      "root_cause_title": "An EXISTS / NOT EXISTS subquery is compiled as a table-producing XASL that must fetch one whole TUPLE of the subquery's select list, so the membership probe projects a data column, the index scan fails the covering-index test and performs a data-row lookup per matching key -- even though existence needs no column value at all",
+      "category": [
+        "optimizer",
+        "index"
+      ],
+      "q_relations": [
+        "Q22"
+      ],
+      "lane": "performance",
+      "loc_low": 40,
+      "loc_likely": 120,
+      "loc_high": 300,
+      "files_affected": [
+        "src/parser/xasl_generation.c",
+        "src/optimizer/rewriter/query_rewrite.c",
+        "src/optimizer/query_graph.c"
+      ],
+      "files_affected_count": 3,
+      "subsystems_affected": [
+        "XASL generation",
+        "query rewriter",
+        "query optimizer / index selection"
+      ],
+      "subsystems_affected_count": 3,
+      "blast_radius_flags": {
+        "touches_header_widely": false,
+        "touches_xasl_serialization": false,
+        "touches_cache_format": false,
+        "touches_wire_protocol": false,
+        "touches_disk_format": false,
+        "touches_catalog_format": false,
+        "touches_write_path": false,
+        "touches_lock_or_latch_protocol": false
+      },
+      "blast_radius_flags_justification": "Pruning the EXISTS subquery's select list changes the CONTENTS of the generated XASL, not its layout, so no serialization format changes. Three files, all plan-time.",
+      "correctness_concurrency_risk": "high",
+      "correctness_concurrency_risk_reason": "The select list of an EXISTS subquery is not always inert: the existing code at xasl_generation.c:1693 already guards the single-tuple-scan flag with pt_has_having_with_predicate(), and the list can be referenced by HAVING, ORDER BY, correlated outer references or GROUP BY inside the subquery. Pruning it without covering every such case produces a subquery that fails to compile or, worse, evaluates a different predicate. UNBOX_AS_TABLE means the regu variable is a table producer, so the projection cannot simply be emptied — it must be replaced with something the executor accepts.",
+      "test_burden": "medium",
+      "test_burden_detail": "EXISTS/NOT EXISTS correctness with HAVING, ORDER BY, GROUP BY, correlated references and set operations inside the subquery, plus plan assertions that the covering index is now chosen.",
+      "predecessors": [],
+      "alternatives": [],
+      "containment": [
+        "IMP-028 (contains this: IMP-028's Q22 anti-join band contains this candidate's 0.11004 core-s; if IMP-028 ever landed this becomes moot — do not implement both, and do not sum them)"
+      ],
+      "relations_disagreement_with_registry": null,
+      "loc_score": 56,
+      "blast_radius_score": 70,
+      "risk_score": 45,
+      "test_dependency_score": 45,
+      "feasibility_score": 54.4,
+      "eligibility": "eligible",
+      "blockers": "Not blocked. IMP-028 is its container but is in the deferred_research lane, so IMP-031 is the eligible cheap step on the same cost.",
+      "feasibility_rationale": "I read xasl_generation.c:1683-1699 at the pin: PT_EXISTS is compiled with UNBOX_AS_TABLE and then flagged XASL_NEED_SINGLE_TUPLE_SCAN, so a whole tuple of the subquery select list must be produced. The covering-index machinery already exists (qo_is_coverage_index, query_graph.c:6933); only the projection makes the query ineligible for it.",
+      "registry_difficulty": "medium",
+      "registry_difficulty_agreement": "agree (registry: medium)"
+    }
+  ],
+  "lane_summary": {
+    "performance": [
+      "IMP-001",
+      "IMP-003",
+      "IMP-004",
+      "IMP-006",
+      "IMP-008",
+      "IMP-009",
+      "IMP-010",
+      "IMP-012",
+      "IMP-013",
+      "IMP-014",
+      "IMP-015",
+      "IMP-016",
+      "IMP-018",
+      "IMP-019",
+      "IMP-021",
+      "IMP-022",
+      "IMP-023",
+      "IMP-024",
+      "IMP-025",
+      "IMP-027",
+      "IMP-029",
+      "IMP-030",
+      "IMP-031"
+    ],
+    "enabler": [
+      "IMP-005"
+    ],
+    "diagnostic": [
+      "IMP-017"
+    ],
+    "deferred_research": [
+      "IMP-002",
+      "IMP-007",
+      "IMP-011",
+      "IMP-020",
+      "IMP-026",
+      "IMP-028"
+    ]
+  },
+  "lane_counts": {
+    "performance": 23,
+    "enabler": 1,
+    "diagnostic": 1,
+    "deferred_research": 6
+  },
+  "dependency_clusters": [
+    {
+      "cluster": "LIKE selectivity estimator (histogram_get_like_selectivity)",
+      "members": [
+        "IMP-003",
+        "IMP-022"
+      ],
+      "kind": "containment",
+      "note": "Siblings, not duplicates and not alternatives: IMP-003 is the non-MCV bucket-boundary arm (histogram_cl.cpp:1487-1501) on a leading-wildcard pattern, IMP-022 the heuristic prefix-skip arm (:1311-1337) reached through PT_NOT_LIKE. Both may be implemented. Recorded as a cluster for two reasons: their effects are never additive on a single term (no term takes both branches), and they edit the same function region, so under the one-branch rule (section 5-b) the two branches will conflict textually and must be sequenced."
+    },
+    {
+      "cluster": "Q02 LIKE cost: avoid the work vs accelerate it",
+      "members": [
+        "IMP-003",
+        "IMP-004"
+      ],
+      "kind": "alternative",
+      "note": "IMP-003 contains IMP-004 for Q02 (after the estimate is fixed only 39,575 of 2,000,000 rows reach the matcher). Queue IMP-003; IMP-004 is independent only for queries where the LIKE cannot be deferred. Do not sum."
+    },
+    {
+      "cluster": "Buffer manager: miss count, miss cost, hit cost, retention window",
+      "members": [
+        "IMP-002",
+        "IMP-007",
+        "IMP-010",
+        "IMP-013",
+        "IMP-018"
+      ],
+      "kind": "containment",
+      "note": "IMP-002 (how many misses) and IMP-007 (what each miss costs) are declared alternatives and must not both be queued. IMP-010 re-scopes IMP-002 to the parallel-scan path; IMP-018 is a different premise (a working set that FITS the pool but is capped at 5,000 BCBs); IMP-013 is the hit-path CPU of the same bookkeeping. All five share profile bands and none of their savings may be summed. Additionally all five are page_buffer.c/file_io.c edits, so the one-branch rule forces a sequence."
+    },
+    {
+      "cluster": "Q10 GROUP BY strategy and key",
+      "members": [
+        "IMP-015",
+        "IMP-016",
+        "IMP-017",
+        "IMP-024",
+        "IMP-026"
+      ],
+      "kind": "alternative",
+      "note": "IMP-015 and IMP-016 are genuine ALTERNATIVES for Q10's measured 1.313675x — fixing either recovers it, so at most one should be counted; IMP-015 is the measured route. IMP-017 is a PREDECESSOR of IMP-016's memory-limit arm (max_agg_hash_size cannot be changed on a running server until it lands). IMP-024 (narrower key) and IMP-026 (cheaper string compare) are orthogonal to both and compound rather than overlap."
+    },
+    {
+      "cluster": "compute_parallel_degree() branches",
+      "members": [
+        "IMP-005",
+        "IMP-009",
+        "IMP-012"
+      ],
+      "kind": "predecessor_chain",
+      "note": "IMP-009 (SUBQUERY branch) and IMP-012 (SCAN branch plus the non-participating coordinator) are two different defects at the same decision point in the same 176-line file; they must be sequenced, not merged. IMP-005 precedes both as a measurement prerequisite: until the nested-chain trace merge is fixed the reported worker counts and row counts are double-counted and no degree change can be honestly read."
+    },
+    {
+      "cluster": "Q09 join choice: what is costed vs how it is costed",
+      "members": [
+        "IMP-014",
+        "IMP-011"
+      ],
+      "kind": "containment",
+      "note": "IMP-014 supplies the cardinality that IMP-011's qo_nljoin_cost()/qo_hjoin_cost() consume. Their Q09 effects overlap completely and must never be summed. IMP-014 is far cheaper and the registry's own measurement rejects IMP-011 as Q09's deciding term, so IMP-011 should not be queued for Q09."
+    },
+    {
+      "cluster": "Q22 correlated EXISTS",
+      "members": [
+        "IMP-028",
+        "IMP-031"
+      ],
+      "kind": "containment",
+      "note": "IMP-028's Q22 anti-join band (1.18252 core-s) CONTAINS IMP-031's 0.11004 core-s. Implementing IMP-028 makes IMP-031 moot. Since IMP-028 is deferred_research, IMP-031 is the eligible member. Never sum."
+    },
+    {
+      "cluster": "Group-by work removal vs group-by work acceleration",
+      "members": [
+        "IMP-021",
+        "IMP-015",
+        "IMP-023"
+      ],
+      "kind": "containment",
+      "note": "IMP-021 removes the group-by sort entirely by admitting an ordered index scan; IMP-015 parallelizes that sort and IMP-023 optimizes the per-group DISTINCT loop that consumes its output. On any query where IMP-021 fires it removes the workload the other two accelerate, so their effects are not additive."
+    },
+    {
+      "cluster": "Generic comparator dispatch and its callers",
+      "members": [
+        "IMP-008",
+        "IMP-025",
+        "IMP-029",
+        "IMP-030"
+      ],
+      "kind": "containment",
+      "note": "All four reach tp_value_compare_with_error (object_domain.c:10404). IMP-008 lowers the cost of one comparison; IMP-025 lowers the NUMBER of comparisons for a materialized NOT IN list; IMP-029 removes the per-element materialization around it for a constant IN list; IMP-030 removes one coercion the comparator performs. They are complementary and can all be implemented, but a domain-specialized comparator (IMP-008) would subsume IMP-030's band entirely, so IMP-030's saving must be recomputed if IMP-008 lands first, and none of the four bands may be summed against the same core-seconds."
+    },
+    {
+      "cluster": "qfile_* materialisation bands",
+      "members": [
+        "IMP-006",
+        "IMP-023"
+      ],
+      "kind": "containment",
+      "note": "IMP-006 owns per-tuple materialisation of intermediate JOIN results; IMP-023 owns the per-GROUP aggregate operand list files. Distinct code paths, but they share qfile_* profile symbols, so on any query where both fire the bands overlap and must be reported as one (Q16 already is). Not additive."
+    },
+    {
+      "cluster": "Per-row DB_VALUE lifecycle band (Q22)",
+      "members": [
+        "IMP-020",
+        "IMP-029"
+      ],
+      "kind": "containment",
+      "note": "The 23.30% DB_VALUE alloc/copy/clear band on Q22 is split between them: IMP-020 owns per-ROW scan-output materialisation, IMP-029 the per-ELEMENT materialisation inside the IN-list loop. Must not be counted twice."
+    }
+  ],
+  "format_change_candidates": [
+    "IMP-002",
+    "IMP-007",
+    "IMP-010",
+    "IMP-013",
+    "IMP-018"
+  ],
+  "format_change_candidates_note": "These candidates set touches_write_path (all five are buffer-manager or file-I/O changes: pgbuf_fix/pgbuf_unfix, victim selection and page insertion are shared by dirty, write-fixed pages, and page_buffer.c's 220 pgbuf_fix call sites include every DML path). NONE of the 31 candidates changes a PERSISTENT database storage format or a CATALOG format — IMP-014, IMP-024 and IMP-031 only READ constraint/index metadata. Per the pinned document sections 5-d and the prompt's requirement, every id listed here requires a stop-and-report before implementation.",
+  "xasl_serialization_candidates": [
+    "IMP-006",
+    "IMP-023",
+    "IMP-024",
+    "IMP-028"
+  ],
+  "xasl_serialization_candidates_note": "Section 5-d makes touching XASL serialization an independent hard stop, so these are listed separately from the format list. IMP-023 and IMP-024 change packed structs (cubxasl::aggregate_list_node, SORT_LIST); IMP-028 adds JOIN_TYPE code points; IMP-006 changes the list-file tuple layout. IMP-001 is NOT listed but is adjacent: cubxasl::aggregate_accumulator is packed at xasl_to_stream.c:5567-5581 and restored at stream_to_xasl.c:5964-6003, so a deferred-carry accumulator must keep its new state runtime-only or it becomes a hard stop too.",
+  "open_questions": [
+    "IMP-005 lane. Its text matches the Diagnostic-Measurement-correctness definition verbatim ('improves observability, plan/trace fidelity'), but the registry makes it an explicit measurement prerequisite for IMP-009 ('IMP-005 must be resolved or co-validated'), which matches the Enabler-Predecessor definition ('another candidate cannot be ... measured without it'). I assigned enabler because that lane carries the operational consequence of a queue slot immediately ahead of IMP-009/IMP-012. If the user prefers the literal reading, move it to diagnostic; nothing else in this file depends on the choice.",
+    "IMP-021 executor support could not be settled read-only. query_executor.c:16605-16609 makes qexec_groupby_index() reachable only when THIS xasl's own first access spec carries groupby_skip, which a join's xasl appears unable to satisfy. Whether the optimizer-only fix therefore (a) does nothing, (b) works because the plan is reshaped, or (c) admits a plan the executor mis-executes, cannot be determined without running it. If (c), the LOC band and the risk rating are both too low.",
+    "IMP-018 cannot be sized without a policy decision. The hard cap (5000 BCBs) and the MIN_PRIVATE_RATIO 0.01 floor coincide within 9% on this 524,288-page pool, so read-only inspection cannot tell which one binds; the registry says the same. Both must move, and how far is a multi-session fairness decision, not a measurement.",
+    "IMP-001 accumulator placement. I could not determine read-only whether a deferred-carry accumulator can live entirely outside the packed cubxasl::aggregate_accumulator. If it cannot, the candidate becomes an XASL-serialization change and a section 5-d hard stop, and its blast_radius_score of 45 is too generous.",
+    "IMP-012 is two changes in one candidate (work-aware degree formula; participating coordinator). The one-branch rule in section 5-b argues for splitting it into two hypotheses. I scored it as bundled; a split would give the formula half a materially higher feasibility score than the 48.0 recorded here.",
+    "Test-burden ratings are estimates of what SHOULD be run. I did not enumerate the existing CTP/SQL regression suite to confirm which paths are already covered, because that lives outside the two read-only checkouts I was given. Every 'no existing test covers this' statement in this file is an inference from the source, not from a test inventory.",
+    "No LOC estimate here has been validated against an actual patch. The pinned document stops implementation at 150% of the HIGH estimate, so these bands are the trap the implementer inherits; I biased the high estimates upward wherever the change requires inventing a mechanism CUBRID does not have (IMP-002, IMP-007, IMP-020, IMP-026, IMP-028) rather than editing one that exists."
+  ],
+  "prompt_vs_pinned_ssot_disagreements": [
+    "None material. Two wording differences, both resolved in favour of the pinned document per its authority rule: (1) the prompt's lane tokens performance/enabler/diagnostic/deferred_research are shorthand for section 4-a's 'Performance' / 'Enabler-Predecessor' / 'Diagnostic-Measurement-correctness' / 'Deferred research' — recorded as a 1:1 mapping in lane_vocabulary_note, no semantic difference. (2) The prompt asks only for candidates that touch persistent format, catalog format or a write path to be flagged for stop-and-report; section 5-d additionally makes XASL serialization and the lock protocol independent hard stops. I follow the document and report both, listing the XASL-serialization group separately in xasl_serialization_candidates."
+  ]
+}
