@@ -24,6 +24,18 @@ _Avoid_: 해시테이블 꽉 참, 메모리 초과, spill
 해시 메모리 예산을 초과했을 때 엔트리를 partial list로 덜어내고 해시 집계는 계속하는 동작이다. 해시 상태를 바꾸지 않으며 해시 포기와 무관하다.
 _Avoid_: 해시 포기, HS_REJECT_ALL
 
+**리더 잔여 직렬 (leader-serial residue)**:
+병렬 폴백 정렬에서 워커 정렬이 끝난 뒤 리더 단독으로 남는 두 국면 — ② fan-in 병합(`sort_merge_worker_runs_to_one`)과 ③ 튜플당 put_fn drain(`sort_run_final_single`) — 의 시간 몫이다. IMP-032(구 IC-5)의 공략 대상.
+_Avoid_: 직렬 꼬리(serial tail — 텔레메트리 지표와 혼동 금지), GROUP BY 전체 시간
+
+**그룹 경계 정렬 분할 (group-boundary-aligned split)**:
+consolidated run을 페이지 단위로 나눈 뒤(`sort_split_last_run` 그대로), 각 워커가 drain 시점에 선두의 이전 구간 연속 그룹을 건너뛰고 말미의 미완 그룹을 닫힐 때까지 초과 읽기하여, 모든 그룹이 정확히 한 워커에 통째로 귀속되게 하는 분할 규약이다. 이 규약 하에서 워커는 직렬과 동일한 순서로 동일한 튜플을 보므로 order-sensitive aggregate까지 의미가 보존된다.
+_Avoid_: range partition(물리 재분배로 오해), 튜플 재분배
+
+**귀속 프로브 (attribution probe)**:
+A/B 증거가 아닌 귀속 증거를 얻기 위한 경량 측정 — 워밍업 1회 + 트레이스 1회 + perf 샘플, §6-c 블록 규율·quiet-gate 차단 미적용(bgload 기록만). 기대효과 산정과 스코프 분해 판단에만 쓰고 accept/reject 판정에는 쓰지 않는다.
+_Avoid_: 텔레메트리 패스, A/B 블록
+
 **계획시점 해시 적격 (plan-time hash-eligible)**:
 XASL 생성 시 select 리스트와 HAVING절의 형태만으로 결정되는 정적 플래그로, 런타임에 해시가 실제로 유지됐는지와는 별개다. 런타임 해시 상태와 혼용하지 않는다.
 _Avoid_: 런타임 해시 상태, hash: true/partial
