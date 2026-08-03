@@ -131,30 +131,4 @@ assumptions and limitations stated.
 
 Code that merely runs is not necessarily done.
 
-9. Practical Checklist
-
-Before coding:
-
-What exactly is being requested?
-What assumptions am I making?
-What will I explicitly not touch?
-Is there a simpler solution?
-What are the success criteria?
-
-While coding:
-
-Am I changing only necessary lines?
-Am I matching the existing style?
-Did I avoid speculative abstractions?
-Are important decisions traceable?
-Is the change reversible?
-
-Before finishing:
-
-Did I verify the intended behavior?
-Did I test normal, boundary, empty/None, mapped, and malformed cases where relevant?
-Did I remove only unused code caused by my own change?
-Did I update docs or comments if behavior changed?
-Can every changed line be explained by the original request?
-
 These guidelines are working if diffs become smaller, unnecessary rewrites decrease, overcomplication decreases, and clarifying questions happen before implementation mistakes rather than after them.

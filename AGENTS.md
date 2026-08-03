@@ -29,21 +29,11 @@ looking for engine code, you are in the wrong directory.
 
 Every skill is a markdown prompt under `.agents/skills/<name>/SKILL.md`. Harnesses discover
 skills via `.claude/skills/`, where each entry is a **relative symlink** back into
-`.agents/skills/`:
-
-```
-.claude/skills/<name> -> ../../.agents/skills/<name>
-```
+`.agents/skills/`.
 
 `.agents/skills/` is the single source of truth; never edit a skill "through" the symlink as
 if it were a separate copy. To add a skill, create it under `.agents/skills/` and add the
 matching relative symlink under `.claude/skills/`.
-
-Bundled skills: caveman, ctp-parallel, cubrid-build, cubrid-deps-check, cubrid-jira-issue-write,
-cubrid-manual, cubrid-pr-create, cubrid-pr-review, cubrid-pr-sync, cubrid-server-control,
-cubrid-shell-run, design-an-interface, grill-me, grill-with-docs, improve-codebase-architecture, jira,
-md-to-presentation, obsidian-vault, remote-claude, remote-codex, setup-matt-pocock-skills,
-to-issues, to-prd, triage, write-a-skill.
 
 ## The `$WORKSPACE` convention
 
