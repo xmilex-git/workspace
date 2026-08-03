@@ -1,0 +1,586 @@
+{
+  "PARTIAL": true,
+  "attempt_level_discards": {
+    "discarded_by_query": {
+      "Q01": 5,
+      "Q04": 3,
+      "Q05": 2,
+      "Q06": 4,
+      "Q07": 2
+    },
+    "discarded_by_reason": {
+      "INVALID_BACKGROUND_LOAD": 2,
+      "WARM_NOT_CONVERGED": 14
+    },
+    "interpretation": "A 30% attempt-discard rate, dominated by WARM non-convergence under the per-block restart, is itself evidence for AMEND-G: each discarded attempt is a full re-warm that the fast regime does not pay.",
+    "n_attempts_accepted": 36,
+    "n_attempts_discarded": 16,
+    "n_attempts_total": 53,
+    "note": "measure_block.sh writes per-attempt artifacts into work/<QNN>/, which the next block of the same query overwrites; only the driver log is a complete durable record. Parsed by extract_attempts.py."
+  },
+  "binaries": {
+    "csql": {
+      "build_id": "64a48dfc4cc163847e9ecb528448694e0b47f7fd",
+      "path": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base/bin/csql",
+      "sha256": "14b5b86865a5cafeb6b34ffa01a958b6d0e2da6e72d2e982e0527bac581a84b8"
+    },
+    "cub_master": {
+      "build_id": "54bb9c7cec32b4c2e887540fa84c711abca8b439",
+      "path": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base/bin/cub_master",
+      "sha256": "003cae2331d0d0632bc450cc7520c40fcbd88190b548e828af13a7b1b9a890a5"
+    },
+    "cub_server": {
+      "build_id": "af122f60daeddc3179fe31cd6b9b490f8ebb3f2a",
+      "path": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base/bin/cub_server",
+      "sha256": "16abc26afa1db16992b6213ecc02adc193d674eb8ba91f0963ae414abd953199"
+    }
+  },
+  "campaign_id": "tpch-sspq-impl-r1-20260803",
+  "cpu_contract": {
+    "collector_cpus": "20-23",
+    "mechanism": "taskset + numactl applied at process start (IMPL-SSOT section 3-a); never cpuset cgroups, never post-hoc re-pinning",
+    "membind_node": "0",
+    "sut_cpus": "0-15"
+  },
+  "cubrid_base_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+  "cubrid_conf_sha256_as_installed": "ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff",
+  "database": "tpch_sf10_q1",
+  "estimator": {
+    "note": "The fast regime MUST be reduced with this identical estimator and these identical pairings, or the ratio CV_restart/CV_fast is not a measurement of the restart's contribution.",
+    "paired_cv": "sample SD of the signed relative differences (b-a)/mean(a,b) over base-vs-base block-median pairs, divided by sqrt(2) \u2014 the per-block CV implied by the paired spread (IMPL-SSOT section 3-c step 6)",
+    "pairings": {
+      "adjacent": "(b1,b2)(b3,b4)(b5,b6)",
+      "spaced": "(b1,b4)(b2,b5)(b3,b6) \u2014 mirrors the B-P-P-B slot spacing"
+    },
+    "selection": "the LARGER of the two pairings is used, so the noise floor is never understated"
+  },
+  "excluded": {
+    "Q07": "PARTIAL AND EXCLUDED \u2014 only block 1 of 6 completed before the driver was stopped for the regime change; block 2 was mid-flight in warm_establish and was discarded, not salvaged. One block cannot yield a paired CV."
+  },
+  "external_load_gate_core_s_per_s": 6.0,
+  "generated_utc": "2026-08-03T05:19:20Z",
+  "impl_ssot_amendment": "AMEND-G",
+  "impl_ssot_blob": "15b42ddca521444fa54b34b0fa8477ed2df643f6",
+  "impl_ssot_commit": "eccdd1ae58cd733ed3121585146d68b9ae54a73f",
+  "install_prefix": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base",
+  "next_step_when_campaign_resumes": [
+    "1. Run tpch-sspq/impl/harness/phase1a_fast_driver.sh (Q01-Q06 first).",
+    "2. Reduce the fast-regime blocks with the IDENTICAL estimator and pairings above.",
+    "3. inflation_q = restart_regime_paired_cv / fast_regime_paired_cv, per query.",
+    "4. Choose pooled vs wall-dependent FROM the six points, and justify in writing.",
+    "5. corrected_MDE_q = max(1%, 2 x inflation x fast_regime_paired_cv) for Q07-Q22; Q01-Q06 use their directly measured restart-regime paired CV."
+  ],
+  "partial_reason": "The campaign was paused by the user before the AMEND-G fast-regime sweep was started. This file therefore contains ONLY the restart-regime half of the section 6-d-1 calibration. NO fast-regime paired CV was measured for any query, so NO inflation factor has been derived and NO corrected MDE exists yet.",
+  "phase": "1A restart-variance calibration (section 6-d-1) \u2014 RESTART-REGIME HALF ONLY",
+  "pin_span_note": "The restart-regime calibration data spans TWO IMPL-SSOT pins. Blocks written before 2026-08-03T04:43:25Z carry ed6fb39f4ea39218b1a8243562083401678a2723 / 1118b18ff1718f8493d72921fb7bb8851e6a1d8c; blocks after it carry 2de2404ba3e39016c423a85900e5b04a39dfda14 / 111c281081785cd25f2b59d74b2a38dfaa75d7da (the AMEND-F commit). This does NOT affect the variance derivation: sections 3, 6, 7, 8 and 9 \u2014 every section that governs Phase 1A measurement \u2014 are byte-identical across the two blobs, proven by hashing each top-level section of both independently (work/BASELINE/repin-record.json). AMEND-F changed only the Phase 1B scoring inputs, the external_tracking lane and the upstream scope gate, none of which touch how a block is measured. The measurement contract under which every calibration block was collected is therefore identical.",
+  "queries": {
+    "Q01": {
+      "block_dispersion_cv": 0.010234769683021826,
+      "block_dispersion_sd_s": 0.3198672449629165,
+      "block_medians_s": [
+        31.405999,
+        31.581999,
+        31.035999,
+        30.902999,
+        30.973999,
+        31.616998
+      ],
+      "blocks_accepted": 6,
+      "blocks_invalidated": 0,
+      "corrected_mde": null,
+      "fast_regime_paired_cv": null,
+      "inflation_factor": null,
+      "median_wall_seconds": 31.220999,
+      "restart_regime_mde": 0.029761527527167597,
+      "restart_regime_paired_cv": 0.014880763763583799,
+      "restart_regime_paired_cv_adjacent": 0.0088433587112701,
+      "restart_regime_paired_cv_source": "spaced",
+      "restart_regime_paired_cv_spaced": 0.014880763763583799,
+      "restart_regime_pairs_adjacent": [
+        {
+          "a_s": 31.405999,
+          "b_s": 31.581999,
+          "pair": [
+            1,
+            2
+          ],
+          "relative_diff": 0.005588
+        },
+        {
+          "a_s": 31.035999,
+          "b_s": 30.902999,
+          "pair": [
+            3,
+            4
+          ],
+          "relative_diff": -0.004295
+        },
+        {
+          "a_s": 30.973999,
+          "b_s": 31.616998,
+          "pair": [
+            5,
+            6
+          ],
+          "relative_diff": 0.020546
+        }
+      ],
+      "restart_regime_pairs_spaced": [
+        {
+          "a_s": 31.405999,
+          "b_s": 30.902999,
+          "pair": [
+            1,
+            4
+          ],
+          "relative_diff": -0.016145
+        },
+        {
+          "a_s": 31.581999,
+          "b_s": 30.973999,
+          "pair": [
+            2,
+            5
+          ],
+          "relative_diff": -0.019439
+        },
+        {
+          "a_s": 31.035999,
+          "b_s": 31.616998,
+          "pair": [
+            3,
+            6
+          ],
+          "relative_diff": 0.018547
+        }
+      ],
+      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
+    },
+    "Q02": {
+      "block_dispersion_cv": 0.005620674031168381,
+      "block_dispersion_sd_s": 0.002041241452319317,
+      "block_medians_s": [
+        0.362,
+        0.36,
+        0.364,
+        0.364,
+        0.366,
+        0.363
+      ],
+      "blocks_accepted": 6,
+      "blocks_invalidated": 0,
+      "corrected_mde": null,
+      "fast_regime_paired_cv": null,
+      "inflation_factor": null,
+      "median_wall_seconds": 0.3635,
+      "restart_regime_mde": 0.01367942607164021,
+      "restart_regime_paired_cv": 0.006839713035820105,
+      "restart_regime_paired_cv_adjacent": 0.002967482576511304,
+      "restart_regime_paired_cv_source": "spaced",
+      "restart_regime_paired_cv_spaced": 0.006839713035820105,
+      "restart_regime_pairs_adjacent": [
+        {
+          "a_s": 0.362,
+          "b_s": 0.36,
+          "pair": [
+            1,
+            2
+          ],
+          "relative_diff": -0.00554
+        },
+        {
+          "a_s": 0.364,
+          "b_s": 0.364,
+          "pair": [
+            3,
+            4
+          ],
+          "relative_diff": 0.0
+        },
+        {
+          "a_s": 0.366,
+          "b_s": 0.363,
+          "pair": [
+            5,
+            6
+          ],
+          "relative_diff": -0.00823
+        }
+      ],
+      "restart_regime_pairs_spaced": [
+        {
+          "a_s": 0.362,
+          "b_s": 0.364,
+          "pair": [
+            1,
+            4
+          ],
+          "relative_diff": 0.00551
+        },
+        {
+          "a_s": 0.36,
+          "b_s": 0.366,
+          "pair": [
+            2,
+            5
+          ],
+          "relative_diff": 0.016529
+        },
+        {
+          "a_s": 0.364,
+          "b_s": 0.363,
+          "pair": [
+            3,
+            6
+          ],
+          "relative_diff": -0.002751
+        }
+      ],
+      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
+    },
+    "Q03": {
+      "block_dispersion_cv": 0.005524119712012392,
+      "block_dispersion_sd_s": 0.02664927141530659,
+      "block_medians_s": [
+        4.834,
+        4.828999,
+        4.811999,
+        4.813,
+        4.788999,
+        4.868
+      ],
+      "blocks_accepted": 6,
+      "blocks_invalidated": 0,
+      "corrected_mde": null,
+      "fast_regime_paired_cv": null,
+      "inflation_factor": null,
+      "median_wall_seconds": 4.820999499999999,
+      "restart_regime_mde": 0.014886596757239337,
+      "restart_regime_paired_cv": 0.007443298378619669,
+      "restart_regime_paired_cv_adjacent": 0.006862428026624178,
+      "restart_regime_paired_cv_source": "spaced",
+      "restart_regime_paired_cv_spaced": 0.007443298378619669,
+      "restart_regime_pairs_adjacent": [
+        {
+          "a_s": 4.834,
+          "b_s": 4.828999,
+          "pair": [
+            1,
+            2
+          ],
+          "relative_diff": -0.001035
+        },
+        {
+          "a_s": 4.811999,
+          "b_s": 4.813,
+          "pair": [
+            3,
+            4
+          ],
+          "relative_diff": 0.000208
+        },
+        {
+          "a_s": 4.788999,
+          "b_s": 4.868,
+          "pair": [
+            5,
+            6
+          ],
+          "relative_diff": 0.016361
+        }
+      ],
+      "restart_regime_pairs_spaced": [
+        {
+          "a_s": 4.834,
+          "b_s": 4.813,
+          "pair": [
+            1,
+            4
+          ],
+          "relative_diff": -0.004354
+        },
+        {
+          "a_s": 4.828999,
+          "b_s": 4.788999,
+          "pair": [
+            2,
+            5
+          ],
+          "relative_diff": -0.008318
+        },
+        {
+          "a_s": 4.811999,
+          "b_s": 4.868,
+          "pair": [
+            3,
+            6
+          ],
+          "relative_diff": 0.01157
+        }
+      ],
+      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
+    },
+    "Q04": {
+      "block_dispersion_cv": 0.0028670708430735634,
+      "block_dispersion_sd_s": 0.00542832079621928,
+      "block_medians_s": [
+        1.903,
+        1.891,
+        1.895,
+        1.887,
+        1.891,
+        1.893
+      ],
+      "blocks_accepted": 6,
+      "blocks_invalidated": 0,
+      "corrected_mde": null,
+      "fast_regime_paired_cv": null,
+      "inflation_factor": null,
+      "median_wall_seconds": 1.892,
+      "restart_regime_mde": 0.01,
+      "restart_regime_paired_cv": 0.003252898530514027,
+      "restart_regime_paired_cv_adjacent": 0.002690349392654043,
+      "restart_regime_paired_cv_source": "spaced",
+      "restart_regime_paired_cv_spaced": 0.003252898530514027,
+      "restart_regime_pairs_adjacent": [
+        {
+          "a_s": 1.903,
+          "b_s": 1.891,
+          "pair": [
+            1,
+            2
+          ],
+          "relative_diff": -0.006326
+        },
+        {
+          "a_s": 1.895,
+          "b_s": 1.887,
+          "pair": [
+            3,
+            4
+          ],
+          "relative_diff": -0.004231
+        },
+        {
+          "a_s": 1.891,
+          "b_s": 1.893,
+          "pair": [
+            5,
+            6
+          ],
+          "relative_diff": 0.001057
+        }
+      ],
+      "restart_regime_pairs_spaced": [
+        {
+          "a_s": 1.903,
+          "b_s": 1.887,
+          "pair": [
+            1,
+            4
+          ],
+          "relative_diff": -0.008443
+        },
+        {
+          "a_s": 1.891,
+          "b_s": 1.891,
+          "pair": [
+            2,
+            5
+          ],
+          "relative_diff": 0.0
+        },
+        {
+          "a_s": 1.895,
+          "b_s": 1.893,
+          "pair": [
+            3,
+            6
+          ],
+          "relative_diff": -0.001056
+        }
+      ],
+      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
+    },
+    "Q05": {
+      "block_dispersion_cv": 0.015925041793309877,
+      "block_dispersion_sd_s": 0.14905838587703318,
+      "block_medians_s": [
+        9.452,
+        9.236999,
+        9.271,
+        9.476999,
+        9.543,
+        9.18
+      ],
+      "blocks_accepted": 6,
+      "blocks_invalidated": 0,
+      "corrected_mde": null,
+      "fast_regime_paired_cv": null,
+      "inflation_factor": null,
+      "median_wall_seconds": 9.3615,
+      "restart_regime_mde": 0.044582871784675966,
+      "restart_regime_paired_cv": 0.022291435892337983,
+      "restart_regime_paired_cv_adjacent": 0.022291435892337983,
+      "restart_regime_paired_cv_source": "adjacent",
+      "restart_regime_paired_cv_spaced": 0.015425491606316198,
+      "restart_regime_pairs_adjacent": [
+        {
+          "a_s": 9.452,
+          "b_s": 9.236999,
+          "pair": [
+            1,
+            2
+          ],
+          "relative_diff": -0.023008
+        },
+        {
+          "a_s": 9.271,
+          "b_s": 9.476999,
+          "pair": [
+            3,
+            4
+          ],
+          "relative_diff": 0.021976
+        },
+        {
+          "a_s": 9.543,
+          "b_s": 9.18,
+          "pair": [
+            5,
+            6
+          ],
+          "relative_diff": -0.038776
+        }
+      ],
+      "restart_regime_pairs_spaced": [
+        {
+          "a_s": 9.452,
+          "b_s": 9.476999,
+          "pair": [
+            1,
+            4
+          ],
+          "relative_diff": 0.002641
+        },
+        {
+          "a_s": 9.236999,
+          "b_s": 9.543,
+          "pair": [
+            2,
+            5
+          ],
+          "relative_diff": 0.032588
+        },
+        {
+          "a_s": 9.271,
+          "b_s": 9.18,
+          "pair": [
+            3,
+            6
+          ],
+          "relative_diff": -0.009864
+        }
+      ],
+      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
+    },
+    "Q06": {
+      "block_dispersion_cv": 0.0064458482399661066,
+      "block_dispersion_sd_s": 0.025813041283428973,
+      "block_medians_s": [
+        3.999999,
+        4.0,
+        4.049,
+        3.991,
+        3.982999
+      ],
+      "blocks_accepted": 5,
+      "blocks_invalidated": 1,
+      "caveat": "Q06 has 5 accepted blocks, not 6 (block 5 was invalidated: attempts 1/2/4 WARM_NOT_CONVERGED, attempt 3 INVALID_BACKGROUND_LOAD at external mean 5.997 / p95 6.466 / max 6.944 core-s/s, 57 samples over the 6.0 gate). Its spaced pairing therefore yields 2 pairs instead of 3, so its paired CV rests on fewer degrees of freedom than the other five and MUST be down-weighted when the inflation factor is combined.",
+      "corrected_mde": null,
+      "fast_regime_paired_cv": null,
+      "inflation_factor": null,
+      "median_wall_seconds": 3.999999,
+      "restart_regime_mde": 0.014428110696548764,
+      "restart_regime_paired_cv": 0.007214055348274382,
+      "restart_regime_paired_cv_adjacent": 0.007214055348274382,
+      "restart_regime_paired_cv_source": "adjacent",
+      "restart_regime_paired_cv_spaced": 0.0010035087235266953,
+      "restart_regime_pairs_adjacent": [
+        {
+          "a_s": 3.999999,
+          "b_s": 4.0,
+          "pair": [
+            1,
+            2
+          ],
+          "relative_diff": 0.0
+        },
+        {
+          "a_s": 4.049,
+          "b_s": 3.991,
+          "pair": [
+            3,
+            4
+          ],
+          "relative_diff": -0.014428
+        }
+      ],
+      "restart_regime_pairs_spaced": [
+        {
+          "a_s": 3.999999,
+          "b_s": 3.991,
+          "pair": [
+            1,
+            4
+          ],
+          "relative_diff": -0.002252
+        },
+        {
+          "a_s": 4.0,
+          "b_s": 3.982999,
+          "pair": [
+            2,
+            5
+          ],
+          "relative_diff": -0.004259
+        }
+      ],
+      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
+    }
+  },
+  "queries_covered_fast_regime": [],
+  "queries_covered_restart_regime": [
+    "Q01",
+    "Q02",
+    "Q03",
+    "Q04",
+    "Q05",
+    "Q06"
+  ],
+  "queries_not_covered_at_all": [
+    "Q07",
+    "Q08",
+    "Q09",
+    "Q10",
+    "Q11",
+    "Q12",
+    "Q13",
+    "Q14",
+    "Q15",
+    "Q16",
+    "Q17",
+    "Q18",
+    "Q19",
+    "Q20",
+    "Q21",
+    "Q22"
+  ],
+  "raw_evidence_path": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/raw-restart-calibration",
+  "wall_span_seconds": {
+    "max": 31.220999,
+    "min": 0.3635,
+    "note": "nearly two orders of magnitude \u2014 enough to test the inflation factor for wall-magnitude dependence rather than assume it pooled"
+  },
+  "warm_gate_decision_D1": "Q05/Q06/Q07 warm tolerances were widened to level_tol=0.04 / spread_sanity=0.07 (from the previous campaign's values, which failed to converge). 0.04 sits above the measured n=20 stationary null max of 3.49% and well below the 13.17% warming signal, so the widened gate still separates a warming engine from a converged one. Recorded in harness/warm_params.json. A widened tolerance is a methodology choice and is stated here so a reader can see it."
+}
