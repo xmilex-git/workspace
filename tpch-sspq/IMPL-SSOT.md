@@ -255,13 +255,46 @@ measured effect. Phase 1A collects a fresh Q01–Q22 CUBRID baseline from the im
 base binary built at the frozen base SHA, and that baseline is the only "before" the
 scoring and the A/B procedure may use.
 
-### 3-a. CPU, cpuset and NUMA contract
+### 3-a. CPU affinity and NUMA contract
+
+#### Host topology (verified read-only on `34-ilhansong`)
+
+| Fact | Value |
+|---|---|
+| CPU model | Intel(R) Xeon(R) Silver 4216 CPU @ 2.10GHz |
+| Sockets × cores | 2 sockets × 16 cores |
+| Threads per core | **1** (no SMT; CPUs 32–63 are offline) |
+| Online CPUs | `0-31` |
+| NUMA node 0 | CPUs `0-15`, 128565 MB |
+| NUMA node 1 | CPUs `16-31`, 64502 MB |
+| Node distances | local 10 / remote 21 |
+
+#### Isolation mechanism: `taskset` affinity, NOT cpuset cgroups
+
+The campaign host is a **rootless podman container**. `/proc/self/cgroup` shows
+`libpod_parent/libpod-…`; `/` is an `overlay` mount. The cgroup hierarchy is **v1**, and
+`/sys/fs/cgroup/cpuset` inside the container is **flat**: it exposes only the container's
+own `cpuset.*` files, zero child cpusets exist, and no host cpuset can be enumerated.
+Container-level values are `cpuset.cpus = 0-31`, `cpuset.effective_cpus = 0-31`,
+`cpuset.mems = 0-1`, `cpuset.cpu_exclusive = 0`.
+
+Whether a child cpuset cgroup *could* be created from inside the container was deliberately
+NOT tested — doing so is a mutating command and Phase 0 recon is read-only. This is recorded
+as an **untested assumption, not a proven impossibility**.
+
+The isolation therefore uses **CPU affinity** (`taskset -c` / `sched_setaffinity`, with
+`numactl` for memory binding), which is exactly what the previous measurement campaign
+`tpch-sspq-fk-r1-20260730` used. That was verified empirically: the live
+`cub_server tpch_sf10_q1` (PID 2737859) has **all 24 TIDs at affinity `0-15`**, and the live
+`postgres` (PID 1433696) is likewise at `0-15`.
+
+#### CPU assignment
 
 | Role | CPUs | NUMA |
 |---|---|---|
 | SUT (`cub_server`) and client (`csql`) | `0-15` | memory node 0 |
-| Collector / sampler processes | `20-23` | node of those CPUs |
-| Controller, GJC worker shell, compiler / build jobs | `24-31` | node of those CPUs |
+| Collector / sampler processes | `20-23` | node 1 |
+| Controller, GJC worker shell, compiler / build jobs | `24-31` | node 1 |
 | Unassigned buffer | `16-19` | — |
 
 Derivation: the prior measurement campaign already contracted SUT+client to CPUs `0-15`
@@ -269,21 +302,30 @@ on memory node 0 and collectors to CPUs `20-23` on this host. This campaign adds
 controller/GJC/compiler on `24-31`. `0-15` therefore satisfies the requirement of not
 overlapping `20-31`, keeps the SUT on the same physical cores and the same NUMA node the
 existing SF10 database and buffer pool were measured on, and leaves `16-19` deliberately
-unassigned as a separation band between the SUT and the collectors. Any other SUT cpuset
-would change the memory locality of the measured engine and is a contract change.
+unassigned as a separation band between the SUT and the collectors. With the topology above,
+`0-15` is **exactly all of NUMA node 0**, which is also the memory-rich node (128565 MB
+versus node 1's 64502 MB) — so the SUT owns one whole node's cores and that node's local
+memory. Collectors (`20-23`) and controller/GJC/compiler (`24-31`) are both entirely on
+node 1, off the SUT's node. Any other SUT CPU list would change the memory locality of the
+measured engine and is a contract change.
 
 Mandatory rules:
 
-- `cub_server` MUST be started fresh under the correct cpuset and NUMA state, with the
-  affinity applied **from process start**, not attached afterwards.
-- After start, the affinity of **every** `cub_server` TID MUST be verified. A single TID
-  outside the SUT cpuset ⇒ the run is marked **INVALID immediately**, the server is
-  restarted, and the run is repeated. Late-spawned pooled threads are the known failure
-  mode; the check MUST therefore be repeated after each measurement block as well as
-  before it.
+- `cub_server` MUST be started fresh with the correct CPU affinity **and** memory binding,
+  applied **from process start** — the server is launched under `taskset -c 0-15` (or
+  `numactl --cpunodebind=0 --membind=0`), never re-pinned after the fact.
+- **Memory MUST be bound, not merely CPU affinity.** NUMA locality is the whole reason
+  `0-15` was chosen, so the SUT MUST run with `numactl --membind=0` or an equivalent memory
+  policy; CPU affinity alone does not satisfy this contract.
+- After start, the affinity of **every** `cub_server` TID MUST be verified by iterating
+  `/proc/<pid>/task/*` and checking each TID's affinity individually (for example
+  `taskset -p <tid>` per entry). A single TID outside the SUT CPU list ⇒ the run is marked
+  **INVALID immediately**, the server is restarted, and the run is repeated. Late-spawned
+  pooled threads are the known failure mode; the check MUST therefore be repeated after each
+  measurement block as well as before it.
 - The NUMA page distribution of the server MUST be recorded before and after each block.
-- The SUT cpuset SHOULD contain no non-campaign process. Where exclusivity cannot be
-  enforced, **any run during which external CPU on the SUT cpuset exceeds 0.5 core-seconds
+- The SUT CPUs SHOULD carry no non-campaign process. Where exclusivity cannot be
+  enforced, **any run during which external CPU on the SUT CPUs exceeds 0.5 core-seconds
   per second is INVALID** (`INVALID_BACKGROUND_LOAD`).
 - **The previous measurement campaign's 6.0 core-s/s quiet gate is NOT inherited.** That
   threshold was raised to keep a cross-engine comparison moving under sustained host
@@ -293,6 +335,16 @@ Mandatory rules:
 - **No build, compression, hashing, archiving or Notion work may run concurrently with a
   performance measurement.** Compilation is confined to CPUs `24-31` *and* MUST NOT
   overlap in time with a measured block.
+
+#### Shared container, out-of-scope neighbours
+
+This campaign runs inside a container shared with other `cubrid`-owned workloads —
+long-lived agent stacks, the PostgreSQL reference instance, and previous campaigns'
+leftovers. Those processes are **out of campaign scope**. They MUST NEVER be stopped,
+killed, re-niced or re-pinned by this campaign. Because affinity is advisory and the
+container grants `0-31` to everyone, contention from those neighbours is handled **solely**
+by the 0.5 core-s/s external-CPU invalidation gate above: a contended run is discarded, not
+made quiet by force.
 
 ### 3-b. Server ownership gate
 
@@ -492,6 +544,222 @@ branch and the campaign waits for the user.
   assertion-enabled or instrumented build MUST NOT produce a headline A/B number, and its
   install prefix MUST be distinct.
 
+### 6-a-1. Build recipe pin
+
+**User decision.** This campaign **replicates the previous campaign's build state**
+(`tpch-sspq-fk-r1-20260730`, worktree `/home/cubrid/dev/tpch-sspq-fk-r1/cubrid-src`) rather
+than deriving the build from the base SHA's committed submodule pointers on their own. The
+authoritative source of that state is that worktree — **never** the dirty shared checkout
+`/home/cubrid/dev/cubrid`. Everything below was captured read-only in Phase 0b and is
+normative.
+
+#### Source pins
+
+| Item | Pinned value | Notes |
+|---|---|---|
+| CUBRID base SHA | `607f1ee9fb2394de129e083602c84a6525fc685c` | detached HEAD; version banner `11.5.0.2366-607f1ee` |
+| Submodule `cubrid-cci` | `2fb8d6d02c41386be0d56c3cfc6a14ad7e17ac15` | **initialized and checked out**; identical to the base SHA's recorded pointer |
+| Submodule `cubrid-jdbc` | `e4947d1a4aafe93239542405d28567c59adca0ea` | **NOT initialized** — directory empty; see below |
+| Submodule `cubridmanager` | `aee66659e11bec1b426ec11f872d36a9345425f8` | **NOT initialized** — directory empty; see below |
+
+**No submodule drift exists.** The previous campaign's only initialized submodule
+(`cubrid-cci`) sits exactly on the pointer recorded by the base SHA
+(`git ls-tree 607f1ee9f -- cubrid-cci` ⇒ `2fb8d6d0…`). Replication and "use the base SHA's
+recorded pointers" therefore coincide for `cubrid-cci`; they differ only in that the
+previous campaign left `cubrid-jdbc` and `cubridmanager` **uninitialized**, and this campaign
+MUST do the same.
+
+- `cubrid-jdbc` and `cubridmanager` MUST be left uninitialized (empty directories).
+  `WITH_JDBC` is `ON` in the cache but `build.sh`/CMake skip the JDBC packaging step when
+  `$source_dir/cubrid-jdbc/src` is absent; the resulting install contains **no** `jdbc/`
+  directory. Initializing them would change what gets built and is a contract change.
+- The shared checkout `/home/cubrid/dev/cubrid` carries **different** submodule state —
+  `cubrid-cci` at `ef5470ffae4aa934425145e393fefc81899c84a7` (`+`, differs from the recorded
+  pointer) and `cubrid-jdbc` initialized at `4a40cb95c9c876f8ffea7640906ffae33d2efbf5`
+  (`+`). That checkout MUST NOT be used, copied from, or treated as a reference for this
+  campaign's build.
+- Known benign dirt: after building, `cubrid-cci/win/cci_version.h` is regenerated, so
+  `git status` in the parent shows ` M cubrid-cci`. This is a build side-effect, not a
+  source change, and MUST NOT be counted as patch diff.
+- `.gitmodules` at the base SHA (blob `158585a3dde3e606bb5d54459b868e07110be797`) pins the
+  remotes `https://github.com/CUBRID/cubrid-manager-server`,
+  `https://github.com/cubrid/cubrid-jdbc`, `https://github.com/CUBRID/cubrid-cci.git`. Only
+  the `cubrid-cci` remote needs to be reachable, and only once per fresh worktree.
+
+#### Preset files — corrected finding
+
+`CMakeUserPresets.json` **does not exist** in the previous campaign's worktree
+`/home/cubrid/dev/tpch-sspq-fk-r1/cubrid-src/`. The build depended solely on the **tracked**
+`CMakePresets.json`:
+
+| File | Presence | sha256 | Git |
+|---|---|---|---|
+| `CMakePresets.json` | present, unmodified | `1818a143464bf51eb7a84bcaa5c3fbb3da2c9ce8dab153f3d847e6ac113baacb` | tracked at base SHA, blob `1bdaed37aa2f693eec4844071beb4689d9bbd532` |
+| `CMakeUserPresets.json` | **ABSENT** | — | untracked by design; not present |
+| `build.sh` | present, unmodified | `f90b796bcc438189fada4c98b9a9f8c8606533a5312720198287be20a4091287` | tracked at base SHA, blob `05c5026caa903d4e0dbee21f9b4524bc8fc923ec`; **not used by this recipe** |
+
+Normative rule: **`CMakeUserPresets.json` MUST NOT be created in `base-src` or in any
+candidate worktree.** Before configuring, each worktree MUST assert that the file is absent
+and that `sha256sum CMakePresets.json` equals `1818a143…`. A `CMakeUserPresets.json` does
+exist in the shared checkout `/home/cubrid/dev/cubrid`
+(sha256 `4a19ab4bfd96b94a34ab1069966980033ac558e3f8b268e2dabca25488f5fb16`); it overrides
+`binaryDir`, the install prefix and the optimization flags, and copying it into a campaign
+worktree would silently change the recipe. It MUST NOT be copied.
+
+**Stated risk (untracked-file hazard).** `CMakeUserPresets.json` is untracked in git, so a
+recipe that depended on it would be reproducible only by hash-pinning it in this document.
+Here the hazard is resolved in the strongest way available — the file is pinned **absent**,
+and the entire preset input is a tracked, hash-pinned file. The absence assertion is
+mandatory precisely because git will never report the file's reappearance.
+
+#### Toolchain pins
+
+| Tool | Pinned value |
+|---|---|
+| C compiler | `/usr/bin/cc` → gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-22); `CMAKE_C_COMPILER_VERSION` `8.5.0`, id `GNU` |
+| C++ compiler | `/usr/bin/c++` → g++ (GCC) 8.5.0 20210514 (Red Hat 8.5.0-22); `CMAKE_CXX_COMPILER_VERSION` `8.5.0`, id `GNU` |
+| Linker | `/usr/bin/ld`, GNU ld version 2.30-123.el8 |
+| cmake | 3.26.5 (`/usr/bin/cmake`) |
+| Generator / make program | Ninja 1.8.2 (`/usr/bin/ninja-build`) |
+| flex / bison | `/usr/bin/flex` 2.6.1, `/usr/bin/bison` 3.0.4 (SYSTEM) |
+| git | 2.43.0 |
+
+#### Configure settings (from the previous campaign's `CMakeCache.txt`)
+
+| Variable | Value |
+|---|---|
+| `CMAKE_BUILD_TYPE` | `RelWithDebInfo` |
+| `CMAKE_C_FLAGS` / `CMAKE_CXX_FLAGS` | *(empty)* |
+| `CMAKE_C_FLAGS_RELWITHDEBINFO` | `-O2 -g -DNDEBUG` |
+| `CMAKE_CXX_FLAGS_RELWITHDEBINFO` | `-O2 -g -DNDEBUG` |
+| Assertions | **disabled** (`-DNDEBUG`) |
+| `CMAKE_C_COMPILER` / `CMAKE_CXX_COMPILER` | `/usr/bin/cc` / `/usr/bin/c++` |
+| `CMAKE_MAKE_PROGRAM` | `/usr/bin/ninja-build` |
+| `CMAKE_GENERATOR` | `Ninja` |
+| All linker flags (`EXE`/`SHARED`/`MODULE`/`STATIC`, all configs) | *(empty)* |
+| `CMAKE_EXPORT_COMPILE_COMMANDS` | `ON` |
+| `CMAKE_SKIP_RPATH` / `CMAKE_SKIP_INSTALL_RPATH` | `NO` / `NO` |
+| `CMAKE_VERBOSE_MAKEFILE` | `FALSE` |
+| `ENABLE_32BIT` | `OFF` |
+| `ENABLE_SYSTEMTAP` | `ON` |
+| `WITH_CCI` | `true` |
+| `WITH_CMSERVER` | `ON` |
+| `WITH_JDBC` | `ON` (no-op: `cubrid-jdbc` is uninitialized) |
+| `WITH_BUNDLED_PREFIX` / `WITH_EXTERNAL_PREFIX` / `WITH_SYSTEM_PREFIX` | `BUNDLED` / `EXTERNAL` / `SYSTEM` |
+| `WITH_LIBEDIT` / `WITH_LIBEXPAT` / `WITH_LIBJANSSON` / `WITH_LIBOPENSSL` / `WITH_LIBTBB` / `WITH_LIBUNIXODBC` / `WITH_LZ4` / `WITH_RE2` | `EXTERNAL` |
+| `WITH_LIBFLEXBISON` | `SYSTEM` |
+
+Corrections to earlier recon, from the authoritative cache: `CMAKE_C_COMPILER` /
+`CMAKE_CXX_COMPILER` are the `cc`/`c++` symlinks (not literal `gcc`/`g++`), and the
+`RelWithDebInfo` flags are plain `-O2 -g -DNDEBUG` with **no** `-finline-functions` and **no**
+`-fdiagnostics-color` — those extras live only in the shared checkout's
+`CMakeUserPresets.json`, which was not in play. There is no `FAISS_SIMD_MODE`,
+`CMAKE_CXX_STANDARD` or `SUPPORT_XA` entry in the cache.
+
+#### Exact build commands
+
+The previous campaign did **not** invoke `build.sh`. It ran this tooling repo's justfile
+`build` recipe (justfile sha256
+`8c9092e503291f59fb9e966c1835407ffcd26126200e712cfdb1b1224a2fa2b1`, byte-identical local and
+remote), which expands to exactly:
+
+```bash
+cd <worktree>
+cmake --preset release -DCMAKE_INSTALL_PREFIX="<install-prefix>"
+cmake --build "build_preset_release" -j <jobs> --target install
+```
+
+`cmake --preset release` resolves, via the tracked `CMakePresets.json`, to generator `Ninja`,
+binary dir `${sourceDir}/build_preset_release`, `CMAKE_BUILD_TYPE=RelWithDebInfo`,
+`CMAKE_EXPORT_COMPILE_COMMANDS=ON`, `WITH_CCI=true`. The bootstrap log confirms the preset
+banner it emitted:
+
+```text
+Preset CMake variables:
+
+  CMAKE_BUILD_TYPE="RelWithDebInfo"
+  CMAKE_EXPORT_COMPILE_COMMANDS="ON"
+  WITH_CCI="true"
+```
+
+and the compiler banner `-- The C compiler identification is GNU 8.5.0` /
+`-- The CXX compiler identification is GNU 8.5.0`, with
+`-- Build CUBRID 11.5.0.2366-607f1ee 64bit RelWithDebInfo on Linux x86_64`. The log contains
+no other cmake or ninja command line — the install is driven by the `install` target, not by
+a separate `ninja install`.
+
+Campaign-specific invocation (this is the form workers MUST use):
+
+```bash
+INSTALL_PREFIX=/home/cubrid/dev/tpch-sspq-impl-r1/install/base \
+WORKSPACE=/home/cubrid/dev/tpch-sspq-impl-r1/base-src \
+  taskset -c 24-31 just build release
+```
+
+- `INSTALL_PREFIX` MUST be set. It both selects the per-variant prefix **and** stops the
+  justfile from repointing the `~/CUBRID` symlink. Repointing `~/CUBRID` is FORBIDDEN in this
+  campaign: `~/CUBRID` currently points at the previous campaign's install and other
+  workloads in this container depend on it.
+- The build MUST run under `taskset -c 24-31` per section 3-a, with `-j` matching that band
+  (`JOBS=8`). The previous campaign built unconfined at the justfile default
+  (`-j $(nproc)` = 32). **Parallelism affects wall time only, not binary content**, so this
+  is not a recipe difference; the confinement is required by the CPU contract, not by the
+  build.
+- The justfile also copies this repo's prebuilt locale files into the install
+  (`just install-locale`). That step is part of the replicated recipe and MUST NOT be
+  skipped — the all-locales `.so` is required for execution.
+
+#### Install prefix — the one intentional difference
+
+| Variant | Prefix |
+|---|---|
+| Base | `/home/cubrid/dev/tpch-sspq-impl-r1/install/base` |
+| Candidate | `/home/cubrid/dev/tpch-sspq-impl-r1/install/IMP-NNN` |
+
+The previous campaign's prefix was `/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9`.
+**Changing `CMAKE_INSTALL_PREFIX` is the ONE intentional configure difference from the
+previous campaign, and it MUST be the only one.** Any other configure divergence is a
+contract change requiring user approval.
+
+This campaign **builds its own immutable base install** and MUST NOT reuse
+`/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9`, nor the `~/CUBRID` symlink, as the
+base binary `B`.
+
+#### Reference fingerprints (sanity comparison only)
+
+Previous campaign's install `/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9`:
+
+| Binary | sha256 | ELF Build ID |
+|---|---|---|
+| `bin/cub_server` | `e5043f0e30cbf4a56f219f833f4f4833687ed774895779450e84550c3d6f2a13` | `4df41ee21300bf617bccd5e1d5c8522b074ef86e` |
+| `bin/cub_master` | `2dd85d479561c1631b05b7f04843a9332a41bd756b46a7a4b13a895522279e0e` | `ca3ba5efa3db9141e14b9c8e6d52bf78ee42a378` |
+| `bin/csql` | `2a2cc292b473cf8807f088bb62542bdad3d872944c637f681ec9f77159ba1908` | `e6638312c5e37e7e8fa8f16cb6bb74f21fe3ca59` |
+
+These are recorded **as a sanity comparison only**. The build is **not** bit-reproducible —
+the install prefix is embedded, paths and timestamps differ, and the ELF Build ID is a link
+hash. **Byte-identical binaries are NOT expected and NOT required**, and a mismatch is NOT a
+failure. What IS required is that this campaign's base build and **every** patch build use
+the identical recipe pinned in this subsection.
+
+#### Pre-build verification (mandatory, every build)
+
+Before running cmake for any variant, the worker MUST assert and record:
+
+1. `git -C <worktree> rev-parse HEAD` resolves to the frozen base SHA, or to a candidate
+   commit whose `git diff 607f1ee9f` contains **only** the candidate patch plus
+   `implementation-plan.md` (section 6-a), ignoring the known `cubrid-cci` build-artifact
+   dirt;
+2. `git -C <worktree> submodule status` shows `cubrid-cci` at `2fb8d6d0…` and both
+   `cubrid-jdbc` and `cubridmanager` uninitialized (`-` prefix);
+3. `sha256sum <worktree>/CMakePresets.json` = `1818a143464bf51eb7a84bcaa5c3fbb3da2c9ce8dab153f3d847e6ac113baacb`;
+4. `<worktree>/CMakeUserPresets.json` **does not exist**;
+5. `cc --version`, `c++ --version`, `ld -v`, `cmake --version`, `ninja-build --version` match
+   the toolchain pins above;
+6. after configuring, the generated `build_preset_release/CMakeCache.txt` matches the
+   configure-settings table above, differing **only** in `CMAKE_INSTALL_PREFIX`.
+
+Any mismatch ⇒ stop and report; do not build around it.
+
 ### 6-b. Correctness gate
 
 Before-and-after canonical results MUST be **EXACTLY equal**:
@@ -528,7 +796,8 @@ correctness failure and continue measuring.
 - Block order is balanced: `B → P → P → B`.
 - For **each** block:
   1. restart the campaign server on that block's binary;
-  2. pass the cpuset / NUMA / all-TID affinity / ownership gates of section 3-a and 3-b;
+  2. pass the affinity / NUMA memory-binding / all-TID / ownership gates of section 3-a
+     and 3-b;
   3. prove WARM convergence;
   4. execute **1 uncounted warmup** on one connection;
   5. execute **3 measured runs** on that same connection;
@@ -714,7 +983,8 @@ A subagent runs every 20 minutes. It is **idempotent** and it MUST check, in thi
 4. **two** `tmux capture-pane` samples, taken a short interval apart and **compared** — a
    single sample cannot distinguish "working" from "frozen";
 5. campaign-owned processes, their CPU and their I/O;
-6. cpuset and NUMA state, and the presence of any off-cpuset TID;
+6. CPU-affinity and NUMA state, and the presence of any `cub_server` TID whose affinity
+   falls outside the SUT CPU list;
 7. forward progress in build output, report and raw manifest;
 8. engine branch commits and workspace report commits;
 9. origin reachability of the latest durable commit;
@@ -926,3 +1196,17 @@ The campaign is complete only when:
    verified;
 9. **merge into any upstream branch waits for explicit user approval.** Producing the
    cumulative branch is not permission to land it.
+
+---
+
+## Revision history
+
+Amendments to this file are a contract change (section 11-a) and are made only on explicit
+user approval. Each amendment gets an ID and is listed here; the pinned commit and blob SHA
+that every worker verifies (section 1-d) change with each entry.
+
+| ID | Commit | Change |
+|---|---|---|
+| — | `9a8a86d` | Original: IMPL-SSOT for campaign `tpch-sspq-impl-r1-20260803`, sections 1–11. |
+| `AMEND-A` | this commit | Section 3-a rewritten: the isolation mechanism is **`taskset` / `sched_setaffinity` affinity plus `numactl` memory binding**, not cpuset cgroups. Reason: the host is a rootless podman container whose cgroup-v1 `cpuset` hierarchy is flat with zero child cpusets; the previous campaign achieved its isolation purely via affinity, verified on the live `cub_server`. Verified host topology (Xeon Silver 4216, 2×16 cores, 1 thread/core, online `0-31`, node 0 = `0-15`/128565 MB, node 1 = `16-31`/64502 MB) recorded. The CPU assignment table, the 0.5 core-s/s invalidation gate and the non-inheritance of the previous 6.0 core-s/s gate are **unchanged**. Shared-container neighbours declared out of scope. Sections 6-c and 9 reworded to match. |
+| `AMEND-B` | this commit | New section 6-a-1 **Build recipe pin**: the campaign replicates the previous campaign's build state (`tpch-sspq-fk-r1-20260730`) rather than deriving it from the base SHA's committed submodule pointers alone. Records literal submodule SHAs and initialization state, the tracked `CMakePresets.json` sha256 with `CMakeUserPresets.json` pinned **absent**, the full `CMakeCache.txt`-derived configure settings, the toolchain pins, the literal cmake/ninja command lines, the per-variant install prefix as the single intentional difference, the reference binary fingerprints as a non-binding sanity comparison, and a mandatory pre-build verification list. |
