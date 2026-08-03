@@ -101,12 +101,16 @@ if [ "$MODE" = gate ] || [ "$MODE" = all ]; then
 fi
 
 if [ "$MODE" = stream ] || [ "$MODE" = all ]; then
+  # STREAM_START allows resuming an interrupted stream cycle at block N
+  # (earlier completed blocks' artifacts are already promoted per-block).
+  START="${STREAM_START:-1}"
   i=0
   for v in base IMP-015 IMP-015 base; do
     i=$((i+1))
+    [ "$i" -lt "$START" ] && continue
     stream_block "$v" "$i" || fail "stream block $i ($v) failed"
   done
-  log "PHASE S COMPLETE: 4 stream blocks (Q15 + Q01/Q03/Q05/Q11/Q16/Q18)"
+  log "PHASE S COMPLETE (from block $START): stream blocks (Q15 + Q01/Q03/Q05/Q11/Q16/Q18)"
 fi
 
 log "IMP015-AB DRIVER DONE ($MODE)"
