@@ -450,6 +450,93 @@ consecutive timeouts give `censored ≥300s`. A censored query MUST NOT be assig
 seconds, interpolated or ranked numerically; it contributes `0` expected saved seconds
 unless a candidate's evidence gives a separate numeric basis.
 
+### 3-c-1. The fast Phase 1A regime — one server instance, no per-block restart (`AMEND-G`)
+
+**User decision.** Step 1 of section 3-c — "restart the campaign server on the base binary"
+**per block** — is superseded **for Phase 1A only** by the regime defined here. Phase 2's
+A/B regime (section 6-c) is **unchanged and still restarts per block**; see 6-c's opening
+note.
+
+#### Why the per-block restart is removed
+
+Measured on the abandoned restart-regime run, per-query cost was approximately
+
+```text
+6 × ( 49 s + 33.7 × query_wall )
+```
+
+Only **4** executions per block are on the measurement path (1 uncounted warmup + 3
+measured). The remaining ≈30 execution-equivalents per block are **WARM re-convergence**,
+incurred because every block restarts the server and therefore empties the 8192M data
+buffer that section 6-a-2 pins. The restart *itself* is only ≈49 s × 132 blocks ≈ 1.8 h of
+a ≈16 h projection; the re-convergence is the rest. Removing the restart removes the
+re-convergence, taking per-query cost from ≈`202 × wall` to ≈`34 × wall`.
+
+#### The regime
+
+1. **One `cub_server` instance for the whole Q01–Q22 sweep.** It is started **once** at
+   sweep start and stopped **once** at sweep end. Affinity and memory binding are applied
+   **from process start** exactly as section 3-a requires — `taskset -c 0-15 numactl
+   --membind=0` wrapping the mandated
+   `.claude/skills/cubrid-server-control/scripts/cubrid-server-ctl.sh`, never post-hoc
+   re-pinning — and all-TID affinity is verified at start.
+2. **Per query:** WARM convergence is established **once**, proved and not assumed by the
+   physical-read and engine-buffer-counter criteria of section 3-c step 3, and the proof is
+   recorded. A failed WARM gate invalidates that query's sweep position and restarts at
+   warmup, as in 3-c.
+3. **Then 6 blocks × (1 uncounted warmup + 3 measured), with NO restart between blocks.**
+   The measured statements of a block still run consecutively on one direct `csql -C`
+   connection with no prepared statement, no pool and no reconnect, and connection
+   establishment is still excluded from the timing.
+4. **The canonical result capture per query is unchanged** — canonical result set (section
+   6-b), plan estimated versus actual rows, and perf counters.
+5. **Query order: Q01…Q06 are swept FIRST**, so the restart-variance calibration of section
+   6-d-1 becomes available as early as possible in the sweep. The remaining queries follow
+   in numeric order.
+
+#### What replaces the restart as the drift check
+
+The per-block restart was also, incidentally, a per-block proof that the server under
+measurement was the campaign's. Removing it removes that proof, so ownership drift MUST be
+caught at **query granularity** instead:
+
+- The section 3-b campaign-ownership verification — executable path resolved under
+  `install/base`, database identity `tpch_sf10_q1`, port, PID, process start time, and the
+  `OK`/`FREE`/`BLOCKED` classification — MUST be performed and recorded **at sweep start, at
+  every query boundary, and at sweep end**, in addition to its existing per-block
+  before-and-after obligation, which is **unchanged**. A PID or start-time change mid-sweep
+  means the instance was replaced and every block since the last passing check is INVALID.
+- The section 3-a **all-TID affinity** proof (iterate `/proc/<pid>/task/*`, check each TID
+  individually) MUST likewise be re-verified **at every query boundary**, in addition to its
+  existing per-block obligation, which is **unchanged**. Late-spawned pooled threads are the
+  known failure mode and a long-lived instance accumulates more of them than a short-lived
+  one. **A single off-target TID invalidates the affected query, which is re-run** — not
+  merely the block, because without a restart the off-target thread may have been serving
+  earlier blocks of that query undetected.
+- The section 3-a NUMA page distribution record is kept per block, unchanged.
+
+#### What is explicitly unchanged
+
+- The **6.0 core-s/s external-CPU gate is sampled and enforced PER BLOCK**, exactly as
+  section 3-a (AMEND-D) specifies. Every invalidation is recorded with its cause and the
+  measured load, and an invalidated block is re-run.
+- The section 6-a-2 `cubrid.conf` sha256 assertion before every measurement block.
+- The `CUBRID_TMP` assertion of section 6-a-2; `/tmp` remains forbidden absolutely.
+- Section 3-c steps 2, 4, 5 and 6 — the sink discipline, the single-connection contract, the
+  recorded dispersion set, and the paired-CV noise floor.
+- Q15 remains one logical unit handled in one block, view proved absent before and dropped
+  after.
+
+#### The cost of this change, stated plainly
+
+The per-block restart is what made blocks **independent**. Six blocks on one warm server
+instance share buffer state, page-table state and thread-pool state, so the observed
+block-to-block dispersion — and therefore the paired CV, and therefore the MDE — will be
+**optimistically small**. This is not a side effect to be noted in passing: it is the
+central hazard of this amendment, and section 6-d-1 exists solely to correct for it. **A
+Phase 1A baseline produced under this regime is INVALID as an MDE source until the section
+6-d-1 correction has been applied.**
+
 ### 3-d. PostgreSQL's role
 
 PostgreSQL is **never** the denominator of a patch effect. In this campaign it has
@@ -925,9 +1012,10 @@ requiring user approval.
 #### Temp directory (`CUBRID_TMP`)
 
 Section 8-e forbids `/tmp` absolutely, but the inherited harness hardcodes
-`CUBRID_TMP=/tmp` (`tpch-sspq/harness/headline_run.py:22`,
-`tpch-sspq/harness/warm_establish.py:57`, and likewise
-`correctness_check.py:19` / `headline_telemetry.py:58`). This campaign's temp directory is:
+`CUBRID_TMP=/tmp` in **six** files (`AMEND-G` correction — this list previously named four):
+`tpch-sspq/harness/headline_run.py:22`, `warm_establish.py:57`, `correctness_check.py:19`,
+`headline_telemetry.py:58`, `telemetry_run.py:24` and `q15_session.py:54`. This campaign's
+temp directory is:
 
 ```text
 /data/tpch-sspq/tpch-sspq-impl-r1-20260803/work/tmp
@@ -1009,6 +1097,13 @@ correctness failure and continue measuring.
 
 ### 6-c. Performance A/B procedure
 
+**Scoping note (`AMEND-G`).** Section 3-c-1 removes the per-block server restart **from
+Phase 1A only**. This section is **unchanged**: the Phase 2 A/B regime is `B → P → P → B`,
+which **swaps binaries between blocks and therefore cannot avoid a restart**. Every A/B
+block below still restarts the campaign server on that block's binary. Because Phase 2
+blocks restart and Phase 1A blocks do not, the two regimes carry **different noise**, and
+section 6-d-1 exists to reconcile them before any MDE is used to decide an A/B.
+
 - **B** = the immutable base binary at `install/base`. **P** = the patched binary at
   `install/IMP-NNN`.
 - Block order is balanced: `B → P → P → B`.
@@ -1056,6 +1151,76 @@ folded in.
   is queued, rather than discovered to be inconclusive after twelve pairs of measurement.
   The flag does not delete the candidate from the ranking; it states that this host cannot
   decide it.
+
+### 6-d-1. Restart-variance calibration — mandatory MDE correction (`AMEND-G`)
+
+**The baseline's MDE MUST NOT be derived from fast-regime dispersion alone.**
+
+Section 3-c-1 runs Phase 1A on one continuous server instance, so its six blocks per query
+are **not independent**: they share buffer, page-table and thread-pool state. Section 6-c's
+A/B blocks **are** independent, because `B → P → P → B` swaps binaries and must restart.
+The fast regime therefore measures a **strictly smaller** dispersion than the regime the
+MDE is actually spent in. Feeding an uncorrected fast-regime paired CV into
+`MDE = max(1%, 2 × baseline_paired_CV)` would produce an MDE smaller than the noise present
+in a real A/B block, and **the campaign would over-accept** — it would report real-looking
+improvements that are restart noise. This subsection is the correction, and it is not
+optional.
+
+#### The calibration set
+
+The abandoned restart-regime Phase 1A run collected **Q01–Q06** under the per-block-restart
+regime, with query walls spanning **0.353 s (Q02) to 31.19 s (Q01)** — nearly two orders of
+magnitude. That evidence is preserved, immutable, at
+`/data/tpch-sspq/tpch-sspq-impl-r1-20260803/raw-restart-calibration/`, with a `README.txt`
+stating that it is calibration evidence and **never** a baseline value. Its wall-clock
+medians MUST NOT be used as `fresh_base_median_q` for any query.
+
+Q07 of that run is **partial (one block) and excluded**: one block cannot yield a paired CV.
+
+#### The procedure
+
+1. Q01–Q06 are re-measured under the fast regime of section 3-c-1, as the first six queries
+   of the sweep.
+2. For each of those six queries the paired CV is computed **under both regimes**, using the
+   identical estimator and the identical pairing rule that section 3-c step 6 fixes, so the
+   two numbers are comparable by construction rather than by assertion.
+3. The **restart-variance inflation factor** for query `q` is
+
+   ```text
+   inflation_q = paired_CV_restart_q / paired_CV_fast_q
+   ```
+
+4. The report MUST state the six per-query factors, their spread, and **how they were
+   combined** — a single pooled factor, or a wall-magnitude-dependent one. **That choice
+   MUST be made from what the six calibration points actually show**, and the reason MUST be
+   written down. It MUST NOT be picked by convenience or by default.
+5. The combined factor is applied to the **fast-regime paired CV of every remaining query**
+   (Q07–Q22), and the MDE is then computed from the inflated value:
+
+   ```text
+   corrected_MDE_q = max( 1% , 2 × inflation × paired_CV_fast_q )
+   ```
+
+6. For Q01–Q06 themselves the **measured restart-regime paired CV is used directly**; there
+   is no reason to estimate a quantity that was measured.
+7. `tpch-sspq/impl/fresh-baseline.json` MUST carry, per query, the fast-regime CV, the
+   inflation factor applied, and the resulting corrected MDE. The derivation MUST **also**
+   be published separately as `tpch-sspq/impl/restart-variance-calibration.json`, so the
+   factor is auditable independently of the baseline file.
+
+#### The rule this establishes
+
+**Phase 2 A/B accept decisions (section 7-a criterion 3, "the point improvement is ≥ MDE")
+use the CORRECTED MDE, never the raw fast-regime MDE.** Likewise the section 6-d rule that
+the Phase 1B ranking carries every candidate's expected effect against its target queries'
+MDE, and the `UNPROVABLE_ON_THIS_HOST` flag, both operate on the corrected MDE.
+
+#### Escalation
+
+If the two regimes' CVs for the six calibration queries differ so wildly — in magnitude or
+in direction — that no single pooled factor and no defensible wall-dependent factor fits,
+that is a **stop-and-report** condition (section 11-a). The worker reports the calibration
+data and asks; it MUST NOT pick a factor to keep the sweep moving.
 
 ---
 
@@ -1166,9 +1331,9 @@ copied into a campaign-local, checked-in copy and adapted before Phase 1A uses i
 |---|---|---|
 | `headline_run.py:24-25` (`CAMPAIGN` / `RAW_ROOT`) | `tpch-sspq-fk-r1-20260730`, `/data/tpch-sspq/tpch-sspq-fk-r1-20260730` | `tpch-sspq-impl-r1-20260803`, `/data/tpch-sspq/tpch-sspq-impl-r1-20260803` |
 | `headline_run.py:29`, `telemetry_run.py:31`, `affinity_guard.py:47`, `smoke_check.py:17` (`CUBRID_HOME`) | `/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9` | the per-variant campaign prefix (section 6-a-1) — the inherited install is **forbidden** as `B` |
-| `headline_run.py:22`, `warm_establish.py:57`, `correctness_check.py:19`, `headline_telemetry.py:58` (`CUBRID_TMP`) | `/tmp` | the campaign temp directory of section 6-a-2 |
+| `headline_run.py:22`, `warm_establish.py:57`, `correctness_check.py:19`, `headline_telemetry.py:58`, `telemetry_run.py:24`, `q15_session.py:54` (`CUBRID_TMP`) — **six** files (`AMEND-G` correction) | `/tmp` | the campaign temp directory of section 6-a-2 |
 | `measure_block.sh:35`, `gated_run.sh:21`, `q15_gated_block.sh:24` (`THRESHOLD`) | `6.0` | `6.0`, **set explicitly from section 3-a**, never inherited |
-| `preflight_check.sh:17`, `perf_run.sh:25`, `measure_block.sh:50`, `gated_run.sh:18`, `q15_gated_block.sh:31` (`CAMPAIGN`) | `tpch-sspq-fk-r1-20260730` | `tpch-sspq-impl-r1-20260803` |
+| `preflight_check.sh:17`, `perf_run.sh:25`, `measure_block.sh:50`, `gated_run.sh:18`, `q15_gated_block.sh:31`, `headline_run.py:24`, `telemetry_run.py:26` (`CAMPAIGN`) — **seven** locations (`AMEND-G` correction) | `tpch-sspq-fk-r1-20260730` | `tpch-sspq-impl-r1-20260803` |
 
 With `AMEND-D` the inherited `THRESHOLD=6.0` now happens to match this campaign's gate
 again. That coincidence MUST NOT be relied on: the campaign-local copy MUST set the
@@ -1485,3 +1650,4 @@ that every worker verifies (section 1-d) change with each entry.
 | `AMEND-D` | this commit | Section 3-a external-CPU invalidation gate changed from **0.5 to 6.0 core-s/s**. **This supersedes the 0.5 core-s/s rule introduced by `AMEND-A`**, and `AMEND-A`'s statement that "the previous measurement campaign's 6.0 core-s/s quiet gate is NOT inherited" is withdrawn — the rest of `AMEND-A` (affinity-not-cpuset mechanism, topology, CPU assignment table, out-of-scope neighbours) stands. Reason, by measurement with zero campaign processes running: over 120 s at 0.25 s sampling, mean 1.94 / p95 10.02 / max 16.03 core-s/s with 321 of 434 samples above 0.5; per-CPU probes over the SUT set 7.995 core-s/s (90 s) and 4.776 core-s/s (60 s); `/proc/stat` over 60 s SUT user 10.635, system 2.503, **steal 0.000** — proving the load is real work by processes outside the podman container, invisible and uncontrollable from inside it, so a 0.5 gate would invalidate every block and make zero measurement possible. The cost is recorded explicitly: a 6.0 tolerance exceeds the few-percent effects many candidates predict, so the gate no longer guarantees the environment can resolve small effects. Compensating strengthening in section 6-d: Phase 1A MUST report per-query paired CV and MDE, and the Phase 1B ranking MUST carry each candidate's expected effect against its target queries' MDE, flagging `UNPROVABLE_ON_THIS_HOST` at ranking time. Section 3-a's per-block sampling, invalidate-and-rerun and invalidation-recording machinery is unchanged. |
 | `AMEND-E` | this commit | Section 8-b: **Phase 1A runs under a single deterministic driver**, not one GJC session per query. Reason: `gjc session create` launches a detached tmux session running the interactive `gjc` LLM agent (`gjc-runtime/tmux-sessions.ts`), so the per-query rule meant 22 sequential LLM agent sessions for one continuous ~10–14 hour measurement block; Phase 1A is a single block, not a per-unit workflow, and removing model non-determinism from the measurement path improves reproducibility. Fixes the driver session name `tpch-sspq-impl-r1-20260803-phase1a-driver`, requires its exact name/parent/PID in the operational state and teardown per 8-d. **Phase 2 is unchanged — one GJC session per IMP** — and the scoping is stated explicitly so the GJC lifecycle is not read as abolished. Also records that the inherited `tpch-sspq/harness/` is campaign-hardcoded (`CAMPAIGN`/`RAW_ROOT` at `tpch-sspq-fk-r1-20260730`, `CUBRID_HOME` at the forbidden `/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9`, `measure_block.sh:35 THRESHOLD=6.0`, `CUBRID_TMP=/tmp`) and MUST be adapted into a campaign-local copy, with the threshold set explicitly from the pinned section 3-a value rather than inherited by coincidence. |
 | `AMEND-F` | this commit | Records the user-led triage of the improvement-registry evidence into the campaign contract, in three places. **Section 4-a**: adds a **fifth lane, `external_tracking`** — a candidate whose problem is being solved outside this campaign (upstream PR or in-progress JIRA ticket), excluded from the implementation queue but still tracked to a resolution, carrying the external reference (PR number or ticket ID) as a required field; only the `performance` lane is ranked, so this lane removes a candidate from the ranked set without being a benefit judgment. **New section 5-e**: adds a **pre-implementation upstream scope-check gate** — a gated candidate's scope MUST be checked against the named upstream tickets/PRs before any implementation work begins and the result recorded in its `implementation-plan.md`; upstream already covering the scope is a **stop-and-report** condition, not a licence to proceed in parallel, and sound A/B evidence does not exempt a candidate from the gate. **New section 2-b-1**: makes `tpch-sspq/impl/triage-adjustments.json` a **required third input** to Phase 1B benefit scoring alongside `feasibility-assessment.json` (which stays immutable) and the Phase 1A fresh baseline, and forbids any numeric benefit score or rank position for a candidate marked `BENEFIT_PENDING_DENOMINATOR` or `BENEFIT_CONFOUNDED` (excluded from the percentile-rank population; distinct from `NO_NUMERIC_BASIS`, and not a rejection). Reason: the triage found that `IMP-001`'s 62.35% profile band is refuted by an internal prototype's ≈13% measured effect whose denominator (wall vs CPU) is unconfirmed, that `IMP-002`'s Q04 attribution of 1.160 core-s is confounded with the `IMP-018` mechanism, and that `IMP-013` must be scored from its realistic 0.47 core-s target rather than its 32.7% band — so the existing "a profile band is never automatically a removable effect" rule is reinforced by citing those two cases by name, making it operational rather than abstract. Section 2-b's weights, formula and normalization are otherwise unchanged. |
+| `AMEND-G` | this commit | **Fast Phase 1A regime — one continuous server instance — with a mandatory restart-variance calibration.** **New section 3-c-1**: Phase 1A runs the whole Q01–Q22 sweep on **one `cub_server` instance**, started once under `taskset -c 0-15 numactl --membind=0` wrapping the mandated `cubrid-server-ctl.sh` with all-TID affinity verified at start, and stopped once at sweep end; per query WARM is established once and proved, then **6 blocks × (1 uncounted warmup + 3 measured) with NO restart between blocks**; Q01–Q06 are swept first so the calibration is available early. **This supersedes, for Phase 1A only, the per-block restart that section 3-c step 1 required and that `AMEND-E`'s driver implemented.** Reason, by measurement on the abandoned run: per-query cost was ≈`6 × (49 s + 33.7 × query_wall)`, of which only 4 executions per block are on the measurement path — the remaining ≈30 execution-equivalents are WARM re-convergence forced by emptying the pinned 8192M data buffer at every restart; the restarts themselves are only ≈1.8 h of a ≈16 h projection, so removing them takes per-query cost from ≈`202 × wall` to ≈`34 × wall`. Because the per-block restart was also the incidental proof that the measured instance was still the campaign's, 3-c-1 replaces it with **section 3-b ownership verification and section 3-a all-TID affinity re-verification at sweep start, at every query boundary and at sweep end**, both **in addition to** the existing per-block obligations, which are unchanged; a single off-target TID invalidates the whole affected **query**, not just the block, because without a restart the thread may have served earlier blocks undetected. The 6.0 core-s/s external-CPU gate remains **per block**, the `cubrid.conf` sha256 and `CUBRID_TMP` assertions remain per block, and the canonical per-query result/plan/perf capture is unchanged. **New section 6-d-1**: the cost of the change is that the per-block restart is what made blocks independent, so six blocks on one warm instance share buffer state and the fast-regime paired CV — and therefore `MDE = max(1%, 2 × baseline_paired_CV)` — is **optimistically small**, while Phase 2's `B → P → P → B` **cannot** avoid restarts because it swaps binaries; an MDE from a restart-free baseline would understate real A/B noise and **cause false accepts**. 6-d-1 therefore makes a **restart-variance calibration mandatory**: the abandoned run's **Q01–Q06, restart regime**, walls spanning 0.353 s to 31.19 s, is preserved immutable at `raw-restart-calibration/` as calibration evidence (never as a baseline value; its Q07 is partial at one block and excluded), those six queries are re-measured under the fast regime, `inflation_q = paired_CV_restart_q / paired_CV_fast_q` is computed with the identical estimator and pairing, the combination rule (pooled versus wall-magnitude-dependent) is chosen **from what the six points show** and justified in writing, and `corrected_MDE_q = max(1%, 2 × inflation × paired_CV_fast_q)` is applied to Q07–Q22 while Q01–Q06 use their directly measured restart-regime CV. Phase 2 accept decisions and the Phase 1B `UNPROVABLE_ON_THIS_HOST` flag use the **corrected** MDE; a Phase 1A baseline is INVALID as an MDE source until the correction is applied; and calibration data that fits no defensible factor is stop-and-report. **Section 6-c carries a scoping note stating that Phase 2's `B → P → P → B` regime is unchanged and still restarts per block — this amendment is Phase 1A only.** Additionally, two **factual corrections** to the inherited-harness table that `AMEND-E` introduced in section 8-b, and to the same list in section 6-a-2: `CUBRID_TMP=/tmp` is hardcoded in **six** files, not four — `telemetry_run.py:24` and `q15_session.py:54` were missing — and `CAMPAIGN` is hardcoded in **seven** locations, not five — `headline_run.py:24` and `telemetry_run.py:26` were missing. Both were verified by grep over `tpch-sspq/harness/` at this commit. The corrections widen the set of files the campaign-local copy MUST override; no rule changes, but an unamended list would have let an unadapted file reintroduce `/tmp` or the previous campaign's ID. |
