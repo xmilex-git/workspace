@@ -65,6 +65,10 @@ def csql_file(cfg, env, sqlfile, out_path, timeout):
         die(f"csql rc={p.returncode} for {sqlfile}: {p.stderr[:2000]}")
     if "ERROR" in p.stderr:
         die(f"csql stderr ERROR for {sqlfile}: {p.stderr[:2000]}")
+    if not p.stdout.strip():
+        die(f"csql produced EMPTY output (aborted statement?): {sqlfile}")
+    if "ERROR" in p.stdout:
+        die(f"csql output body contains ERROR: {sqlfile}")
     return p.stdout
 
 
@@ -163,9 +167,13 @@ def cmd_compare(args):
             # canonical sort, duplicate multiplicity preserved (never a set)
             rows_a, rows_b = sorted(rows_a), sorted(rows_b)
         equal = rows_a == rows_b
+        # vacuous-pass guard: a query producing zero rows on both sides would
+        # otherwise "pass"; every TPC-H answer here is non-empty by contract.
+        nonvacuous = len(rows_a) > 0 and len(rows_b) > 0
         report["queries"][q] = {"ordered": ordered, "rows": len(rows_a),
-                                "rows_patch": len(rows_b), "equal": equal}
-        if not equal:
+                                "rows_patch": len(rows_b), "equal": equal,
+                                "nonvacuous": nonvacuous}
+        if not equal or not nonvacuous:
             for i, (x, y) in enumerate(zip(rows_a, rows_b)):
                 if x != y:
                     report["queries"][q]["first_diff_index"] = i

@@ -80,6 +80,17 @@ BATTERY = {
     "QC2": ("order-sensitive control: ordered GROUP_CONCAT + MIN/MAX",
             "SELECT {h}g, GROUP_CONCAT(v ORDER BY v DESC), MIN(pad), MAX(pad) "
             "FROM t_hs GROUP BY g ORDER BY g"),
+    "QD1": ("floating-point accumulator coverage through the newly-parallel "
+            "path: SUM/AVG over DOUBLE with integer-valued inputs (< 2^53, "
+            "exactly representable) so the double sums are order-invariant "
+            "and the exact compare stays valid. KNOWN PROPERTY, recorded: "
+            "non-integer double accumulation order under the parallel "
+            "fallback sort is nondeterministic across equal keys — an "
+            "expansion of the pre-existing upstream property QC1 documents; "
+            "last-ulp differences on real-valued doubles are NOT covered by "
+            "this exact-compare battery.",
+            "SELECT {h}g, SUM(CAST(v AS DOUBLE)), AVG(CAST(v AS DOUBLE)), "
+            "MIN(CAST(v AS DOUBLE)) FROM t_hs GROUP BY g ORDER BY g"),
 }
 SERIAL_HINT = "/*+ NO_HASH_AGGREGATE PARALLEL(1) */ "
 
@@ -217,6 +228,18 @@ def cmd_run(args):
                "overrides": TC_OVERRIDES.strip().splitlines()[1:],
                "layer1": {}, "layer2": {}, "pass": False}
     started = False
+    import signal
+
+    def _restore_conf(signum=None, frame=None):
+        try:
+            with open(conf, "wb") as f:
+                f.write(pinned_bytes)
+        finally:
+            if signum is not None:
+                die(f"signal {signum} received — pinned conf byte-restored")
+
+    prev_handlers = {s: signal.signal(s, _restore_conf)
+                     for s in (signal.SIGINT, signal.SIGTERM)}
     try:
         with open(conf, "wb") as f:
             f.write(pinned_bytes + TC_OVERRIDES.encode())
@@ -268,9 +291,13 @@ def cmd_run(args):
     finally:
         if started:
             run_logged(["cubrid", "server", "stop", TC_DB], env, log)
-        run_logged(["cubrid", "deletedb", TC_DB], env, log)
-        with open(conf, "wb") as f:
-            f.write(pinned_bytes)
+        drc = run_logged(["cubrid", "deletedb", TC_DB], env, log)
+        if drc != 0:
+            print(f"IMP015-TC WARNING: deletedb rc={drc} (see {log})",
+                  file=sys.stderr)
+        for s, h in prev_handlers.items():
+            signal.signal(s, h)
+        _restore_conf()
         restored = sha256_file(conf)
         summary["conf_restored_sha256"] = restored
         with open(os.path.join(outdir, "summary.json"), "w") as f:

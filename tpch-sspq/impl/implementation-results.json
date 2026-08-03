@@ -5,7 +5,7 @@
       "imp_id": "IMP-015",
       "lane": "performance",
       "verdict": "accepted (provisional)",
-      "verdict_basis": "7-a criteria 2-4 met on measurement; criterion 1 checks 1-4 full pass, check-5 stress half pass + diagnostic half waived by direct user instruction 2026-08-03; criterion 3 evaluated against labelled restart-regime MDE proxies (unpaired 1.42% / paired 2.21%), pinned corrected MDE unobtainable (Phase 1A never ran); spec-C criterion-2 absolute gate re-dispositioned regime-invalid by operator decision, final adjudication at cumulative-phase review",
+      "verdict_basis": "7-a criteria 2-4 met on measurement; criterion 1 checks 1-4 full pass, check-5 stress half pass + diagnostic half waived by direct user instruction 2026-08-03; criterion 3 evaluated against labelled restart-regime MDE proxies (unpaired 1.42% / paired 2.21%), pinned corrected MDE unobtainable (Phase 1A never ran); spec-C criterion-2 absolute gate re-dispositioned regime-invalid by operator decision, final adjudication at cumulative-phase review; base +33.6% framing resolved as controlled-route destination mismatch (base drift +1.7% vs old native)",
       "branch": "impl/tpch-sspq-impl-r1-20260803/IMP-015-gby-sort-runtime-px",
       "plan_commit": "84546077b",
       "patch_commit": "61f4b4cf9",
@@ -43,7 +43,24 @@
         "state": "synced",
         "page_id": "3aef947f-1be1-816f-b19e-f3679f3e978f",
         "method": "ntn CLI, server-side refetch + corruption check clean"
-      }
+      },
+      "carried_risks": [
+        {
+          "id": "TWU-unmeasured",
+          "item": "criterion-4 TWU component (>=3.70) not measured; telemetry lane did not run this campaign execution; signature set formally reduced to measured components by recorded operator adjudication (report §7); surrogate: ~606% cub_server CPU live-load probe + parallel sub-lines",
+          "close_by": "cumulative-phase telemetry pass"
+        },
+        {
+          "id": "10b-item7-reduced",
+          "item": "report §10-b item 7 operated in reduced form (no executor/auxiliary/total CPU split, no serial tail) — recorded decision, report §7",
+          "close_by": "cumulative-phase telemetry pass"
+        },
+        {
+          "id": "expectation-transfer",
+          "item": "registry 1.31x was the NO_HASH_AGGREGATE controlled route (7.128->5.426 s); base drift vs old native only +1.7%; rule for later IMPs: transfer expectations as relative ratios against matching routes only (diagnosis, report §5/§8)",
+          "close_by": "Phase 1A fresh baseline when campaign resumes"
+        }
+      ]
     }
   ]
 }
