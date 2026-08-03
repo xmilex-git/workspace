@@ -61,6 +61,46 @@
           "close_by": "Phase 1A fresh baseline when campaign resumes"
         }
       ]
+    },
+    {
+      "imp_id": "IMP-032",
+      "legacy_candidate_id": "IC-5 (구 개선 후보 레지스트리 ⑤)",
+      "lane": "performance",
+      "verdict": null,
+      "verdict_basis": "blocked — no verdict. Two independent spec stop-and-report conditions: (1) spec §A A3 refuted (GROUPBY_STATE cannot be duplicated per worker inside the declared radius: shared g_val_list/g_regu_list instances, g_output_agg_list, shared xasl_state->vd evaluation, agg_hash_context sequential cursor); duplication would require the parallel-scan per-worker XASL clone (px_scan_task.cpp:569-643) = §5-d XASL serialization / unanticipated subsystem + LOC hard stop 420. (2) spec D1 UNPROVABLE_ON_THIS_HOST: Q15 gate expected effect 0.00% < §6-d MDE floor 1%, because Q15's group-by fallback sort is fully serial even under IMP-015 (0/5088 DWARF callchain samples in the parallel drain), so the targeted phases ②/③ never execute. Scope redesign is a user decision (§11-a).",
+      "branch": "impl/tpch-sspq-impl-r1-20260803/IMP-032-gby-parallel-finalize",
+      "branch_base_commit": "61f4b4cf967dbc2f0cd18422b83561ef44366382",
+      "stacked_on": "IMP-015 (explicit user approval 2026-08-04, spec D2; recorded in both reports per §5-b)",
+      "plan_commit": null,
+      "patch_commit": null,
+      "source_modified": false,
+      "cubrid_base_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+      "measured": {
+        "ab_evidence": null,
+        "ab_budget_spent": "none — §6-c B→P→P→B not run",
+        "probe_only": {
+          "label": "attribution evidence, NOT A/B evidence; quiet-gate not enforced, bgload recorded only",
+          "binary": "install/IMP-015 (preserved, not rebuilt)",
+          "q15_leader_serial_residue": "0.00% — parallel fallback sort never engages (③ 0/5088 samples, ② 0/5088)",
+          "q18_parallel_instance": "hash partial-list sort only; ③ 716/10684 (6.70%) vs ② 103 (0.96%) = 87.4:12.6",
+          "q18_main_groupby_sort": "serial — sort_exphase_merge 1700 samples / qexec_gby_put_next 1203; 0 co-occurrence with sort_put_result_from_tmpfile"
+        }
+      },
+      "build_ids": {
+        "B": {
+          "prefix": "install/IMP-015",
+          "cub_server_sha256": "0a376e0606f7395822cf0f4925b8290326b4f1131e6c865e5e7b291722726f30",
+          "elf_build_id": "379ab8c0760ec526fbeee8b80f0a2da0d81759bd"
+        },
+        "P": null
+      },
+      "report": "tpch-sspq/impl/IMP-032/status.md (interim; §10-b report.md deliberately absent — no verdict)",
+      "raw_manifest": "tpch-sspq/impl/IMP-032/raw-manifest.json (38 artifacts, per-artifact sha256)",
+      "report_commit": "7a95be60aa2917913999efcbfc04b4edffb8cf95",
+      "notion_sync": "not attempted — no verdict and no §10-b report; §10-c Git-first ordering respected; §10-e discovery fields untouched",
+      "carried_risks": [
+        "A3 refutation and the Q15 target-absence finding both require a user scope decision (§11-a options A–E in status.md §5)"
+      ]
     }
   ]
 }
