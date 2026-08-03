@@ -1,0 +1,164 @@
+{
+  "campaign_id": "tpch-sspq-impl-r1-20260803",
+  "source": "user-led triage discussion from the Notion improvement-registry evidence",
+  "recorded_utc": "2026-08-03T04:33:51Z",
+  "pinned_impl_ssot_commit": null,
+  "pinned_impl_ssot_commit_note": "Self-reference is impossible: this file and the AMEND-F amendment to tpch-sspq/IMPL-SSOT.md are recorded in a single commit, so that commit's SHA cannot be embedded in this file. The amended IMPL-SSOT is identified instead by pinned_impl_ssot_blob below, which is exactly the blob SHA every worker verifies under IMPL-SSOT section 1-d. The commit SHA is reported in the commit message and in the agent report.",
+  "pinned_impl_ssot_blob": "111c281081785cd25f2b59d74b2a38dfaa75d7da",
+  "pinned_impl_ssot_blob_predecessor": "1118b18ff1718f8493d72921fb7bb8851e6a1d8c",
+  "impl_ssot_amendment": "AMEND-F",
+  "immutable_inputs_not_modified": [
+    "tpch-sspq/impl/feasibility-assessment.json"
+  ],
+  "benefit_adjustments": [
+    {
+      "id": "IMP-001",
+      "status": "BENEFIT_PENDING_DENOMINATOR",
+      "measured_effect_pct": 13.0,
+      "measured_effect_source": "internal prototype",
+      "refutes": "full removal of the 62.35% profile band",
+      "blocker": "denominator (wall vs CPU) unconfirmed",
+      "ranking_treatment": "no numeric benefit score, no rank position until resolved; excluded from the percentile-rank population",
+      "rejected": false,
+      "note": "expected_saved_seconds multiplies fresh_base_median_q, a wall-clock median, by the effect fraction. If the 13% is a CPU-time reduction, applying it to a wall median overstates the benefit, potentially by a large factor because the candidate's target work is parallelisable. Blocked on exactly one datum: whether the prototype's 13% is a wall-time or a CPU-time reduction. Resolvable by the user; not a rejection."
+    },
+    {
+      "id": "IMP-002",
+      "status": "BENEFIT_CONFOUNDED",
+      "confounded_attribution": "Q04 attribution of 1.160 core-s",
+      "confounded_with": "the IMP-018 mechanism",
+      "effective_evidence_weight": 0.0,
+      "trust_restored_when": "IMP-018 and IMP-010 are fixed",
+      "ranking_treatment": "no numeric benefit score, no rank position; contributes 0 seconds to any campaign-level total",
+      "rejected": false,
+      "independent_existing_reason": "feasibility-assessment.json already assigns IMP-002 the deferred_research lane because CUBRID has no BufferAccessStrategy equivalent",
+      "note": "The two reasons are independent and BOTH stand. The deferred_research lane is a feasibility judgment; BENEFIT_CONFOUNDED is an evidence judgment. Neither subsumes the other, and lifting one does not lift the other."
+    },
+    {
+      "id": "IMP-012",
+      "status": "PRIORITY_DISAGREEMENT",
+      "discovery_priority_field": "P0",
+      "discovery_priority_source": "tpch-sspq/reports/improvement-registry.json and its Notion mirror",
+      "discovery_priority_action": "NOT MODIFIED — the registry's and Notion's discovery Priority field is left exactly as it is",
+      "campaign_absolute_effect_seconds": 0.138,
+      "campaign_evidence_level": "Projection",
+      "campaign_evidence_weight": 0.5,
+      "ranking_treatment": "score from the 0.138 s projection at the Projection evidence weight 0.50, per IMPL-SSOT section 2-b",
+      "note": "The absolute magnitude of 0.138 s does not support a P0 discovery priority. This is recorded as a disagreement in the campaign's own fields only; the discovery-side Priority is a different question (how interesting the finding is) from the campaign-side rank (how much wall time an implementation would buy), and this campaign does not overwrite the former."
+    },
+    {
+      "id": "IMP-013",
+      "status": "BENEFIT_BASIS_CORRECTED",
+      "use_basis": "realistic target of 0.47 core-s",
+      "must_not_use_basis": "32.7% profile band upper bound",
+      "ranking_treatment": "compute expected_saved_seconds from the 0.47 core-s realistic target only",
+      "note": "Direct application of the IMPL-SSOT section 2-b rules: a whole profile band is never automatically a removable effect, and a range contributes its conservative lower bound. The 32.7% band is a cost observation, not an effect."
+    }
+  ],
+  "lane_status_changes": [
+    {
+      "id": "IMP-028",
+      "new_lane": "external_tracking",
+      "previous_lane_in_feasibility_assessment": "deferred_research",
+      "reason": "superseded by PR #7533",
+      "external_reference": "#7533",
+      "external_reference_type": "pull_request",
+      "excluded_from_self_implementation": true,
+      "tracking_obligation": "track PR #7533 to a resolution"
+    },
+    {
+      "id": "IMP-025",
+      "new_lane": "external_tracking",
+      "previous_lane_in_feasibility_assessment": "performance",
+      "reason": "superseded by PR #7533",
+      "external_reference": "#7533",
+      "external_reference_type": "pull_request",
+      "excluded_from_self_implementation": true,
+      "tracking_obligation": "track PR #7533 to a resolution",
+      "note": "This removes IMP-025 from the ranked performance set. It is an ownership change, not a benefit judgment."
+    },
+    {
+      "id": "IMP-007",
+      "new_lane": "external_tracking",
+      "previous_lane_in_feasibility_assessment": "deferred_research",
+      "status": "watch",
+      "reason": "CBRD-26788 is in progress upstream",
+      "external_reference": "CBRD-26788",
+      "external_reference_type": "jira_ticket",
+      "excluded_from_self_implementation": true,
+      "queued_for_implementation": false,
+      "tracking_obligation": "watch CBRD-26788 to a resolution"
+    }
+  ],
+  "upstream_scope_gates": [
+    {
+      "ids": ["IMP-003", "IMP-022", "IMP-019", "IMP-011", "IMP-014"],
+      "tickets": ["CBRD-27127", "CBRD-27036", "CBRD-27037", "CBRD-27094", "CBRD-27113"],
+      "pr": ["#7453"],
+      "mapping": "set-to-set",
+      "mapping_note": "The triage stated these upstream references as a SET applying to this SET of candidates. It did NOT state which ticket applies to which candidate. No per-candidate mapping is recorded, because inventing one would fabricate specificity the triage did not supply. Each gated candidate is therefore checked against ALL six references.",
+      "rule": "Before any implementation work begins on a gated candidate — before the first source edit and before its implementation-plan.md is complete — its scope MUST be checked against every reference listed here, and the result recorded in that candidate's implementation-plan.md. If the upstream work already covers the candidate's scope, that is a stop-and-report condition (IMPL-SSOT section 11-a), not a reason to proceed in parallel.",
+      "impl_ssot_section": "5-e"
+    }
+  ],
+  "evidence_confirmed_sound": ["IMP-027", "IMP-011", "IMP-014", "IMP-015", "IMP-018", "IMP-010"],
+  "evidence_confirmed_sound_note": "The direct A/B evidence for these six candidates was examined in the triage and found without defect. This is a POSITIVE finding: it raises confidence in these candidates' benefit inputs and MUST be visible in each one's ranking rationale, not merely absent from the defect list. It does not change any evidence weight — direct A/B is already 1.00 — it confirms that the 1.00 is earned.",
+  "preserved_tensions": [
+    {
+      "tension": "IMP-011 and IMP-014 appear in BOTH the upstream scope-gate set and the evidence-confirmed-sound set.",
+      "resolution": "NOT RESOLVED — both hold simultaneously, by design. Sound A/B evidence establishes that the cost is real; it does not establish that the fix is still this campaign's to write. Sound evidence does NOT exempt a candidate from the upstream scope check.",
+      "recorded_in_impl_ssot": "section 5-e, final bullet"
+    },
+    {
+      "tension": "IMP-002 carries two independent negative findings: the deferred_research lane in feasibility-assessment.json (no CUBRID BufferAccessStrategy equivalent) and BENEFIT_CONFOUNDED here (Q04 attribution confounded with IMP-018).",
+      "resolution": "NOT RESOLVED into one reason — both are recorded and both stand independently."
+    },
+    {
+      "tension": "IMP-012 is P0 in the discovery-side improvement registry, but its campaign-side absolute effect is a 0.138 s projection.",
+      "resolution": "NOT RESOLVED by overwriting either side. The registry/Notion Priority field is untouched; the disagreement lives only in this campaign's fields."
+    }
+  ],
+  "contradictions_with_pinned_inputs": [
+    {
+      "against": "tpch-sspq/impl/feasibility-assessment.json",
+      "detail": "IMP-025 is lane 'performance' there; this triage moves it to external_tracking. IMP-028 and IMP-007 are lane 'deferred_research' there; this triage moves them to external_tracking. IMP-011 is lane 'deferred_research' there, yet it is gated for upstream scope-check and its evidence was confirmed sound here — those are not lane statements and do not by themselves promote it.",
+      "handling": "feasibility-assessment.json is NOT modified (IMPL-SSOT section 2-b-1 keeps it immutable). The lane changes are recorded here as the later, higher-authority input and the ranking tool applies them; the divergence is stated rather than silently reconciled."
+    },
+    {
+      "against": "tpch-sspq/reports/improvement-registry.json (input evidence)",
+      "detail": "IMP-012 priority P0 and IMP-028 priority P0 are unchanged in the registry while this campaign de-queues IMP-028 and disputes the P0 magnitude basis of IMP-012.",
+      "handling": "The registry is INPUT EVIDENCE ONLY (IMPL-SSOT section 1-b) and is not modified. The disagreement is recorded here only."
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "OQ-F1",
+      "blocks": ["IMP-001"],
+      "question": "Is the internal prototype's ≈13% measured effect a WALL-TIME reduction or a CPU-TIME reduction?",
+      "why_it_matters": "expected_saved_seconds multiplies a wall-clock median (fresh_base_median_q); a CPU-side fraction applied to a wall median overstates the benefit, and the overstatement is large precisely because the target work is parallelisable.",
+      "who_can_answer": "user",
+      "until_answered": "IMP-001 stays BENEFIT_PENDING_DENOMINATOR with no benefit score and no rank position"
+    },
+    {
+      "id": "OQ-F2",
+      "blocks": ["IMP-002"],
+      "question": "After IMP-018 and IMP-010 are fixed, should IMP-002's Q04 attribution be re-measured, or does its deferred_research lane make re-measurement moot for this campaign?",
+      "why_it_matters": "The confound and the lane are independent; clearing the confound does not by itself make IMP-002 implementable here.",
+      "who_can_answer": "user"
+    },
+    {
+      "id": "OQ-F3",
+      "blocks": ["IMP-003", "IMP-022", "IMP-019", "IMP-011", "IMP-014"],
+      "question": "Is there a per-candidate mapping between the six upstream references (CBRD-27127, CBRD-27036, CBRD-27037, CBRD-27094, CBRD-27113, PR #7453) and the five gated candidates?",
+      "why_it_matters": "The triage supplied the references as a set. Recorded as set-to-set; each gated candidate is checked against all six, which is safe but more work. A per-candidate mapping, if one exists, would narrow the gate.",
+      "who_can_answer": "user"
+    },
+    {
+      "id": "OQ-F4",
+      "blocks": ["IMP-028", "IMP-025", "IMP-007"],
+      "question": "Who owns tracking PR #7533 and CBRD-26788 to resolution, and where is that tracking state recorded once this campaign closes?",
+      "why_it_matters": "The external_tracking lane definition (IMPL-SSOT section 4-a) requires tracking to a resolution, but this campaign's closeout (section 11-b) has no step that discharges it.",
+      "who_can_answer": "user"
+    }
+  ]
+}

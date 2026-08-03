@@ -204,6 +204,46 @@ so a single outlier candidate cannot dominate the ranking by arithmetic alone. C
 with `expected_saved_seconds = 0` all receive the bottom rank and MUST be marked
 `NO_NUMERIC_BASIS`.
 
+#### 2-b-1. Triage adjustments are a required input (`AMEND-F`)
+
+Phase 1B benefit scoring has **three** required inputs, not two:
+
+1. `tpch-sspq/impl/feasibility-assessment.json` — the frozen Phase 1B feasibility input;
+2. the Phase 1A fresh baseline (section 3) — the source of every `fresh_base_median_q`;
+3. `tpch-sspq/impl/triage-adjustments.json` — the user-led triage's corrections to the
+   benefit inputs, lanes and pre-implementation gates.
+
+A ranking produced without reading input 3 is invalid. The three inputs are independent:
+`triage-adjustments.json` does **not** modify `feasibility-assessment.json`, which remains
+immutable, and where the two disagree the disagreement is recorded in
+`triage-adjustments.json` and escalated (section 11-a) — it is never resolved silently by
+the ranking tool.
+
+**Blocked benefit statuses.** A candidate marked `BENEFIT_PENDING_DENOMINATOR` or
+`BENEFIT_CONFOUNDED` in `triage-adjustments.json` MUST NOT receive a numeric benefit
+score and MUST NOT receive a rank position. It is listed with its status and its blocker
+in the ranking table's eligibility column, and it is excluded from the percentile-rank
+population so it cannot shift other candidates' scores. This is distinct from
+`NO_NUMERIC_BASIS`, which means *no evidence*; these two statuses mean *evidence exists
+but is not yet usable*, and neither is a rejection.
+
+**Profile bands, made operational.** The rule above — a whole profile band MUST NOT be
+automatically treated as removable — has two concrete instances, and the ranking MUST
+apply it in exactly these terms:
+
+- `IMP-001`: the profile band is **62.35%**, but an internal prototype measured an actual
+  effect of **≈13%**. The 62.35% band is therefore refuted as a removable effect. The
+  13% figure is nevertheless unusable until its denominator (wall time vs CPU time) is
+  confirmed, which is why the candidate is `BENEFIT_PENDING_DENOMINATOR` rather than
+  simply re-scored at 13%.
+- `IMP-013`: the profile band is **32.7%**, but the realistic target is **0.47 core-s**.
+  The benefit MUST be computed from the 0.47 core-s target, never from the band's upper
+  bound — which is also the section 2-b range rule (conservative lower bound).
+
+Citing these two cases is what makes the band rule operational rather than abstract: a
+band figure that appears in the registry is a *cost observation*, and it becomes an
+*effect* only when a measurement or a stated, argued removable fraction says so.
+
 ### 2-c. Total score and tie-breaks
 
 ```text
@@ -438,6 +478,20 @@ Every one of `IMP-001`…`IMP-031` MUST be assigned exactly one lane:
 | **Enabler-Predecessor** | The candidate does not itself produce a headline improvement, but another candidate cannot be implemented or measured without it. |
 | **Diagnostic-Measurement-correctness** | The candidate improves observability, plan/trace fidelity, or corrects a measurement-visible behaviour. It is not ranked for performance benefit. |
 | **Deferred research** | The candidate is real but out of scope for this campaign: it requires a design decision, a persistent-format change, or research beyond a bounded patch. |
+| **External-tracking** (`external_tracking`) | The candidate's problem is being solved **outside this campaign** — by an upstream pull request, or by an in-progress upstream JIRA ticket. It is therefore **excluded from the implementation queue**, but it is NOT closed: it MUST still be tracked to a resolution. |
+
+`External-tracking` is a **fifth** lane, added by `AMEND-F`; the four lanes above are
+unchanged. Every one of `IMP-001`…`IMP-031` still carries exactly one lane. Only the
+**Performance** lane is ranked for implementation, so moving a candidate into
+`external_tracking` removes it from the ranked set — it is not a benefit judgment and
+MUST NOT be recorded as one.
+
+An `external_tracking` candidate carries a **required** field naming the external
+reference — the upstream PR number (for example `#7533`) or the JIRA ticket ID (for
+example `CBRD-26788`) — plus its current external state. A candidate placed in this lane
+without that reference is invalid. When the external work lands or is abandoned, the
+candidate returns to the user for a lane decision; this campaign does not re-lane it
+silently.
 
 The **overall implementation ranking covers the Performance lane only**. A required
 enabler is inserted into the queue **immediately ahead of** the dependent candidate it
@@ -537,6 +591,26 @@ Implementation MUST stop immediately, and the worker MUST report, if **either**:
 
 This is a stop-and-report, not a judgment call. The partial work is preserved on the
 branch and the campaign waits for the user.
+
+### 5-e. Upstream scope-check gate (pre-implementation)
+
+Some candidates carry an **upstream scope-check gate**, recorded per candidate in
+`tpch-sspq/impl/triage-adjustments.json` (`upstream_scope_gates`). For any candidate
+carrying the gate:
+
+- **Before any implementation work begins** — before the first source edit, and before
+  `implementation-plan.md` is considered complete under 5-c — the candidate's scope MUST
+  be checked against the named upstream tickets and pull requests.
+- The result of that check MUST be recorded in that candidate's `implementation-plan.md`:
+  which upstream references were checked, what each covers, and whether it overlaps the
+  candidate's scope.
+- **If the upstream work already covers the candidate's scope, that is a stop-and-report
+  condition** (section 11-a). It is NOT a reason to proceed in parallel, and it is NOT a
+  reason to silently narrow the candidate's scope to whatever the upstream work left over.
+  The worker reports the overlap and waits for the user.
+- The gate is independent of evidence quality. A candidate whose A/B evidence was examined
+  and found sound is **not** exempt: sound evidence says the cost is real, it does not say
+  the fix is still this campaign's to write.
 
 ---
 
@@ -1410,3 +1484,4 @@ that every worker verifies (section 1-d) change with each entry.
 | `AMEND-C` | this commit | New section 6-a-2 **Runtime configuration pin**: the campaign adopts the previous campaign's install `cubrid.conf` (sha256 `ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff`) as its canonical runtime configuration. Reason: 6-a-1 pinned the build exhaustively but pinned no runtime configuration, so the base install received stock defaults (`data_buffer_size=512M`, no `parallelism`), whereas all `IMP-001`…`IMP-031` evidence was produced at `data_buffer_size=8192M` / `parallelism=6` / `max_parallel_workers=100` / `update_statistics_update_histogram=yes`; measuring the fresh baseline in a different regime would corrupt every 2-b benefit score and every later A/B denominator. Records the full pinned settings table, mandates the identical file in `install/base` and every `install/IMP-NNN` with a pre-block sha256 assertion, records that the file contains **no** non-portable line so **zero** deviation is permitted, sets the campaign `CUBRID_TMP` under the campaign raw root as a mandatory pre-run assertion overriding the harness's hardcoded `/tmp`, adds the node-0 memory note (server-start memory failure is stop-and-report, never a silent buffer reduction), records that every other conf file is byte-identical and out of scope because it cannot affect single-connection query performance, and records the unresolved conflict with this repository's root `cubrid.conf` / `AGENTS.md` "single source of truth" claim. |
 | `AMEND-D` | this commit | Section 3-a external-CPU invalidation gate changed from **0.5 to 6.0 core-s/s**. **This supersedes the 0.5 core-s/s rule introduced by `AMEND-A`**, and `AMEND-A`'s statement that "the previous measurement campaign's 6.0 core-s/s quiet gate is NOT inherited" is withdrawn — the rest of `AMEND-A` (affinity-not-cpuset mechanism, topology, CPU assignment table, out-of-scope neighbours) stands. Reason, by measurement with zero campaign processes running: over 120 s at 0.25 s sampling, mean 1.94 / p95 10.02 / max 16.03 core-s/s with 321 of 434 samples above 0.5; per-CPU probes over the SUT set 7.995 core-s/s (90 s) and 4.776 core-s/s (60 s); `/proc/stat` over 60 s SUT user 10.635, system 2.503, **steal 0.000** — proving the load is real work by processes outside the podman container, invisible and uncontrollable from inside it, so a 0.5 gate would invalidate every block and make zero measurement possible. The cost is recorded explicitly: a 6.0 tolerance exceeds the few-percent effects many candidates predict, so the gate no longer guarantees the environment can resolve small effects. Compensating strengthening in section 6-d: Phase 1A MUST report per-query paired CV and MDE, and the Phase 1B ranking MUST carry each candidate's expected effect against its target queries' MDE, flagging `UNPROVABLE_ON_THIS_HOST` at ranking time. Section 3-a's per-block sampling, invalidate-and-rerun and invalidation-recording machinery is unchanged. |
 | `AMEND-E` | this commit | Section 8-b: **Phase 1A runs under a single deterministic driver**, not one GJC session per query. Reason: `gjc session create` launches a detached tmux session running the interactive `gjc` LLM agent (`gjc-runtime/tmux-sessions.ts`), so the per-query rule meant 22 sequential LLM agent sessions for one continuous ~10–14 hour measurement block; Phase 1A is a single block, not a per-unit workflow, and removing model non-determinism from the measurement path improves reproducibility. Fixes the driver session name `tpch-sspq-impl-r1-20260803-phase1a-driver`, requires its exact name/parent/PID in the operational state and teardown per 8-d. **Phase 2 is unchanged — one GJC session per IMP** — and the scoping is stated explicitly so the GJC lifecycle is not read as abolished. Also records that the inherited `tpch-sspq/harness/` is campaign-hardcoded (`CAMPAIGN`/`RAW_ROOT` at `tpch-sspq-fk-r1-20260730`, `CUBRID_HOME` at the forbidden `/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9`, `measure_block.sh:35 THRESHOLD=6.0`, `CUBRID_TMP=/tmp`) and MUST be adapted into a campaign-local copy, with the threshold set explicitly from the pinned section 3-a value rather than inherited by coincidence. |
+| `AMEND-F` | this commit | Records the user-led triage of the improvement-registry evidence into the campaign contract, in three places. **Section 4-a**: adds a **fifth lane, `external_tracking`** — a candidate whose problem is being solved outside this campaign (upstream PR or in-progress JIRA ticket), excluded from the implementation queue but still tracked to a resolution, carrying the external reference (PR number or ticket ID) as a required field; only the `performance` lane is ranked, so this lane removes a candidate from the ranked set without being a benefit judgment. **New section 5-e**: adds a **pre-implementation upstream scope-check gate** — a gated candidate's scope MUST be checked against the named upstream tickets/PRs before any implementation work begins and the result recorded in its `implementation-plan.md`; upstream already covering the scope is a **stop-and-report** condition, not a licence to proceed in parallel, and sound A/B evidence does not exempt a candidate from the gate. **New section 2-b-1**: makes `tpch-sspq/impl/triage-adjustments.json` a **required third input** to Phase 1B benefit scoring alongside `feasibility-assessment.json` (which stays immutable) and the Phase 1A fresh baseline, and forbids any numeric benefit score or rank position for a candidate marked `BENEFIT_PENDING_DENOMINATOR` or `BENEFIT_CONFOUNDED` (excluded from the percentile-rank population; distinct from `NO_NUMERIC_BASIS`, and not a rejection). Reason: the triage found that `IMP-001`'s 62.35% profile band is refuted by an internal prototype's ≈13% measured effect whose denominator (wall vs CPU) is unconfirmed, that `IMP-002`'s Q04 attribution of 1.160 core-s is confounded with the `IMP-018` mechanism, and that `IMP-013` must be scored from its realistic 0.47 core-s target rather than its 32.7% band — so the existing "a profile band is never automatically a removable effect" rule is reinforced by citing those two cases by name, making it operational rather than abstract. Section 2-b's weights, formula and normalization are otherwise unchanged. |
