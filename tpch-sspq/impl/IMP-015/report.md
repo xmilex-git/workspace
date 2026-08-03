@@ -145,3 +145,44 @@ Build recipe: §6-a-1 replicated (pre-build 6-point verification passed; one dev
 ## 13. Notion sync state
 
 Written directly via the authenticated `ntn` CLI to the IMP-015 registry row page (`3aef947f-1be1-816f-b19e-f3679f3e978f`) as a `## 구현 캠페인 tpch-sspq-impl-r1-20260803` body section (§10-e: discovery fields untouched), after this report's commit was pushed and verified reachable from `origin/main` (§10-c). Sync state recorded in the workspace ledger; on failure a §10-f backfill record is committed instead.
+
+## 14. 스태킹 기록 (§5-b) — IMP-032가 이 패치 위에 쌓였다
+
+IMPL-SSOT §5-b는 predecessor 브랜치 스태킹을 **명시적 사용자 승인 시에만** 허용하고 **양쪽 report에
+기록**할 것을 요구한다. 이 절은 그 기록의 IMP-015 쪽 절반이다.
+
+| 항목 | 값 |
+|---|---|
+| 스태킹한 IMP | `IMP-032` (구 개선 후보 `IC-5` / ⑤ — GROUP BY 리더 merge/finalize 병렬화) |
+| 승인 | 사용자 명시 승인, 2026-08-04 그릴링 세션 (spec `tpch-sspq/impl/IC-5-implementation-spec.md` D2) |
+| 브랜치 | `impl/tpch-sspq-impl-r1-20260803/IMP-032-gby-parallel-finalize`, 이 report의 패치 커밋 `61f4b4cf967dbc2f0cd18422b83561ef44366382`에서 분기 |
+| A/B 설계 귀결 | IMP-032의 `B`는 캠페인 기본 `install/base`가 **아니라** 보존된 `install/IMP-015` 바이너리다 (`P` = IMP-015+IMP-032). IMP-032 단독 효과를 격리하기 위한 예외이며 근거는 spec D2/D3 |
+| 기술적 필연성 | IMP-032가 공략하는 리더 병합/최종화 기계장치는 병렬 폴백 정렬 경로가 발동해야 실행된다. IMP-015가 없는 base(`607f1ee9f`)에서는 hash-eligible 플랜이 `sort_check_parallelism`의 `hash_eligible` 게이트에서 직렬로 떨어져 그 경로에 도달하지 않으므로 독립 브랜치로는 효과 측정이 불가능하다 |
+| 명기된 리스크 | cumulative 단계에서 IMP-015가 뒤집히면 IMP-032의 측정도 무효다 |
+| IMP-032 현재 상태 | **정지(blocked)** — spec §A A3 반증 + spec D1 `UNPROVABLE_ON_THIS_HOST`. 소스 수정 0건, A/B 예산 미소모. 상세는 `tpch-sspq/impl/IMP-032/status.md` |
+
+### 14-a. IMP-032 프로브가 이 패치에 대해 관측한 것 (IMP-015 장부에 대한 사실 추가)
+
+IMP-032의 D1 귀속 프로브(보존 `install/IMP-015` 바이너리, 재빌드 없음)가 측정한 사실 — 이 report의
+verdict를 바꾸지 않으나 IMP-015의 적용 범위를 좁혀 기록한다:
+
+- **Q15**: 두 GROUPBY 노드 모두 `hash: partial`(HS_REJECT_ALL)인데도 group-by 폴백 정렬이 **완전
+  직렬**이다. DWARF 콜체인 표본 5,088개 중 `sort_put_result_from_tmpfile` / `sort_end_parallelism` /
+  `sort_merge_nruns` 표본이 각 **0개**, `sort_listfile_execute` absent. 즉 IMP-015의 런타임-진실
+  게이트가 Q15에서는 병렬 경로를 열지 못했다 — 이 report §9가 Q15를 "미개선(+1.0% 무효과)"으로 남긴
+  결과와 정합한다.
+- **Q18**: 병렬 SORT_GROUP_BY가 발동하지만, ③ drain 표본 716개 중 **688개가
+  `qexec_hash_gby_put_next`와 동시 출현**하고 `qexec_gby_put_next`와 동시 출현하는 표본은 **0개**다.
+  ⇒ 실제로 병렬화된 것은 이 패치의 변경 (b)(부분 해시리스트 정렬을 무조건 병렬 적격화)이고, 메인
+  group-by 폴백 정렬은 여전히 직렬(`sort_exphase_merge` 1,700 표본 아래 `qexec_gby_put_next` 1,203
+  표본)이다.
+- 크기·상위 질의 구조·해시 상태는 원인에서 배제된다(뷰 본문 단독도 직렬, 12개월 창 9,123,688행 /
+  sort page 85,534에서도 직렬).
+- 남은 후보(계측 빌드 필요, 미확정): `sort_check_parallelism`(`external_sort.c:5236-5246`)이 보는
+  `input_list->page_cnt`가 gather된 mergeable-list 입력에서 문턱(2048) 미달인 경우,
+  `px->parallelism`(=`xasl->parallelism`) 힌트가 해당 XASL 노드에서 `0 또는 1`이어서
+  `compute_parallel_degree`가 즉시 0을 돌려주는 경우(`px_parallel.cpp:128-131`),
+  `try_reserve_workers` 실패.
+
+증거: `tpch-sspq/impl/IMP-032/D1-attribution-probe.md`, `tpch-sspq/impl/IMP-032/raw-manifest.json`.
+라벨: **귀속 증거이며 A/B 증거가 아니다** — quiet-gate 차단 미적용, bgload 기록만.
