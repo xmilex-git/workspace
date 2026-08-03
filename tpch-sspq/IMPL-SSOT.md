@@ -325,13 +325,26 @@ Mandatory rules:
   measurement block as well as before it.
 - The NUMA page distribution of the server MUST be recorded before and after each block.
 - The SUT CPUs SHOULD carry no non-campaign process. Where exclusivity cannot be
-  enforced, **any run during which external CPU on the SUT CPUs exceeds 0.5 core-seconds
+  enforced, **any run during which external CPU on the SUT CPUs exceeds 6.0 core-seconds
   per second is INVALID** (`INVALID_BACKGROUND_LOAD`).
-- **The previous measurement campaign's 6.0 core-s/s quiet gate is NOT inherited.** That
-  threshold was raised to keep a cross-engine comparison moving under sustained host
-  load; this campaign measures a same-engine patch effect where the expected signal is
-  often a few percent, so a 6.0 core-s/s tolerance would exceed the effect being
-  measured. The gate here is 0.5 core-s/s and it is not negotiable without user approval.
+- **The gate is 6.0 core-s/s — the previous measurement campaign's value — and this was
+  decided by measurement, not by inheritance.** With **zero** campaign processes running,
+  external load on this host measured: over a 120 s window at 0.25 s sampling, mean
+  **1.94**, p95 **10.02**, max **16.03** core-s/s, with **321 of 434 samples above 0.5**.
+  Per-CPU probes over the SUT set gave **7.995** core-s/s (90 s) and **4.776** core-s/s
+  (60 s); `/proc/stat` over 60 s gave SUT user **10.635**, system **2.503**, **steal
+  0.000**. `steal == 0` while container-visible `ps` accounts for only ~10% CPU proves the
+  load is **real work by processes outside the podman container** — invisible and
+  uncontrollable from inside it. A 0.5 core-s/s gate is therefore **unattainable on this
+  host**: every block would be `INVALID_BACKGROUND_LOAD` and zero measurement would be
+  possible. The previous campaign raised its own gate from 1.5 to 6.0 for what is evidently
+  the same reason.
+- **The cost of this decision, stated plainly.** A 6.0 core-s/s tolerance is **large
+  relative to the few-percent effects many candidates predict**. The gate therefore **no
+  longer guarantees that the environment is quiet enough to resolve small effects**. It
+  bounds only gross contention. Resolution is carried instead by the **paired design**
+  (section 6-c/6-d) and by **honest per-query MDE reporting** (section 6-d) — not by the
+  gate. This limitation MUST be restated in every report that cites a sub-MDE effect.
 - **No build, compression, hashing, archiving or Notion work may run concurrently with a
   performance measurement.** Compilation is confined to CPUs `24-31` *and* MUST NOT
   overlap in time with a measured block.
@@ -343,7 +356,7 @@ long-lived agent stacks, the PostgreSQL reference instance, and previous campaig
 leftovers. Those processes are **out of campaign scope**. They MUST NEVER be stopped,
 killed, re-niced or re-pinned by this campaign. Because affinity is advisory and the
 container grants `0-31` to everyone, contention from those neighbours is handled **solely**
-by the 0.5 core-s/s external-CPU invalidation gate above: a contended run is discarded, not
+by the 6.0 core-s/s external-CPU invalidation gate above: a contended run is discarded, not
 made quiet by force.
 
 ### 3-b. Server ownership gate
@@ -760,6 +773,137 @@ Before running cmake for any variant, the worker MUST assert and record:
 
 Any mismatch ⇒ stop and report; do not build around it.
 
+### 6-a-2. Runtime configuration pin
+
+**User decision.** Section 6-a-1 pins the *build* exhaustively but pinned **no runtime
+configuration**, so the base install received stock defaults (`data_buffer_size=512M`, no
+`parallelism`). Every candidate's evidence in the frozen improvement registry
+(`IMP-001`…`IMP-031`) was produced under the previous campaign's runtime regime
+(`data_buffer_size=8192M`, `parallelism=6`, `max_parallel_workers=100`,
+`update_statistics_update_histogram=yes`). Measuring this campaign's fresh baseline under a
+different regime would put `fresh_base_median_q` in a **different operating regime from the
+evidence**, silently corrupting every section 2-b benefit score and every later A/B
+denominator. The previous campaign's own SSOT recorded that a 512M buffer "risked leaving
+CUBRID unable to hold its working set resident, which would fail the WARM proof rather than
+merely bias it" — the same hazard applies to section 3-c's WARM convergence gate here.
+
+This campaign therefore **adopts the previous campaign's performance regime, not its install
+paths**. The canonical runtime configuration is the previous campaign's install
+`cubrid.conf`, captured read-only in Phase 0c:
+
+| Item | Value |
+|---|---|
+| Canonical source (read-only) | `/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9/conf/cubrid.conf` |
+| sha256 | `ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff` |
+| Size / mtime | 2827 bytes, `2026-07-30T19:07:58+09:00` |
+
+#### Pinned settings
+
+Every non-comment setting the canonical file carries, in file order:
+
+| Section | Parameter | Pinned value |
+|---|---|---|
+| `[service]` | `service` | `server,broker,manager` |
+| `[service]` | `server` | *(commented out — no database autostart list)* |
+| `[common]` | `update_statistics_update_histogram` | `yes` |
+| `[common]` | `parallelism` | `6` |
+| `[common]` | `max_parallel_workers` | `100` |
+| `[common]` | `data_buffer_size` | `8192M` |
+| `[common]` | `log_buffer_size` | `256M` |
+| `[common]` | `sort_buffer_size` | `2M` |
+| `[common]` | `max_clients` | `100` |
+| `[common]` | `cubrid_port_id` | `1523` |
+| `[common]` | `db_volume_size` | `512M` |
+| `[common]` | `log_volume_size` | `512M` |
+| `[common]` | `log_max_archives` | `0` |
+
+The base install as built currently carries sha256
+`862c4c68b04847d4ae0f0a9846387530606c457e687cd4a794a157f6f4d7a815` — stock defaults, i.e.
+the canonical file **minus** the three `[common]` lines
+`update_statistics_update_histogram` / `parallelism` / `max_parallel_workers` and with
+`data_buffer_size=512M` instead of `8192M`. Those four differences are the entire delta and
+they are exactly the regime difference this subsection exists to remove.
+
+#### Mandatory installation and verification
+
+- This **identical** configuration MUST be installed into
+  `install/base/conf/cubrid.conf` **and** into every
+  `install/IMP-NNN/conf/cubrid.conf`.
+- `sha256sum <prefix>/conf/cubrid.conf` MUST be asserted equal to `ad19f5ac…` **before every
+  measurement block**, for whichever variant that block runs, and the value recorded in the
+  raw manifest.
+- **Base and patch MUST run the identical runtime configuration.** A configuration
+  difference between variants invalidates the A/B outright — it is not a caveat, it is a
+  discarded result.
+
+#### Portability to the new install prefix
+
+The canonical `cubrid.conf` contains **no install-path-specific, host-specific or otherwise
+non-portable line**. It was inspected line by line: there is no absolute path anywhere in
+the file, the `server=` list is commented out (`#server=foo,bar`), no log directory, volume
+directory or database directory is named, and there is no `CUBRID_TMP`-adjacent setting.
+`cubrid_port_id=1523` is the stock port and is host-neutral. The file is therefore adopted
+**byte-for-byte**, with **zero permitted deviation** — unlike section 6-a-1, where
+`CMAKE_INSTALL_PREFIX` is the single sanctioned build difference, this subsection sanctions
+**no** difference at all. Any edit to the installed `cubrid.conf` is a contract change
+requiring user approval.
+
+#### Temp directory (`CUBRID_TMP`)
+
+Section 8-e forbids `/tmp` absolutely, but the inherited harness hardcodes
+`CUBRID_TMP=/tmp` (`tpch-sspq/harness/headline_run.py:22`,
+`tpch-sspq/harness/warm_establish.py:57`, and likewise
+`correctness_check.py:19` / `headline_telemetry.py:58`). This campaign's temp directory is:
+
+```text
+/data/tpch-sspq/tpch-sspq-impl-r1-20260803/work/tmp
+```
+
+Overriding the inherited harness default is a **mandatory pre-run assertion**: before any
+server start or measured block the worker MUST assert that `CUBRID_TMP` resolves to the path
+above, that the directory exists and is campaign-owned, and MUST record the asserted value.
+A block run with `CUBRID_TMP=/tmp` is INVALID. Note `cub_master` binds
+`${CUBRID_TMP}/CUBRID<port>`, so this value also determines the master socket path and MUST
+be identical for the server and every client in the same block. It is deliberately **not**
+per-IMP (`work/<IMP-ID>`, section 8-e): the master socket path must be stable across the
+whole campaign, so `work/tmp` is a campaign-lifetime sibling under the same permitted
+`work/` root, and is the only such exception.
+
+#### Memory note
+
+`numactl --membind=0` is mandatory per section 3-a. Node 0 has 128565 MB total, but observed
+**free** memory on it has fluctuated (21.8 GB down to 8.3 GB under external load), while
+roughly 107 GB of the machine is reclaimable buff/cache. An 8192M data buffer is expected to
+be satisfiable via reclaim. If a server start nevertheless fails on memory, that is a
+**stop-and-report condition** — it is NOT a licence to silently lower `data_buffer_size`,
+because lowering it changes the regime this subsection exists to pin.
+
+#### Other conf files
+
+Verified in Phase 0c: **every** other file in the previous campaign's `conf/` directory is
+byte-identical to the base install's counterpart — `cubrid_broker.conf`
+(`b8bb5921…`), `cubrid_broker.conf.shard`, `cubrid_ha.conf` (`81eae5d4…`),
+`cubrid_gateway.conf`, `cubrid_hosts.conf`, `cubrid_locales.txt`, `cubrid_locales.all.txt`,
+`cubrid.conf.large`, `cubrid.conf.small`, `shard_connection.txt`, `shard_key.txt`,
+`cas_ssl_cert.crt`, `cas_ssl_cert.key`. Nothing to pin and nothing to reconcile. They are
+**explicitly out of scope**: this campaign measures over a single direct `csql -C`
+connection (section 3-c), so the broker, gateway, HA and shard configurations are not on the
+measurement path and cannot affect single-connection query performance. The only extra files
+in the previous campaign's directory are its own `cubrid.conf.pre-stats-contract.bak` and
+`cubrid.conf.pre-buffer-contract.bak` snapshots, which are history, not configuration.
+
+#### Recorded conflict — this repository's `cubrid.conf`
+
+This tooling repository's own root `cubrid.conf` (sha256
+`0183c5d7556ef1c1cca9860a85942929fc3eeb3a6c64fc3d3ecdda95a089dc13`) carries
+`data_buffer_size=512M`, `parallelism=24`, `max_parallel_workers=100` and an active
+`server=demodb`, and `AGENTS.md` describes it as "the campaign cubrid.conf — single source
+of truth". That claim **conflicts with what the previous campaign actually ran** and it does
+NOT describe this campaign. The conflict is recorded here deliberately and is not resolved
+by editing `AGENTS.md`. For this campaign the authority is this subsection: the pinned
+configuration is the one hashed `ad19f5ac…` above, and the repository's root `cubrid.conf`
+MUST NOT be copied into any campaign install.
+
 ### 6-b. Correctness gate
 
 Before-and-after canonical results MUST be **EXACTLY equal**:
@@ -828,6 +972,16 @@ folded in.
   where `baseline_paired_CV` is the noise floor measured in section 3-c for that query.
 - Three values within a block are a dispersion estimate, not a confidence interval. A CI
   is only ever computed across block medians.
+- **Phase 1A MUST report, per query, the paired CV and the resulting MDE.** These are
+  campaign deliverables, not diagnostics: they are the only quantitative statement of what
+  this host can resolve, and section 3-a's 6.0 core-s/s gate deliberately does not make
+  that statement.
+- **The Phase 1B ranking MUST carry every candidate's expected effect against the MDE of
+  its target queries.** A candidate whose predicted effect is **below** its target query's
+  MDE is flagged `UNPROVABLE_ON_THIS_HOST` **at ranking time** — so it is known before it
+  is queued, rather than discovered to be inconclusive after twelve pairs of measurement.
+  The flag does not delete the candidate from the ranking; it states that this host cannot
+  decide it.
 
 ---
 
@@ -901,8 +1055,51 @@ including the possibility that the original evidence attribution was wrong.
   export PI_STREAM_IDLE_TIMEOUT_MS=300000
   ```
 
-- **One GJC session per query (Phase 1A) or per IMP (Phase 2).**
+- **Phase 2: one GJC session per IMP.** Unchanged. The full GJC lifecycle — creation, the
+  status block of 8-c, and the teardown order of 8-d — continues to apply per IMP.
+- **Phase 1A: one single deterministic driver, NOT one session per query.**
 - **Never two measurement sessions at once.**
+
+#### Phase 1A driver (supersedes the per-query session rule for Phase 1A only)
+
+**User decision.** `gjc session create` launches a **detached tmux session running the
+interactive `gjc` LLM agent** (confirmed in `gjc-runtime/tmux-sessions.ts`), so a per-query
+rule would mean **22 sequential LLM agent sessions** for what is a single ~10–14 hour
+measurement block. Phase 1A is **one continuous measurement block, not a per-unit
+workflow**, and removing model non-determinism from the measurement path improves
+reproducibility. Therefore, for Phase 1A specifically:
+
+- Phase 1A runs under **one detached tmux session executing a checked-in script** that
+  iterates Q01–Q22 and their blocks. **No LLM is in the measurement loop.**
+- The session name is fixed and campaign-identifiable:
+
+  ```text
+  tpch-sspq-impl-r1-20260803-phase1a-driver
+  ```
+
+- Its **exact name, its parent session and its PID** MUST be recorded in the operational
+  state, exactly as the child tmux driver rule below requires.
+- It is torn down per the section 8-d checklist, and its absence verified both ways.
+- **Scoping:** this replaces the per-query session rule for **Phase 1A only**. It does NOT
+  abolish the GJC lifecycle; Phase 2 keeps one GJC session per IMP.
+
+#### The inherited harness MUST be adapted, never used as-is
+
+The harness under `tpch-sspq/harness/` is **hardcoded to the previous campaign** and MUST be
+copied into a campaign-local, checked-in copy and adapted before Phase 1A uses it:
+
+| Location | Inherited value | Required for this campaign |
+|---|---|---|
+| `headline_run.py:24-25` (`CAMPAIGN` / `RAW_ROOT`) | `tpch-sspq-fk-r1-20260730`, `/data/tpch-sspq/tpch-sspq-fk-r1-20260730` | `tpch-sspq-impl-r1-20260803`, `/data/tpch-sspq/tpch-sspq-impl-r1-20260803` |
+| `headline_run.py:29`, `telemetry_run.py:31`, `affinity_guard.py:47`, `smoke_check.py:17` (`CUBRID_HOME`) | `/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9` | the per-variant campaign prefix (section 6-a-1) — the inherited install is **forbidden** as `B` |
+| `headline_run.py:22`, `warm_establish.py:57`, `correctness_check.py:19`, `headline_telemetry.py:58` (`CUBRID_TMP`) | `/tmp` | the campaign temp directory of section 6-a-2 |
+| `measure_block.sh:35`, `gated_run.sh:21`, `q15_gated_block.sh:24` (`THRESHOLD`) | `6.0` | `6.0`, **set explicitly from section 3-a**, never inherited |
+| `preflight_check.sh:17`, `perf_run.sh:25`, `measure_block.sh:50`, `gated_run.sh:18`, `q15_gated_block.sh:31` (`CAMPAIGN`) | `tpch-sspq-fk-r1-20260730` | `tpch-sspq-impl-r1-20260803` |
+
+With `AMEND-D` the inherited `THRESHOLD=6.0` now happens to match this campaign's gate
+again. That coincidence MUST NOT be relied on: the campaign-local copy MUST set the
+threshold **explicitly from the pinned section 3-a value**, so that a future amendment to
+the gate cannot be silently ignored by an inherited constant.
 
 If the `gjc session create` call's cwd or environment is not trustworthy, the controller
 MUST verify from **inside the tmux body after creation**: the working directory, the IMP
@@ -1208,5 +1405,8 @@ that every worker verifies (section 1-d) change with each entry.
 | ID | Commit | Change |
 |---|---|---|
 | — | `9a8a86d` | Original: IMPL-SSOT for campaign `tpch-sspq-impl-r1-20260803`, sections 1–11. |
-| `AMEND-A` | this commit | Section 3-a rewritten: the isolation mechanism is **`taskset` / `sched_setaffinity` affinity plus `numactl` memory binding**, not cpuset cgroups. Reason: the host is a rootless podman container whose cgroup-v1 `cpuset` hierarchy is flat with zero child cpusets; the previous campaign achieved its isolation purely via affinity, verified on the live `cub_server`. Verified host topology (Xeon Silver 4216, 2×16 cores, 1 thread/core, online `0-31`, node 0 = `0-15`/128565 MB, node 1 = `16-31`/64502 MB) recorded. The CPU assignment table, the 0.5 core-s/s invalidation gate and the non-inheritance of the previous 6.0 core-s/s gate are **unchanged**. Shared-container neighbours declared out of scope. Sections 6-c and 9 reworded to match. |
+| `AMEND-A` | this commit | Section 3-a rewritten: the isolation mechanism is **`taskset` / `sched_setaffinity` affinity plus `numactl` memory binding**, not cpuset cgroups. Reason: the host is a rootless podman container whose cgroup-v1 `cpuset` hierarchy is flat with zero child cpusets; the previous campaign achieved its isolation purely via affinity, verified on the live `cub_server`. Verified host topology (Xeon Silver 4216, 2×16 cores, 1 thread/core, online `0-31`, node 0 = `0-15`/128565 MB, node 1 = `16-31`/64502 MB) recorded. The CPU assignment table, the 0.5 core-s/s invalidation gate and the non-inheritance of the previous 6.0 core-s/s gate are **unchanged**. Shared-container neighbours declared out of scope. Sections 6-c and 9 reworded to match. *(The 0.5 core-s/s gate and the non-inheritance statement recorded here were later superseded by `AMEND-D`; the rest of this entry stands.)* |
 | `AMEND-B` | this commit | New section 6-a-1 **Build recipe pin**: the campaign replicates the previous campaign's build state (`tpch-sspq-fk-r1-20260730`) rather than deriving it from the base SHA's committed submodule pointers alone. Records literal submodule SHAs and initialization state, the tracked `CMakePresets.json` sha256 with `CMakeUserPresets.json` pinned **absent**, the full `CMakeCache.txt`-derived configure settings, the toolchain pins, the literal cmake/ninja command lines, the per-variant install prefix as the single intentional difference, the reference binary fingerprints as a non-binding sanity comparison, and a mandatory pre-build verification list. |
+| `AMEND-C` | this commit | New section 6-a-2 **Runtime configuration pin**: the campaign adopts the previous campaign's install `cubrid.conf` (sha256 `ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff`) as its canonical runtime configuration. Reason: 6-a-1 pinned the build exhaustively but pinned no runtime configuration, so the base install received stock defaults (`data_buffer_size=512M`, no `parallelism`), whereas all `IMP-001`…`IMP-031` evidence was produced at `data_buffer_size=8192M` / `parallelism=6` / `max_parallel_workers=100` / `update_statistics_update_histogram=yes`; measuring the fresh baseline in a different regime would corrupt every 2-b benefit score and every later A/B denominator. Records the full pinned settings table, mandates the identical file in `install/base` and every `install/IMP-NNN` with a pre-block sha256 assertion, records that the file contains **no** non-portable line so **zero** deviation is permitted, sets the campaign `CUBRID_TMP` under the campaign raw root as a mandatory pre-run assertion overriding the harness's hardcoded `/tmp`, adds the node-0 memory note (server-start memory failure is stop-and-report, never a silent buffer reduction), records that every other conf file is byte-identical and out of scope because it cannot affect single-connection query performance, and records the unresolved conflict with this repository's root `cubrid.conf` / `AGENTS.md` "single source of truth" claim. |
+| `AMEND-D` | this commit | Section 3-a external-CPU invalidation gate changed from **0.5 to 6.0 core-s/s**. **This supersedes the 0.5 core-s/s rule introduced by `AMEND-A`**, and `AMEND-A`'s statement that "the previous measurement campaign's 6.0 core-s/s quiet gate is NOT inherited" is withdrawn — the rest of `AMEND-A` (affinity-not-cpuset mechanism, topology, CPU assignment table, out-of-scope neighbours) stands. Reason, by measurement with zero campaign processes running: over 120 s at 0.25 s sampling, mean 1.94 / p95 10.02 / max 16.03 core-s/s with 321 of 434 samples above 0.5; per-CPU probes over the SUT set 7.995 core-s/s (90 s) and 4.776 core-s/s (60 s); `/proc/stat` over 60 s SUT user 10.635, system 2.503, **steal 0.000** — proving the load is real work by processes outside the podman container, invisible and uncontrollable from inside it, so a 0.5 gate would invalidate every block and make zero measurement possible. The cost is recorded explicitly: a 6.0 tolerance exceeds the few-percent effects many candidates predict, so the gate no longer guarantees the environment can resolve small effects. Compensating strengthening in section 6-d: Phase 1A MUST report per-query paired CV and MDE, and the Phase 1B ranking MUST carry each candidate's expected effect against its target queries' MDE, flagging `UNPROVABLE_ON_THIS_HOST` at ranking time. Section 3-a's per-block sampling, invalidate-and-rerun and invalidation-recording machinery is unchanged. |
+| `AMEND-E` | this commit | Section 8-b: **Phase 1A runs under a single deterministic driver**, not one GJC session per query. Reason: `gjc session create` launches a detached tmux session running the interactive `gjc` LLM agent (`gjc-runtime/tmux-sessions.ts`), so the per-query rule meant 22 sequential LLM agent sessions for one continuous ~10–14 hour measurement block; Phase 1A is a single block, not a per-unit workflow, and removing model non-determinism from the measurement path improves reproducibility. Fixes the driver session name `tpch-sspq-impl-r1-20260803-phase1a-driver`, requires its exact name/parent/PID in the operational state and teardown per 8-d. **Phase 2 is unchanged — one GJC session per IMP** — and the scoping is stated explicitly so the GJC lifecycle is not read as abolished. Also records that the inherited `tpch-sspq/harness/` is campaign-hardcoded (`CAMPAIGN`/`RAW_ROOT` at `tpch-sspq-fk-r1-20260730`, `CUBRID_HOME` at the forbidden `/home/cubrid/release/CUBRID-tpch-sspq-fk-r1-607f1ee9`, `measure_block.sh:35 THRESHOLD=6.0`, `CUBRID_TMP=/tmp`) and MUST be adapted into a campaign-local copy, with the threshold set explicitly from the pinned section 3-a value rather than inherited by coincidence. |
