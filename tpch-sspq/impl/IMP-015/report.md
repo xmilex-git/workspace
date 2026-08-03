@@ -63,7 +63,7 @@ Run-level: base median-of-medians **7.2475 s**, patch **6.5755 s**.
 - **Paired block-median P/B ratio (median): 0.9008** → **9.92% improvement**.
 - **Paired bootstrap 95% CI: [0.8991, 0.9223]** (10⁵ resamples, seed 20260803) — **entirely below 1.0**.
 - Noise floor: base block-median CV = **0.71%** across the 6 B blocks — measured in this A/B's own restart regime (every block restarts the server on its binary, §6-c).
-- MDE: the pinned §6-d-1 **corrected MDE does not exist** — Phase 1A never ran. Substitute, explicitly labelled: `MDE_proxy = max(1%, 2 × CV_B) = 1.42%` (unpaired CV over the 6 B block medians). Note this differs from the pinned §3-c procedure in **both source and estimator**: recomputing with the paired estimator over the 6 (B,P) pairs gives CV ≈ 1.10% → MDE ≈ 2.21%. The 9.92% point improvement clears either figure by ≥ 4.5×, so the criterion-3 outcome is invariant to the estimator choice; both are restart-regime and same-query, the quantity §6-d-1's inflation exists to reconstruct.
+- MDE: the pinned §6-d-1 **corrected MDE does not exist** — Phase 1A never ran. Substitute, explicitly labelled: `MDE_proxy = max(1%, 2 × CV_B) = 1.42%` (unpaired CV over the 6 B block medians). Note this differs from the pinned §3-c procedure in **both source and estimator**: recomputing with the paired estimator over the base-vs-base block-median pairs (§3-c step 6's pairing rule) gives CV ≈ 1.10% → MDE ≈ 2.21%. The 9.92% point improvement clears either figure by ≥ 4.5×, so the criterion-3 outcome is invariant to the estimator choice; both are restart-regime and same-query, the quantity §6-d-1's inflation exists to reconstruct.
 - Q10 card gate "median ≤ 5.70 s": **NOT MET** (patch 6.575 s) — but the threshold's premise fails on this build/host: the base itself measures 7.247 s, 33.6% above the previous campaign's 5.426 s control from which the 5.70 s number was derived. §2-b's own rule ("a previous campaign's absolute time MUST NOT be substituted") cuts against holding this campaign to that absolute number without a fresh baseline; the relative paired estimate above is the §6-d primary result.
 
 ## 6. Plan and work-volume stability (§7-d)
@@ -125,6 +125,7 @@ Stream A/B (corroboration/controls): one full balanced B→P→P→B cycle — *
 - correctness → `work/IMP-015/correctness/20260803T064228Z/**` + `correctness-report.json` → §6-b exact compare → correctness → in manifest
 - TC → `work/IMP-015/tc/20260803T063753Z/**` → D6 two-layer → correctness/trace → in manifest
 - latch-deadlock defect → `install/IMP-015/log/server/imp015tc_20260803_1515.err` → server stack dump → diagnostic → in manifest
+- QA/red-team lane → `work/IMP-015/redteam/redteam-report.json` (14 adversarial cases, RT-00–RT-13) → `imp015_redteam_adversarial.py` battery (checked into `tpch-sspq/impl/harness/`) → qa-red-team → in manifest
 
 ## 12. Branch, commit and build IDs
 
