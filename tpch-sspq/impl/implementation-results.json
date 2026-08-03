@@ -1,0 +1,41 @@
+{
+  "campaign_id": "tpch-sspq-impl-r1-20260803",
+  "records": [
+    {
+      "imp_id": "IMP-015",
+      "lane": "performance",
+      "verdict": "accepted (provisional)",
+      "verdict_basis": "7-a criteria 2-4 met on measurement; criterion 1 checks 1-4 full pass, check-5 stress half pass + diagnostic half waived by direct user instruction 2026-08-03; criterion 3 evaluated against labelled restart-regime MDE proxies (unpaired 1.42% / paired 2.21%), pinned corrected MDE unobtainable (Phase 1A never ran); spec-C criterion-2 absolute gate re-dispositioned regime-invalid by operator decision, final adjudication at cumulative-phase review",
+      "branch": "impl/tpch-sspq-impl-r1-20260803/IMP-015-gby-sort-runtime-px",
+      "plan_commit": "84546077b",
+      "patch_commit": "61f4b4cf9",
+      "cubrid_base_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+      "measured": {
+        "q10_paired_block_median_ratio": 0.90076342946775,
+        "q10_bootstrap_95ci": [0.8990683163896296, 0.9223104681020392],
+        "n_pairs": 6,
+        "q10_base_median_s": 7.2474995,
+        "q10_patch_median_s": 6.5754995,
+        "improvement_pct": 9.92,
+        "mde_proxy_unpaired": 0.0142,
+        "mde_paired_reestimate": 0.0221,
+        "corrected_mde": null,
+        "q18_stream_observation_ratio": 0.9014,
+        "expected_from_registry": {"ratio": 0.7612, "source": "Q10 direct A/B 1.313675x", "divergence": "7-e re-examination in report §8"}
+      },
+      "build_ids": {
+        "base_cub_server_sha256": "16abc26afa1db16992b6213ecc02adc193d674eb8ba91f0963ae414abd953199",
+        "base_cub_server_build_id": "af122f60daeddc3179fe31cd6b9b490f8ebb3f2a",
+        "patch_cub_server_sha256": "0a376e0606f7395822cf0f4925b8290326b4f1131e6c865e5e7b291722726f30",
+        "patch_cub_server_build_id": "379ab8c0760ec526fbeee8b80f0a2da0d81759bd"
+      },
+      "report": "tpch-sspq/impl/IMP-015/report.md",
+      "raw_manifest": "tpch-sspq/impl/IMP-015/raw-manifest.json",
+      "notion_sync": {
+        "state": "synced",
+        "page_id": "3aef947f-1be1-816f-b19e-f3679f3e978f",
+        "method": "ntn CLI, server-side refetch + corruption check clean"
+      }
+    }
+  ]
+}
