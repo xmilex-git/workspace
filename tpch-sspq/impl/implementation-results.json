@@ -12,7 +12,10 @@
       "cubrid_base_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
       "measured": {
         "q10_paired_block_median_ratio": 0.90076342946775,
-        "q10_bootstrap_95ci": [0.8990683163896296, 0.9223104681020392],
+        "q10_bootstrap_95ci": [
+          0.8990683163896296,
+          0.9223104681020392
+        ],
         "n_pairs": 6,
         "q10_base_median_s": 7.2474995,
         "q10_patch_median_s": 6.5754995,
@@ -20,8 +23,13 @@
         "mde_proxy_unpaired": 0.0142,
         "mde_paired_reestimate": 0.0221,
         "corrected_mde": null,
-        "q18_stream_observation_ratio": 0.9014,
-        "expected_from_registry": {"ratio": 0.7612, "source": "Q10 direct A/B 1.313675x", "divergence": "7-e re-examination in report §8"}
+        "q18_stream_observation_ratio": 0.9076,
+        "expected_from_registry": {
+          "ratio": 0.7612,
+          "source": "Q10 direct A/B 1.313675x",
+          "divergence": "7-e re-examination in report §8"
+        },
+        "stream_controls": "full B->P->P->B cycle, 2 block medians/variant; all deltas within ±3.4%, none adverse >3%"
       },
       "build_ids": {
         "base_cub_server_sha256": "16abc26afa1db16992b6213ecc02adc193d674eb8ba91f0963ae414abd953199",

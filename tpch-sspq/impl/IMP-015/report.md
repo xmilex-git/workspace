@@ -94,26 +94,26 @@ Live-load probe during a patch block: `cub_server` ≈ **606% CPU** (≙ pinned 
 
 ## 9. Regressions (non-target queries)
 
-Stream A/B (corroboration/controls; truncated by user decision to conclude — base × 1 block, patch × 1 block, Q15 patch × 2; labelled accordingly, NOT gated-block statistics):
+Stream A/B (corroboration/controls): one full balanced B→P→P→B cycle — **2 block medians per variant per query** (an earlier operator truncation was reversed and the cycle completed; every block per-query quiet-gated, WARM-proved and bgload-monitored). Values below are medians of the 2 block medians; NOT gated-block 6-pair statistics:
 
 | Query | base (s) | patch (s) | Δ | >3% regression? |
 |---|---|---|---|---|
-| Q01 | 32.560 | 31.637 | -2.8% | no |
-| Q03 | 4.823 | 4.798 | -0.5% | no |
-| Q05 | 10.257 | 10.301 | +0.4% | no |
-| Q11 (null-by-size control) | 3.625 | 3.505 | -3.3% (faster) | no |
-| Q15 (armed, corroboration) | 10.457 | 10.627 | +1.6% | no |
-| Q16 (already-parallel control) | 2.920 | 2.890 | -1.0% | no |
-| Q18 (armed, observation) | 37.679 | **33.963** | **-9.9%** | no — improvement |
+| Q01 | 32.560, 31.835 | 31.637, 31.864 | -1.4% | no |
+| Q03 | 4.823, 4.823 | 4.798, 4.764 | -0.9% | no |
+| Q05 | 10.257, 10.997 | 10.301, 10.231 | -3.4% (faster) | no |
+| Q11 (null-by-size control) | 3.625, 3.668 | 3.505, 3.704 | -1.2% | no |
+| Q15 (armed, corroboration) | 10.457, 10.418 | 10.672, 10.409 | +1.0% | no |
+| Q16 (already-parallel control) | 2.920, 2.912 | 2.890, 2.898 | -0.8% | no |
+| Q18 (armed, observation) | 37.679, 37.171 | **33.963, 33.974** | **-9.2%** | no — improvement |
 
-- Q11 stayed null as predicted (its 1,516-page sort is under the 2048-page threshold; the small wall movement is stream noise, direction favorable).
-- Q18's -9.9% mirrors the Q10 gate ratio — consistent with (b) arming in the spill path.
-- Q15 +1.6%: within noise bound (<3%), single/dual-block resolution only; flagged for the cumulative-phase re-measurement rather than over-read here.
-- Q01/Q03/Q05: unchanged within noise. Correctness: all 22 queries byte/multiset-EXACT (§3).
+- Q11 stayed null as predicted (its 1,516-page sort is under the 2048-page threshold; block-to-block movement is stream noise, both directions covered by the two blocks).
+- Q18's -9.2% is stable across both patch blocks (33.963 / 33.974 s) and mirrors the Q10 gate ratio — consistent with (b) arming in the spill path.
+- Q15 +1.0%: within noise; the armed lower-bound corroboration did not materialize as a measurable win at 2-block resolution — flagged for the cumulative-phase re-measurement rather than over-read here.
+- Q01/Q03/Q05/Q16: unchanged within noise (Q05's -3.4% is favorable-direction block variance: base blocks spread 10.257→10.997). Correctness: all 22 queries byte/multiset-EXACT (§3).
 
 ## 10. Verdict
 
-**accepted (provisional)** — deciding criteria (§7-a): (1) §6-b checks 1–4 pass in full; check 5's stress half passes (concurrency stress + 14/14 red-team battery) and its assertion/sanitizer diagnostic half is **waived by direct user instruction** (§3 — waiver recorded, not claimed as a pass); (2) paired bootstrap 95% CI [0.8991, 0.9223] entirely below 1.0; (3) point improvement 9.92% ≥ MDE — cleared under both the labelled unpaired proxy (1.42%) and the paired re-estimate (2.21%), the pinned corrected MDE being unobtainable without Phase 1A; (4) the named metric signature moved as predicted (GROUPBY gains `parallel workers ≥ 2` sub-line; sort-worker ioread ~0; GROUPBY ioread -63%); (5) no non-target regression above 3% in the available control set. Provisional qualifiers carried with the verdict: §6-b check-5 diagnostic half waived; TWU unmeasured and CPU three-way split not captured (§10-b item 7 partially unmet); controls at 1-block resolution; the spec-§C criterion-2 absolute gate (Q10 ≤ 5.70 s) re-dispositioned as regime-invalid (§5) by operator decision under the same user instruction — final adjudication of that re-disposition rests with the user at cumulative-phase review; §7-e magnitude divergence documented (§8).
+**accepted (provisional)** — deciding criteria (§7-a): (1) §6-b checks 1–4 pass in full; check 5's stress half passes (concurrency stress + 14/14 red-team battery) and its assertion/sanitizer diagnostic half is **waived by direct user instruction** (§3 — waiver recorded, not claimed as a pass); (2) paired bootstrap 95% CI [0.8991, 0.9223] entirely below 1.0; (3) point improvement 9.92% ≥ MDE — cleared under both the labelled unpaired proxy (1.42%) and the paired re-estimate (2.21%), the pinned corrected MDE being unobtainable without Phase 1A; (4) the named metric signature moved as predicted (GROUPBY gains `parallel workers ≥ 2` sub-line; sort-worker ioread ~0; GROUPBY ioread -63%); (5) no non-target regression above 3% across a full balanced control cycle (2 block medians per variant per query, §9). Provisional qualifiers carried with the verdict: §6-b check-5 diagnostic half waived; TWU unmeasured and CPU three-way split not captured (§10-b item 7 partially unmet); the spec-§C criterion-2 absolute gate (Q10 ≤ 5.70 s) re-dispositioned as regime-invalid (§5) by operator decision — final adjudication of that re-disposition rests with the user at cumulative-phase review; §7-e magnitude divergence documented (§8).
 
 ## 11. Raw evidence index
 
