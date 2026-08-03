@@ -1,0 +1,165 @@
+{
+  "campaign": "tpch-sspq-impl-r1-20260803",
+  "target": "IMP-015",
+  "source_hash_pinned_snapshot": "sha256:c78f8f5de6b18010bf5fffc0aca0fbfb558eb6ef317919ed037b7b5f8cc1f2fc",
+  "contract": [
+    "IMP-015-implementation-spec.md D1 (scope a+b)",
+    "D2 (caller-side truth, external_sort.c unmodified)",
+    "D4 (order-sensitivity: nil new exposure)",
+    "D6 (two-layer TC, campaign harness only)",
+    "IMPL-SSOT sec 6-b (EXACT equality gate)"
+  ],
+  "install_under_test": "/home/cubrid/dev/tpch-sspq-impl-r1/install/IMP-015 (patch 61f4b4cf9)",
+  "install_base": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base",
+  "generated_utc": "2026-08-03T10:14Z-19:30Z",
+  "cases": [
+    {
+      "id": "RT-00",
+      "scenario": "D6 two-layer TC full re-run (imp015_tc.sh): SQL correctness battery (QA1/QB1/QC1/QC2) base-vs-patch EXACT compare + shell arming proof (TA/TB trace, hash mode + parallel workers sub-line) on both variants",
+      "expected": "layer1 cross-variant EXACT identical + natural==serialref both variants; layer2 base shows NO parallel sub-line (workers=0), patch shows workers>=2 under both hash:partial (TA) and hash:true/spill (TB)",
+      "observed": "base TA/TB workers=0 (hash_ok=true); patch TA workers=6 under hash:partial, TB workers=6 under hash:true (spill); layer1 compare pass=true for all 4 queries (cross_variant_identical, base_natural_eq_serialref, patch_natural_eq_serialref all true)",
+      "verdict": "passed",
+      "evidence": [
+        "tc/20260803T101427Z/base/summary.json",
+        "tc/20260803T101427Z/IMP-015/summary.json",
+        "tc/20260803T101427Z/IMP-015/compare-report.json"
+      ]
+    },
+    {
+      "id": "RT-01",
+      "scenario": "empty table GROUP BY (t_empty, 0 rows)",
+      "expected": "0 rows selected on both variants, byte-identical (also exercises D1(a)'s runtime-state read against a groupby with zero input tuples)",
+      "observed": "0 rows on both; cross_variant_identical=true",
+      "verdict": "passed",
+      "evidence": ["adversarial/base/RT-01_empty.out", "adversarial/IMP-015/RT-01_empty.out", "adversarial/IMP-015/compare-report.json"]
+    },
+    {
+      "id": "RT-02",
+      "scenario": "single-row table GROUP BY (t_one, 1 row)",
+      "expected": "1 row selected, identical aggregates on both variants",
+      "observed": "1 row on both; cross_variant_identical=true",
+      "verdict": "passed",
+      "evidence": ["adversarial/base/RT-02_onerow.out", "adversarial/IMP-015/RT-02_onerow.out"]
+    },
+    {
+      "id": "RT-03",
+      "scenario": "all-NULL GROUP BY key -> single NULL group (t_allnull, 40000 rows, k always NULL)",
+      "expected": "1 group (k=NULL), COUNT=40000, identical on both variants; NULL-key handling unaffected by the caller-side runtime-truth formula",
+      "observed": "1 row on both; cross_variant_identical=true",
+      "verdict": "passed",
+      "evidence": ["adversarial/base/RT-03_allnull.out", "adversarial/IMP-015/RT-03_allnull.out"]
+    },
+    {
+      "id": "RT-04",
+      "scenario": "single group, all 40000 rows share one non-NULL key (t_singlegroup)",
+      "expected": "1 group, COUNT=40000, identical aggregates on both variants",
+      "observed": "1 row on both; cross_variant_identical=true",
+      "verdict": "passed",
+      "evidence": ["adversarial/base/RT-04_singlegroup.out", "adversarial/IMP-015/RT-04_singlegroup.out"]
+    },
+    {
+      "id": "RT-05",
+      "scenario": "mixed NULL/non-NULL keys, high selectivity (t_mixednull: ~1/7 rows NULL, rest near-unique -> ~85.7% distinct, arms HS_REJECT_ALL); adversarial vs D6 TC because the D6 battery never mixes NULL keys into an armed high-selectivity table",
+      "expected": "34286 groups (1 NULL group + 34285 distinct), EXACT cross-variant identical results; trace: base workers=0 under hash:partial (D2 gate refuses while HS_REJECT_ALL was not runtime-observable pre-patch), patch workers>=2 under hash:partial (D2(a) fires)",
+      "observed": "34286 rows both variants, cross_variant_identical=true; trace base GROUPBY hash:partial workers=0; trace patch GROUPBY hash:partial workers=6",
+      "verdict": "passed",
+      "evidence": [
+        "adversarial/base/RT-05_mixednull.out", "adversarial/IMP-015/RT-05_mixednull.out",
+        "adversarial/base/RT-05_mixednull-trace.out", "adversarial/IMP-015/RT-05_mixednull-trace.out",
+        "adversarial/base/summary.json#trace.RT-05_mixednull", "adversarial/IMP-015/summary.json#trace.RT-05_mixednull"
+      ]
+    },
+    {
+      "id": "RT-06",
+      "scenario": "composite (multi-column) GROUP BY key (k1,k2), high selectivity (t_composite, 40000 rows, 100% distinct (k1,k2)); adversarial vs D6 TC because the D6 battery only exercises single-column keys",
+      "expected": "40000 groups, EXACT cross-variant identical (sort key tie-breaking across 2 columns must be stable under a parallel fallback sort too); trace: base workers=0, patch workers>=2 under hash:partial",
+      "observed": "40000 rows both variants, cross_variant_identical=true; trace base GROUPBY hash:partial workers=0; trace patch GROUPBY hash:partial workers=6",
+      "verdict": "passed",
+      "evidence": [
+        "adversarial/base/RT-06_composite.out", "adversarial/IMP-015/RT-06_composite.out",
+        "adversarial/base/RT-06_composite-trace.out", "adversarial/IMP-015/RT-06_composite-trace.out"
+      ]
+    },
+    {
+      "id": "RT-07",
+      "scenario": "HAVING + uncorrelated scalar subquery on an armed GROUP BY (GROUP BY k1 HAVING SUM(v) > (SELECT AVG(v) FROM t_mixednull))",
+      "expected": "identical filtered row set/values on both variants; HAVING evaluation and the subquery's own (unrelated) groupby state must not interact with the caller-side runtime truth of the outer query's sort",
+      "observed": "39622 rows both variants (378 groups filtered out by HAVING), cross_variant_identical=true",
+      "verdict": "passed",
+      "evidence": ["adversarial/base/RT-07_having_subquery.out", "adversarial/IMP-015/RT-07_having_subquery.out"]
+    },
+    {
+      "id": "RT-08",
+      "scenario": "negative control: extreme LOW selectivity, 3 groups over 40000 rows (t_extreme) -- must stay unaffected per spec sec.B item 8 (negative controls)",
+      "expected": "hash state stays HS_ACCEPT_ALL (never rejects, no spill since only 3 distinct groups), so hash:true with NO parallel sub-line on EITHER variant -- D2(a)'s formula must not spuriously fire when the runtime hash state was never rejected",
+      "observed": "3 rows both variants, cross_variant_identical=true; trace BOTH variants show GROUPBY hash:true workers=0 (identical, no parallel sub-line anywhere)",
+      "verdict": "passed",
+      "evidence": [
+        "adversarial/base/RT-08_extreme_low_selectivity.out", "adversarial/IMP-015/RT-08_extreme_low_selectivity.out",
+        "adversarial/base/RT-08_extreme_low_selectivity-trace.out", "adversarial/IMP-015/RT-08_extreme_low_selectivity-trace.out"
+      ]
+    },
+    {
+      "id": "RT-09",
+      "scenario": "order-sensitive GROUP_CONCAT(v ORDER BY v) over a 4000-group/40000-row table (t_concat_hs) -- D4 check, extends D6's QC1/QC2 (which use low-cardinality groups) to a table sized/shaped so the fallback sort itself naturally parallelizes",
+      "expected": "GROUP_CONCAT member order per group is deterministic (explicit inner ORDER BY v) and EXACT cross-variant identical; per D4/A4 the aggregate is not hash-eligible at plan time so IMP-015's caller-side formula for (a) is moot here -- confirmed by trace showing hash:false on BOTH variants, i.e. this path was already outside hash_eligible gating before the patch",
+      "observed": "4000 rows both variants, cross_variant_identical=true; trace BOTH variants show GROUPBY hash:false sort:true workers=6 (identical -- the parallel fallback sort for order-sensitive aggregates pre-existed IMP-015 and is unaffected by it, consistent with D4)",
+      "verdict": "passed",
+      "evidence": [
+        "adversarial/base/RT-09_order_concat.out", "adversarial/IMP-015/RT-09_order_concat.out",
+        "adversarial/base/RT-09_order_concat-trace.out", "adversarial/IMP-015/RT-09_order_concat-trace.out"
+      ]
+    },
+    {
+      "id": "RT-10",
+      "scenario": "same-session 10x sequential repeat of an armed query (composite-key GROUP BY, ORDER BY, LIMIT 500) -- reproducibility/determinism probe for the new parallel fallback sort path",
+      "expected": "all 10 in-session repeats produce byte-identical result sets on each variant (parallel workers introduce no run-to-run nondeterminism)",
+      "observed": "base: 10/10 runs identical (1 distinct hash); patch: 10/10 runs identical (1 distinct hash) -- confirmed AFTER fixing a harness canonicalization bug (per-statement 'in Line N>' trace-block header text varies by script position and was initially miscounted as a real diff; fixed by stripping it before hashing, then reverified both variants pass with genuinely identical row data)",
+      "verdict": "passed",
+      "evidence": ["adversarial/base/RT-10.out", "adversarial/IMP-015/RT-10.out", "adversarial/base/summary.json#stability", "adversarial/IMP-015/summary.json#stability"]
+    },
+    {
+      "id": "RT-11",
+      "scenario": "4-session concurrency stress: 4 concurrent csql sessions x 3 iterations each of the same armed composite-key GROUP BY query, against the patched (and, as a control, base) engine -- latch/deadlock/crash probe for the newly-parallel fallback sort under concurrent load",
+      "expected": "no ERROR in any session's stdout/stderr, no nonzero csql exit code, and all 12 result sets per variant are byte-identical to each other (no cross-session interference/corruption)",
+      "observed": "base: 4 sessions x 3 iters = 12/12 results identical, 0 errors; patch: 4 sessions x 3 iters = 12/12 results identical, 0 errors -- no latch contention, deadlock, or crash observed under concurrent parallel-sort load",
+      "verdict": "passed",
+      "evidence": ["adversarial/base/RT-11-session0.out", "adversarial/IMP-015/RT-11-session0.out", "adversarial/base/summary.json#concurrency", "adversarial/IMP-015/summary.json#concurrency"]
+    },
+    {
+      "id": "RT-12",
+      "scenario": "campaign DB (tpch_sf10_q1, read-only) Q10 run on the real IMP-015 binary, SET TRACE ON, checking the parallel-workers sub-line under the outer GROUPBY (spec sec.C criterion 1)",
+      "expected": "query completes and returns 20 rows; native trace shows GROUPBY (... hash: partial, sort: true ...) with a (parallel workers: N>=2) sub-line",
+      "observed": "20 rows selected (8.88 sec); trace: 'GROUPBY (time: 3861, hash: partial, sort: true, page: 50464, ioread: 12473, rows: 381105)' followed by '(parallel workers: 4, time: 147..168, page: 12460..13792, ioread: 0..43)' -- parallel sub-line present, N=4 >= 2, per-worker ioread near-zero (0..43 vs total-scan ioread 12473)",
+      "verdict": "passed",
+      "evidence": ["campaign/q10_q18.out (lines 1-~177)", "campaign/q10_q18.sql", "campaign/server-start.log", "campaign/server-stop.log"]
+    },
+    {
+      "id": "RT-13",
+      "scenario": "campaign DB (tpch_sf10_q1, read-only) Q18 run on the real IMP-015 binary, SET TRACE ON, checking for a parallel-workers sub-line on the l_orderkey HAVING-subquery's GROUPBY (spec sec.B item 5/7: upper-bound observation only, not a gate)",
+      "expected": "query completes and returns 100 rows; observational only -- no pass/fail gate on whether the parallel sub-line appears, but a crash, error, or wrong row count would be a red-team finding",
+      "observed": "100 rows selected (39.97 sec); outer GROUPBY (624-row result) shows hash:true workers=0 (small, no spill); the inner HAVING-subquery's GROUPBY over the full lineitem table shows 'GROUPBY (time: 26534, hash: partial, sort: true, page: 250685, ioread: 92675, rows: 624)' followed by '(parallel workers: 6, time: 767..924, page: 27188..39844, ioread: 6950..8425)' -- change (a)+(b)'s mechanism visibly fires on the real campaign data's Q18 plan, matching the spec's upper-bound framing; no errors, correct row count",
+      "verdict": "passed",
+      "evidence": ["campaign/q10_q18.out (lines ~178-223)", "campaign/q10_q18.sql"]
+    }
+  ],
+  "summary": {
+    "total_cases": 14,
+    "passed": 14,
+    "failed": 0,
+    "harness_bugs_found_and_fixed": [
+      "redteam_adversarial.py RT-10/RT-11 initially hashed raw csql multi-statement output including the per-statement '=== <Result of SELECT Command in Line N> ===' header, whose line number N varies by script position -- this produced spurious 'FAILED' results on the FIRST run of both RT-10 (10 distinct hashes) and a boundary-condition variant (2 distinct hashes from a trailing-whitespace asymmetry on the last block). Root-caused by direct inspection of the raw csql output, fixed in canon_block() (strip the header + rstrip trailing whitespace before hashing), then both variants re-run clean. This was a test-harness artifact, not an engine correctness issue -- recorded here for transparency, not hidden."
+    ],
+    "product_source_correctness_findings": "none -- no cross-variant (base vs IMP-015) result divergence found across the D6 TC re-run or any of the 9 adversarial battery cases (RT-01..RT-09), across 10x same-session repeats or 4-session concurrency stress on either variant, or on the real campaign DB's Q10/Q18",
+    "mechanism_verification": "D2(a) (caller-side HS_REJECT_ALL formula) confirmed firing correctly on 2 adversarial cases the D6 TC does not cover (NULL-mixed keys RT-05, composite keys RT-06), and confirmed NOT firing on a negative control it also does not cover (extreme low selectivity RT-08); D4 (order-sensitive aggregates unaffected) confirmed on a differently-shaped table (RT-09) with the group-by fallback sort itself parallel on both variants, identically; both target queries Q10/Q18 confirmed exhibiting the predicted parallel-workers trace sub-line on the real campaign database with the actual patched binary"
+  },
+  "cleanup": {
+    "pgrep_cub_server_final": "empty (verified)",
+    "conf_sha256_base_final": "ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff",
+    "conf_sha256_IMP-015_final": "ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff",
+    "conf_sha256_pinned": "ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff",
+    "own_tc_db_imp015tc": "created/deleted by imp015_tc.sh (RT-00), self-contained",
+    "own_rt_db_imp015rt": "created/deleted by redteam_adversarial.py (RT-01..RT-11), self-contained, orphaned empty lob/ dir removed post-hoc",
+    "campaign_db_tpch_sf10_q1": "read-only SELECT queries only (RT-12/RT-13); server started/stopped, no writes, no schema changes"
+  }
+}

@@ -1,0 +1,337 @@
+{
+  "Q10_gate": {
+    "blocks": [
+      {
+        "idx": 1,
+        "variant": "base",
+        "median_s": 7.264,
+        "times": [
+          6.887999,
+          7.129,
+          7.264,
+          7.331
+        ]
+      },
+      {
+        "idx": 2,
+        "variant": "IMP-015",
+        "median_s": 6.548,
+        "times": [
+          6.511999,
+          6.555,
+          6.503,
+          6.548
+        ]
+      },
+      {
+        "idx": 3,
+        "variant": "IMP-015",
+        "median_s": 6.695,
+        "times": [
+          6.6,
+          6.655,
+          6.739999,
+          6.695
+        ]
+      },
+      {
+        "idx": 4,
+        "variant": "base",
+        "median_s": 7.222999,
+        "times": [
+          6.87,
+          7.188,
+          7.222999,
+          7.272
+        ]
+      },
+      {
+        "idx": 5,
+        "variant": "base",
+        "median_s": 7.347,
+        "times": [
+          7.348999,
+          7.374,
+          7.347,
+          7.316
+        ]
+      },
+      {
+        "idx": 6,
+        "variant": "IMP-015",
+        "median_s": 6.612999,
+        "times": [
+          6.596,
+          6.612999,
+          6.689,
+          6.569
+        ]
+      },
+      {
+        "idx": 7,
+        "variant": "IMP-015",
+        "median_s": 6.602999,
+        "times": [
+          6.537,
+          6.596,
+          6.611,
+          6.602999
+        ]
+      },
+      {
+        "idx": 8,
+        "variant": "base",
+        "median_s": 7.194999,
+        "times": [
+          7.169,
+          7.188,
+          7.225,
+          7.194999
+        ]
+      },
+      {
+        "idx": 9,
+        "variant": "base",
+        "median_s": 7.244,
+        "times": [
+          6.878,
+          7.114,
+          7.244,
+          7.312999
+        ]
+      },
+      {
+        "idx": 10,
+        "variant": "IMP-015",
+        "median_s": 6.507,
+        "times": [
+          6.509,
+          6.517999,
+          6.507,
+          6.494
+        ]
+      },
+      {
+        "idx": 11,
+        "variant": "IMP-015",
+        "median_s": 6.525,
+        "times": [
+          6.474,
+          6.525,
+          6.486,
+          6.612999
+        ]
+      },
+      {
+        "idx": 12,
+        "variant": "base",
+        "median_s": 7.250999,
+        "times": [
+          7.106,
+          7.265,
+          7.175,
+          7.250999
+        ]
+      }
+    ],
+    "pairs_BP": [
+      [
+        7.264,
+        6.548
+      ],
+      [
+        7.222999,
+        6.695
+      ],
+      [
+        7.347,
+        6.612999
+      ],
+      [
+        7.194999,
+        6.602999
+      ],
+      [
+        7.244,
+        6.507
+      ],
+      [
+        7.250999,
+        6.525
+      ]
+    ],
+    "paired_ratios_sorted": [
+      0.8982606294864716,
+      0.8998760032927877,
+      0.900095140873826,
+      0.901431718061674,
+      0.917720627897238,
+      0.9269003083068404
+    ],
+    "point_estimate_median_ratio": 0.90076342946775,
+    "bootstrap_95CI": [
+      0.8990683163896296,
+      0.9223104681020392
+    ],
+    "n_pairs": 6,
+    "base_block_medians": [
+      7.264,
+      7.222999,
+      7.347,
+      7.194999,
+      7.244,
+      7.250999
+    ],
+    "patch_block_medians": [
+      6.548,
+      6.695,
+      6.612999,
+      6.602999,
+      6.507,
+      6.525
+    ],
+    "base_median_of_medians": 7.2474995,
+    "patch_median_of_medians": 6.575499499999999,
+    "restart_regime_CV_base_blocks": 0.007109946516137701,
+    "MDE_proxy_note": "Phase 1A corrected MDE unavailable (campaign paused before fast sweep; raw/ empty). Proxy: max(1%, 2 x CV over this A/B's own 6 base block medians), same-regime same-query.",
+    "MDE_proxy": 0.014219893032275402,
+    "criterion2_CI_below_1": true,
+    "criterion3_point_improvement_ge_MDE_proxy": true,
+    "q10_gate_median_le_5p70s": false
+  },
+  "stream": {
+    "Q01": {
+      "base": {
+        "block_medians": [
+          32.559999,
+          31.834999
+        ]
+      },
+      "IMP-015": {
+        "block_medians": [
+          31.636999,
+          31.863999
+        ]
+      },
+      "median_base_s": 32.197499,
+      "median_patch_s": 31.750498999999998,
+      "ratio_P_over_B": 0.9861169341134228,
+      "delta_pct": -1.3883065886577177,
+      "regression_gt_3pct": false
+    },
+    "Q03": {
+      "base": {
+        "block_medians": [
+          4.823,
+          4.823
+        ]
+      },
+      "IMP-015": {
+        "block_medians": [
+          4.798,
+          4.764
+        ]
+      },
+      "median_base_s": 4.823,
+      "median_patch_s": 4.781000000000001,
+      "ratio_P_over_B": 0.9912917271407837,
+      "delta_pct": -0.8708272859216217,
+      "regression_gt_3pct": false
+    },
+    "Q05": {
+      "base": {
+        "block_medians": [
+          10.257,
+          10.997
+        ]
+      },
+      "IMP-015": {
+        "block_medians": [
+          10.301,
+          10.230999
+        ]
+      },
+      "median_base_s": 10.626999999999999,
+      "median_patch_s": 10.2659995,
+      "ratio_P_over_B": 0.9660298767290864,
+      "delta_pct": -3.3970123270913657,
+      "regression_gt_3pct": false
+    },
+    "Q11": {
+      "base": {
+        "block_medians": [
+          3.625,
+          3.668
+        ]
+      },
+      "IMP-015": {
+        "block_medians": [
+          3.505,
+          3.704
+        ]
+      },
+      "median_base_s": 3.6465,
+      "median_patch_s": 3.6045,
+      "ratio_P_over_B": 0.9884821061291649,
+      "delta_pct": -1.1517893870835119,
+      "regression_gt_3pct": false
+    },
+    "Q15": {
+      "base": {
+        "block_medians": [
+          10.457,
+          10.418
+        ]
+      },
+      "IMP-015": {
+        "block_medians": [
+          10.671999,
+          10.408999000000001
+        ]
+      },
+      "median_base_s": 10.4375,
+      "median_patch_s": 10.540499,
+      "ratio_P_over_B": 1.0098681676646708,
+      "delta_pct": 0.9868167664670708,
+      "regression_gt_3pct": false
+    },
+    "Q16": {
+      "base": {
+        "block_medians": [
+          2.919999,
+          2.912
+        ]
+      },
+      "IMP-015": {
+        "block_medians": [
+          2.89,
+          2.898
+        ]
+      },
+      "median_base_s": 2.9159995,
+      "median_patch_s": 2.894,
+      "ratio_P_over_B": 0.9924555885554851,
+      "delta_pct": -0.75444114445149,
+      "regression_gt_3pct": false
+    },
+    "Q18": {
+      "base": {
+        "block_medians": [
+          37.678998,
+          37.170998
+        ]
+      },
+      "IMP-015": {
+        "block_medians": [
+          33.962998,
+          33.973999
+        ]
+      },
+      "median_base_s": 37.424998,
+      "median_patch_s": 33.968498499999995,
+      "ratio_P_over_B": 0.9076419589922221,
+      "delta_pct": -9.235804100777791,
+      "regression_gt_3pct": false
+    }
+  }
+}

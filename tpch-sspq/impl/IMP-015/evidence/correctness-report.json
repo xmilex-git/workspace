@@ -1,0 +1,137 @@
+{
+  "queries": {
+    "q1": {
+      "ordered": true,
+      "rows": 4,
+      "rows_patch": 4,
+      "equal": true
+    },
+    "q2": {
+      "ordered": true,
+      "rows": 100,
+      "rows_patch": 100,
+      "equal": true
+    },
+    "q3": {
+      "ordered": true,
+      "rows": 10,
+      "rows_patch": 10,
+      "equal": true
+    },
+    "q4": {
+      "ordered": true,
+      "rows": 5,
+      "rows_patch": 5,
+      "equal": true
+    },
+    "q5": {
+      "ordered": true,
+      "rows": 5,
+      "rows_patch": 5,
+      "equal": true
+    },
+    "q6": {
+      "ordered": false,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true
+    },
+    "q7": {
+      "ordered": true,
+      "rows": 4,
+      "rows_patch": 4,
+      "equal": true
+    },
+    "q8": {
+      "ordered": true,
+      "rows": 2,
+      "rows_patch": 2,
+      "equal": true
+    },
+    "q9": {
+      "ordered": true,
+      "rows": 175,
+      "rows_patch": 175,
+      "equal": true
+    },
+    "q10": {
+      "ordered": true,
+      "rows": 20,
+      "rows_patch": 20,
+      "equal": true
+    },
+    "q11": {
+      "ordered": true,
+      "rows": 8685,
+      "rows_patch": 8685,
+      "equal": true
+    },
+    "q12": {
+      "ordered": true,
+      "rows": 2,
+      "rows_patch": 2,
+      "equal": true
+    },
+    "q13": {
+      "ordered": true,
+      "rows": 46,
+      "rows_patch": 46,
+      "equal": true
+    },
+    "q14": {
+      "ordered": false,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true
+    },
+    "q16": {
+      "ordered": true,
+      "rows": 27840,
+      "rows_patch": 27840,
+      "equal": true
+    },
+    "q17": {
+      "ordered": false,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true
+    },
+    "q18": {
+      "ordered": true,
+      "rows": 100,
+      "rows_patch": 100,
+      "equal": true
+    },
+    "q19": {
+      "ordered": false,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true
+    },
+    "q20": {
+      "ordered": true,
+      "rows": 1804,
+      "rows_patch": 1804,
+      "equal": true
+    },
+    "q21": {
+      "ordered": true,
+      "rows": 100,
+      "rows_patch": 100,
+      "equal": true
+    },
+    "q22": {
+      "ordered": true,
+      "rows": 7,
+      "rows_patch": 7,
+      "equal": true
+    },
+    "q15": {
+      "ordered": true,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true
+    }
+  },
+  "pass": true
+}
