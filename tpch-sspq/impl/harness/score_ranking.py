@@ -198,12 +198,24 @@ def build(impl_dir):
         records[imp]["rank"] = pos
         records[imp].setdefault("eligibility", "eligible")
 
-    # ---- section 4-a: enablers inherit the dependent's position ------------
+    # ---- section 4-a: ONLY enablers inherit the dependent's position --------
+    # Section 4-a (IMPL-SSOT 583-587) is precise about which lanes enter the queue:
+    # "A required enabler is inserted into the queue immediately ahead of the
+    # dependent candidate it unblocks; it inherits its position from the dependent...
+    # Diagnostic and Deferred-research candidates are listed with their lane and
+    # rationale but carry no queue position."
+    # So `enabler` is the ONLY non-performance lane that gets a queue position, and
+    # `diagnostic` gets one only in the sense that it does not. An earlier revision
+    # tested `("enabler", "diagnostic")` here and `("deferred_research", "diagnostic",
+    # "enabler")` below, which put the diagnostic IMP-017 into the queue while ALSO
+    # labelling it "no queue position", and labelled the enabler IMP-005 "no queue
+    # position" while it correctly carried queue_position_inherited_from. Both halves
+    # of that contradiction are fixed here.
     queue = []
     for imp in ranked:
         for pre in (records[imp].get("predecessors") or []):
             pid = pre.split()[0].strip("(),")
-            if pid in records and records[pid]["lane"] in ("enabler", "diagnostic") \
+            if pid in records and records[pid]["lane"] == "enabler" \
                     and pid not in [q["imp_id"] for q in queue]:
                 records[pid]["queue_position_inherited_from"] = imp
                 queue.append({"imp_id": pid, "lane": records[pid]["lane"],
@@ -215,8 +227,15 @@ def build(impl_dir):
         if not r["ranked_eligible"] and r.get("eligibility") is None:
             if r["lane"] == "external_tracking":
                 r["eligibility"] = "excluded from the implementation queue (external_tracking); still tracked to a resolution"
-            elif r["lane"] in ("deferred_research", "diagnostic", "enabler"):
+            elif r["lane"] in ("deferred_research", "diagnostic"):
                 r["eligibility"] = f"listed with lane and rationale, no queue position ({r['lane']})"
+            elif r["lane"] == "enabler":
+                inh = r.get("queue_position_inherited_from")
+                r["eligibility"] = (
+                    f"no benefit-ranked position; inserted into the queue immediately ahead of "
+                    f"{inh} as its required predecessor, inheriting that position (section 4-a)"
+                    if inh else
+                    "enabler with no dependent in the ranked set, so no queue position (section 4-a)")
             r.setdefault("rank", None)
 
     # ---- section 2-d sensitivity ------------------------------------------

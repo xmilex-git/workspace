@@ -195,8 +195,14 @@ def main():
     w()
     w("## The ranking (section 2-e columns, exactly)")
     w()
+    w("Rows appear in rank order. Section 2-e fixes twelve columns and says \"exactly these columns\", so the ordinal is not a thirteenth column here — explicit queue positions are in the **Candidate queue** table below.")
+    w()
     ranked = sorted([i for i in C if C[i].get("rank")], key=lambda i: C[i]["rank"])
-    hdr = ["Rank", "IMP ID", "Lane", "Fresh affected-query baseline (s)",
+    # Section 2-e fixes the columns as "exactly these columns" and lists twelve. An
+    # earlier revision prepended a 13th "Rank" column; the ordinal is instead carried
+    # by row order here and by explicit positions in the Candidate queue table below,
+    # so this table now matches the twelve literally.
+    hdr = ["IMP ID", "Lane", "Fresh affected-query baseline (s)",
            "Expected effect + evidence level", "Expected saved seconds",
            "LOC low/likely/high", "Files and subsystems touched",
            "Difficulty and risk rationale", "Feasibility / Benefit / Total",
@@ -240,7 +246,7 @@ def main():
         if extra:
             elig += " — " + " | ".join(extra)
         w("| " + " | ".join([
-            str(r["rank"]), f"`{imp}`", r["lane"], cell(base), cell(eff),
+            f"`{imp}`", r["lane"], cell(base), cell(eff),
             f"{r['expected_saved_seconds']:.4f}",
             f"{r.get('loc_low')}/{r.get('loc_likely')}/{r.get('loc_high')}",
             cell((r.get("files_affected") or [])[:4]) + " | " + cell(r.get("subsystems_affected")),

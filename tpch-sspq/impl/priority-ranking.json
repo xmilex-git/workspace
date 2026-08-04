@@ -433,7 +433,7 @@
       "containment": [],
       "correctness_concurrency_risk": "low",
       "difficulty_and_risk_rationale": "I confirmed the double traversal at the pin: the caller walks the scan_ptr chain and calls xasl_merge_stats per level, and xasl_merge_stats itself recurses the subtree with += accumulation (xasl_iteration.cpp:101-135). The fix is deleting or narrowing one of the two traversals.",
-      "eligibility": "listed with lane and rationale, no queue position (enabler)",
+      "eligibility": "no benefit-ranked position; inserted into the queue immediately ahead of IMP-009 as its required predecessor, inheriting that position (section 4-a)",
       "expected_saved_seconds": 0.0,
       "external_reference": null,
       "external_state": null,
@@ -2051,7 +2051,6 @@
         }
       ],
       "predecessors": [],
-      "queue_position_inherited_from": "IMP-016",
       "queue_position_rule": "Diagnostic-Measurement-correctness: listed with lane and rationale, no queue position (section 4-a). It is a predecessor of IMP-016's memory arm.",
       "rank": null,
       "ranked_eligible": false,
@@ -3394,7 +3393,7 @@
     "Q21": 52.586499,
     "Q22": 1.119
   },
-  "generated_utc": "2026-08-04T10:56:15Z",
+  "generated_utc": "2026-08-04T11:58:53Z",
   "id_unassigned_new_candidates": [
     {
       "decision_requested": "Whether to allocate an IMP ID and, if so, whether the performance and measurement-correctness arms are one candidate or two.",
@@ -3563,11 +3562,6 @@
       "imp_id": "IMP-022",
       "lane": "performance",
       "rank": 14
-    },
-    {
-      "imp_id": "IMP-017",
-      "lane": "diagnostic",
-      "reason": "required predecessor of IMP-016; inherits its position (section 4-a), never its own benefit score"
     },
     {
       "imp_id": "IMP-016",
