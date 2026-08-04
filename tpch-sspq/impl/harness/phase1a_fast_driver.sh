@@ -241,18 +241,35 @@ json.dump({'campaign_id':'${CAMPAIGN}','qnn':'${QNN}','query_attempt':${qattempt
     python3.11 "${HARNESS}/wait_quiet.py" "$THRESHOLD" 6 2.0 "$MAX_WAIT_S" \
         >> "$DRIVER_LOG" 2>&1
 
+    # Q15's repeated unit is the three-statement LOGICAL SESSION (create view /
+    # select / drop view), not the statement — IMPL-SSOT section 3-c / 6-b, and
+    # section 3-c-1 leaves that explicitly unchanged. warm_establish.py is
+    # statement-scoped and has no Q15 mode, so pointing it at Q15 times the DDL
+    # statements too: the first sweep measured "steady 0.003 s, spread 335899%"
+    # and Q15's WARM gate could never converge, costing the query all six blocks.
+    # q15_gated_block.sh already routes Q15 through q15_session.py for exactly
+    # this reason; AMEND-G moved WARM out of the block without carrying that
+    # branch across, so it is carried here.
     warm_ok=0
     for wtry in 1 2 3; do
-      python3.11 "${HARNESS}/warm_establish.py" "$QNN" cubrid "$WMAX" - native \
-          > "$W/${QNN}-cubrid-warm-query-try${wtry}.log" 2>&1
-      wrc=$?
+      if [ "$QNN" = "Q15" ]; then
+        WARM_SESSIONS="$WMAX" python3.11 "${HARNESS}/q15_session.py" warm cubrid "$WMAX" \
+            > "$W/${QNN}-cubrid-warm-query-try${wtry}.log" 2>&1
+        wrc=$?
+        AFTER_KEY=converged_after_sessions
+      else
+        python3.11 "${HARNESS}/warm_establish.py" "$QNN" cubrid "$WMAX" - native \
+            > "$W/${QNN}-cubrid-warm-query-try${wtry}.log" 2>&1
+        wrc=$?
+        AFTER_KEY=converged_after_statements
+      fi
       cp -f "$W/${QNN}-cubrid-warm.json" "${QDIR}/${QNN}-warm-query-try${wtry}.json" 2>/dev/null
       wv="$(python3.11 -c "
 import json,sys
 d=json.load(open(sys.argv[1]))
 print(('CONVERGED' if d['converged'] else 'NOT_CONVERGED'), d['verdict'],
-      'after', d['converged_after_statements'], 'steady', d['steady_state_median_s'])
-" "$W/${QNN}-cubrid-warm.json" 2>/dev/null)"
+      'after', d.get(sys.argv[2]), 'steady', d['steady_state_median_s'])
+" "$W/${QNN}-cubrid-warm.json" "$AFTER_KEY" 2>/dev/null)"
       log "  WARM try ${wtry} rc=${wrc} ${wv}"
       if [ "$wrc" -eq 0 ]; then warm_ok=1; cp -f "$W/${QNN}-cubrid-warm.json" \
           "${QDIR}/${QNN}-warm.json" 2>/dev/null; break; fi
