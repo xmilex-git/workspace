@@ -96,7 +96,7 @@
       },
       "report": "tpch-sspq/impl/IMP-032/report.md",
       "raw_manifest": "tpch-sspq/impl/IMP-032/raw-manifest.json (38 artifacts, per-artifact sha256)",
-      "report_commit": "ff73cc096aa4b7a2245c9d5e480ac529a7515ca0",
+      "report_commit": "39d80824343cd122e781eacc2d6b631736b5ee1a",
       "notion_sync": "backfill recorded per §10-f — no Notion connector / ntn CLI on this host; target page 3aef947f-1be1-816f-b19e-f3679f3e978f",
       "carried_risks": [
         "A3 refutation and the Q15 target-absence finding both require a user scope decision (§11-a options A–E in status.md §5)"
@@ -104,7 +104,13 @@
       "verdict_decided_by": "user instruction 2026-08-04",
       "interim_record": "tpch-sspq/impl/IMP-032/status.md (historical, pre-decision)",
       "relationship_to_imp_015": "IMP-015 remains implemented and accepted (provisional); IMP-032 was the follow-on attempt stacked on it (spec D2, user-approved) and is the only thing rejected. Recorded in both reports per §5-b.",
-      "follow_up_observation": "probe found a larger target outside this IMP: the MAIN group-by fallback sort never passes the parallelism gate even under IMP-015 (Q15 sort_listfile 10.00% of server cycles; Q18 sort_exphase_merge 16.87%). Three unresolved gate candidates in report.md §17. A new IMP ID requires a user instruction (§1-b); next_id would be IMP-033."
+      "follow_up_observation": "probe found a larger target outside this IMP: the MAIN group-by fallback sort never passes the parallelism gate even under IMP-015 (Q15 sort_listfile 10.00% of server cycles; Q18 sort_exphase_merge 16.87%). Three unresolved gate candidates in report.md §17. A new IMP ID requires a user instruction (§1-b); next_id would be IMP-033.",
+      "closeout_verification": {
+        "verifier": "work/IMP-032/closeout/verify_closeout.py — 15/15 passed (idempotent across two runs)",
+        "cleaner": "work/IMP-032/closeout/ai-slop-cleanup-report.md — 2 blocking findings fixed, 3 advisory",
+        "architect": "architecture/product/code = WATCH/WATCH/WATCH, recommendation COMMENT; only outstanding item is the Notion append (§10-f pending)",
+        "red_team": "work/IMP-032/closeout/redteam/redteam-report.json — passed, zero claims falsified; every probe figure independently re-derived"
+      }
     }
   ]
 }
