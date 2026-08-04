@@ -249,7 +249,14 @@ def main():
             f"`{imp}`", r["lane"], cell(base), cell(eff),
             f"{r['expected_saved_seconds']:.4f}",
             f"{r.get('loc_low')}/{r.get('loc_likely')}/{r.get('loc_high')}",
-            cell((r.get("files_affected") or [])[:4]) + " | " + cell(r.get("subsystems_affected")),
+            # Section 2-e column 7 is ONE column ("files and subsystems touched").
+            # An earlier revision spliced a literal " | " between two cell() calls, which
+            # bypassed cell()'s pipe escaping and emitted a 13th cell on every data row
+            # against a 12-column header — a malformed table that failed the very contract
+            # this section claims to satisfy. Both halves are now joined INSIDE one value
+            # and passed through cell(), so any pipe in the data is escaped.
+            cell("files: " + (", ".join((r.get("files_affected") or [])[:4]) or "—")
+                 + "; subsystems: " + (", ".join(r.get("subsystems_affected") or []) or "—")),
             cell(r.get("difficulty_and_risk_rationale")),
             f"{cell(r.get('feasibility_score'))} / {cell(r.get('benefit_score'))} / {cell(r.get('total_score'))}",
             cell(rel), cell(elig), cell(r.get("ranking_rationale")),
