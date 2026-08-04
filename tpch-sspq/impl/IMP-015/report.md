@@ -159,7 +159,8 @@ IMPL-SSOT §5-b는 predecessor 브랜치 스태킹을 **명시적 사용자 승�
 | A/B 설계 귀결 | IMP-032의 `B`는 캠페인 기본 `install/base`가 **아니라** 보존된 `install/IMP-015` 바이너리다 (`P` = IMP-015+IMP-032). IMP-032 단독 효과를 격리하기 위한 예외이며 근거는 spec D2/D3 |
 | 기술적 필연성 | IMP-032가 공략하는 리더 병합/최종화 기계장치는 병렬 폴백 정렬 경로가 발동해야 실행된다. IMP-015가 없는 base(`607f1ee9f`)에서는 hash-eligible 플랜이 `sort_check_parallelism`의 `hash_eligible` 게이트에서 직렬로 떨어져 그 경로에 도달하지 않으므로 독립 브랜치로는 효과 측정이 불가능하다 |
 | 명기된 리스크 | cumulative 단계에서 IMP-015가 뒤집히면 IMP-032의 측정도 무효다 |
-| IMP-032 현재 상태 | **정지(blocked)** — spec §A A3 반증 + spec D1 `UNPROVABLE_ON_THIS_HOST`. 소스 수정 0건, A/B 예산 미소모. 상세는 `tpch-sspq/impl/IMP-032/status.md` |
+| IMP-032 최종 처분 | **`rejected`** (2026-08-04 사용자 결정) — spec §A A3 반증 + spec D1 `UNPROVABLE_ON_THIS_HOST`. 소스 수정 0건, A/B 예산 미소모, 브랜치는 `61f4b4cf9`에 보존. 상세는 `tpch-sspq/impl/IMP-032/report.md` |
+| 이 report에 대한 영향 | **없음.** IMP-015의 verdict(accepted, provisional)는 그대로다. 기각된 것은 IMP-015 *이후에* 리더 merge/finalize를 더 병렬화하려던 후속 제안이며, IMP-015 자체의 패치·바이너리·측정은 유효하다. 단 아래 §14-a의 적용범위 관찰은 유지된다 |
 
 ### 14-a. IMP-032 프로브가 이 패치에 대해 관측한 것 (IMP-015 장부에 대한 사실 추가)
 

@@ -27,9 +27,9 @@
   "ab_evidence_present": false,
   "ab_evidence_absent_reason": "No P binary exists: implementation is stopped by spec §A A3 refutation (stop-and-report) and by spec D1 UNPROVABLE_ON_THIS_HOST (Q15 expected effect 0.00% < MDE floor 1%). The §6-c B→P→P→B budget was deliberately not spent.",
   "probe_label": "attribution evidence only — NOT A/B evidence; quiet-gate not enforced, bgload recorded only",
-  "verdict": null,
-  "verdict_absent_reason": "blocked pending user decision (§11-a: materially different implementation options)",
-  "notion_sync_state": "not attempted — no verdict and no report_commit; §10-c ordering (Git first) respected",
+  "verdict": "rejected",
+  "verdict_absent_reason": null,
+  "notion_sync_state": "backfill recorded per §10-f — no Notion connector / ntn CLI on this host",
   "artifacts": [
     {
       "absolute_remote_path": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/work/IMP-032/handoff.md",
@@ -678,5 +678,8 @@
       "producing_stage": "G007-durable-record"
     }
   ],
-  "artifacts_missing": []
+  "artifacts_missing": [],
+  "verdict_decided_by": "user instruction 2026-08-04 (authority order 1), in response to the §11-a escalation",
+  "verdict_basis": "spec §A A3 refuted (GROUPBY_STATE not duplicable per worker inside the declared radius) and spec D1 UNPROVABLE_ON_THIS_HOST (Q15 expected effect 0.00% < §6-d MDE floor 1%, target phases ②/③ never execute). §7-a is unsatisfiable (criteria 3 and 4 provably); no §7-c measurement criterion was exercised because no P binary exists.",
+  "report": "tpch-sspq/impl/IMP-032/report.md (§10-b, 13 items)"
 }
