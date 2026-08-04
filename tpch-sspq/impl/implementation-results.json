@@ -66,8 +66,8 @@
       "imp_id": "IMP-032",
       "legacy_candidate_id": "IC-5 (구 개선 후보 레지스트리 ⑤)",
       "lane": "performance",
-      "verdict": null,
-      "verdict_basis": "blocked — no verdict. Two independent spec stop-and-report conditions: (1) spec §A A3 refuted (GROUPBY_STATE cannot be duplicated per worker inside the declared radius: shared g_val_list/g_regu_list instances, g_output_agg_list, shared xasl_state->vd evaluation, agg_hash_context sequential cursor); duplication would require the parallel-scan per-worker XASL clone (px_scan_task.cpp:569-643) = §5-d XASL serialization / unanticipated subsystem + LOC hard stop 420. (2) spec D1 UNPROVABLE_ON_THIS_HOST: Q15 gate expected effect 0.00% < §6-d MDE floor 1%, because Q15's group-by fallback sort is fully serial even under IMP-015 (0/5088 DWARF callchain samples in the parallel drain), so the targeted phases ②/③ never execute. Scope redesign is a user decision (§11-a).",
+      "verdict": "rejected",
+      "verdict_basis": "rejected by user decision 2026-08-04 (authority order 1) in response to the §11-a escalation. §7-a is unsatisfiable: criterion 3 (point improvement ≥ MDE) impossible because Q15 expected effect is 0.00%, criterion 4 (expected metric signature moves) impossible because the emitting phase never executes. No §7-c measurement criterion was exercised — no P binary exists. Grounds: (1) spec §A A3 refuted — GROUPBY_STATE cannot be duplicated per worker inside the declared radius (shared g_val_list/g_regu_list instances query_executor.c:4587/4597, g_output_agg_list :19947-19948, shared xasl_state->vd evaluation :19973/:20047-20048/:20081, agg_hash_context sequential cursor); the only existing duplication machinery is the parallel-scan per-worker XASL clone (px_scan_task.cpp:569-643) which is a §5-d XASL-serialization stop and re-costs the change at 390-600 LOC against hard stop 420. (2) spec D1 UNPROVABLE_ON_THIS_HOST — Q15's group-by fallback sort is fully serial even under IMP-015 (0 of 5088 DWARF callchain samples in the parallel drain), so the targeted phases ②/③ never execute.",
       "branch": "impl/tpch-sspq-impl-r1-20260803/IMP-032-gby-parallel-finalize",
       "branch_base_commit": "61f4b4cf967dbc2f0cd18422b83561ef44366382",
       "stacked_on": "IMP-015 (explicit user approval 2026-08-04, spec D2; recorded in both reports per §5-b)",
@@ -94,13 +94,17 @@
         },
         "P": null
       },
-      "report": "tpch-sspq/impl/IMP-032/status.md (interim; §10-b report.md deliberately absent — no verdict)",
+      "report": "tpch-sspq/impl/IMP-032/report.md",
       "raw_manifest": "tpch-sspq/impl/IMP-032/raw-manifest.json (38 artifacts, per-artifact sha256)",
-      "report_commit": "7a95be60aa2917913999efcbfc04b4edffb8cf95",
-      "notion_sync": "not attempted — no verdict and no §10-b report; §10-c Git-first ordering respected; §10-e discovery fields untouched",
+      "report_commit": "ff73cc096aa4b7a2245c9d5e480ac529a7515ca0",
+      "notion_sync": "backfill recorded per §10-f — no Notion connector / ntn CLI on this host; target page 3aef947f-1be1-816f-b19e-f3679f3e978f",
       "carried_risks": [
         "A3 refutation and the Q15 target-absence finding both require a user scope decision (§11-a options A–E in status.md §5)"
-      ]
+      ],
+      "verdict_decided_by": "user instruction 2026-08-04",
+      "interim_record": "tpch-sspq/impl/IMP-032/status.md (historical, pre-decision)",
+      "relationship_to_imp_015": "IMP-015 remains implemented and accepted (provisional); IMP-032 was the follow-on attempt stacked on it (spec D2, user-approved) and is the only thing rejected. Recorded in both reports per §5-b.",
+      "follow_up_observation": "probe found a larger target outside this IMP: the MAIN group-by fallback sort never passes the parallelism gate even under IMP-015 (Q15 sort_listfile 10.00% of server cycles; Q18 sort_exphase_merge 16.87%). Three unresolved gate candidates in report.md §17. A new IMP ID requires a user instruction (§1-b); next_id would be IMP-033."
     }
   ]
 }
