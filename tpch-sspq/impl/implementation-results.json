@@ -66,8 +66,8 @@
       "imp_id": "IMP-032",
       "legacy_candidate_id": "IC-5 (구 개선 후보 레지스트리 ⑤)",
       "lane": "performance",
-      "verdict": "rejected",
-      "verdict_basis": "rejected by user decision 2026-08-04 (authority order 1) in response to the §11-a escalation. §7-a is unsatisfiable: criterion 3 (point improvement ≥ MDE) impossible because Q15 expected effect is 0.00%, criterion 4 (expected metric signature moves) impossible because the emitting phase never executes. No §7-c measurement criterion was exercised — no P binary exists. Grounds: (1) spec §A A3 refuted — GROUPBY_STATE cannot be duplicated per worker inside the declared radius (shared g_val_list/g_regu_list instances query_executor.c:4587/4597, g_output_agg_list :19947-19948, shared xasl_state->vd evaluation :19973/:20047-20048/:20081, agg_hash_context sequential cursor); the only existing duplication machinery is the parallel-scan per-worker XASL clone (px_scan_task.cpp:569-643) which is a §5-d XASL-serialization stop and re-costs the change at 390-600 LOC against hard stop 420. (2) spec D1 UNPROVABLE_ON_THIS_HOST — Q15's group-by fallback sort is fully serial even under IMP-015 (0 of 5088 DWARF callchain samples in the parallel drain), so the targeted phases ②/③ never execute.",
+      "verdict": "stopped",
+      "verdict_basis": "two spec-mandated stop-and-report conditions both fired before the first source edit. (1) spec §A A3 refuted — GROUPBY_STATE cannot be duplicated per worker inside the declared radius: shared g_val_list/g_regu_list instances written and read per tuple (query_executor.c:4587 / :4597), g_output_agg_list written by finalize (:19947-19948) which is the binding point of the outptr/having regu tree, having_pred and g_outptr_list evaluated against the shared xasl_state->vd (:19973 / :20047-20048 / :20081), and the agg_hash_context partial-list single sequential cursor (:5191-5309). Mirroring ORDER_BY is impossible: qexec_ordby_put_next is a pure tuple copy and external_sort.c:5720-5722 already records that a put_fn with shared state must not run in parallel. The only existing duplication machinery is the parallel-scan per-worker XASL clone (px_scan_task.cpp:569-643), which is a §5-d XASL-serialization / unanticipated-subsystem stop and re-costs the change at 390-600 LOC against the hard stop of 420. (2) spec D1 UNPROVABLE_ON_THIS_HOST — the D1 attribution probe measured Q15 leader-serial residue at 0.00%: the group-by fallback sort is fully serial even under IMP-015 (0 of 5088 DWARF callchain samples touch sort_put_result_from_tmpfile, sort_merge_nruns or sort_end_parallelism; sort_listfile_execute and qfile_sort_get_next_parallel absent; no parallel-workers sub-line under either GROUPBY in the trace), so the targeted phases ②/③ never execute and the expected effect is 0.00% against a §6-d MDE floor of 1%.",
       "branch": "impl/tpch-sspq-impl-r1-20260803/IMP-032-gby-parallel-finalize",
       "branch_base_commit": "61f4b4cf967dbc2f0cd18422b83561ef44366382",
       "stacked_on": "IMP-015 (explicit user approval 2026-08-04, spec D2; recorded in both reports per §5-b)",
@@ -99,9 +99,11 @@
       "report_commit": "39d80824343cd122e781eacc2d6b631736b5ee1a",
       "notion_sync": "backfill recorded per §10-f — no Notion connector / ntn CLI on this host; target page 3aef947f-1be1-816f-b19e-f3679f3e978f",
       "carried_risks": [
-        "A3 refutation and the Q15 target-absence finding both require a user scope decision (§11-a options A–E in status.md §5)"
+        "NEW FINDING, UNDIAGNOSED — the MAIN group-by fallback sort never passes the parallelism gate even under IMP-015. Bigger than what IMP-032 targeted: Q15 sort_listfile 10.00% of server cycles (its entire sort cost) and Q18 sort_exphase_merge 16.87%, versus the ③ drain at 6.70%. Excluded causes: input size / page threshold (still serial at 9,123,688 rows / 85,534 sort pages), hash state (hash: partial = HS_REJECT_ALL so the first gate opens), enclosing query shape (the view body alone is serial too). Remaining candidates, unresolved because confirming them needs an instrumented build i.e. a first source edit: (a) input_list->page_cnt below the 2048 threshold for gathered mergeable-list inputs at external_sort.c:5236-5246, (b) px->parallelism (= xasl->parallelism) being 0 or 1 so compute_parallel_degree returns 0 immediately (px_parallel.cpp:128-131), (c) try_reserve_workers failing. A new IMP ID requires a user instruction (§1-b); next_id would be IMP-033.",
+        "IMP-015 scope narrowing recorded in its report §14-a: its runtime-truth gate does not open the parallel path for Q15, and what actually parallelised in Q18 is its change (b) (the unconditional partial-hash-list sort), not the main group-by sort. Does not change IMP-015 verdict.",
+        "Notion append to card 3adf947f-1be1-81e8-acb5-f583ec2e4a2a is outstanding: no Notion connector and no ntn CLI exist on this host, so §10-f pending backfill carries the full payload."
       ],
-      "verdict_decided_by": "user instruction 2026-08-04",
+      "verdict_decided_by": "user instruction 2026-08-04 (authority order 1): formal closure as `stopped`",
       "interim_record": "tpch-sspq/impl/IMP-032/status.md (historical, pre-decision)",
       "relationship_to_imp_015": "IMP-015 remains implemented and accepted (provisional); IMP-032 was the follow-on attempt stacked on it (spec D2, user-approved) and is the only thing rejected. Recorded in both reports per §5-b.",
       "follow_up_observation": "probe found a larger target outside this IMP: the MAIN group-by fallback sort never passes the parallelism gate even under IMP-015 (Q15 sort_listfile 10.00% of server cycles; Q18 sort_exphase_merge 16.87%). Three unresolved gate candidates in report.md §17. A new IMP ID requires a user instruction (§1-b); next_id would be IMP-033.",
@@ -110,6 +112,19 @@
         "cleaner": "work/IMP-032/closeout/ai-slop-cleanup-report.md — 2 blocking findings fixed, 3 advisory",
         "architect": "architecture/product/code = WATCH/WATCH/WATCH, recommendation COMMENT; only outstanding item is the Notion append (§10-f pending)",
         "red_team": "work/IMP-032/closeout/redteam/redteam-report.json — passed, zero claims falsified; every probe figure independently re-derived"
+      },
+      "verdict_detail": "A3-refuted; UNPROVABLE_ON_THIS_HOST on Q15",
+      "verdict_label_note": "not accepted and not rejected: the candidate was stopped BEFORE implementation. §7-a criteria 3 and 4 are provably unsatisfiable (Q15 expected effect 0.00%; the phase that would emit the metric signature never executes), and every §7-c criterion presupposes a measured treatment — no P binary was ever built, so none was exercised. §7-b inconclusive does not apply either: no pair was ever collected.",
+      "evidence_paths": {
+        "report": "tpch-sspq/impl/IMP-032/report.md",
+        "a1_a8_source_verification": "tpch-sspq/impl/IMP-032/A1-A8-source-verification.md",
+        "d1_attribution_probe": "tpch-sspq/impl/IMP-032/D1-attribution-report.md (mirror: D1-attribution-probe.md)",
+        "raw_manifest": "tpch-sspq/impl/IMP-032/raw-manifest.json (45 artifacts, per-file sha256)",
+        "pre_decision_status": "tpch-sspq/impl/IMP-032/status.md (historical)",
+        "c7_integrity_report": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/work/IMP-032/status/C7-report.md",
+        "final_status_block": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/work/IMP-032/status/final-status.yaml",
+        "probe_raw": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/work/IMP-032/probe/",
+        "closeout_verification": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/work/IMP-032/closeout/"
       }
     }
   ]
