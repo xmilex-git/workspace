@@ -107,10 +107,15 @@ def main():
           "under-correction is the single failure mode section 6-d-1 exists to prevent — an "
           "MDE smaller than real A/B noise causes **false accepts**.")
         w()
-        w("**Consequence for reading this document:** every `UNPROVABLE_ON_THIS_HOST` verdict "
-          "is provisional and errs toward flagging. A candidate marked provable here is "
-          "provable under *every* candidate rule; a candidate marked `UNPROVABLE_ON_THIS_HOST` "
-          "may become provable if a smaller factor is chosen.")
+        w("**Consequence for reading this document:** **no `UNPROVABLE_ON_THIS_HOST` verdict "
+          "is asserted anywhere in it.** Every determination that would depend on the factor "
+          "is **WITHHELD** until the rule is chosen, and what each of the three candidate "
+          "rules would give is published beside it. Rows whose outcome is the same under all "
+          "three are marked `rule-invariant`, so the pending decision cannot move them; the "
+          "remaining rows are marked as depending on the decision, and those are the ones the "
+          "choice actually settles. The corrected MDE figures printed below are provisional "
+          "and illustrative only — they exist so the table can be read, not so a verdict can "
+          "be drawn from them.")
         w()
         w("### Why neither rule fits")
         w()

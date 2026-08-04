@@ -392,12 +392,16 @@ def build(impl_dir):
             "near_equal_wall_contradictions": (calib.get("combination") or {}).get(
                 "near_equal_wall_contradictions"),
             "effect_on_this_ranking": (
-                "Every UNPROVABLE_ON_THIS_HOST verdict below is computed against the "
-                "PROVISIONAL corrected MDE. Because the provisional factor is the most "
-                "conservative of the six measured factors, the flag can only be raised too "
-                "OFTEN here, never too rarely: a candidate marked provable is provable under "
-                "every candidate rule, while a candidate marked UNPROVABLE may become "
-                "provable if the user selects a smaller factor."
+                "NO UNPROVABLE_ON_THIS_HOST verdict is asserted in this ranking. Section "
+                "6-d-1 forbids this campaign from choosing the combination rule, so a verdict "
+                "computed from the corrected MDE would be the campaign making the user's "
+                "decision. Every factor-dependent determination is therefore WITHHELD "
+                "(verdict `withheld_pending_user_factor_decision`) and each row publishes what "
+                "all three candidate rules would give, plus `verdict_is_rule_invariant` "
+                "separating the rows the pending decision cannot move from the rows it "
+                "settles. The corrected MDE values carried here are provisional and "
+                "illustrative, computed under the most conservative measured factor so they "
+                "cannot under-correct; they are not campaign values."
                 if calib.get("STOP_AND_REPORT") else
                 "The combination rule was accepted, so the corrected MDE is final."),
         },
