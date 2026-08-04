@@ -387,8 +387,12 @@ def main():
     alt = d.get("corrected_mde_under_each_candidate_rule") or {}
     rules = sorted({r for v in alt.values() for r in (v or {})})
     if rules:
-        w("| Query | Fresh base median (s) | Corrected MDE (applied) | "
-          + " | ".join(f"under `{r}`" for r in rules) + " |")
+        # "(applied)" would be false while the rule is open — nothing is applied then.
+        # Conditioned for the same reason as every other state-dependent label here.
+        w("| Query | Fresh base median (s) | "
+          + ("Corrected MDE (illustrative, no rule applied)"
+             if cs.get("STOP_AND_REPORT") else "Corrected MDE (applied)")
+          + " | " + " | ".join(f"under `{r}`" for r in rules) + " |")
         w("|---|---|---|" + "---|" * len(rules))
         for q in sorted(medians):
             m = medians[q]

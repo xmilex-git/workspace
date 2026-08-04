@@ -364,7 +364,7 @@ The Phase 1B ranking MUST carry every candidate's expected effect against the MD
 
 ### Per-query corrected MDE
 
-| Query | Fresh base median (s) | Corrected MDE (applied) | under `max_observed_factor` | under `single_pooled_geometric_mean` | under `wall_magnitude_dependent` |
+| Query | Fresh base median (s) | Corrected MDE (illustrative, no rule applied) | under `max_observed_factor` | under `single_pooled_geometric_mean` | under `wall_magnitude_dependent` |
 |---|---|---|---|---|---|
 | Q01 | 31.6435 | 2.976% | measured directly | measured directly | measured directly |
 | Q02 | 0.3645 | 1.368% | measured directly | measured directly | measured directly |
