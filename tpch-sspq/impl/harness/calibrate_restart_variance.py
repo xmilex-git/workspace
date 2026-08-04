@@ -542,11 +542,17 @@ def build():
         "sensitivity_max_factor": {
             "max_clamped_factor": max_factor,
             "queries_whose_corrected_mde_changes_under_the_max_factor": flip,
-            "note": ("Reported so a fragile UNPROVABLE_ON_THIS_HOST determination is "
-                     "visible. The ranking uses the chosen combination rule; this column "
-                     "states what the most conservative single factor would have given."),
+            "note": ("Reported so a factor-sensitive determination is visible. NO "
+                     "combination rule has been chosen — see combination.rule. While the "
+                     "rule is USER_DECISION_REQUIRED the ranking asserts no "
+                     "UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent "
+                     "determination is WITHHELD and each row publishes what all three "
+                     "candidate rules would give. This column states what the most "
+                     "conservative single factor would give, as one of those "
+                     "possibilities, not as the applied rule."),
         },
-        "rule_established": ("Phase 2 A/B accept decisions (section 7-a criterion 3) and the "
+        "rule_established": ("ONCE THE RULE IS CHOSEN: Phase 2 A/B accept decisions "
+                             "(section 7-a criterion 3) and the "
                              "Phase 1B UNPROVABLE_ON_THIS_HOST flag both use the CORRECTED "
                              "MDE, never the raw fast-regime MDE"),
         "raw_evidence_paths": {"fast_regime": os.path.join(cfg.RAW_ROOT, "raw"),

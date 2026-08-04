@@ -139,13 +139,13 @@ The three candidate rules and their per-query consequences are tabulated in `tpc
 
 Per-query clamped factors: Q01 15.3158, Q02 1.4039, Q03 1.4516, Q04 1.4760, Q05 2.2719, Q06 6.4235. Spread 1.4039..15.3158 (ratio 10.91), geometric mean 2.9598, pearson r of ln(inflation) vs ln(wall) = 0.7150.
 
-Sensitivity: the most conservative single factor available is 15.3158x. Queries whose corrected MDE would change under it: none. Reported so a fragile UNPROVABLE_ON_THIS_HOST determination is visible. The ranking uses the chosen combination rule; this column states what the most conservative single factor would have given.
+Sensitivity: the most conservative single factor available is 15.3158x. Queries whose corrected MDE would change under it: none. Reported so a factor-sensitive determination is visible. NO combination rule has been chosen — see combination.rule. While the rule is USER_DECISION_REQUIRED the ranking asserts no UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent determination is WITHHELD and each row publishes what all three candidate rules would give. This column states what the most conservative single factor would give, as one of those possibilities, not as the applied rule.
 
-### Queries where a few-percent effect CANNOT be proven on this host
+### Queries a few-percent effect could not be proven on — ILLUSTRATIVE ONLY
 
-These queries' **corrected** MDE exceeds 3%. A candidate predicting a smaller effect on them must be flagged `UNPROVABLE_ON_THIS_HOST` **at Phase 1B ranking time** (section 6-d) — before it is queued, not after twelve pairs of measurement have come back inconclusive.
+**Nothing in this section is a determination.** The section 6-d-1 combination rule is undecided (see the stop-and-report block above), so the corrected MDE is not a campaign value and no query can yet be declared unable to resolve a given effect. The rows below show which queries WOULD exceed a 3% corrected MDE **under the most conservative of the three candidate rules** — one possibility among three, listed so the shape of the decision is visible. `tpch-sspq/impl/priority-ranking.md` asserts no `UNPROVABLE_ON_THIS_HOST` verdict at all while the rule is open; it withholds every factor-dependent determination and publishes all three rules' outcomes per row.
 
-| Query | corrected MDE | median wall (s) | an effect below this is undecidable here |
+| Query | corrected MDE (illustrative) | median wall (s) | an effect below this would be undecidable under this factor |
 |---|---:|---:|---|
 | Q08 | **67.71%** | 1.007 | < 0.682 s |
 | Q07 | **35.60%** | 18.649 | < 6.638 s |
@@ -165,7 +165,7 @@ These queries' **corrected** MDE exceeds 3%. A candidate predicting a smaller ef
 | Q12 | **4.19%** | 3.950 | < 0.165 s |
 | Q15 | **3.45%** | 10.024 | < 0.346 s |
 
-At the other end, Q04 sit at the 1% floor — even after inflation their paired CV is below 0.5%, so the formula's 1% floor, not the noise, is what limits them.
+At the other end, Q04 sit at the 1% floor — even after inflation their paired CV is below 0.5%, so the formula's 1% floor, not the noise, is what limits them, and that holds under every candidate rule, so the pending decision cannot move them.
 
 ## Divergence from the previous measurement campaign
 

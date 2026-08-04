@@ -257,26 +257,48 @@ def main():
                     key=lambda r: -(_cm(r) or 0))
     fine = sorted((r for r in qs.values() if _cm(r) is not None
                    and _cm(r) <= 0.01 + 1e-12), key=lambda r: r["qnn"])
-    w("### Queries where a few-percent effect CANNOT be proven on this host")
+    escalated = (corr.get("combination_rule") or {}).get("rule") == "USER_DECISION_REQUIRED"
+    if escalated:
+        w("### Queries a few-percent effect could not be proven on — ILLUSTRATIVE ONLY")
+        w("")
+        w("**Nothing in this section is a determination.** The section 6-d-1 combination "
+          "rule is undecided (see the stop-and-report block above), so the corrected MDE "
+          "is not a campaign value and no query can yet be declared unable to resolve a "
+          "given effect. The rows below show which queries WOULD exceed a 3% corrected MDE "
+          "**under the most conservative of the three candidate rules** — one possibility "
+          "among three, listed so the shape of the decision is visible. "
+          "`tpch-sspq/impl/priority-ranking.md` asserts no `UNPROVABLE_ON_THIS_HOST` "
+          "verdict at all while the rule is open; it withholds every factor-dependent "
+          "determination and publishes all three rules' outcomes per row.")
+    else:
+        w("### Queries where a few-percent effect CANNOT be proven on this host")
     w("")
     if coarse:
-        w("These queries' **corrected** MDE exceeds 3%. A candidate predicting a smaller "
-          "effect on them must be flagged `UNPROVABLE_ON_THIS_HOST` **at Phase 1B ranking "
-          "time** (section 6-d) — before it is queued, not after twelve pairs of "
-          "measurement have come back inconclusive.")
-        w("")
-        w("| Query | corrected MDE | median wall (s) | an effect below this is undecidable here |")
+        if not escalated:
+            w("These queries' **corrected** MDE exceeds 3%. A candidate predicting a smaller "
+              "effect on them must be flagged `UNPROVABLE_ON_THIS_HOST` **at Phase 1B ranking "
+              "time** (section 6-d) — before it is queued, not after twelve pairs of "
+              "measurement have come back inconclusive.")
+            w("")
+        hdr = ("| Query | corrected MDE (illustrative) | median wall (s) | "
+               "an effect below this would be undecidable under this factor |"
+               if escalated else
+               "| Query | corrected MDE | median wall (s) | an effect below this is undecidable here |")
+        w(hdr)
         w("|---|---:|---:|---|")
         for r in coarse:
             w(f"| {r['qnn']} | **{pct(_cm(r))}** | {s(r['median_wall_seconds'])} | "
               f"< {s(_cm(r) * r['median_wall_seconds'])} s |")
     else:
-        w("No query's corrected MDE exceeds 3%.")
+        w("No query's corrected MDE exceeds 3%"
+          + (" under the illustrative factor." if escalated else "."))
     w("")
     if fine:
         w(f"At the other end, {', '.join(r['qnn'] for r in fine)} sit at the 1% "
           "floor — even after inflation their paired CV is below 0.5%, so the formula's 1% "
-          "floor, not the noise, is what limits them.")
+          "floor, not the noise, is what limits them"
+          + (", and that holds under every candidate rule, so the pending decision cannot "
+             "move them." if escalated else "."))
         w("")
 
     # ---- comparison to previous campaign ----
