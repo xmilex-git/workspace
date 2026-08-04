@@ -539,19 +539,37 @@ def build():
         "combination": combination,
         "clamp_notes": notes,
         "corrected_mde": corrected,
+        # The note is CONDITIONED on the escalation, not hardcoded. Hardcoding either
+        # wording reintroduces the same defect class in one direction or the other: an
+        # escalation-only text becomes false the moment a rule is chosen, and a
+        # settled-rule text becomes false while the decision is open. Both variants live
+        # here so the artifact is correct in both states, mirroring what
+        # render_baseline_md.py's coarse-MDE section does for its own text.
         "sensitivity_max_factor": {
             "max_clamped_factor": max_factor,
             "queries_whose_corrected_mde_changes_under_the_max_factor": flip,
-            "note": ("Reported so a factor-sensitive determination is visible. NO "
-                     "combination rule has been chosen — see combination.rule. While the "
-                     "rule is USER_DECISION_REQUIRED the ranking asserts no "
-                     "UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent "
-                     "determination is WITHHELD and each row publishes what all three "
-                     "candidate rules would give. This column states what the most "
-                     "conservative single factor would give, as one of those "
-                     "possibilities, not as the applied rule."),
+            "queries_list_meaning": (
+                "queries whose corrected MDE would differ under the maximum measured "
+                "factor versus the factor this file currently applies"
+                if not stop else
+                "queries whose corrected MDE differs between the candidate rules, i.e. the "
+                "queries the pending rule decision actually settles"),
+            "note": (("Reported so a factor-sensitive determination is visible. NO "
+                      "combination rule has been chosen — see combination.rule. While the "
+                      "rule is USER_DECISION_REQUIRED the ranking asserts no "
+                      "UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent "
+                      "determination is WITHHELD and each row publishes what all three "
+                      "candidate rules would give. This column states what the most "
+                      "conservative single factor would give, as one of those "
+                      "possibilities, not as the applied rule.")
+                     if stop else
+                     ("Reported so a fragile UNPROVABLE_ON_THIS_HOST determination is "
+                      "visible. The ranking uses the combination rule recorded in "
+                      "combination.rule; this column states what the most conservative "
+                      "single factor would have given instead.")),
         },
-        "rule_established": ("ONCE THE RULE IS CHOSEN: Phase 2 A/B accept decisions "
+        "rule_established": (("ONCE THE RULE IS CHOSEN: " if stop else "")
+                             + "Phase 2 A/B accept decisions "
                              "(section 7-a criterion 3) and the "
                              "Phase 1B UNPROVABLE_ON_THIS_HOST flag both use the CORRECTED "
                              "MDE, never the raw fast-regime MDE"),

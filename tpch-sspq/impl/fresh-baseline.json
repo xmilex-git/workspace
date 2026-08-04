@@ -15008,6 +15008,7 @@
     "sensitivity_max_factor": {
       "max_clamped_factor": 15.315813062171745,
       "note": "Reported so a factor-sensitive determination is visible. NO combination rule has been chosen \u2014 see combination.rule. While the rule is USER_DECISION_REQUIRED the ranking asserts no UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent determination is WITHHELD and each row publishes what all three candidate rules would give. This column states what the most conservative single factor would give, as one of those possibilities, not as the applied rule.",
+      "queries_list_meaning": "queries whose corrected MDE differs between the candidate rules, i.e. the queries the pending rule decision actually settles",
       "queries_whose_corrected_mde_changes_under_the_max_factor": []
     }
   },

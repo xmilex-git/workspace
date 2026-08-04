@@ -574,7 +574,7 @@
     },
     "selection": "the LARGER of the two pairings is used, so the noise floor is never understated"
   },
-  "generated_utc": "2026-08-04T14:37:47Z",
+  "generated_utc": "2026-08-04T14:53:21Z",
   "impl_ssot_amendment": "AMEND-G section 6-d-1",
   "impl_ssot_blob": "15b42ddca521444fa54b34b0fa8477ed2df643f6",
   "impl_ssot_commit": "eccdd1ae58cd733ed3121585146d68b9ae54a73f",
@@ -1208,6 +1208,7 @@
   "sensitivity_max_factor": {
     "max_clamped_factor": 15.315813062171745,
     "note": "Reported so a factor-sensitive determination is visible. NO combination rule has been chosen \u2014 see combination.rule. While the rule is USER_DECISION_REQUIRED the ranking asserts no UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent determination is WITHHELD and each row publishes what all three candidate rules would give. This column states what the most conservative single factor would give, as one of those possibilities, not as the applied rule.",
+    "queries_list_meaning": "queries whose corrected MDE differs between the candidate rules, i.e. the queries the pending rule decision actually settles",
     "queries_whose_corrected_mde_changes_under_the_max_factor": []
   },
   "user_decision_required": "IMPL-SSOT section 6-d-1 escalation: neither a single pooled factor nor a defensible wall-magnitude-dependent factor fits the six calibration points. The corrected MDE published here, and every UNPROVABLE_ON_THIS_HOST verdict derived from it, is PROVISIONAL and was computed under the most conservative of the six measured factors so it cannot under-correct. Choose the combination rule, or direct more calibration blocks, before any Phase 2 A/B accept decision uses this MDE."
