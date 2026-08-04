@@ -189,15 +189,23 @@ def main():
             w("")
             w("**IMPL-SSOT section 6-d-1 escalation, section 11-a.** The six calibration points "
               "support neither a single pooled factor nor a defensible wall-magnitude-dependent "
-              "one, and section 6-d-1 forbids picking a factor to keep the sweep moving. **No "
-              "factor was chosen here.**")
+              "one, and section 6-d-1 forbids picking a factor to keep the sweep moving. **The "
+              "combination rule is NOT decided; it is the user's decision.**")
             w("")
-            w(f"Every corrected MDE in this file is therefore **PROVISIONAL**, computed under the "
-              f"most conservative of the six measured factors "
-              f"(**{comb.get('provisional_value'):.4f}x**, the maximum observed). That choice "
-              f"cannot under-correct, and under-correction is the single failure mode section "
-              f"6-d-1 exists to prevent — an MDE smaller than real A/B noise causes false "
-              f"accepts. {comb.get('provisional_is_not_a_decision', '')}")
+            w(f"Every corrected MDE printed in this file is a **PROVISIONAL, ILLUSTRATIVE** "
+              f"figure, not a campaign value. It is computed under the most conservative of the "
+              f"six measured factors (**{comb.get('provisional_value'):.4f}x**, the maximum "
+              f"observed) purely so the shape of the table can be read while the decision is "
+              f"open. The maximum is used because it is the one option that cannot "
+              f"under-correct, and under-correction is the single failure mode section 6-d-1 "
+              f"exists to prevent — an MDE smaller than real A/B noise causes false accepts. "
+              f"{comb.get('provisional_is_not_a_decision', '')}")
+            w("")
+            w("**Nothing downstream asserts a verdict from these numbers.** In "
+              "`tpch-sspq/impl/priority-ranking.md` every `UNPROVABLE_ON_THIS_HOST` "
+              "determination that would depend on the factor is **WITHHELD**, with what each "
+              "candidate rule would give published alongside it, so no candidate is judged "
+              "provable or unprovable on the strength of a factor this campaign picked.")
             w("")
             w("The three candidate rules and their per-query consequences are tabulated in "
               "`tpch-sspq/impl/priority-ranking.md`, together with the "

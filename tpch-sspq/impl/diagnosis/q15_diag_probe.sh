@@ -20,12 +20,23 @@
 #
 # FALSIFIABLE PREDICTIONS
 #   Leg A  Q15 view body, parallel scan (default)  -> trace `hash: partial`, GROUPBY SERIAL
-#   Leg B  Q15 view body, /*+ NO_PARALLEL_SCAN */  -> trace `hash: true`   (label differs on
-#          identical SQL/data/binary => the parallel-path label is not the leader state)
+#   Leg B  Q15 view body, /*+ NO_PARALLEL_SCAN */  -> trace `hash: partial`, GROUPBY PARALLEL
+#          (MEASURED, and it corrected the prediction this comment originally carried.
+#          The first draft predicted `hash: true` on the reasoning that Q15's GLOBAL
+#          selectivity is 100,000 groups / 2,265,714 rows = 0.044, far below the 0.5
+#          abort threshold.  That reasoning is wrong: the check at
+#          query_executor.c:4839-4842 fires the first time `context->tuple_count`
+#          exceeds 2000 and compares group_count/tuple_count on the PREFIX seen so far.
+#          l_suppkey has 100,000 distinct values at SF10, so the first ~2,001 rows are
+#          almost all distinct, prefix selectivity is ~0.99 > 0.5, and the leader's hash
+#          pass aborts to HS_REJECT_ALL immediately.  The label is therefore GENUINE
+#          here, unlike the parallel-scan legs where it is force-assigned.)
 #   Leg C  high-selectivity group-by, parallel scan     -> `hash: partial`, GROUPBY SERIAL
 #   Leg D  same SQL, /*+ NO_PARALLEL_SCAN */            -> `hash: partial`, GROUPBY PARALLEL
-#   C vs D is the decisive pair: identical SQL except the scan hint, identical binary
-#   and data, both labelled `hash: partial`, opposite group-by-sort arming.  That
+#   A vs B and C vs D are both decisive pairs: identical SQL except the scan hint,
+#   identical binary and data, ALL FOUR labelled `hash: partial`, opposite group-by-sort
+#   arming.  That the label is identical across a pair whose arming differs is the point:
+#   it cannot be the quantity the gate reads.  That
 #   isolates the cause to the leader's runtime agg_hash_context->state and therefore
 #   to external_sort.c:5232, and it excludes the size gate (5237-5243), the
 #   px->parallelism hint (5238-5239) and try_reserve_workers (5244), all of which sit
@@ -60,8 +71,12 @@ emit_leg_sql() {  # emit_leg_sql <hint> <group-by-shape: low|high> <file>
   {
     printf 'SET TRACE ON;\n'
     if [ "$shape" = "low" ]; then
-      # Q15's own grouping: 2.27M rows -> 100k groups, selectivity ~0.044 < 0.5,
-      # so a LEADER-side hash pass never trips the abort at query_executor.c:4842.
+      # Q15's own grouping.  GLOBAL selectivity is 100,000 groups / 2,265,714 rows =
+      # 0.044, but that is NOT what the abort at query_executor.c:4839-4842 tests: it
+      # fires once tuple_count > 2000 and uses group_count/tuple_count over the PREFIX
+      # processed so far.  With 100,000 distinct l_suppkey values the first ~2,001 rows
+      # are nearly all distinct, so prefix selectivity is ~0.99 and a LEADER-side hash
+      # pass DOES abort to HS_REJECT_ALL.  Measured in leg B.
       printf 'select count(*) from (select %s l_suppkey, sum(l_extendedprice * (1 - l_discount))\n' "$hint"
       printf '  from lineitem where %s group by l_suppkey) t;\n' "$WINDOW"
     else

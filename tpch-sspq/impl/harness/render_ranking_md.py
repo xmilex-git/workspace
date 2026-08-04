@@ -329,17 +329,38 @@ def main():
       "`UNPROVABLE_ON_THIS_HOST` does not delete a candidate; it states that this host "
       "cannot decide it.")
     w()
-    w("| IMP ID | Query | Predicted effect | Corrected MDE | Verdict |")
-    w("|---|---|---|---|---|")
+    if cs.get("STOP_AND_REPORT"):
+        w("**No `UNPROVABLE_ON_THIS_HOST` verdict is asserted in this document.** Section "
+          "6-d-1 says that when the calibration supports no combination rule the worker "
+          "reports and asks, and MUST NOT pick a factor. The corrected MDE is therefore "
+          "not a campaign fact yet, and a verdict computed from one would be this campaign "
+          "quietly making the user's decision. Each affected row is **WITHHELD**, and what "
+          "each candidate rule *would* give is published instead so the decision is "
+          "informed. Rows marked `rule-invariant` come out the same under all three "
+          "candidate rules, so the pending decision cannot move them.")
+        w()
+    w("| IMP ID | Query | Predicted effect | Corrected MDE (provisional) | Verdict | Under each candidate rule |")
+    w("|---|---|---|---|---|---|")
     any_row = False
     for imp in sorted(C):
         for row in C[imp].get("mde_comparison", []):
             if row["verdict"] in ("no_predicted_effect",):
                 continue
             any_row = True
+            v = row["verdict"]
+            if v == "unprovable":
+                vtxt = "**UNPROVABLE_ON_THIS_HOST**"
+            elif v == "withheld_pending_user_factor_decision":
+                vtxt = ("**WITHHELD** — pending the section 6-d-1 rule decision"
+                        + (" (rule-invariant)" if row.get("verdict_is_rule_invariant")
+                           else " · **outcome DEPENDS on the decision**"))
+            else:
+                vtxt = v
+            wb = row.get("would_be_under_each_candidate_rule") or {}
+            wbtxt = ("; ".join(f"{k} → {vv}" for k, vv in sorted(wb.items()))
+                     if wb else "—")
             w(f"| `{imp}` | {row['q']} | {fmt_pct(row['predicted_effect_fraction'])} | "
-              f"{fmt_pct(row['corrected_mde'])} | "
-              f"{'**UNPROVABLE_ON_THIS_HOST**' if row['verdict'] == 'unprovable' else row['verdict']} |")
+              f"{fmt_pct(row['corrected_mde'])} | {vtxt} | {wbtxt} |")
     if not any_row:
         w("| — | — | — | — | no candidate carries a non-zero predicted effect |")
     w()

@@ -72,6 +72,82 @@ def expected_saved(cand, medians, weights):
     return total, terms
 
 
+def _static(imp, feas, cands):
+    """Weight-independent inputs to the section 2-c tie-break chain."""
+    f = feas.get(imp, {})
+    c = cands.get(imp, {})
+    return {
+        "feasibility_score": f.get("feasibility_score"),
+        "risk": (f.get("correctness_concurrency_risk") or "high").lower(),
+        "loc_high": f.get("loc_high"),
+        "lane": c.get("lane"),
+        "predecessors": c.get("predecessors") or f.get("predecessors") or [],
+        "ranked_eligible": bool(c.get("ranked")) and c.get("lane") == "performance",
+        "blocked": c.get("benefit_status") in BLOCKED_BENEFIT,
+        "scored": bool(c.get("scored")),
+    }
+
+
+def score_with(weights, cands, feas, medians):
+    """The ONE scoring implementation, parameterized only by the evidence weights.
+
+    Section 2-d perturbs the evidence weights and asks whether the top 5 moves. That
+    question is only meaningful if the perturbed run is the SAME computation with
+    different weights. An earlier revision had a second, simplified scorer for the
+    sensitivity pass: it normalized over a narrower population (scored + ranked +
+    performance) than the main pass (every scored, non-blocked candidate) and ordered
+    by (total, id) instead of the full section 2-c chain. The two therefore disagreed
+    on the base case itself, so `RANKING_UNSTABLE` was not measuring perturbation
+    sensitivity at all. Both passes now go through this function, so identity is
+    structural rather than asserted.
+
+    Returns (per_imp, order) where order is the ranked-eligible set in section 2-c
+    order and per_imp carries saved/terms/best_evidence_level/benefit/total.
+    """
+    per = {}
+    for imp, c in cands.items():
+        saved, terms = expected_saved(c, medians, weights)
+        evs = [t["evidence_level"] for t in terms if t["expected_saved_seconds"] > 0] \
+            or [t["evidence_level"] for t in terms] or ["unmeasured"]
+        per[imp] = {"saved": saved, "terms": terms,
+                    "best_evidence_level": max(evs, key=lambda e: EVIDENCE_RANK.get(e, 0)),
+                    "static": _static(imp, feas, cands)}
+
+    # Population rule, identical for every pass: every SCORED candidate whose benefit
+    # status is not blocked, regardless of lane or ranked eligibility (section 2-b-1
+    # excludes only the blocked statuses from the percentile population).
+    pop = [imp for imp, d in per.items() if d["static"]["scored"] and not d["static"]["blocked"]]
+    pr = percentile_rank([math.log1p(per[imp]["saved"]) for imp in pop])
+    for imp, d in per.items():
+        if imp in pop:
+            d["benefit"] = round(pr[math.log1p(d["saved"])], 4)
+        else:
+            d["benefit"] = None
+        fs = d["static"]["feasibility_score"]
+        d["total"] = (round(0.5 * fs + 0.5 * d["benefit"], 4)
+                      if (fs is not None and d["benefit"] is not None) else None)
+
+    is_pred_of = set()
+    for imp, d in per.items():
+        for pre in d["static"]["predecessors"]:
+            is_pred_of.add(str(pre).split()[0].strip("(),"))
+
+    def sort_key(imp):
+        d = per[imp]
+        st = d["static"]
+        is_pred = 1 if (st["lane"] == "enabler" or imp in is_pred_of) else 0
+        return (-(d["total"] or 0.0),
+                -EVIDENCE_RANK.get(d["best_evidence_level"], 0),
+                RISK_RANK.get(st["risk"], 3),
+                -is_pred,
+                st["loc_high"] or 10 ** 9,
+                imp)
+
+    order = sorted([imp for imp, d in per.items() if d["static"]["ranked_eligible"]],
+                   key=sort_key)
+    return per, order
+
+
 def build(impl_dir):
     with open(os.path.join(impl_dir, "benefit-inputs.json")) as f:
         bi = json.load(f)
@@ -92,30 +168,62 @@ def build(impl_dir):
     corrected = {q: r.get("corrected_mde") for q, r in calib["corrected_mde"].items()}
 
     cands = bi["candidates"]
+    base_per, base_order = score_with(WEIGHTS, cands, feas, medians)
     records = {}
     for imp, c in cands.items():
         f = feas.get(imp, {})
-        saved, terms = expected_saved(c, medians, WEIGHTS)
-        evs = [t["evidence_level"] for t in terms if t["expected_saved_seconds"] > 0] \
-            or [t["evidence_level"] for t in terms] or ["unmeasured"]
-        best_ev = max(evs, key=lambda e: EVIDENCE_RANK.get(e, 0))
+        saved, terms = base_per[imp]["saved"], base_per[imp]["terms"]
+        best_ev = base_per[imp]["best_evidence_level"]
 
         # Section 6-d: the ranking MUST carry every candidate's expected effect against
         # the CORRECTED MDE of its target queries, flagging UNPROVABLE_ON_THIS_HOST at
         # ranking time. Evaluated per target query on the predicted effect FRACTION.
+        #
+        # BUT section 6-d-1 also forbids this campaign from choosing the combination
+        # rule when the calibration does not support one: "the worker reports the
+        # calibration data and asks; it MUST NOT pick a factor to keep the sweep
+        # moving." When the calibration is escalated, the corrected MDE is not a
+        # campaign fact, so a verdict computed from it would be this campaign silently
+        # making the user's decision. The verdict is therefore WITHHELD and, instead,
+        # what each candidate rule WOULD give is published so the decision is informed.
+        # A candidate is only reported UNPROVABLE_ON_THIS_HOST when the rule is settled.
         mde_rows, unprovable_qs = [], []
+        escalated = bool(calib.get("STOP_AND_REPORT"))
         for t in c.get("terms", []):
             q, frac = t["q"], t.get("fraction")
             if q == "*":
                 continue
             m = corrected.get(q)
-            verdict = "no_predicted_effect" if not frac else (
-                "unprovable" if (m is not None and frac < m) else
-                "resolvable" if m is not None else "no_mde")
+            per_rule = ((calib["corrected_mde"].get(q) or {})
+                        .get("corrected_mde_under_each_candidate_rule") or {})
+            if not frac:
+                verdict = "no_predicted_effect"
+            elif m is None:
+                verdict = "no_mde"
+            elif escalated and per_rule:
+                verdict = "withheld_pending_user_factor_decision"
+            elif escalated:
+                # Q01-Q06 use their MEASURED restart-regime CV, so no combination rule
+                # applies to them and the pending decision cannot move their verdict.
+                verdict = "unprovable" if frac < m else "resolvable"
+            else:
+                verdict = "unprovable" if frac < m else "resolvable"
             if verdict == "unprovable":
                 unprovable_qs.append(q)
-            mde_rows.append({"q": q, "predicted_effect_fraction": frac,
-                             "corrected_mde": m, "verdict": verdict})
+            row = {"q": q, "predicted_effect_fraction": frac,
+                   "corrected_mde": m, "verdict": verdict}
+            if verdict == "withheld_pending_user_factor_decision":
+                row["would_be_under_each_candidate_rule"] = {
+                    rule: ("unprovable" if frac < mm else "resolvable")
+                    for rule, mm in per_rule.items()}
+                row["verdict_is_rule_invariant"] = len(
+                    set(row["would_be_under_each_candidate_rule"].values())) == 1
+                row["note"] = ("section 6-d-1 escalation: the combination rule is the "
+                               "user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is "
+                               "asserted for this query. Where every candidate rule agrees "
+                               "(verdict_is_rule_invariant true) the outcome does not depend "
+                               "on the pending decision.")
+            mde_rows.append(row)
 
         records[imp] = {
             "imp_id": imp,
@@ -164,36 +272,20 @@ def build(impl_dir):
                       "blocker": cands[imp].get("blocker")})
 
     # ---- section 2-b normalization over the scored candidate set ------------
-    pop = [imp for imp, r in records.items()
-           if r["scored"] and r["benefit_status"] not in BLOCKED_BENEFIT]
-    vals = [math.log1p(records[imp]["expected_saved_seconds"]) for imp in pop]
-    pr = percentile_rank(vals)
-    for imp in pop:
-        r = records[imp]
-        r["in_percentile_population"] = True
-        r["log1p_expected_saved_seconds"] = round(math.log1p(r["expected_saved_seconds"]), 6)
-        r["benefit_score"] = round(pr[math.log1p(r["expected_saved_seconds"])], 4)
-        if r["expected_saved_seconds"] == 0:
-            r["no_numeric_basis"] = True
     for imp, r in records.items():
-        if r.get("benefit_score") is None and r["benefit_status"] not in BLOCKED_BENEFIT:
-            r["in_percentile_population"] = False
-        fs, bs = r.get("feasibility_score"), r.get("benefit_score")
-        r["total_score"] = round(0.5 * fs + 0.5 * bs, 4) if (fs is not None and bs is not None) else None
+        d = base_per[imp]
+        if r["benefit_status"] in BLOCKED_BENEFIT:
+            continue
+        r["in_percentile_population"] = d["benefit"] is not None
+        if d["benefit"] is not None:
+            r["log1p_expected_saved_seconds"] = round(math.log1p(d["saved"]), 6)
+            r["benefit_score"] = d["benefit"]
+            r["total_score"] = d["total"]
+            if d["saved"] == 0:
+                r["no_numeric_basis"] = True
 
-    # ---- section 2-c ordering with the exact tie-break chain ---------------
-    def sort_key(imp):
-        r = records[imp]
-        is_pred = 1 if (r["lane"] == "enabler" or any(
-            imp in (records[o].get("predecessors") or []) for o in records)) else 0
-        return (-(r["total_score"] or 0.0),
-                -EVIDENCE_RANK.get(r["best_evidence_level"], 0),
-                RISK_RANK.get((r.get("correctness_concurrency_risk") or "high").lower(), 3),
-                -is_pred,
-                r.get("loc_high") or 10 ** 9,
-                imp)
-
-    ranked = sorted([i for i, r in records.items() if r["ranked_eligible"]], key=sort_key)
+    # ---- section 2-c ordering: taken from score_with, the single implementation ----
+    ranked = list(base_order)
     for pos, imp in enumerate(ranked, 1):
         records[imp]["rank"] = pos
         records[imp].setdefault("eligibility", "eligible")
@@ -240,23 +332,17 @@ def build(impl_dir):
 
     # ---- section 2-d sensitivity ------------------------------------------
     def top5(weights):
-        recs = {}
-        for imp, c in cands.items():
-            if not (c.get("scored") and c["lane"] == "performance"
-                    and c.get("benefit_status") not in BLOCKED_BENEFIT and c.get("ranked")):
-                continue
-            s, _ = expected_saved(c, medians, weights)
-            recs[imp] = s
-        p = percentile_rank([math.log1p(v) for v in recs.values()])
-        scored = {}
-        for imp, s in recs.items():
-            b = p[math.log1p(s)]
-            fs = feas.get(imp, {}).get("feasibility_score")
-            scored[imp] = 0.5 * fs + 0.5 * b if fs is not None else None
-        order = sorted(scored, key=lambda i: (-(scored[i] or 0), i))
-        return order[:5], scored
+        _per, order = score_with(weights, cands, feas, medians)
+        return order[:5], _per
 
     base_top5, _ = top5(WEIGHTS)
+    # The base case of the perturbation MUST reproduce the published order, or the
+    # perturbation is not measuring what section 2-d asks. Asserted, not assumed.
+    if base_top5 != ranked[:5]:
+        raise SystemExit(
+            "sensitivity base case disagrees with the published ranking "
+            f"({base_top5} vs {ranked[:5]}) — the two passes are not the same "
+            "computation, so RANKING_UNSTABLE would be meaningless")
     perturbed = {}
     for direction, sign in (("pessimistic", -1), ("optimistic", +1)):
         w = {k: min(1.0, max(0.0, v + sign * PERTURBATION)) for k, v in WEIGHTS.items()}

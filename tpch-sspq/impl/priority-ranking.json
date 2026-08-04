@@ -669,7 +669,6 @@
         "heap / scan",
         "thread pool (if async workers are added)"
       ],
-      "total_score": null,
       "triage_note": null,
       "unprovable_on_this_host_queries": [],
       "upstream_scope_gate": false,
@@ -954,7 +953,7 @@
       "loc_high": 150,
       "loc_likely": 60,
       "loc_low": 20,
-      "log1p_expected_saved_seconds": 1.369312,
+      "log1p_expected_saved_seconds": 1.369313,
       "mde_comparison": [
         {
           "corrected_mde": 0.044582871784675966,
@@ -1218,9 +1217,16 @@
       "mde_comparison": [
         {
           "corrected_mde": 0.3559526610022119,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.7275,
           "q": "Q07",
-          "verdict": "resolvable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": true,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "resolvable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         },
         {
           "corrected_mde": 0.085414123958949,
@@ -1362,9 +1368,16 @@
       "mde_comparison": [
         {
           "corrected_mde": 0.6770836295377326,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.1215,
           "q": "Q08",
-          "verdict": "unprovable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": false,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "unprovable",
+            "single_pooled_geometric_mean": "unprovable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         },
         {
           "corrected_mde": 0.08536047098560715,
@@ -1431,9 +1444,7 @@
       ],
       "total_score": 52.0,
       "triage_note": "PRIORITY_DISAGREEMENT \u2014 the 0.138 s projection does not support the registry's P0. That is a priority note, not a benefit block; the discovery Priority field is left untouched.",
-      "unprovable_on_this_host_queries": [
-        "Q08"
-      ],
+      "unprovable_on_this_host_queries": [],
       "upstream_scope_gate": false,
       "write_path_flag": false
     },
@@ -1469,13 +1480,20 @@
       "loc_high": 200,
       "loc_likely": 80,
       "loc_low": 30,
-      "log1p_expected_saved_seconds": 0.071831,
+      "log1p_expected_saved_seconds": 0.071832,
       "mde_comparison": [
         {
           "corrected_mde": 0.6770836295377326,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.1056,
           "q": "Q08",
-          "verdict": "unprovable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": false,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "unprovable",
+            "single_pooled_geometric_mean": "unprovable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         },
         {
           "corrected_mde": 0.085414123958949,
@@ -1658,9 +1676,7 @@
       ],
       "total_score": 54.45,
       "triage_note": "BENEFIT_BASIS_CORRECTED \u2014 the benefit MUST be computed from the realistic 0.47 core-s target, never from the 32.7% band upper bound (AMEND-F section 2-b-1, cited by name).",
-      "unprovable_on_this_host_queries": [
-        "Q08"
-      ],
+      "unprovable_on_this_host_queries": [],
       "upstream_scope_gate": false,
       "write_path_flag": true
     },
@@ -1702,9 +1718,16 @@
       "mde_comparison": [
         {
           "corrected_mde": 0.085414123958949,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.35171,
           "q": "Q09",
-          "verdict": "resolvable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": true,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "resolvable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         }
       ],
       "per_query_terms": [
@@ -1778,9 +1801,16 @@
       "mde_comparison": [
         {
           "corrected_mde": 0.2454387278412416,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.23877,
           "q": "Q10",
-          "verdict": "unprovable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": false,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "unprovable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         },
         {
           "corrected_mde": 0.18193745098869762,
@@ -1862,9 +1892,7 @@
       ],
       "total_score": 76.5,
       "triage_note": null,
-      "unprovable_on_this_host_queries": [
-        "Q10"
-      ],
+      "unprovable_on_this_host_queries": [],
       "upstream_scope_gate": false,
       "write_path_flag": false
     },
@@ -2104,13 +2132,20 @@
       "loc_high": 120,
       "loc_likely": 40,
       "loc_low": 10,
-      "log1p_expected_saved_seconds": 1.060015,
+      "log1p_expected_saved_seconds": 1.060014,
       "mde_comparison": [
         {
           "corrected_mde": 0.18193745098869762,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.5843,
           "q": "Q11",
-          "verdict": "resolvable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": true,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "resolvable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         },
         {
           "corrected_mde": 0.05567616056439928,
@@ -2197,9 +2232,16 @@
       "mde_comparison": [
         {
           "corrected_mde": 0.04188820607142341,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.05447,
           "q": "Q12",
-          "verdict": "resolvable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": true,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "resolvable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         },
         {
           "corrected_mde": 0.08536047098560715,
@@ -2520,9 +2562,16 @@
       "mde_comparison": [
         {
           "corrected_mde": 0.1556922468945616,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.2599,
           "q": "Q16",
-          "verdict": "resolvable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": true,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "resolvable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         }
       ],
       "per_query_terms": [
@@ -2688,7 +2737,6 @@
         "list file",
         "hash structure (new)"
       ],
-      "total_score": null,
       "triage_note": null,
       "unprovable_on_this_host_queries": [],
       "upstream_scope_gate": false,
@@ -2811,9 +2859,16 @@
       "mde_comparison": [
         {
           "corrected_mde": 0.0705380418040567,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.99177,
           "q": "Q19",
-          "verdict": "resolvable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": true,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "resolvable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         }
       ],
       "per_query_terms": [
@@ -2908,7 +2963,6 @@
         "executor / join",
         "predicate evaluation"
       ],
-      "total_score": null,
       "triage_note": null,
       "unprovable_on_this_host_queries": [],
       "upstream_scope_gate": false,
@@ -2952,9 +3006,16 @@
       "mde_comparison": [
         {
           "corrected_mde": 0.08871381073111173,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.20903,
           "q": "Q22",
-          "verdict": "resolvable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": true,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "resolvable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         }
       ],
       "per_query_terms": [
@@ -3018,13 +3079,20 @@
       "loc_high": 130,
       "loc_likely": 50,
       "loc_low": 20,
-      "log1p_expected_saved_seconds": 0.025521,
+      "log1p_expected_saved_seconds": 0.02552,
       "mde_comparison": [
         {
           "corrected_mde": 0.08871381073111173,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.0231,
           "q": "Q22",
-          "verdict": "unprovable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": false,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "unprovable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         }
       ],
       "per_query_terms": [
@@ -3054,9 +3122,7 @@
       ],
       "total_score": 57.9,
       "triage_note": null,
-      "unprovable_on_this_host_queries": [
-        "Q22"
-      ],
+      "unprovable_on_this_host_queries": [],
       "upstream_scope_gate": false,
       "write_path_flag": false
     },
@@ -3091,13 +3157,20 @@
       "loc_high": 300,
       "loc_likely": 120,
       "loc_low": 40,
-      "log1p_expected_saved_seconds": 0.022681,
+      "log1p_expected_saved_seconds": 0.02268,
       "mde_comparison": [
         {
           "corrected_mde": 0.08871381073111173,
+          "note": "section 6-d-1 escalation: the combination rule is the user's decision, so no UNPROVABLE_ON_THIS_HOST verdict is asserted for this query. Where every candidate rule agrees (verdict_is_rule_invariant true) the outcome does not depend on the pending decision.",
           "predicted_effect_fraction": 0.0205,
           "q": "Q22",
-          "verdict": "unprovable"
+          "verdict": "withheld_pending_user_factor_decision",
+          "verdict_is_rule_invariant": false,
+          "would_be_under_each_candidate_rule": {
+            "max_observed_factor": "unprovable",
+            "single_pooled_geometric_mean": "resolvable",
+            "wall_magnitude_dependent": "resolvable"
+          }
         }
       ],
       "per_query_terms": [
@@ -3129,9 +3202,7 @@
       ],
       "total_score": 51.2,
       "triage_note": null,
-      "unprovable_on_this_host_queries": [
-        "Q22"
-      ],
+      "unprovable_on_this_host_queries": [],
       "upstream_scope_gate": false,
       "write_path_flag": false
     }
@@ -3393,7 +3464,7 @@
     "Q21": 52.586499,
     "Q22": 1.119
   },
-  "generated_utc": "2026-08-04T11:58:53Z",
+  "generated_utc": "2026-08-04T14:08:46Z",
   "id_unassigned_new_candidates": [
     {
       "decision_requested": "Whether to allocate an IMP ID and, if so, whether the performance and measurement-correctness arms are one candidate or two.",
@@ -3604,8 +3675,8 @@
     "base_top5": [
       "IMP-015",
       "IMP-009",
-      "IMP-014",
       "IMP-018",
+      "IMP-014",
       "IMP-027"
     ],
     "candidates_that_swapped": [
@@ -3622,8 +3693,8 @@
           "IMP-015",
           "IMP-009",
           "IMP-018",
-          "IMP-014",
-          "IMP-027"
+          "IMP-027",
+          "IMP-014"
         ],
         "weights": {
           "attribution": 0.85,
@@ -3640,8 +3711,8 @@
         "top5": [
           "IMP-015",
           "IMP-009",
-          "IMP-014",
           "IMP-018",
+          "IMP-014",
           "IMP-003"
         ],
         "weights": {
