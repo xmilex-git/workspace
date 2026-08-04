@@ -43,13 +43,27 @@ def extract_section_2(ssot_path):
 
 
 def cell(x):
+    """One markdown table cell, with the pipe escaped on EVERY path.
+
+    The escaping has to be uniform or it is not a guarantee. An earlier revision
+    escaped only the string path and let the list path join elements raw, so a list
+    field whose element happened to contain a pipe would have silently split the row
+    into an extra column. Column 10 (predecessor / alternative / containment) does
+    pass raw lists, so that hazard was reachable and merely latent — no element
+    currently contains a pipe. Escaping is now applied once, at the end, to whatever
+    the value was reduced to.
+    """
     if x is None:
         return "—"
     if isinstance(x, float):
-        return f"{x:g}"
+        return _esc(f"{x:g}")
     if isinstance(x, list):
-        return "; ".join(str(i) for i in x) if x else "—"
-    return str(x).replace("|", "\\|").replace("\n", " ")
+        return _esc("; ".join(str(i) for i in x)) if x else "—"
+    return _esc(str(x))
+
+
+def _esc(s):
+    return s.replace("|", "\\|").replace("\n", " ")
 
 
 def fmt_pct(x):
