@@ -152,38 +152,94 @@ def main():
       "the **larger** of the two used, so the MDE is not flattered by pairing "
       "temporally adjacent blocks.")
     w("")
-    w("| Query | paired CV | pairing used | **MDE** | median wall (s) | smallest provable saving (s) |")
-    w("|---|---:|---|---:|---:|---:|")
+    w("| Query | fast-regime paired CV | pairing used | raw MDE | inflation applied | **CORRECTED MDE** | median wall (s) | smallest provable saving (s) |")
+    w("|---|---:|---|---:|---:|---:|---:|---:|")
     for q in sorted(qs):
         r = qs[q]
-        m, med = r.get("mde"), r.get("median_wall_seconds")
+        raw, med = r.get("mde"), r.get("median_wall_seconds")
+        cm = r.get("corrected_mde")
+        inf = r.get("inflation_factor_applied")
         w(f"| {q} | {pct(r.get('paired_cv'))} | {r.get('paired_cv_source', '—')} | "
-          f"**{pct(m)}** | {s(med)} | {s(m * med) if (m and med) else '—'} |")
+          f"{pct(raw)} | {('measured directly' if inf is None else f'{inf:.4f}x')} | "
+          f"**{pct(cm)}** | {s(med)} | {s(cm * med) if (cm and med) else '—'} |")
     w("")
+    w("### The correction is mandatory, and why (section 6-d-1)")
+    w("")
+    w("The fast Phase 1A regime runs all six blocks of a query on **one continuous server "
+      "instance**, so those blocks share buffer, page-table and thread-pool state and are "
+      "**not independent**. Phase 2's `B → P → P → B` A/B blocks **are** independent, because "
+      "swapping binaries forces a restart. The fast regime therefore measures a strictly "
+      "smaller dispersion than the regime the MDE is actually spent in, and feeding an "
+      "uncorrected fast-regime paired CV into `MDE = max(1%, 2 × paired_CV)` would produce an "
+      "MDE smaller than the noise present in a real A/B block — **the campaign would "
+      "over-accept, reporting restart noise as real improvement**.")
+    w("")
+    w("`corrected_MDE_q = max(1%, 2 × inflation × paired_CV_fast_q)` for Q07–Q22. Q01–Q06 use "
+      "their **directly measured** restart-regime paired CV instead: there is no reason to "
+      "estimate a quantity that was measured. The inflation factor, its six per-query points, "
+      "their spread and the written reason for how they were combined are published "
+      "separately in `tpch-sspq/impl/restart-variance-calibration.json` so the factor is "
+      "auditable independently of this file.")
+    w("")
+    corr = d.get("restart_variance_correction") or {}
+    comb = corr.get("combination_rule") or {}
+    if comb:
+        w(f"**Combination rule chosen: `{comb.get('rule')}`.** "
+          + (f"Value {comb.get('value'):.4f}. " if comb.get("value") is not None else "")
+          + (f"Form `{comb.get('form')}` with a={comb.get('a')}, b={comb.get('b')}. "
+             if comb.get("form") else ""))
+        w("")
+        w(comb.get("reason", ""))
+        w("")
+        sp = corr.get("inflation_factor_spread") or {}
+        if sp:
+            w(f"Per-query clamped factors: "
+              + ", ".join(f"{k} {v:.4f}" for k, v in
+                          (corr.get("inflation_factors_clamped") or {}).items())
+              + f". Spread {sp.get('min'):.4f}..{sp.get('max'):.4f} "
+                f"(ratio {sp.get('ratio'):.2f}), geometric mean {sp.get('geometric_mean'):.4f}, "
+                f"pearson r of ln(inflation) vs ln(wall) = "
+                f"{'n/a' if sp.get('pearson_r_ln_inflation_vs_ln_wall') is None else format(sp['pearson_r_ln_inflation_vs_ln_wall'], '.4f')}.")
+            w("")
+        for n in (corr.get("clamp_notes") or []):
+            w(f"- {n}")
+        if corr.get("clamp_notes"):
+            w("")
+        sm = corr.get("sensitivity_max_factor") or {}
+        if sm:
+            flips = sm.get("queries_whose_corrected_mde_changes_under_the_max_factor") or []
+            w(f"Sensitivity: the most conservative single factor available is "
+              f"{sm.get('max_clamped_factor'):.4f}x. Queries whose corrected MDE would change "
+              f"under it: {', '.join(flips) if flips else 'none'}. "
+              + sm.get("note", ""))
+            w("")
 
-    coarse = sorted((r for r in qs.values() if (r.get("mde") or 0) > 0.03),
-                    key=lambda r: -(r.get("mde") or 0))
-    fine = sorted((r for r in qs.values() if r.get("mde") is not None
-                   and r["mde"] <= 0.01 + 1e-12), key=lambda r: r["qnn"])
+    def _cm(r):
+        return r.get("corrected_mde")
+
+    coarse = sorted((r for r in qs.values() if (_cm(r) or 0) > 0.03),
+                    key=lambda r: -(_cm(r) or 0))
+    fine = sorted((r for r in qs.values() if _cm(r) is not None
+                   and _cm(r) <= 0.01 + 1e-12), key=lambda r: r["qnn"])
     w("### Queries where a few-percent effect CANNOT be proven on this host")
     w("")
     if coarse:
-        w("These queries' MDE exceeds 3%. A candidate predicting a smaller effect on "
-          "them must be flagged `UNPROVABLE_ON_THIS_HOST` **at Phase 1B ranking "
+        w("These queries' **corrected** MDE exceeds 3%. A candidate predicting a smaller "
+          "effect on them must be flagged `UNPROVABLE_ON_THIS_HOST` **at Phase 1B ranking "
           "time** (section 6-d) — before it is queued, not after twelve pairs of "
           "measurement have come back inconclusive.")
         w("")
-        w("| Query | MDE | median wall (s) | an effect below this is undecidable here |")
+        w("| Query | corrected MDE | median wall (s) | an effect below this is undecidable here |")
         w("|---|---:|---:|---|")
         for r in coarse:
-            w(f"| {r['qnn']} | **{pct(r['mde'])}** | {s(r['median_wall_seconds'])} | "
-              f"< {s(r['mde'] * r['median_wall_seconds'])} s |")
+            w(f"| {r['qnn']} | **{pct(_cm(r))}** | {s(r['median_wall_seconds'])} | "
+              f"< {s(_cm(r) * r['median_wall_seconds'])} s |")
     else:
-        w("No query's MDE exceeds 3%.")
+        w("No query's corrected MDE exceeds 3%.")
     w("")
     if fine:
         w(f"At the other end, {', '.join(r['qnn'] for r in fine)} sit at the 1% "
-          "floor — their measured paired CV is below 0.5%, so the formula's 1% "
+          "floor — even after inflation their paired CV is below 0.5%, so the formula's 1% "
           "floor, not the noise, is what limits them.")
         w("")
 

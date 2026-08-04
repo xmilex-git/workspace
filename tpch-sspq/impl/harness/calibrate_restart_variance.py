@@ -407,6 +407,48 @@ def main():
     with open(p, "w") as f:
         json.dump(out, f, indent=2, sort_keys=True)
     print(f"wrote {p}")
+
+    # Section 6-d-1 step 7 has two halves. The file above satisfies "the derivation MUST
+    # also be published separately ... so the factor is auditable independently of the
+    # baseline file". The injection below satisfies the first half: "fresh-baseline.json
+    # MUST carry, per query, the fast-regime CV, the inflation factor applied, and the
+    # resulting corrected MDE." The baseline's own measured fields are never rewritten —
+    # only correction fields are added.
+    fb = os.path.join(out_dir, "fresh-baseline.json")
+    if os.path.exists(fb):
+        with open(fb) as f:
+            base = json.load(f)
+        for q, rec in base.get("queries", {}).items():
+            c = out["corrected_mde"].get(q, {})
+            rec["fast_regime_paired_cv"] = c.get("fast_regime_paired_cv")
+            rec["inflation_factor_applied"] = c.get("inflation_factor_applied")
+            rec["corrected_mde"] = c.get("corrected_mde")
+            rec["corrected_mde_basis"] = c.get("basis")
+            rec["corrected_mde_basis_reason"] = c.get("basis_reason")
+        base["restart_variance_correction"] = {
+            "applied": True,
+            "amendment": "AMEND-G section 6-d-1",
+            "combination_rule": out["combination"],
+            "inflation_factors_clamped": out["inflation_factors_clamped"],
+            "inflation_factor_spread": out["inflation_factor_spread"],
+            "clamp_notes": out["clamp_notes"],
+            "sensitivity_max_factor": out["sensitivity_max_factor"],
+            "derivation_published_separately_at": "tpch-sspq/impl/restart-variance-calibration.json",
+            "rule_established": out["rule_established"],
+            "invalidity_cleared": ("Section 3-c-1 states that a Phase 1A baseline produced "
+                                   "under the fast regime is INVALID as an MDE source until "
+                                   "the section 6-d-1 correction has been applied. It has "
+                                   "now been applied."),
+        }
+        base["mde_formula_corrected"] = ("max(1%, 2 x inflation x paired_CV_fast) for Q07-Q22; "
+                                         "Q01-Q06 use their directly measured restart-regime "
+                                         "paired CV (section 6-d-1 steps 5 and 6)")
+        with open(fb, "w") as f:
+            json.dump(base, f, indent=2, sort_keys=True)
+        print(f"updated {fb} — per-query fast CV / inflation / corrected MDE (step 7)")
+    else:
+        print(f"WARNING {fb} absent — run aggregate_baseline.py first", file=sys.stderr)
+
     print(f"rule={out['combination']['rule']}")
     print(f"factors={json.dumps(out['inflation_factors_clamped'])}")
     return 0
