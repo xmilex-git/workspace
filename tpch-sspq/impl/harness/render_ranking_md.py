@@ -233,9 +233,22 @@ def main():
                         f"({t['evidence_level']} w={t['evidence_weight']:g})"
                         for t in r["per_query_terms"]
                         if t.get("conservative_effect_fraction")) or "no non-zero term"
-        rel = " / ".join([cell(r.get("predecessors")), cell(r.get("alternatives")),
-                          cell(r.get("containment"))])
-        elig = cell(r.get("eligibility"))
+        # Composites are assembled from RAW values and escaped exactly ONCE, by the
+        # cell() call at the row. An earlier revision escaped each sub-value with
+        # cell() and then passed the composite through cell() again, which
+        # double-escaped: a pipe in the data became "\\|", and under GFM that renders
+        # as a literal backslash followed by a live column delimiter — the very split
+        # the escaping exists to prevent. Escaping once is the only correct number.
+        def _join_raw(v):
+            if v is None:
+                return "—"
+            if isinstance(v, list):
+                return "; ".join(str(i) for i in v) if v else "—"
+            return str(v)
+
+        rel = " / ".join([_join_raw(r.get("predecessors")), _join_raw(r.get("alternatives")),
+                          _join_raw(r.get("containment"))])
+        elig = _join_raw(r.get("eligibility"))
         extra = []
         if r.get("blocker"):
             extra.append("BLOCKER: " + r["blocker"])
@@ -258,7 +271,7 @@ def main():
         if r.get("no_numeric_basis"):
             extra.append("NO_NUMERIC_BASIS")
         if extra:
-            elig += " — " + " | ".join(extra)
+            elig += " — " + " · ".join(extra)
         w("| " + " | ".join([
             f"`{imp}`", r["lane"], cell(base), cell(eff),
             f"{r['expected_saved_seconds']:.4f}",
