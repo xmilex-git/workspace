@@ -594,16 +594,21 @@ def main():
             "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
         p = os.path.join(out_dir, "restart-variance-calibration-STOP.json")
+        # A G1/G2 stop happens before any combination rule exists, so the document is by
+        # definition in the escalated state; guard it on that rather than leaving the one
+        # write path in this file unguarded.
+        state_labels.check_json(blocker, True, "restart-variance-calibration-STOP.json")
         with open(p, "w") as f:
             json.dump(blocker, f, indent=2, sort_keys=True)
         print(f"STOP_AND_REPORT: {e}", file=sys.stderr)
         print(f"wrote {p}", file=sys.stderr)
         return 3
     p = os.path.join(out_dir, "restart-variance-calibration.json")
+    # Fail closed rather than emit a document that misstates its own state. Values only:
+    # a permanent KEY name may legitimately collide with a forbidden phrase.
+    state_labels.check_json(out, state_labels.escalated_from_calibration(out),
+                            "restart-variance-calibration.json")
     payload = json.dumps(out, indent=2, sort_keys=True)
-    # Fail closed rather than emit a document that misstates its own state.
-    state_labels.check(payload, state_labels.escalated_from_calibration(out),
-                       "restart-variance-calibration.json")
     with open(p, "w") as f:
         f.write(payload)
     print(f"wrote {p}")
@@ -660,9 +665,9 @@ def main():
         base["mde_formula_corrected"] = ("max(1%, 2 x inflation x paired_CV_fast) for Q07-Q22; "
                                          "Q01-Q06 use their directly measured restart-regime "
                                          "paired CV (section 6-d-1 steps 5 and 6)")
+        state_labels.check_json(base, state_labels.escalated_from_baseline(base),
+                                "fresh-baseline.json (section 6-d-1 step 7 injection)")
         fb_payload = json.dumps(base, indent=2, sort_keys=True)
-        state_labels.check(fb_payload, state_labels.escalated_from_baseline(base),
-                           "fresh-baseline.json (section 6-d-1 step 7 injection)")
         with open(fb, "w") as f:
             f.write(fb_payload)
         print(f"updated {fb} — per-query fast CV / inflation / corrected MDE (step 7)")

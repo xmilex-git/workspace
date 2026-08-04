@@ -80,6 +80,32 @@ class StateLabelViolation(SystemExit):
     """Raised instead of emitting an artifact that misstates its own state."""
 
 
+def _string_values(obj):
+    """Every string VALUE in a JSON document, excluding key names.
+
+    Key names are part of the schema, not prose, and a permanent key can legitimately
+    collide with a forbidden phrase: `user_decision_required` is emitted unconditionally
+    (its VALUE is the state-dependent part, None once a rule is chosen) while
+    FORBIDDEN_WHEN_SETTLED contains "USER_DECISION_REQUIRED". Checking the serialized
+    document would therefore have failed a correct settled-rule run on its own schema.
+    Values are what make claims; keys are not.
+    """
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            yield from _string_values(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _string_values(v)
+
+
+def check_json(obj, escalated, what):
+    """Guard a JSON document by inspecting its string VALUES only (see _string_values)."""
+    check("\n".join(_string_values(obj)), escalated, what)
+    return obj
+
+
 def check(text, escalated, what):
     """Refuse to emit `text` if it contains a phrase forbidden in this state.
 

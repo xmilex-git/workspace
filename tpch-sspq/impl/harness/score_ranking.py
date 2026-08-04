@@ -21,6 +21,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import campaign_config as cfg  # noqa: E402
+import state_labels  # noqa: E402
 
 WEIGHTS = {"direct_ab": 1.00, "lower_bound": 0.90, "attribution": 0.70,
            "projection": 0.50, "upper_bound": 0.35, "unmeasured": 0.00}
@@ -437,6 +438,12 @@ def main():
     impl_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(cfg.REPO, "impl")
     out = build(impl_dir)
     p = os.path.join(impl_dir, "priority-ranking.json")
+    # This file copies calibration prose verbatim (the combination rule, its reason, the
+    # candidate rules, the provisional factor, effect_on_this_ranking), so it is just as
+    # able to misstate the state as the documents it quotes. Guard it on the same fact.
+    state_labels.check_json(
+        out, bool((out.get("calibration_status") or {}).get("STOP_AND_REPORT")),
+        "priority-ranking.json")
     with open(p, "w") as f:
         json.dump(out, f, indent=2, sort_keys=True)
     print(f"wrote {p}")

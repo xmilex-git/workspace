@@ -1,6 +1,6 @@
 # Phase 1B priority ranking — campaign `tpch-sspq-impl-r1-20260803`
 
-Generated 2026-08-04T15:55:55Z. Pinned norm `tpch-sspq/IMPL-SSOT.md` commit `eccdd1ae58cd733ed3121585146d68b9ae54a73f`, blob `15b42ddca521444fa54b34b0fa8477ed2df643f6` (AMEND-A..G).
+Generated 2026-08-04T16:39:50Z. Pinned norm `tpch-sspq/IMPL-SSOT.md` commit `eccdd1ae58cd733ed3121585146d68b9ae54a73f`, blob `15b42ddca521444fa54b34b0fa8477ed2df643f6` (AMEND-A..G).
 
 **Phase gate.** This document is a Phase 1 deliverable. Phase 2 — writing any engine code — MUST NOT begin until the user has explicitly approved this ranking and the resulting candidate queue. There is no implicit promotion from Phase 1 to Phase 2.
 

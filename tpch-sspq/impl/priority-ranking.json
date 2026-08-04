@@ -3464,7 +3464,7 @@
     "Q21": 52.586499,
     "Q22": 1.119
   },
-  "generated_utc": "2026-08-04T15:55:55Z",
+  "generated_utc": "2026-08-04T16:39:50Z",
   "id_unassigned_new_candidates": [
     {
       "decision_requested": "Whether to allocate an IMP ID and, if so, whether the performance and measurement-correctness arms are one candidate or two.",
