@@ -34,9 +34,10 @@
     },
     {
       "id": "MD-3",
-      "decision": "An effect measured only outside the WARM-converged regime is not removable from a WARM baseline.",
-      "reason": "Phase 1A proves WARM convergence before measuring (section 3-c step 3), so fresh_base_median_q is a saturated-regime value. IMP-018's direct A/B is 3.544 s -> 1.342 s where 3.544 s is the FIRST connection's block median and 1.342 s is the SATURATED one (registry measurement.cubrid_block_median_s = {connection_1_of_the_query: 3.544, saturated: 1.342}); the connection sweep converges to 1.344-1.349 s by connection 6. The cost the candidate removes is therefore already absent from the baseline it would be scored against. The evidence is sound — triage confirmed it — but soundness is about the defect being real, not about the WARM baseline containing it.",
-      "consequence": "IMP-018 contributes 0 expected saved seconds while remaining a genuine defect for cold or short-lived-connection workloads. That distinction is stated in the ranking rather than resolved by arithmetic."
+      "decision": "An effect measured only outside the WARM-converged regime is not removable from a WARM baseline — but whether a given cost is outside that regime is a question for THIS campaign's baseline, not for the previous campaign's.",
+      "reason": "Phase 1A proves WARM convergence before measuring (section 3-c step 3), so it is tempting to assume any first-touch cost is absent from fresh_base_median_q. That reasoning was applied to IMP-018 in the first draft of this file and it was WRONG. The WARM gate proves STATEMENT-level convergence within one connection; it cannot converge a PER-CONNECTION structure, and Phase 1A opens one direct `csql -C` connection per block (headline_run.py:189, connection_mode `single-connection-four-statements`). A per-connection cost is therefore re-paid by every block and IS in the baseline.",
+      "consequence": "The correction is not theoretical — this campaign's own baseline settled it. See the IMP-018 Q11 term, where three independent observations show the cost present, and the Q11 baseline caveat it forces.",
+      "how_it_was_caught": "The mandatory 'divergence from the previous measurement campaign' comparison (fresh-baseline.md) flagged Q11 at +140.57%, by far the largest divergence in the sweep. Section 3 requires an unexplained divergence to be explained rather than noted; explaining it refuted the assumption."
     },
     {
       "id": "MD-4",
@@ -670,11 +671,11 @@
       "terms": [
         {
           "q": "Q11",
-          "fraction": 0.0,
+          "fraction": 0.5843,
           "evidence": "direct_ab",
           "wall_basis": true,
-          "basis": "MD-3. The direct A/B is 3.544 s -> 1.342 s, but registry measurement.cubrid_block_median_s labels 3.544 s 'connection_1_of_the_query' and 1.342 s 'saturated', and connection_sweep_median_s converges to 1.344-1.349 s by connection 6. Phase 1A proves WARM convergence before measuring, so fresh_base_median_Q11 is the saturated value and does not contain the cost this candidate removes. Contributes 0 s against a WARM baseline while remaining a real defect for cold or short-lived-connection workloads.",
-          "citation": "improvement-registry.json IMP-018.measurement.cubrid_block_median_s and .connection_sweep_median_s"
+          "basis": "CORRECTED (see MD-3). The cost IMP-018 removes IS present in this campaign's Q11 baseline. Three independent observations: (i) the fresh Phase 1A median is 3.2285 s, +140.57% against the previous campaign's 1.342 s — the largest divergence in the sweep — and within 9% of IMP-018's own measured `connection_1_of_the_query` value of 3.544 s, i.e. this baseline sits in the amplified regime, not the saturated one; (ii) Q11's six block medians decline MONOTONICALLY 3.529 / 3.404 / 3.298 / 3.159 / 3.040 / 2.961, which is the across-CONNECTION decay signature the registry records as `connection_sweep_median_s` [1.581, 1.54, 1.436, 1.353, 1.352, 1.349, 1.344, 1.346] with `connection_sweep_reads_per_statement` [49292, 34538, 18306, 3519, 135, 119, 127, 124]; Phase 1A opens one connection per block, so each block re-pays it; (iii) Q11 is the ONLY query of 22 with a monotone across-block drift above 3% (-16.10%; every other query is within +/-2.42% and non-monotone), so the drift is specific to this mechanism rather than an artefact of the fast regime. The fraction is the CONSERVATIVE of the two readings the A/B supports: the raw observed rate 1 - 1.342/3.544 = 0.62133, versus taking the A/B's measured saturated endpoint 1.342 s against THIS campaign's median, (3.2285 - 1.342)/3.2285 = 0.58430. The smaller is used, so the term cannot over-claim, and the previous campaign's absolute time is never used as the 'before' (section 3) — the before is this campaign's own fresh median.",
+          "citation": "improvement-registry.json IMP-018.measurement.{cubrid_block_median_s,connection_sweep_median_s,connection_sweep_reads_per_statement}; tpch-sspq/impl/fresh-baseline.json Q11 (blocks + divergence); raw/Q11/block[1-6]-headline.json; harness/headline_run.py:189"
         },
         {
           "q": "Q14",
@@ -684,7 +685,8 @@
           "citation": "improvement-registry.json IMP-018.q_relations"
         }
       ],
-      "ranking_rationale": "Sound evidence, zero benefit against THIS baseline: the 2.6408x is a first-connection effect and Phase 1A proves WARM convergence before measuring, so the cost is already absent from fresh_base_median_Q11. Real for cold or short-lived-connection workloads. Write-path candidate."
+      "ranking_rationale": "Corrected upward after this campaign's own baseline refuted the first-draft reasoning: Q11's fresh median (3.2285 s, +140.57% vs the previous campaign) sits in the amplified per-connection regime, and its block medians decay monotonically -16.10% across the six connections — the only query in the sweep that does. The 2.64x direct A/B therefore applies to a cost this baseline really carries, making it one of the larger honestly wall-measured savings in the set. Write-path candidate, so section 11-a stop-and-report before implementing.",
+      "baseline_caveat": "Q11's own baseline is regime-ambiguous and this must be carried into any Phase 2 A/B on it. Its six block medians are a monotone TREND, not exchangeable draws, so (a) its paired CV 0.005940 measures the trend rather than a noise floor and understates the true dispersion, and (b) its median depends on how many connections the block sequence made. Section 6-c's B->P->P->B restarts per block, which resets the per-connection state every block, so a Phase 2 A/B on Q11 will not reproduce this trend and its noise floor must be re-derived under that regime rather than taken from here."
     },
     "IMP-019": {
       "lane": "performance",

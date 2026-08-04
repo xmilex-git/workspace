@@ -365,6 +365,59 @@ def build():
                                 "property": "cannot under-correct; cannot cause a false accept"},
     }
 
+    # ---- diagnostic: is the restart penalty MULTIPLICATIVE or ADDITIVE? ------
+    # This is reported, not applied. Section 6-d-1 fixes the estimator as a RATIO
+    # (inflation = CV_restart / CV_fast) and the correction as
+    # corrected_MDE = max(1%, 2 x inflation x CV_fast), which for a calibration query
+    # is just 2 x CV_restart. The open question the escalation hands to the user is
+    # therefore "how should CV_restart be extrapolated for Q07-Q22 from CV_fast", and
+    # the ratio model answers "multiplicatively". The six points let that assumption
+    # itself be tested, and it matters a great deal: a restart empties the pinned
+    # 8192M data buffer, which plausibly adds a roughly CONSTANT dispersion term
+    # rather than scaling the existing one. Under an additive penalty the RATIO is
+    # large exactly where CV_fast is small, which is precisely the pattern observed —
+    # and it is why applying Q01's 15.3x to Q08, whose fast CV is already 22x larger
+    # than Q01's, produces an MDE that is not a physically plausible restart penalty.
+    deltas = {q: (per_query[q]["restart_regime"]["paired_cv"]
+                  - per_query[q]["fast_regime"]["paired_cv"]) for q in CALIB_QUERIES}
+    dv = [deltas[q] for q in CALIB_QUERIES]
+    ratio_cv_of_factors = (statistics.stdev(fv) / statistics.mean(fv)) if len(fv) > 1 else None
+    delta_cv = (statistics.stdev(dv) / statistics.mean(dv)) if len(dv) > 1 and statistics.mean(dv) else None
+    combination["additive_vs_multiplicative_diagnostic"] = {
+        "status": "REPORTED, NOT APPLIED — section 6-d-1 fixes the ratio estimator; this "
+                  "diagnostic exists so the user's choice is informed rather than blind",
+        "multiplicative_model": {
+            "quantity": "inflation_q = CV_restart_q / CV_fast_q",
+            "per_query": {q: factors[q] for q in CALIB_QUERIES},
+            "spread_ratio": spread_ratio,
+            "relative_sd": ratio_cv_of_factors,
+        },
+        "additive_model": {
+            "quantity": "delta_q = CV_restart_q - CV_fast_q  (absolute dispersion the restart adds)",
+            "per_query": deltas,
+            "spread_ratio": (max(dv) / min(dv)) if min(dv) else None,
+            "relative_sd": delta_cv,
+            "max_delta": max(dv),
+        },
+        "reading": (
+            "Neither model is tight on six points, so this does not rescue the "
+            "calibration and does not overturn the escalation. What it does show is the "
+            "DIRECTION of the failure: the ratio is largest exactly where the "
+            "fast-regime CV is smallest (Q01 CV_fast "
+            f"{per_query['Q01']['fast_regime']['paired_cv']:.6f} -> factor {factors['Q01']:.2f}x; "
+            f"Q06 CV_fast {per_query['Q06']['fast_regime']['paired_cv']:.6f} -> factor "
+            f"{factors['Q06']:.2f}x) and smallest where it is largest (Q02 CV_fast "
+            f"{per_query['Q02']['fast_regime']['paired_cv']:.6f} -> factor {factors['Q02']:.2f}x). "
+            "That is the signature of an additive penalty being read through a "
+            "multiplicative estimator. The practical consequence is that the "
+            "max-factor fail-safe over-corrects hardest for the queries that need it "
+            "least: it takes Q08, whose fast CV is already the largest in the sweep, to "
+            "an MDE no real restart penalty would justify. The user's options are "
+            "therefore not only 'which factor' but 'is a multiplicative factor the right "
+            "shape at all', and collecting more blocks per calibration query is the one "
+            "path that answers it by measurement instead of by model choice."),
+    }
+
     def factor_for(wall_s, rule=None):
         rule = rule or combination["rule"]
         if rule == "wall_magnitude_dependent":

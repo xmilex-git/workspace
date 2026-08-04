@@ -231,6 +231,10 @@ def main():
             extra.append(r["campaign_status"])
         if r.get("triage_note"):
             extra.append("triage: " + r["triage_note"])
+        if r.get("baseline_caveat"):
+            extra.append("BASELINE CAVEAT: " + r["baseline_caveat"])
+        if r.get("acceptance_criterion_caveat"):
+            extra.append("acceptance-criterion caveat: " + r["acceptance_criterion_caveat"])
         if r.get("no_numeric_basis"):
             extra.append("NO_NUMERIC_BASIS")
         if extra:

@@ -1,556 +1,7 @@
 {
-  "PARTIAL": true,
-  "attempt_level_discards": {
-    "discarded_by_query": {
-      "Q01": 5,
-      "Q04": 3,
-      "Q05": 2,
-      "Q06": 4,
-      "Q07": 2
-    },
-    "discarded_by_reason": {
-      "INVALID_BACKGROUND_LOAD": 2,
-      "WARM_NOT_CONVERGED": 14
-    },
-    "interpretation": "A 30% attempt-discard rate, dominated by WARM non-convergence under the per-block restart, is itself evidence for AMEND-G: each discarded attempt is a full re-warm that the fast regime does not pay.",
-    "n_attempts_accepted": 36,
-    "n_attempts_discarded": 16,
-    "n_attempts_total": 53,
-    "note": "measure_block.sh writes per-attempt artifacts into work/<QNN>/, which the next block of the same query overwrites; only the driver log is a complete durable record. Parsed by extract_attempts.py."
-  },
-  "binaries": {
-    "csql": {
-      "build_id": "64a48dfc4cc163847e9ecb528448694e0b47f7fd",
-      "path": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base/bin/csql",
-      "sha256": "14b5b86865a5cafeb6b34ffa01a958b6d0e2da6e72d2e982e0527bac581a84b8"
-    },
-    "cub_master": {
-      "build_id": "54bb9c7cec32b4c2e887540fa84c711abca8b439",
-      "path": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base/bin/cub_master",
-      "sha256": "003cae2331d0d0632bc450cc7520c40fcbd88190b548e828af13a7b1b9a890a5"
-    },
-    "cub_server": {
-      "build_id": "af122f60daeddc3179fe31cd6b9b490f8ebb3f2a",
-      "path": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base/bin/cub_server",
-      "sha256": "16abc26afa1db16992b6213ecc02adc193d674eb8ba91f0963ae414abd953199"
-    }
-  },
-  "campaign_id": "tpch-sspq-impl-r1-20260803",
-  "cpu_contract": {
-    "collector_cpus": "20-23",
-    "mechanism": "taskset + numactl applied at process start (IMPL-SSOT section 3-a); never cpuset cgroups, never post-hoc re-pinning",
-    "membind_node": "0",
-    "sut_cpus": "0-15"
-  },
-  "cubrid_base_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
-  "cubrid_conf_sha256_as_installed": "ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff",
-  "database": "tpch_sf10_q1",
-  "estimator": {
-    "note": "The fast regime MUST be reduced with this identical estimator and these identical pairings, or the ratio CV_restart/CV_fast is not a measurement of the restart's contribution.",
-    "paired_cv": "sample SD of the signed relative differences (b-a)/mean(a,b) over base-vs-base block-median pairs, divided by sqrt(2) \u2014 the per-block CV implied by the paired spread (IMPL-SSOT section 3-c step 6)",
-    "pairings": {
-      "adjacent": "(b1,b2)(b3,b4)(b5,b6)",
-      "spaced": "(b1,b4)(b2,b5)(b3,b6) \u2014 mirrors the B-P-P-B slot spacing"
-    },
-    "selection": "the LARGER of the two pairings is used, so the noise floor is never understated"
-  },
-  "excluded": {
-    "Q07": "PARTIAL AND EXCLUDED \u2014 only block 1 of 6 completed before the driver was stopped for the regime change; block 2 was mid-flight in warm_establish and was discarded, not salvaged. One block cannot yield a paired CV."
-  },
-  "external_load_gate_core_s_per_s": 6.0,
-  "generated_utc": "2026-08-03T05:19:20Z",
-  "impl_ssot_amendment": "AMEND-G",
-  "impl_ssot_blob": "15b42ddca521444fa54b34b0fa8477ed2df643f6",
-  "impl_ssot_commit": "eccdd1ae58cd733ed3121585146d68b9ae54a73f",
-  "install_prefix": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base",
-  "next_step_when_campaign_resumes": [
-    "1. Run tpch-sspq/impl/harness/phase1a_fast_driver.sh (Q01-Q06 first).",
-    "2. Reduce the fast-regime blocks with the IDENTICAL estimator and pairings above.",
-    "3. inflation_q = restart_regime_paired_cv / fast_regime_paired_cv, per query.",
-    "4. Choose pooled vs wall-dependent FROM the six points, and justify in writing.",
-    "5. corrected_MDE_q = max(1%, 2 x inflation x fast_regime_paired_cv) for Q07-Q22; Q01-Q06 use their directly measured restart-regime paired CV."
-  ],
-  "partial_reason": "The campaign was paused by the user before the AMEND-G fast-regime sweep was started. This file therefore contains ONLY the restart-regime half of the section 6-d-1 calibration. NO fast-regime paired CV was measured for any query, so NO inflation factor has been derived and NO corrected MDE exists yet.",
-  "phase": "1A restart-variance calibration (section 6-d-1) \u2014 RESTART-REGIME HALF ONLY",
-  "pin_span_note": "The restart-regime calibration data spans TWO IMPL-SSOT pins. Blocks written before 2026-08-03T04:43:25Z carry ed6fb39f4ea39218b1a8243562083401678a2723 / 1118b18ff1718f8493d72921fb7bb8851e6a1d8c; blocks after it carry 2de2404ba3e39016c423a85900e5b04a39dfda14 / 111c281081785cd25f2b59d74b2a38dfaa75d7da (the AMEND-F commit). This does NOT affect the variance derivation: sections 3, 6, 7, 8 and 9 \u2014 every section that governs Phase 1A measurement \u2014 are byte-identical across the two blobs, proven by hashing each top-level section of both independently (work/BASELINE/repin-record.json). AMEND-F changed only the Phase 1B scoring inputs, the external_tracking lane and the upstream scope gate, none of which touch how a block is measured. The measurement contract under which every calibration block was collected is therefore identical.",
-  "queries": {
-    "Q01": {
-      "block_dispersion_cv": 0.010234769683021826,
-      "block_dispersion_sd_s": 0.3198672449629165,
-      "block_medians_s": [
-        31.405999,
-        31.581999,
-        31.035999,
-        30.902999,
-        30.973999,
-        31.616998
-      ],
-      "blocks_accepted": 6,
-      "blocks_invalidated": 0,
-      "corrected_mde": null,
-      "fast_regime_paired_cv": null,
-      "inflation_factor": null,
-      "median_wall_seconds": 31.220999,
-      "restart_regime_mde": 0.029761527527167597,
-      "restart_regime_paired_cv": 0.014880763763583799,
-      "restart_regime_paired_cv_adjacent": 0.0088433587112701,
-      "restart_regime_paired_cv_source": "spaced",
-      "restart_regime_paired_cv_spaced": 0.014880763763583799,
-      "restart_regime_pairs_adjacent": [
-        {
-          "a_s": 31.405999,
-          "b_s": 31.581999,
-          "pair": [
-            1,
-            2
-          ],
-          "relative_diff": 0.005588
-        },
-        {
-          "a_s": 31.035999,
-          "b_s": 30.902999,
-          "pair": [
-            3,
-            4
-          ],
-          "relative_diff": -0.004295
-        },
-        {
-          "a_s": 30.973999,
-          "b_s": 31.616998,
-          "pair": [
-            5,
-            6
-          ],
-          "relative_diff": 0.020546
-        }
-      ],
-      "restart_regime_pairs_spaced": [
-        {
-          "a_s": 31.405999,
-          "b_s": 30.902999,
-          "pair": [
-            1,
-            4
-          ],
-          "relative_diff": -0.016145
-        },
-        {
-          "a_s": 31.581999,
-          "b_s": 30.973999,
-          "pair": [
-            2,
-            5
-          ],
-          "relative_diff": -0.019439
-        },
-        {
-          "a_s": 31.035999,
-          "b_s": 31.616998,
-          "pair": [
-            3,
-            6
-          ],
-          "relative_diff": 0.018547
-        }
-      ],
-      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
-    },
-    "Q02": {
-      "block_dispersion_cv": 0.005620674031168381,
-      "block_dispersion_sd_s": 0.002041241452319317,
-      "block_medians_s": [
-        0.362,
-        0.36,
-        0.364,
-        0.364,
-        0.366,
-        0.363
-      ],
-      "blocks_accepted": 6,
-      "blocks_invalidated": 0,
-      "corrected_mde": null,
-      "fast_regime_paired_cv": null,
-      "inflation_factor": null,
-      "median_wall_seconds": 0.3635,
-      "restart_regime_mde": 0.01367942607164021,
-      "restart_regime_paired_cv": 0.006839713035820105,
-      "restart_regime_paired_cv_adjacent": 0.002967482576511304,
-      "restart_regime_paired_cv_source": "spaced",
-      "restart_regime_paired_cv_spaced": 0.006839713035820105,
-      "restart_regime_pairs_adjacent": [
-        {
-          "a_s": 0.362,
-          "b_s": 0.36,
-          "pair": [
-            1,
-            2
-          ],
-          "relative_diff": -0.00554
-        },
-        {
-          "a_s": 0.364,
-          "b_s": 0.364,
-          "pair": [
-            3,
-            4
-          ],
-          "relative_diff": 0.0
-        },
-        {
-          "a_s": 0.366,
-          "b_s": 0.363,
-          "pair": [
-            5,
-            6
-          ],
-          "relative_diff": -0.00823
-        }
-      ],
-      "restart_regime_pairs_spaced": [
-        {
-          "a_s": 0.362,
-          "b_s": 0.364,
-          "pair": [
-            1,
-            4
-          ],
-          "relative_diff": 0.00551
-        },
-        {
-          "a_s": 0.36,
-          "b_s": 0.366,
-          "pair": [
-            2,
-            5
-          ],
-          "relative_diff": 0.016529
-        },
-        {
-          "a_s": 0.364,
-          "b_s": 0.363,
-          "pair": [
-            3,
-            6
-          ],
-          "relative_diff": -0.002751
-        }
-      ],
-      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
-    },
-    "Q03": {
-      "block_dispersion_cv": 0.005524119712012392,
-      "block_dispersion_sd_s": 0.02664927141530659,
-      "block_medians_s": [
-        4.834,
-        4.828999,
-        4.811999,
-        4.813,
-        4.788999,
-        4.868
-      ],
-      "blocks_accepted": 6,
-      "blocks_invalidated": 0,
-      "corrected_mde": null,
-      "fast_regime_paired_cv": null,
-      "inflation_factor": null,
-      "median_wall_seconds": 4.820999499999999,
-      "restart_regime_mde": 0.014886596757239337,
-      "restart_regime_paired_cv": 0.007443298378619669,
-      "restart_regime_paired_cv_adjacent": 0.006862428026624178,
-      "restart_regime_paired_cv_source": "spaced",
-      "restart_regime_paired_cv_spaced": 0.007443298378619669,
-      "restart_regime_pairs_adjacent": [
-        {
-          "a_s": 4.834,
-          "b_s": 4.828999,
-          "pair": [
-            1,
-            2
-          ],
-          "relative_diff": -0.001035
-        },
-        {
-          "a_s": 4.811999,
-          "b_s": 4.813,
-          "pair": [
-            3,
-            4
-          ],
-          "relative_diff": 0.000208
-        },
-        {
-          "a_s": 4.788999,
-          "b_s": 4.868,
-          "pair": [
-            5,
-            6
-          ],
-          "relative_diff": 0.016361
-        }
-      ],
-      "restart_regime_pairs_spaced": [
-        {
-          "a_s": 4.834,
-          "b_s": 4.813,
-          "pair": [
-            1,
-            4
-          ],
-          "relative_diff": -0.004354
-        },
-        {
-          "a_s": 4.828999,
-          "b_s": 4.788999,
-          "pair": [
-            2,
-            5
-          ],
-          "relative_diff": -0.008318
-        },
-        {
-          "a_s": 4.811999,
-          "b_s": 4.868,
-          "pair": [
-            3,
-            6
-          ],
-          "relative_diff": 0.01157
-        }
-      ],
-      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
-    },
-    "Q04": {
-      "block_dispersion_cv": 0.0028670708430735634,
-      "block_dispersion_sd_s": 0.00542832079621928,
-      "block_medians_s": [
-        1.903,
-        1.891,
-        1.895,
-        1.887,
-        1.891,
-        1.893
-      ],
-      "blocks_accepted": 6,
-      "blocks_invalidated": 0,
-      "corrected_mde": null,
-      "fast_regime_paired_cv": null,
-      "inflation_factor": null,
-      "median_wall_seconds": 1.892,
-      "restart_regime_mde": 0.01,
-      "restart_regime_paired_cv": 0.003252898530514027,
-      "restart_regime_paired_cv_adjacent": 0.002690349392654043,
-      "restart_regime_paired_cv_source": "spaced",
-      "restart_regime_paired_cv_spaced": 0.003252898530514027,
-      "restart_regime_pairs_adjacent": [
-        {
-          "a_s": 1.903,
-          "b_s": 1.891,
-          "pair": [
-            1,
-            2
-          ],
-          "relative_diff": -0.006326
-        },
-        {
-          "a_s": 1.895,
-          "b_s": 1.887,
-          "pair": [
-            3,
-            4
-          ],
-          "relative_diff": -0.004231
-        },
-        {
-          "a_s": 1.891,
-          "b_s": 1.893,
-          "pair": [
-            5,
-            6
-          ],
-          "relative_diff": 0.001057
-        }
-      ],
-      "restart_regime_pairs_spaced": [
-        {
-          "a_s": 1.903,
-          "b_s": 1.887,
-          "pair": [
-            1,
-            4
-          ],
-          "relative_diff": -0.008443
-        },
-        {
-          "a_s": 1.891,
-          "b_s": 1.891,
-          "pair": [
-            2,
-            5
-          ],
-          "relative_diff": 0.0
-        },
-        {
-          "a_s": 1.895,
-          "b_s": 1.893,
-          "pair": [
-            3,
-            6
-          ],
-          "relative_diff": -0.001056
-        }
-      ],
-      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
-    },
-    "Q05": {
-      "block_dispersion_cv": 0.015925041793309877,
-      "block_dispersion_sd_s": 0.14905838587703318,
-      "block_medians_s": [
-        9.452,
-        9.236999,
-        9.271,
-        9.476999,
-        9.543,
-        9.18
-      ],
-      "blocks_accepted": 6,
-      "blocks_invalidated": 0,
-      "corrected_mde": null,
-      "fast_regime_paired_cv": null,
-      "inflation_factor": null,
-      "median_wall_seconds": 9.3615,
-      "restart_regime_mde": 0.044582871784675966,
-      "restart_regime_paired_cv": 0.022291435892337983,
-      "restart_regime_paired_cv_adjacent": 0.022291435892337983,
-      "restart_regime_paired_cv_source": "adjacent",
-      "restart_regime_paired_cv_spaced": 0.015425491606316198,
-      "restart_regime_pairs_adjacent": [
-        {
-          "a_s": 9.452,
-          "b_s": 9.236999,
-          "pair": [
-            1,
-            2
-          ],
-          "relative_diff": -0.023008
-        },
-        {
-          "a_s": 9.271,
-          "b_s": 9.476999,
-          "pair": [
-            3,
-            4
-          ],
-          "relative_diff": 0.021976
-        },
-        {
-          "a_s": 9.543,
-          "b_s": 9.18,
-          "pair": [
-            5,
-            6
-          ],
-          "relative_diff": -0.038776
-        }
-      ],
-      "restart_regime_pairs_spaced": [
-        {
-          "a_s": 9.452,
-          "b_s": 9.476999,
-          "pair": [
-            1,
-            4
-          ],
-          "relative_diff": 0.002641
-        },
-        {
-          "a_s": 9.236999,
-          "b_s": 9.543,
-          "pair": [
-            2,
-            5
-          ],
-          "relative_diff": 0.032588
-        },
-        {
-          "a_s": 9.271,
-          "b_s": 9.18,
-          "pair": [
-            3,
-            6
-          ],
-          "relative_diff": -0.009864
-        }
-      ],
-      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
-    },
-    "Q06": {
-      "block_dispersion_cv": 0.0064458482399661066,
-      "block_dispersion_sd_s": 0.025813041283428973,
-      "block_medians_s": [
-        3.999999,
-        4.0,
-        4.049,
-        3.991,
-        3.982999
-      ],
-      "blocks_accepted": 5,
-      "blocks_invalidated": 1,
-      "caveat": "Q06 has 5 accepted blocks, not 6 (block 5 was invalidated: attempts 1/2/4 WARM_NOT_CONVERGED, attempt 3 INVALID_BACKGROUND_LOAD at external mean 5.997 / p95 6.466 / max 6.944 core-s/s, 57 samples over the 6.0 gate). Its spaced pairing therefore yields 2 pairs instead of 3, so its paired CV rests on fewer degrees of freedom than the other five and MUST be down-weighted when the inflation factor is combined.",
-      "corrected_mde": null,
-      "fast_regime_paired_cv": null,
-      "inflation_factor": null,
-      "median_wall_seconds": 3.999999,
-      "restart_regime_mde": 0.014428110696548764,
-      "restart_regime_paired_cv": 0.007214055348274382,
-      "restart_regime_paired_cv_adjacent": 0.007214055348274382,
-      "restart_regime_paired_cv_source": "adjacent",
-      "restart_regime_paired_cv_spaced": 0.0010035087235266953,
-      "restart_regime_pairs_adjacent": [
-        {
-          "a_s": 3.999999,
-          "b_s": 4.0,
-          "pair": [
-            1,
-            2
-          ],
-          "relative_diff": 0.0
-        },
-        {
-          "a_s": 4.049,
-          "b_s": 3.991,
-          "pair": [
-            3,
-            4
-          ],
-          "relative_diff": -0.014428
-        }
-      ],
-      "restart_regime_pairs_spaced": [
-        {
-          "a_s": 3.999999,
-          "b_s": 3.991,
-          "pair": [
-            1,
-            4
-          ],
-          "relative_diff": -0.002252
-        },
-        {
-          "a_s": 4.0,
-          "b_s": 3.982999,
-          "pair": [
-            2,
-            5
-          ],
-          "relative_diff": -0.004259
-        }
-      ],
-      "status": "AWAITING_FAST_REGIME_MEASUREMENT"
-    }
-  },
-  "queries_covered_fast_regime": [],
-  "queries_covered_restart_regime": [
+  "PARTIAL": false,
+  "STOP_AND_REPORT": true,
+  "calibration_queries": [
     "Q01",
     "Q02",
     "Q03",
@@ -558,29 +9,1206 @@
     "Q05",
     "Q06"
   ],
-  "queries_not_covered_at_all": [
-    "Q07",
-    "Q08",
-    "Q09",
-    "Q10",
-    "Q11",
-    "Q12",
-    "Q13",
-    "Q14",
-    "Q15",
-    "Q16",
-    "Q17",
-    "Q18",
-    "Q19",
-    "Q20",
-    "Q21",
-    "Q22"
-  ],
-  "raw_evidence_path": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/raw-restart-calibration",
-  "wall_span_seconds": {
-    "max": 31.220999,
-    "min": 0.3635,
-    "note": "nearly two orders of magnitude \u2014 enough to test the inflation factor for wall-magnitude dependence rather than assume it pooled"
+  "campaign_id": "tpch-sspq-impl-r1-20260803",
+  "clamp_notes": [],
+  "combination": {
+    "STOP_AND_REPORT": true,
+    "additive_vs_multiplicative_diagnostic": {
+      "additive_model": {
+        "max_delta": 0.013909169000499523,
+        "per_query": {
+          "Q01": 0.013909169000499523,
+          "Q02": 0.0019678427386617308,
+          "Q03": 0.002315711631124028,
+          "Q04": 0.0010490183819034373,
+          "Q05": 0.012479543004522307,
+          "Q06": 0.006090983006169456
+        },
+        "quantity": "delta_q = CV_restart_q - CV_fast_q  (absolute dispersion the restart adds)",
+        "relative_sd": 0.8929670796133946,
+        "spread_ratio": 13.259223327680324
+      },
+      "multiplicative_model": {
+        "per_query": {
+          "Q01": 15.315813062171745,
+          "Q02": 1.4039193612788745,
+          "Q03": 1.4516182261090058,
+          "Q04": 1.4759870370286599,
+          "Q05": 2.271879253800181,
+          "Q06": 6.423500141365237
+        },
+        "quantity": "inflation_q = CV_restart_q / CV_fast_q",
+        "relative_sd": 1.1724467961431688,
+        "spread_ratio": 10.909325339184786
+      },
+      "reading": "Neither model is tight on six points, so this does not rescue the calibration and does not overturn the escalation. What it does show is the DIRECTION of the failure: the ratio is largest exactly where the fast-regime CV is smallest (Q01 CV_fast 0.000972 -> factor 15.32x; Q06 CV_fast 0.001123 -> factor 6.42x) and smallest where it is largest (Q02 CV_fast 0.004872 -> factor 1.40x). That is the signature of an additive penalty being read through a multiplicative estimator. The practical consequence is that the max-factor fail-safe over-corrects hardest for the queries that need it least: it takes Q08, whose fast CV is already the largest in the sweep, to an MDE no real restart penalty would justify. The user's options are therefore not only 'which factor' but 'is a multiplicative factor the right shape at all', and collecting more blocks per calibration query is the one path that answers it by measurement instead of by model choice.",
+      "status": "REPORTED, NOT APPLIED \u2014 section 6-d-1 fixes the ratio estimator; this diagnostic exists so the user's choice is informed rather than blind"
+    },
+    "candidate_rules_for_user_decision": {
+      "max_observed_factor": {
+        "property": "cannot under-correct; cannot cause a false accept",
+        "value": 15.315813062171745
+      },
+      "single_pooled_geometric_mean": {
+        "spread_ratio": 10.909325339184786,
+        "value": 2.959799959845978,
+        "within_declared_stop_ratio": false
+      },
+      "wall_magnitude_dependent": {
+        "a": 0.4551825256280494,
+        "b": 0.4637000329320216,
+        "full_sample_pearson_r": 0.7149651770770077,
+        "residual_reduction": 0.30083993566047895,
+        "robust_under_leave_one_out": false
+      }
+    },
+    "leave_one_out_failures": [
+      "Q01",
+      "Q04"
+    ],
+    "leave_one_out_pearson_r": {
+      "Q01": 0.3927553335836125,
+      "Q02": 0.7188611094905968,
+      "Q03": 0.7833370861857492,
+      "Q04": 0.6877928777592124,
+      "Q05": 0.8026988308758017,
+      "Q06": 0.7754072806154185
+    },
+    "near_equal_wall_contradictions": [
+      {
+        "factor_ratio": 4.425061649014373,
+        "factors": [
+          1.4516182261090058,
+          6.423500141365237
+        ],
+        "queries": [
+          "Q03",
+          "Q06"
+        ],
+        "wall_ratio": 1.1804705499934987,
+        "walls_s": [
+          4.5394995,
+          3.8455000000000004
+        ]
+      }
+    ],
+    "near_equal_wall_pairs": [
+      {
+        "factor_ratio": 4.425061649014373,
+        "factors": [
+          1.4516182261090058,
+          6.423500141365237
+        ],
+        "queries": [
+          "Q03",
+          "Q06"
+        ],
+        "wall_ratio": 1.1804705499934987,
+        "walls_s": [
+          4.5394995,
+          3.8455000000000004
+        ]
+      }
+    ],
+    "provisional_is_not_a_decision": "Section 6-d-1 forbids picking a factor to keep the sweep moving. This value is not picked for convenience: it is the most conservative of the six measured factors, so it cannot under-correct and therefore cannot cause a false accept. Every downstream artifact produced under it is labelled provisional, and the consequences of all three candidate rules are published side by side so the decision is the user's.",
+    "provisional_rule_applied": "max_observed_factor",
+    "provisional_value": 15.315813062171745,
+    "reason": "NEITHER a single pooled factor NOR a defensible wall-magnitude-dependent factor fits the six calibration points.\n(a) The wall-dependent fit is not robust. Full-sample pearson r = 0.7150 clears the declared 0.70 threshold by 0.015 and the residual reduction 30.1% clears the declared 30% threshold by 0.1 points, but leave-one-out shows the association is carried by individual points: dropping Q01 gives r=+0.3928, Q04 gives r=+0.6878 (all six: Q01:+0.3928, Q02:+0.7189, Q03:+0.7833, Q04:+0.6878, Q05:+0.8027, Q06:+0.7754).\n(b) A single pooled factor is out of range: the clamped factors span 1.4039..15.3158, a ratio of 10.91, beyond the declared stop ratio of 10.0.\n(c) The model is contradicted directly by near-equal walls: Q03 at 4.539s has factor 1.452 while Q06 at 3.846s has factor 6.424 \u2014 walls differ 1.18x, factors differ 4.43x.\n(d) Mechanism for the instability, so this is not left as an unexplained anomaly: the ratio's DENOMINATOR is at the resolution floor for the two queries carrying the extreme factors. Fast-regime paired CV is 0.000972 for Q01 and 0.001123 for Q06, each estimated from only 3 pairs. A ratio whose denominator is a 3-pair estimate of a ~0.1% dispersion is not a stable quantity, and that is exactly where the 15.3x and 6.4x factors come from.",
+    "rule": "USER_DECISION_REQUIRED",
+    "section": "IMPL-SSOT 6-d-1 escalation / 11-a"
   },
-  "warm_gate_decision_D1": "Q05/Q06/Q07 warm tolerances were widened to level_tol=0.04 / spread_sanity=0.07 (from the previous campaign's values, which failed to converge). 0.04 sits above the measured n=20 stationary null max of 3.49% and well below the 13.17% warming signal, so the widened gate still separates a warming engine from a converged one. Recorded in harness/warm_params.json. A widened tolerance is a methodology choice and is stated here so a reader can see it."
+  "corrected_mde": {
+    "Q01": {
+      "basis": "measured_restart_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 6: this query's restart-regime paired CV was measured directly, so it is used as-is rather than estimated from an inflation factor",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.029761527527167597,
+      "fast_regime_paired_cv": 0.0009715947630842748,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 31.643498,
+      "inflation_factor_applied": null,
+      "paired_cv_used": 0.014880763763583799,
+      "status": "OK"
+    },
+    "Q02": {
+      "basis": "measured_restart_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 6: this query's restart-regime paired CV was measured directly, so it is used as-is rather than estimated from an inflation factor",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.01367942607164021,
+      "fast_regime_paired_cv": 0.004871870297158375,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 0.3645,
+      "inflation_factor_applied": null,
+      "paired_cv_used": 0.006839713035820105,
+      "status": "OK"
+    },
+    "Q03": {
+      "basis": "measured_restart_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 6: this query's restart-regime paired CV was measured directly, so it is used as-is rather than estimated from an inflation factor",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.014886596757239337,
+      "fast_regime_paired_cv": 0.005127586747495641,
+      "fast_regime_raw_mde": 0.010255173494991282,
+      "fresh_base_median_seconds": 4.5394995,
+      "inflation_factor_applied": null,
+      "paired_cv_used": 0.007443298378619669,
+      "status": "OK"
+    },
+    "Q04": {
+      "basis": "measured_restart_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 6: this query's restart-regime paired CV was measured directly, so it is used as-is rather than estimated from an inflation factor",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.01,
+      "fast_regime_paired_cv": 0.0022038801486105896,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 1.666,
+      "inflation_factor_applied": null,
+      "paired_cv_used": 0.003252898530514027,
+      "status": "OK"
+    },
+    "Q05": {
+      "basis": "measured_restart_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 6: this query's restart-regime paired CV was measured directly, so it is used as-is rather than estimated from an inflation factor",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.044582871784675966,
+      "fast_regime_paired_cv": 0.009811892887815676,
+      "fast_regime_raw_mde": 0.019623785775631352,
+      "fresh_base_median_seconds": 10.3355,
+      "inflation_factor_applied": null,
+      "paired_cv_used": 0.022291435892337983,
+      "status": "OK"
+    },
+    "Q06": {
+      "basis": "measured_restart_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 6: this query's restart-regime paired CV was measured directly, so it is used as-is rather than estimated from an inflation factor",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.014428110696548764,
+      "fast_regime_paired_cv": 0.0011230723421049263,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 3.8455000000000004,
+      "inflation_factor_applied": null,
+      "paired_cv_used": 0.007214055348274382,
+      "status": "OK"
+    },
+    "Q07": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.3559526610022119,
+      "corrected_mde_at_max_factor": 0.3559526610022119,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.3559526610022119,
+        "single_pooled_geometric_mean": 0.06878829530399251,
+        "wall_magnitude_dependent": 0.1422799993353211
+      },
+      "fast_regime_paired_cv": 0.011620429798838856,
+      "fast_regime_raw_mde": 0.023240859597677712,
+      "fresh_base_median_seconds": 18.649499,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 6.121976630741235
+      },
+      "paired_cv_used": 0.17797633050110595,
+      "status": "OK"
+    },
+    "Q08": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.6770836295377326,
+      "corrected_mde_at_max_factor": 0.6770836295377326,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.6770836295377326,
+        "single_pooled_geometric_mean": 0.13084725514624315,
+        "wall_magnitude_dependent": 0.06993430251786462
+      },
+      "fast_regime_paired_cv": 0.02210407070095578,
+      "fast_regime_raw_mde": 0.04420814140191156,
+      "fresh_base_median_seconds": 1.0074999999999998,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 1.5819326553918562
+      },
+      "paired_cv_used": 0.3385418147688663,
+      "status": "OK"
+    },
+    "Q09": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 5,
+      "corrected_mde": 0.085414123958949,
+      "corrected_mde_at_max_factor": 0.085414123958949,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.085414123958949,
+        "single_pooled_geometric_mean": 0.016506385892655247,
+        "wall_magnitude_dependent": 0.026247555272190002
+      },
+      "fast_regime_paired_cv": 0.002788429305457894,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 10.578,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 4.706512591302693
+      },
+      "paired_cv_used": 0.0427070619794745,
+      "status": "PARTIAL"
+    },
+    "Q10": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.2454387278412416,
+      "corrected_mde_at_max_factor": 0.2454387278412416,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.2454387278412416,
+        "single_pooled_geometric_mean": 0.04743134000527857,
+        "wall_magnitude_dependent": 0.06246261160640127
+      },
+      "fast_regime_paired_cv": 0.008012592176625815,
+      "fast_regime_raw_mde": 0.01602518435325163,
+      "fresh_base_median_seconds": 7.0439995,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 3.8977780367142634
+      },
+      "paired_cv_used": 0.1227193639206208,
+      "status": "OK"
+    },
+    "Q11": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.18193745098869762,
+      "corrected_mde_at_max_factor": 0.18193745098869762,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.18193745098869762,
+        "single_pooled_geometric_mean": 0.03515963912231696,
+        "wall_magnitude_dependent": 0.03224697578257386
+      },
+      "fast_regime_paired_cv": 0.005939529630263694,
+      "fast_regime_raw_mde": 0.011879059260527389,
+      "fresh_base_median_seconds": 3.2285,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 2.7146068619866623
+      },
+      "paired_cv_used": 0.09096872549434881,
+      "status": "OK"
+    },
+    "Q12": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.04188820607142341,
+      "corrected_mde_at_max_factor": 0.04188820607142341,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.04188820607142341,
+        "single_pooled_geometric_mean": 0.01,
+        "wall_magnitude_dependent": 0.01
+      },
+      "fast_regime_paired_cv": 0.0013674822845312193,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 3.9505,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 2.9809235759063055
+      },
+      "paired_cv_used": 0.020944103035711707,
+      "status": "OK"
+    },
+    "Q13": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.06876884994290162,
+      "corrected_mde_at_max_factor": 0.06876884994290162,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.06876884994290162,
+        "single_pooled_geometric_mean": 0.013289665946784058,
+        "wall_magnitude_dependent": 0.021820333092720117
+      },
+      "fast_regime_paired_cv": 0.002245027726041936,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 11.334499999999998,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 4.859702363496005
+      },
+      "paired_cv_used": 0.03438442497145081,
+      "status": "OK"
+    },
+    "Q14": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.05567616056439928,
+      "corrected_mde_at_max_factor": 0.05567616056439928,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.05567616056439928,
+        "single_pooled_geometric_mean": 0.01075948740912096,
+        "wall_magnitude_dependent": 0.01
+      },
+      "fast_regime_paired_cv": 0.00181760381699594,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 3.117,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 2.6707241320092763
+      },
+      "paired_cv_used": 0.02783808028219964,
+      "status": "OK"
+    },
+    "Q15": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.03453488727427281,
+      "corrected_mde_at_max_factor": 0.03453488727427281,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.03453488727427281,
+        "single_pooled_geometric_mean": 0.01,
+        "wall_magnitude_dependent": 0.010351279879370295
+      },
+      "fast_regime_paired_cv": 0.001127425855032467,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 10.024499500000001,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 4.5906699022226185
+      },
+      "paired_cv_used": 0.017267443637136407,
+      "status": "OK"
+    },
+    "Q16": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.1556922468945616,
+      "corrected_mde_at_max_factor": 0.1556922468945616,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.1556922468945616,
+        "single_pooled_geometric_mean": 0.030087720726039643,
+        "wall_magnitude_dependent": 0.026331175739714937
+      },
+      "fast_regime_paired_cv": 0.005082728754345504,
+      "fast_regime_raw_mde": 0.010165457508691009,
+      "fresh_base_median_seconds": 2.918,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 2.590259780949649
+      },
+      "paired_cv_used": 0.0778461234472808,
+      "status": "OK"
+    },
+    "Q17": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.08536047098560715,
+      "corrected_mde_at_max_factor": 0.08536047098560715,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.08536047098560715,
+        "single_pooled_geometric_mean": 0.016496017388698048,
+        "wall_magnitude_dependent": 0.01
+      },
+      "fast_regime_paired_cv": 0.002786677750606576,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 0.1465,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 1.0
+      },
+      "paired_cv_used": 0.04268023549280357,
+      "status": "OK"
+    },
+    "Q18": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.15284212412310952,
+      "corrected_mde_at_max_factor": 0.15284212412310952,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.15284212412310952,
+        "single_pooled_geometric_mean": 0.02953693094881682,
+        "wall_magnitude_dependent": 0.08444330818364046
+      },
+      "fast_regime_paired_cv": 0.0049896836525320214,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 37.481499,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 8.461789771059895
+      },
+      "paired_cv_used": 0.07642106206155476,
+      "status": "OK"
+    },
+    "Q19": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.0705380418040567,
+      "corrected_mde_at_max_factor": 0.0705380418040567,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.0705380418040567,
+        "single_pooled_geometric_mean": 0.013631564478605399,
+        "wall_magnitude_dependent": 0.04196341459701069
+      },
+      "fast_regime_paired_cv": 0.0023027847597029425,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 43.9639985,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 9.111449609042909
+      },
+      "paired_cv_used": 0.03526902090202835,
+      "status": "OK"
+    },
+    "Q20": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.22401489196903115,
+      "corrected_mde_at_max_factor": 0.22401489196903115,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.22401489196903115,
+        "single_pooled_geometric_mean": 0.0432911570259674,
+        "wall_magnitude_dependent": 0.03837613505947954
+      },
+      "fast_regime_paired_cv": 0.007313189677220649,
+      "fast_regime_raw_mde": 0.014626379354441298,
+      "fresh_base_median_seconds": 3.0,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 2.6237617751809936
+      },
+      "paired_cv_used": 0.11200744598451558,
+      "status": "OK"
+    },
+    "Q21": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.06960187067449425,
+      "corrected_mde_at_max_factor": 0.06960187067449425,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.06960187067449425,
+        "single_pooled_geometric_mean": 0.013450648241221198,
+        "wall_magnitude_dependent": 0.044991820322485616
+      },
+      "fast_regime_paired_cv": 0.0022722225190382702,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 52.586499,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 9.900399266689918
+      },
+      "paired_cv_used": 0.034800935337247124,
+      "status": "OK"
+    },
+    "Q22": {
+      "basis": "inflated_fast_regime_paired_cv",
+      "basis_reason": "section 6-d-1 step 5: corrected_MDE = max(1%, 2 x inflation x paired_CV_fast)",
+      "blocks_accepted": 6,
+      "corrected_mde": 0.08871381073111173,
+      "corrected_mde_at_max_factor": 0.08871381073111173,
+      "corrected_mde_under_each_candidate_rule": {
+        "max_observed_factor": 0.08871381073111173,
+        "single_pooled_geometric_mean": 0.01714405447323315,
+        "wall_magnitude_dependent": 0.01
+      },
+      "fast_regime_paired_cv": 0.0028961508726632473,
+      "fast_regime_raw_mde": 0.01,
+      "fresh_base_median_seconds": 1.119,
+      "inflation_factor_applied": 15.315813062171745,
+      "inflation_under_each_candidate_rule": {
+        "max_observed_factor": 15.315813062171745,
+        "single_pooled_geometric_mean": 2.959799959845978,
+        "wall_magnitude_dependent": 1.660832259562239
+      },
+      "paired_cv_used": 0.044356905365555865,
+      "status": "OK"
+    }
+  },
+  "decision_thresholds_declared_in_advance": {
+    "factor_spread_stop_ratio": 10.0,
+    "minority_clamp_stop_count": 3,
+    "pearson_r_accept": 0.7,
+    "residual_reduction_accept": 0.3
+  },
+  "estimator": {
+    "identity_guarantee": "both regimes are reduced by the same aggregate_baseline.paired_cv function with the same ADJACENT/SPACED pairings and the same selection rule, so CV_restart/CV_fast is a measurement of the restart's contribution by construction, not by assertion",
+    "paired_cv": "sample SD of the signed relative differences (b-a)/mean(a,b) over base-vs-base block-median pairs, divided by sqrt(2) \u2014 the per-block CV implied by the paired spread (IMPL-SSOT section 3-c step 6)",
+    "pairings": {
+      "adjacent": "(b1,b2)(b3,b4)(b5,b6)",
+      "spaced": "(b1,b4)(b2,b5)(b3,b6) \u2014 mirrors the B-P-P-B slot spacing"
+    },
+    "selection": "the LARGER of the two pairings is used, so the noise floor is never understated"
+  },
+  "generated_utc": "2026-08-04T10:52:37Z",
+  "impl_ssot_amendment": "AMEND-G section 6-d-1",
+  "impl_ssot_blob": "15b42ddca521444fa54b34b0fa8477ed2df643f6",
+  "impl_ssot_commit": "eccdd1ae58cd733ed3121585146d68b9ae54a73f",
+  "inflation_factor_spread": {
+    "geometric_mean": 2.959799959845978,
+    "ln_inflation_sd_loglinear_fit": 0.693566120564594,
+    "ln_inflation_sd_pooled_model": 0.9919990513471167,
+    "loglinear_residual_reduction": 0.30083993566047895,
+    "max": 15.315813062171745,
+    "median": 1.8739331454144206,
+    "min": 1.4039193612788745,
+    "pearson_r_ln_inflation_vs_ln_wall": 0.7149651770770077,
+    "ratio": 10.909325339184786
+  },
+  "inflation_factors_clamped": {
+    "Q01": 15.315813062171745,
+    "Q02": 1.4039193612788745,
+    "Q03": 1.4516182261090058,
+    "Q04": 1.4759870370286599,
+    "Q05": 2.271879253800181,
+    "Q06": 6.423500141365237
+  },
+  "install_prefix": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base",
+  "per_query_calibration": {
+    "Q01": {
+      "clamped_up_to_1": false,
+      "fast_regime": {
+        "block_medians_s": [
+          31.648998,
+          31.615998,
+          31.637998,
+          31.670998,
+          31.603998,
+          31.652998
+        ],
+        "blocks_accepted": 6,
+        "median_wall_seconds": 31.643498,
+        "paired_cv": 0.0009715947630842748,
+        "paired_cv_source": "adjacent",
+        "raw_mde": 0.01
+      },
+      "inflation_clamped": 15.315813062171745,
+      "inflation_raw": 15.315813062171745,
+      "restart_regime": {
+        "adjacent": {
+          "paired_cv": 0.0088433587112701,
+          "pairs": [
+            {
+              "a_s": 31.405999,
+              "b_s": 31.581999,
+              "pair": [
+                1,
+                2
+              ],
+              "relative_diff": 0.005588
+            },
+            {
+              "a_s": 31.035999,
+              "b_s": 30.902999,
+              "pair": [
+                3,
+                4
+              ],
+              "relative_diff": -0.004295
+            },
+            {
+              "a_s": 30.973999,
+              "b_s": 31.616998,
+              "pair": [
+                5,
+                6
+              ],
+              "relative_diff": 0.020546
+            }
+          ]
+        },
+        "block_medians_s": [
+          31.405999,
+          31.581999,
+          31.035999,
+          30.902999,
+          30.973999,
+          31.616998
+        ],
+        "blocks_accepted": 6,
+        "invalidations": [],
+        "median_wall_seconds": 31.220999,
+        "never_used_as_fresh_base_median": true,
+        "paired_cv": 0.014880763763583799,
+        "paired_cv_source": "spaced",
+        "spaced": {
+          "paired_cv": 0.014880763763583799,
+          "pairs": [
+            {
+              "a_s": 31.405999,
+              "b_s": 30.902999,
+              "pair": [
+                1,
+                4
+              ],
+              "relative_diff": -0.016145
+            },
+            {
+              "a_s": 31.581999,
+              "b_s": 30.973999,
+              "pair": [
+                2,
+                5
+              ],
+              "relative_diff": -0.019439
+            },
+            {
+              "a_s": 31.035999,
+              "b_s": 31.616998,
+              "pair": [
+                3,
+                6
+              ],
+              "relative_diff": 0.018547
+            }
+          ],
+          "rationale": "mirrors the B-P-P-B slot spacing of section 6-c"
+        },
+        "wall_is_calibration_evidence_only": true
+      }
+    },
+    "Q02": {
+      "clamped_up_to_1": false,
+      "fast_regime": {
+        "block_medians_s": [
+          0.364,
+          0.366,
+          0.365,
+          0.364,
+          0.367,
+          0.364
+        ],
+        "blocks_accepted": 6,
+        "median_wall_seconds": 0.3645,
+        "paired_cv": 0.004871870297158375,
+        "paired_cv_source": "adjacent",
+        "raw_mde": 0.01
+      },
+      "inflation_clamped": 1.4039193612788745,
+      "inflation_raw": 1.4039193612788745,
+      "restart_regime": {
+        "adjacent": {
+          "paired_cv": 0.002967482576511304,
+          "pairs": [
+            {
+              "a_s": 0.362,
+              "b_s": 0.36,
+              "pair": [
+                1,
+                2
+              ],
+              "relative_diff": -0.00554
+            },
+            {
+              "a_s": 0.364,
+              "b_s": 0.364,
+              "pair": [
+                3,
+                4
+              ],
+              "relative_diff": 0.0
+            },
+            {
+              "a_s": 0.366,
+              "b_s": 0.363,
+              "pair": [
+                5,
+                6
+              ],
+              "relative_diff": -0.00823
+            }
+          ]
+        },
+        "block_medians_s": [
+          0.362,
+          0.36,
+          0.364,
+          0.364,
+          0.366,
+          0.363
+        ],
+        "blocks_accepted": 6,
+        "invalidations": [],
+        "median_wall_seconds": 0.3635,
+        "never_used_as_fresh_base_median": true,
+        "paired_cv": 0.006839713035820105,
+        "paired_cv_source": "spaced",
+        "spaced": {
+          "paired_cv": 0.006839713035820105,
+          "pairs": [
+            {
+              "a_s": 0.362,
+              "b_s": 0.364,
+              "pair": [
+                1,
+                4
+              ],
+              "relative_diff": 0.00551
+            },
+            {
+              "a_s": 0.36,
+              "b_s": 0.366,
+              "pair": [
+                2,
+                5
+              ],
+              "relative_diff": 0.016529
+            },
+            {
+              "a_s": 0.364,
+              "b_s": 0.363,
+              "pair": [
+                3,
+                6
+              ],
+              "relative_diff": -0.002751
+            }
+          ],
+          "rationale": "mirrors the B-P-P-B slot spacing of section 6-c"
+        },
+        "wall_is_calibration_evidence_only": true
+      }
+    },
+    "Q03": {
+      "clamped_up_to_1": false,
+      "fast_regime": {
+        "block_medians_s": [
+          4.536999,
+          4.547,
+          4.542,
+          4.533,
+          4.504999,
+          4.56
+        ],
+        "blocks_accepted": 6,
+        "median_wall_seconds": 4.5394995,
+        "paired_cv": 0.005127586747495641,
+        "paired_cv_source": "adjacent",
+        "raw_mde": 0.010255173494991282
+      },
+      "inflation_clamped": 1.4516182261090058,
+      "inflation_raw": 1.4516182261090058,
+      "restart_regime": {
+        "adjacent": {
+          "paired_cv": 0.006862428026624178,
+          "pairs": [
+            {
+              "a_s": 4.834,
+              "b_s": 4.828999,
+              "pair": [
+                1,
+                2
+              ],
+              "relative_diff": -0.001035
+            },
+            {
+              "a_s": 4.811999,
+              "b_s": 4.813,
+              "pair": [
+                3,
+                4
+              ],
+              "relative_diff": 0.000208
+            },
+            {
+              "a_s": 4.788999,
+              "b_s": 4.868,
+              "pair": [
+                5,
+                6
+              ],
+              "relative_diff": 0.016361
+            }
+          ]
+        },
+        "block_medians_s": [
+          4.834,
+          4.828999,
+          4.811999,
+          4.813,
+          4.788999,
+          4.868
+        ],
+        "blocks_accepted": 6,
+        "invalidations": [],
+        "median_wall_seconds": 4.820999499999999,
+        "never_used_as_fresh_base_median": true,
+        "paired_cv": 0.007443298378619669,
+        "paired_cv_source": "spaced",
+        "spaced": {
+          "paired_cv": 0.007443298378619669,
+          "pairs": [
+            {
+              "a_s": 4.834,
+              "b_s": 4.813,
+              "pair": [
+                1,
+                4
+              ],
+              "relative_diff": -0.004354
+            },
+            {
+              "a_s": 4.828999,
+              "b_s": 4.788999,
+              "pair": [
+                2,
+                5
+              ],
+              "relative_diff": -0.008318
+            },
+            {
+              "a_s": 4.811999,
+              "b_s": 4.868,
+              "pair": [
+                3,
+                6
+              ],
+              "relative_diff": 0.01157
+            }
+          ],
+          "rationale": "mirrors the B-P-P-B slot spacing of section 6-c"
+        },
+        "wall_is_calibration_evidence_only": true
+      }
+    },
+    "Q04": {
+      "clamped_up_to_1": false,
+      "fast_regime": {
+        "block_medians_s": [
+          1.666,
+          1.668,
+          1.664,
+          1.664,
+          1.666,
+          1.671
+        ],
+        "blocks_accepted": 6,
+        "median_wall_seconds": 1.666,
+        "paired_cv": 0.0022038801486105896,
+        "paired_cv_source": "spaced",
+        "raw_mde": 0.01
+      },
+      "inflation_clamped": 1.4759870370286599,
+      "inflation_raw": 1.4759870370286599,
+      "restart_regime": {
+        "adjacent": {
+          "paired_cv": 0.002690349392654043,
+          "pairs": [
+            {
+              "a_s": 1.903,
+              "b_s": 1.891,
+              "pair": [
+                1,
+                2
+              ],
+              "relative_diff": -0.006326
+            },
+            {
+              "a_s": 1.895,
+              "b_s": 1.887,
+              "pair": [
+                3,
+                4
+              ],
+              "relative_diff": -0.004231
+            },
+            {
+              "a_s": 1.891,
+              "b_s": 1.893,
+              "pair": [
+                5,
+                6
+              ],
+              "relative_diff": 0.001057
+            }
+          ]
+        },
+        "block_medians_s": [
+          1.903,
+          1.891,
+          1.895,
+          1.887,
+          1.891,
+          1.893
+        ],
+        "blocks_accepted": 6,
+        "invalidations": [],
+        "median_wall_seconds": 1.892,
+        "never_used_as_fresh_base_median": true,
+        "paired_cv": 0.003252898530514027,
+        "paired_cv_source": "spaced",
+        "spaced": {
+          "paired_cv": 0.003252898530514027,
+          "pairs": [
+            {
+              "a_s": 1.903,
+              "b_s": 1.887,
+              "pair": [
+                1,
+                4
+              ],
+              "relative_diff": -0.008443
+            },
+            {
+              "a_s": 1.891,
+              "b_s": 1.891,
+              "pair": [
+                2,
+                5
+              ],
+              "relative_diff": 0.0
+            },
+            {
+              "a_s": 1.895,
+              "b_s": 1.893,
+              "pair": [
+                3,
+                6
+              ],
+              "relative_diff": -0.001056
+            }
+          ],
+          "rationale": "mirrors the B-P-P-B slot spacing of section 6-c"
+        },
+        "wall_is_calibration_evidence_only": true
+      }
+    },
+    "Q05": {
+      "clamped_up_to_1": false,
+      "fast_regime": {
+        "block_medians_s": [
+          10.306,
+          10.148,
+          10.252,
+          10.373,
+          10.365,
+          10.396
+        ],
+        "blocks_accepted": 6,
+        "median_wall_seconds": 10.3355,
+        "paired_cv": 0.009811892887815676,
+        "paired_cv_source": "adjacent",
+        "raw_mde": 0.019623785775631352
+      },
+      "inflation_clamped": 2.271879253800181,
+      "inflation_raw": 2.271879253800181,
+      "restart_regime": {
+        "adjacent": {
+          "paired_cv": 0.022291435892337983,
+          "pairs": [
+            {
+              "a_s": 9.452,
+              "b_s": 9.236999,
+              "pair": [
+                1,
+                2
+              ],
+              "relative_diff": -0.023008
+            },
+            {
+              "a_s": 9.271,
+              "b_s": 9.476999,
+              "pair": [
+                3,
+                4
+              ],
+              "relative_diff": 0.021976
+            },
+            {
+              "a_s": 9.543,
+              "b_s": 9.18,
+              "pair": [
+                5,
+                6
+              ],
+              "relative_diff": -0.038776
+            }
+          ]
+        },
+        "block_medians_s": [
+          9.452,
+          9.236999,
+          9.271,
+          9.476999,
+          9.543,
+          9.18
+        ],
+        "blocks_accepted": 6,
+        "invalidations": [],
+        "median_wall_seconds": 9.3615,
+        "never_used_as_fresh_base_median": true,
+        "paired_cv": 0.022291435892337983,
+        "paired_cv_source": "adjacent",
+        "spaced": {
+          "paired_cv": 0.015425491606316198,
+          "pairs": [
+            {
+              "a_s": 9.452,
+              "b_s": 9.476999,
+              "pair": [
+                1,
+                4
+              ],
+              "relative_diff": 0.002641
+            },
+            {
+              "a_s": 9.236999,
+              "b_s": 9.543,
+              "pair": [
+                2,
+                5
+              ],
+              "relative_diff": 0.032588
+            },
+            {
+              "a_s": 9.271,
+              "b_s": 9.18,
+              "pair": [
+                3,
+                6
+              ],
+              "relative_diff": -0.009864
+            }
+          ],
+          "rationale": "mirrors the B-P-P-B slot spacing of section 6-c"
+        },
+        "wall_is_calibration_evidence_only": true
+      }
+    },
+    "Q06": {
+      "clamped_up_to_1": false,
+      "fast_regime": {
+        "block_medians_s": [
+          3.844999,
+          3.852,
+          3.846,
+          3.845,
+          3.848,
+          3.843
+        ],
+        "blocks_accepted": 6,
+        "median_wall_seconds": 3.8455000000000004,
+        "paired_cv": 0.0011230723421049263,
+        "paired_cv_source": "adjacent",
+        "raw_mde": 0.01
+      },
+      "inflation_clamped": 6.423500141365237,
+      "inflation_raw": 6.423500141365237,
+      "restart_regime": {
+        "adjacent": {
+          "paired_cv": 0.007214055348274382,
+          "pairs": [
+            {
+              "a_s": 3.999999,
+              "b_s": 4.0,
+              "pair": [
+                1,
+                2
+              ],
+              "relative_diff": 0.0
+            },
+            {
+              "a_s": 4.049,
+              "b_s": 3.991,
+              "pair": [
+                3,
+                4
+              ],
+              "relative_diff": -0.014428
+            }
+          ]
+        },
+        "block_medians_s": [
+          3.999999,
+          4.0,
+          4.049,
+          3.991,
+          3.982999
+        ],
+        "blocks_accepted": 5,
+        "invalidations": [
+          {
+            "block": 5,
+            "reason": "INVALID_MARKER"
+          }
+        ],
+        "median_wall_seconds": 3.999999,
+        "never_used_as_fresh_base_median": true,
+        "paired_cv": 0.007214055348274382,
+        "paired_cv_source": "adjacent",
+        "spaced": {
+          "paired_cv": 0.0010035087235266953,
+          "pairs": [
+            {
+              "a_s": 3.999999,
+              "b_s": 3.991,
+              "pair": [
+                1,
+                4
+              ],
+              "relative_diff": -0.002252
+            },
+            {
+              "a_s": 4.0,
+              "b_s": 3.982999,
+              "pair": [
+                2,
+                5
+              ],
+              "relative_diff": -0.004259
+            }
+          ],
+          "rationale": "mirrors the B-P-P-B slot spacing of section 6-c"
+        },
+        "wall_is_calibration_evidence_only": true
+      }
+    }
+  },
+  "phase": "Phase 1A complete \u2014 fast regime measured; restart-variance correction computed but the combination rule is ESCALATED to the user",
+  "q07_restart_regime_excluded": "partial at one block; one block cannot yield a paired CV (section 6-d-1)",
+  "raw_evidence_paths": {
+    "fast_regime": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/raw",
+    "restart_regime": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/raw-restart-calibration"
+  },
+  "rule_established": "Phase 2 A/B accept decisions (section 7-a criterion 3) and the Phase 1B UNPROVABLE_ON_THIS_HOST flag both use the CORRECTED MDE, never the raw fast-regime MDE",
+  "sensitivity_max_factor": {
+    "max_clamped_factor": 15.315813062171745,
+    "note": "Reported so a fragile UNPROVABLE_ON_THIS_HOST determination is visible. The ranking uses the chosen combination rule; this column states what the most conservative single factor would have given.",
+    "queries_whose_corrected_mde_changes_under_the_max_factor": []
+  },
+  "user_decision_required": "IMPL-SSOT section 6-d-1 escalation: neither a single pooled factor nor a defensible wall-magnitude-dependent factor fits the six calibration points. The corrected MDE published here, and every UNPROVABLE_ON_THIS_HOST verdict derived from it, is PROVISIONAL and was computed under the most conservative of the six measured factors so it cannot under-correct. Choose the combination rule, or direct more calibration blocks, before any Phase 2 A/B accept decision uses this MDE."
 }

@@ -143,6 +143,8 @@ def build(impl_dir):
             "triage_note": c.get("triage_note"),
             "campaign_status": c.get("campaign_status"),
             "acceptance_criterion_caveat": c.get("acceptance_criterion_caveat"),
+            "baseline_caveat": c.get("baseline_caveat"),
+            "ranking_rationale": c.get("ranking_rationale"),
             "scored": c.get("scored", False),
             "ranked_eligible": c.get("ranked", False) and c["lane"] == "performance",
             "queue_position_rule": c.get("queue_position_rule"),
