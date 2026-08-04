@@ -14875,7 +14875,8 @@
   "queries_with_baseline": 22,
   "restart_variance_correction": {
     "amendment": "AMEND-G section 6-d-1",
-    "applied": true,
+    "applied": false,
+    "applied_note": "derived but NOT applied \u2014 the combination rule is a pending user decision (section 6-d-1 escalation); the corrected MDE values carried here are illustrative, not campaign values",
     "clamp_notes": [],
     "combination_rule": {
       "STOP_AND_REPORT": true,
@@ -14984,6 +14985,7 @@
       "section": "IMPL-SSOT 6-d-1 escalation / 11-a"
     },
     "derivation_published_separately_at": "tpch-sspq/impl/restart-variance-calibration.json",
+    "derived": true,
     "inflation_factor_spread": {
       "geometric_mean": 2.959799959845978,
       "ln_inflation_sd_loglinear_fit": 0.693566120564594,
@@ -15003,11 +15005,11 @@
       "Q05": 2.271879253800181,
       "Q06": 6.423500141365237
     },
-    "invalidity_cleared": "Section 3-c-1 states that a Phase 1A baseline produced under the fast regime is INVALID as an MDE source until the section 6-d-1 correction has been applied. It has now been applied.",
+    "invalidity_cleared": "Section 3-c-1 states that a Phase 1A baseline produced under the fast regime is INVALID as an MDE source until the section 6-d-1 correction has been applied. The correction has been DERIVED but NOT applied: the combination rule is escalated to the user (see combination.rule), so this baseline is NOT yet a valid MDE source and the corrected MDE values here are illustrative. Choosing the rule is what clears the invalidity.",
     "rule_established": "ONCE THE RULE IS CHOSEN: Phase 2 A/B accept decisions (section 7-a criterion 3) and the Phase 1B UNPROVABLE_ON_THIS_HOST flag both use the CORRECTED MDE, never the raw fast-regime MDE",
     "sensitivity_max_factor": {
       "max_clamped_factor": 15.315813062171745,
-      "note": "Reported so a factor-sensitive determination is visible. NO combination rule has been chosen \u2014 see combination.rule. While the rule is USER_DECISION_REQUIRED the ranking asserts no UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent determination is WITHHELD and each row publishes what all three candidate rules would give. This column states what the most conservative single factor would give, as one of those possibilities, not as the applied rule.",
+      "note": "Reported so a factor-sensitive determination is visible. NO combination rule has been chosen \u2014 see combination.rule. While the rule is USER_DECISION_REQUIRED the ranking asserts no UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent determination is WITHHELD and each row publishes what all three candidate rules would give. This column states what the most conservative single factor would give, as one of those possibilities \u2014 not because that factor is in force.",
       "queries_list_meaning": "queries whose corrected MDE differs between the candidate rules, i.e. the queries the pending rule decision actually settles",
       "queries_whose_corrected_mde_changes_under_the_max_factor": []
     }

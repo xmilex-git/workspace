@@ -139,33 +139,37 @@ The three candidate rules and their per-query consequences are tabulated in `tpc
 
 Per-query clamped factors: Q01 15.3158, Q02 1.4039, Q03 1.4516, Q04 1.4760, Q05 2.2719, Q06 6.4235. Spread 1.4039..15.3158 (ratio 10.91), geometric mean 2.9598, pearson r of ln(inflation) vs ln(wall) = 0.7150.
 
-Sensitivity: the most conservative single factor available is 15.3158x. Queries whose corrected MDE would change under it: none. Reported so a factor-sensitive determination is visible. NO combination rule has been chosen — see combination.rule. While the rule is USER_DECISION_REQUIRED the ranking asserts no UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent determination is WITHHELD and each row publishes what all three candidate rules would give. This column states what the most conservative single factor would give, as one of those possibilities, not as the applied rule.
+Sensitivity: the most conservative single factor available is 15.3158x. Queries whose corrected MDE would change under it: none. Reported so a factor-sensitive determination is visible. NO combination rule has been chosen — see combination.rule. While the rule is USER_DECISION_REQUIRED the ranking asserts no UNPROVABLE_ON_THIS_HOST verdict at all: every factor-dependent determination is WITHHELD and each row publishes what all three candidate rules would give. This column states what the most conservative single factor would give, as one of those possibilities — not because that factor is in force.
 
 ### Queries a few-percent effect could not be proven on — ILLUSTRATIVE ONLY
 
-**Nothing in this section is a determination.** The section 6-d-1 combination rule is undecided (see the stop-and-report block above), so the corrected MDE is not a campaign value and no query can yet be declared unable to resolve a given effect. The rows below show which queries WOULD exceed a 3% corrected MDE **under the most conservative of the three candidate rules** — one possibility among three, listed so the shape of the decision is visible. `tpch-sspq/impl/priority-ranking.md` asserts no `UNPROVABLE_ON_THIS_HOST` verdict at all while the rule is open; it withholds every factor-dependent determination and publishes all three rules' outcomes per row.
+**For Q07–Q22 nothing in this section is a determination.** The section 6-d-1 combination rule is undecided (see the stop-and-report block above), so for those queries the corrected MDE is not a campaign value and none of them can yet be declared unable to resolve a given effect. Their rows below show which queries WOULD exceed a 3% corrected MDE **under the most conservative of the three candidate rules** — one possibility among three, listed so the shape of the decision is visible.
 
-| Query | corrected MDE (illustrative) | median wall (s) | an effect below this would be undecidable under this factor |
-|---|---:|---:|---|
-| Q08 | **67.71%** | 1.007 | < 0.682 s |
-| Q07 | **35.60%** | 18.649 | < 6.638 s |
-| Q10 | **24.54%** | 7.044 | < 1.729 s |
-| Q20 | **22.40%** | 3.000 | < 0.672 s |
-| Q11 | **18.19%** | 3.228 | < 0.587 s |
-| Q16 | **15.57%** | 2.918 | < 0.454 s |
-| Q18 | **15.28%** | 37.481 | < 5.729 s |
-| Q22 | **8.87%** | 1.119 | < 0.099 s |
-| Q09 | **8.54%** | 10.578 | < 0.904 s |
-| Q17 | **8.54%** | 0.146 | < 0.013 s |
-| Q19 | **7.05%** | 43.964 | < 3.101 s |
-| Q21 | **6.96%** | 52.586 | < 3.660 s |
-| Q13 | **6.88%** | 11.334 | < 0.779 s |
-| Q14 | **5.57%** | 3.117 | < 0.174 s |
-| Q05 | **4.46%** | 10.335 | < 0.461 s |
-| Q12 | **4.19%** | 3.950 | < 0.165 s |
-| Q15 | **3.45%** | 10.024 | < 0.346 s |
+**Q01–Q06 are different and their rows ARE determinations.** Section 6-d-1 step 6 uses their DIRECTLY MEASURED restart-regime paired CV, so no combination rule enters their MDE and the pending decision cannot move them. Where a calibration query appears below it is a real section 6-d statement about this host, and the `basis` column says which kind of row you are looking at.
 
-At the other end, Q04 sit at the 1% floor — even after inflation their paired CV is below 0.5%, so the formula's 1% floor, not the noise, is what limits them, and that holds under every candidate rule, so the pending decision cannot move them.
+`tpch-sspq/impl/priority-ranking.md` withholds every factor-dependent `UNPROVABLE_ON_THIS_HOST` determination while the rule is open and publishes all three rules' outcomes per row; the calibration queries' verdicts there are asserted normally, for the same reason.
+
+| Query | basis | corrected MDE | median wall (s) | an effect below this would be undecidable |
+|---|---|---:|---:|---|
+| Q08 | illustrative, under the most conservative candidate rule | **67.71%** | 1.007 | < 0.682 s |
+| Q07 | illustrative, under the most conservative candidate rule | **35.60%** | 18.649 | < 6.638 s |
+| Q10 | illustrative, under the most conservative candidate rule | **24.54%** | 7.044 | < 1.729 s |
+| Q20 | illustrative, under the most conservative candidate rule | **22.40%** | 3.000 | < 0.672 s |
+| Q11 | illustrative, under the most conservative candidate rule | **18.19%** | 3.228 | < 0.587 s |
+| Q16 | illustrative, under the most conservative candidate rule | **15.57%** | 2.918 | < 0.454 s |
+| Q18 | illustrative, under the most conservative candidate rule | **15.28%** | 37.481 | < 5.729 s |
+| Q22 | illustrative, under the most conservative candidate rule | **8.87%** | 1.119 | < 0.099 s |
+| Q09 | illustrative, under the most conservative candidate rule | **8.54%** | 10.578 | < 0.904 s |
+| Q17 | illustrative, under the most conservative candidate rule | **8.54%** | 0.146 | < 0.013 s |
+| Q19 | illustrative, under the most conservative candidate rule | **7.05%** | 43.964 | < 3.101 s |
+| Q21 | illustrative, under the most conservative candidate rule | **6.96%** | 52.586 | < 3.660 s |
+| Q13 | illustrative, under the most conservative candidate rule | **6.88%** | 11.334 | < 0.779 s |
+| Q14 | illustrative, under the most conservative candidate rule | **5.57%** | 3.117 | < 0.174 s |
+| Q05 | measured directly (section 6-d-1 step 6) — a real determination | **4.46%** | 10.335 | < 0.461 s |
+| Q12 | illustrative, under the most conservative candidate rule | **4.19%** | 3.950 | < 0.165 s |
+| Q15 | illustrative, under the most conservative candidate rule | **3.45%** | 10.024 | < 0.346 s |
+
+At the other end, Q04 (measured restart-regime CV, no inflation applied) sit at the 1% floor — their paired CV is below 0.5%, so the formula's 1% floor, not the noise, is what limits them, and that holds under every candidate rule, so the pending decision cannot move them.
 
 ## Divergence from the previous measurement campaign
 

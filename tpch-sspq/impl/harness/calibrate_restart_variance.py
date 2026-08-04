@@ -65,6 +65,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import campaign_config as cfg  # noqa: E402
 import aggregate_baseline as ab  # noqa: E402
+import state_labels  # noqa: E402
 
 CALIB_ROOT = os.path.join(cfg.RAW_ROOT, "raw-restart-calibration")
 CALIB_QUERIES = [f"Q{n:02d}" for n in range(1, 7)]     # Q07 partial -> excluded
@@ -561,7 +562,7 @@ def build():
                       "determination is WITHHELD and each row publishes what all three "
                       "candidate rules would give. This column states what the most "
                       "conservative single factor would give, as one of those "
-                      "possibilities, not as the applied rule.")
+                      "possibilities — not because that factor is in force.")
                      if stop else
                      ("Reported so a fragile UNPROVABLE_ON_THIS_HOST determination is "
                       "visible. The ranking uses the combination rule recorded in "
@@ -599,8 +600,12 @@ def main():
         print(f"wrote {p}", file=sys.stderr)
         return 3
     p = os.path.join(out_dir, "restart-variance-calibration.json")
+    payload = json.dumps(out, indent=2, sort_keys=True)
+    # Fail closed rather than emit a document that misstates its own state.
+    state_labels.check(payload, state_labels.escalated_from_calibration(out),
+                       "restart-variance-calibration.json")
     with open(p, "w") as f:
-        json.dump(out, f, indent=2, sort_keys=True)
+        f.write(payload)
     print(f"wrote {p}")
 
     # Section 6-d-1 step 7 has two halves. The file above satisfies "the derivation MUST
@@ -610,6 +615,9 @@ def main():
     # resulting corrected MDE." The baseline's own measured fields are never rewritten —
     # only correction fields are added.
     fb = os.path.join(out_dir, "fresh-baseline.json")
+    # `stop` lives in build(); main() reads the same fact off the emitted document so the
+    # two can never disagree about which state the artifacts are being written in.
+    stop = bool(out["STOP_AND_REPORT"])
     if os.path.exists(fb):
         with open(fb) as f:
             base = json.load(f)
@@ -621,7 +629,14 @@ def main():
             rec["corrected_mde_basis"] = c.get("basis")
             rec["corrected_mde_basis_reason"] = c.get("basis_reason")
         base["restart_variance_correction"] = {
-            "applied": True,
+            # NOT unconditional: while the rule is escalated the correction is derived but
+            # not applied, and claiming otherwise contradicted STOP_AND_REPORT two keys away.
+            "applied": not stop,
+            "derived": True,
+            "applied_note": ("derived and applied" if not stop else
+                             "derived but NOT applied — the combination rule is a pending user "
+                             "decision (section 6-d-1 escalation); the corrected MDE values "
+                             "carried here are illustrative, not campaign values"),
             "amendment": "AMEND-G section 6-d-1",
             "combination_rule": out["combination"],
             "inflation_factors_clamped": out["inflation_factors_clamped"],
@@ -630,16 +645,26 @@ def main():
             "sensitivity_max_factor": out["sensitivity_max_factor"],
             "derivation_published_separately_at": "tpch-sspq/impl/restart-variance-calibration.json",
             "rule_established": out["rule_established"],
-            "invalidity_cleared": ("Section 3-c-1 states that a Phase 1A baseline produced "
-                                   "under the fast regime is INVALID as an MDE source until "
-                                   "the section 6-d-1 correction has been applied. It has "
-                                   "now been applied."),
+            "invalidity_cleared": (
+                ("Section 3-c-1 states that a Phase 1A baseline produced under the fast "
+                 "regime is INVALID as an MDE source until the section 6-d-1 correction has "
+                 "been applied. The correction has been DERIVED but NOT applied: the "
+                 "combination rule is escalated to the user (see combination.rule), so this "
+                 "baseline is NOT yet a valid MDE source and the corrected MDE values here "
+                 "are illustrative. Choosing the rule is what clears the invalidity.")
+                if stop else
+                ("Section 3-c-1 states that a Phase 1A baseline produced under the fast "
+                 "regime is INVALID as an MDE source until the section 6-d-1 correction has "
+                 "been applied. It has now been applied.")),
         }
         base["mde_formula_corrected"] = ("max(1%, 2 x inflation x paired_CV_fast) for Q07-Q22; "
                                          "Q01-Q06 use their directly measured restart-regime "
                                          "paired CV (section 6-d-1 steps 5 and 6)")
+        fb_payload = json.dumps(base, indent=2, sort_keys=True)
+        state_labels.check(fb_payload, state_labels.escalated_from_baseline(base),
+                           "fresh-baseline.json (section 6-d-1 step 7 injection)")
         with open(fb, "w") as f:
-            json.dump(base, f, indent=2, sort_keys=True)
+            f.write(fb_payload)
         print(f"updated {fb} — per-query fast CV / inflation / corrected MDE (step 7)")
     else:
         print(f"WARNING {fb} absent — run aggregate_baseline.py first", file=sys.stderr)

@@ -16,6 +16,9 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import state_labels  # noqa: E402
+
 OUT = []
 
 
@@ -341,14 +344,20 @@ def main():
       "cannot decide it.")
     w()
     if cs.get("STOP_AND_REPORT"):
-        w("**No `UNPROVABLE_ON_THIS_HOST` verdict is asserted in this document.** Section "
-          "6-d-1 says that when the calibration supports no combination rule the worker "
-          "reports and asks, and MUST NOT pick a factor. The corrected MDE is therefore "
-          "not a campaign fact yet, and a verdict computed from one would be this campaign "
-          "quietly making the user's decision. Each affected row is **WITHHELD**, and what "
-          "each candidate rule *would* give is published instead so the decision is "
-          "informed. Rows marked `rule-invariant` come out the same under all three "
-          "candidate rules, so the pending decision cannot move them.")
+        w("**For every query whose MDE depends on the undecided factor, no "
+          "`UNPROVABLE_ON_THIS_HOST` verdict is asserted here.** Section 6-d-1 says that when "
+          "the calibration supports no combination rule the worker reports and asks, and MUST "
+          "NOT pick a factor. For those queries the corrected MDE is therefore not a campaign "
+          "fact yet, and a verdict computed from one would be this campaign quietly making "
+          "the user's decision. Each affected row is **WITHHELD**, and what each candidate "
+          "rule *would* give is published instead so the decision is informed. Rows marked "
+          "`rule-invariant` come out the same under all three candidate rules, so the pending "
+          "decision cannot move them.")
+        w()
+        w("**Q01–Q06 rows in this table are real determinations.** Their MDE comes from a "
+          "DIRECTLY MEASURED restart-regime paired CV (section 6-d-1 step 6), no combination "
+          "rule enters it, and the pending decision cannot move them — so their verdicts are "
+          "stated normally rather than withheld.")
         w()
     # The header is CONDITIONED, not hardcoded. "(provisional)" is true only while the
     # combination rule is open; once a rule is chosen score_ranking.py's own methodology
@@ -502,7 +511,10 @@ def main():
               f"{t['evidence_weight']:g} | {t['expected_saved_seconds']:.4f} | "
               f"{cell(t.get('basis'))} | {cell(t.get('citation'))} |")
         w()
-    print("\n".join(OUT))
+    rendered = "\n".join(OUT)
+    state_labels.check(rendered, bool((d.get("calibration_status") or {}).get("STOP_AND_REPORT")),
+                       "priority-ranking.md")
+    print(rendered)
     return 0
 
 

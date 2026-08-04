@@ -1,6 +1,6 @@
 # Phase 1B priority ranking — campaign `tpch-sspq-impl-r1-20260803`
 
-Generated 2026-08-04T15:07:29Z. Pinned norm `tpch-sspq/IMPL-SSOT.md` commit `eccdd1ae58cd733ed3121585146d68b9ae54a73f`, blob `15b42ddca521444fa54b34b0fa8477ed2df643f6` (AMEND-A..G).
+Generated 2026-08-04T15:55:55Z. Pinned norm `tpch-sspq/IMPL-SSOT.md` commit `eccdd1ae58cd733ed3121585146d68b9ae54a73f`, blob `15b42ddca521444fa54b34b0fa8477ed2df643f6` (AMEND-A..G).
 
 **Phase gate.** This document is a Phase 1 deliverable. Phase 2 — writing any engine code — MUST NOT begin until the user has explicitly approved this ranking and the resulting candidate queue. There is no implicit promotion from Phase 1 to Phase 2.
 
@@ -343,7 +343,9 @@ A required enabler is inserted **immediately ahead of** the dependent candidate 
 
 The Phase 1B ranking MUST carry every candidate's expected effect against the MDE of its target queries, and the flag is raised **at ranking time** so it is known before a candidate is queued rather than discovered inconclusive after twelve pairs. The MDE used is the section 6-d-1 **corrected** MDE, never the raw fast-regime MDE. `UNPROVABLE_ON_THIS_HOST` does not delete a candidate; it states that this host cannot decide it.
 
-**No `UNPROVABLE_ON_THIS_HOST` verdict is asserted in this document.** Section 6-d-1 says that when the calibration supports no combination rule the worker reports and asks, and MUST NOT pick a factor. The corrected MDE is therefore not a campaign fact yet, and a verdict computed from one would be this campaign quietly making the user's decision. Each affected row is **WITHHELD**, and what each candidate rule *would* give is published instead so the decision is informed. Rows marked `rule-invariant` come out the same under all three candidate rules, so the pending decision cannot move them.
+**For every query whose MDE depends on the undecided factor, no `UNPROVABLE_ON_THIS_HOST` verdict is asserted here.** Section 6-d-1 says that when the calibration supports no combination rule the worker reports and asks, and MUST NOT pick a factor. For those queries the corrected MDE is therefore not a campaign fact yet, and a verdict computed from one would be this campaign quietly making the user's decision. Each affected row is **WITHHELD**, and what each candidate rule *would* give is published instead so the decision is informed. Rows marked `rule-invariant` come out the same under all three candidate rules, so the pending decision cannot move them.
+
+**Q01–Q06 rows in this table are real determinations.** Their MDE comes from a DIRECTLY MEASURED restart-regime paired CV (section 6-d-1 step 6), no combination rule enters it, and the pending decision cannot move them — so their verdicts are stated normally rather than withheld.
 
 | IMP ID | Query | Predicted effect | Corrected MDE (provisional for factor-dependent queries) | Verdict | Under each candidate rule |
 |---|---|---|---|---|---|

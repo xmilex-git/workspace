@@ -14,7 +14,11 @@ MDE cannot resolve a few-percent effect are called out by name.
 Usage: render_baseline_md.py fresh-baseline.json > fresh-baseline.md
 """
 import json
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import state_labels  # noqa: E402
 
 # The previous measurement campaign's CUBRID medians. INPUT EVIDENCE ONLY
 # (IMPL-SSOT section 1-b): shown for comparison so a material divergence is
@@ -261,15 +265,24 @@ def main():
     if escalated:
         w("### Queries a few-percent effect could not be proven on — ILLUSTRATIVE ONLY")
         w("")
-        w("**Nothing in this section is a determination.** The section 6-d-1 combination "
-          "rule is undecided (see the stop-and-report block above), so the corrected MDE "
-          "is not a campaign value and no query can yet be declared unable to resolve a "
-          "given effect. The rows below show which queries WOULD exceed a 3% corrected MDE "
-          "**under the most conservative of the three candidate rules** — one possibility "
-          "among three, listed so the shape of the decision is visible. "
-          "`tpch-sspq/impl/priority-ranking.md` asserts no `UNPROVABLE_ON_THIS_HOST` "
-          "verdict at all while the rule is open; it withholds every factor-dependent "
-          "determination and publishes all three rules' outcomes per row.")
+        w("**For Q07–Q22 nothing in this section is a determination.** The section 6-d-1 "
+          "combination rule is undecided (see the stop-and-report block above), so for those "
+          "queries the corrected MDE is not a campaign value and none of them can yet be "
+          "declared unable to resolve a given effect. Their rows below show which queries "
+          "WOULD exceed a 3% corrected MDE **under the most conservative of the three "
+          "candidate rules** — one possibility among three, listed so the shape of the "
+          "decision is visible.")
+        w("")
+        w("**Q01–Q06 are different and their rows ARE determinations.** Section 6-d-1 step 6 "
+          "uses their DIRECTLY MEASURED restart-regime paired CV, so no combination rule "
+          "enters their MDE and the pending decision cannot move them. Where a calibration "
+          "query appears below it is a real section 6-d statement about this host, and the "
+          "`basis` column says which kind of row you are looking at.")
+        w("")
+        w("`tpch-sspq/impl/priority-ranking.md` withholds every factor-dependent "
+          "`UNPROVABLE_ON_THIS_HOST` determination while the rule is open and publishes all "
+          "three rules' outcomes per row; the calibration queries' verdicts there are "
+          "asserted normally, for the same reason.")
     else:
         w("### Queries where a few-percent effect CANNOT be proven on this host")
     w("")
@@ -280,23 +293,34 @@ def main():
               "time** (section 6-d) — before it is queued, not after twelve pairs of "
               "measurement have come back inconclusive.")
             w("")
-        hdr = ("| Query | corrected MDE (illustrative) | median wall (s) | "
-               "an effect below this would be undecidable under this factor |"
+        hdr = ("| Query | basis | corrected MDE | median wall (s) | "
+               "an effect below this would be undecidable |"
                if escalated else
-               "| Query | corrected MDE | median wall (s) | an effect below this is undecidable here |")
+               "| Query | basis | corrected MDE | median wall (s) | an effect below this is undecidable here |")
         w(hdr)
-        w("|---|---:|---:|---|")
+        w("|---|---|---:|---:|---|")
         for r in coarse:
-            w(f"| {r['qnn']} | **{pct(_cm(r))}** | {s(r['median_wall_seconds'])} | "
+            measured = r.get("inflation_factor_applied") is None
+            basis = ("measured directly (section 6-d-1 step 6) — a real determination"
+                     if measured else
+                     ("illustrative, under the most conservative candidate rule"
+                      if escalated else "inflated fast-regime CV"))
+            w(f"| {r['qnn']} | {basis} | **{pct(_cm(r))}** | {s(r['median_wall_seconds'])} | "
               f"< {s(_cm(r) * r['median_wall_seconds'])} s |")
     else:
         w("No query's corrected MDE exceeds 3%"
           + (" under the illustrative factor." if escalated else "."))
     w("")
     if fine:
-        w(f"At the other end, {', '.join(r['qnn'] for r in fine)} sit at the 1% "
-          "floor — even after inflation their paired CV is below 0.5%, so the formula's 1% "
-          "floor, not the noise, is what limits them"
+        meas = [r['qnn'] for r in fine if r.get("inflation_factor_applied") is None]
+        infl = [r['qnn'] for r in fine if r.get("inflation_factor_applied") is not None]
+        parts = []
+        if meas:
+            parts.append(f"{', '.join(meas)} (measured restart-regime CV, no inflation applied)")
+        if infl:
+            parts.append(f"{', '.join(infl)} (even after inflation)")
+        w(f"At the other end, {' and '.join(parts)} sit at the 1% floor — their paired CV is "
+          "below 0.5%, so the formula's 1% floor, not the noise, is what limits them"
           + (", and that holds under every candidate rule, so the pending decision cannot "
              "move them." if escalated else "."))
         w("")
@@ -480,7 +504,9 @@ def main():
     w("Hashes, byte sizes and producing stage for every artifact are in "
       "`tpch-sspq/impl/raw-manifest.json`.")
     w("")
-    print("\n".join(out))
+    rendered = "\n".join(out)
+    state_labels.check(rendered, state_labels.escalated_from_baseline(d), "fresh-baseline.md")
+    print(rendered)
     return 0
 
 
