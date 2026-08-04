@@ -1,0 +1,490 @@
+{
+  "campaign_id": "tpch-sspq-impl-r1-20260803",
+  "impl_ssot_commit": "eccdd1ae58cd733ed3121585146d68b9ae54a73f",
+  "impl_ssot_blob": "15b42ddca521444fa54b34b0fa8477ed2df643f6",
+  "purpose": "The judgment half of IMPL-SSOT section 2-b, separated from the arithmetic so it is auditable. For every candidate and every one of its q_relations this file records the conservative_effect_fraction_q, the evidence level that sets evidence_weight_q, and the raw evidence pointer that produced the term. score_ranking.py then applies section 2-b/2-c/2-d mechanically. Nothing here is computed; nothing in the scorer is judged.",
+  "inputs_read": {
+    "frozen_registry": "tpch-sspq/reports/improvement-registry.json blob c38591819f8b34f52b6832d7fda41bc54a0077ba (INPUT EVIDENCE ONLY, section 1-b)",
+    "feasibility": "tpch-sspq/impl/feasibility-assessment.json (immutable, section 2-b-1 input 1)",
+    "triage": "tpch-sspq/impl/triage-adjustments.json (section 2-b-1 input 3, normative under AMEND-F)",
+    "fresh_baseline": "tpch-sspq/impl/fresh-baseline.json (section 2-b-1 input 2; supplies every fresh_base_median_q)",
+    "campaign_results": "tpch-sspq/impl/implementation-results.json (this campaign's own recorded verdicts)",
+    "new_this_run": "tpch-sspq/impl/diagnosis/Q15-parallel-non-arming.md (handoff task 2)"
+  },
+  "evidence_weights": {
+    "direct_ab": 1.0,
+    "lower_bound": 0.9,
+    "attribution": 0.7,
+    "projection": 0.5,
+    "upper_bound": 0.35,
+    "unmeasured": 0.0
+  },
+  "methodology_decisions": [
+    {
+      "id": "MD-1",
+      "decision": "A CPU-side figure is never substituted into a wall denominator.",
+      "reason": "Section 2-b multiplies fresh_base_median_q, which is a WALL median (section 3-c). AMEND-F's operational reading of the band rule blocks IMP-001 for exactly this reason — 'applying a CPU-side figure would overstate the benefit, possibly by a large factor'. Consistency requires the same treatment everywhere, not only for IMP-001. A term whose only quantified evidence is a core-second band, with no measured active-unit count U and no stated wall conversion, therefore has NO WALL BASIS and contributes 0 seconds. It is still listed (section 2-b: 'A q_relation with no numeric basis contributes 0 seconds. It is still listed, so the reader can see it, but it adds nothing'). This introduces no new status vocabulary — it applies the SSOT's own NO_NUMERIC_BASIS category at term granularity.",
+      "consequence": "Several profile-attribution candidates score 0. That is the honest outcome of a wall-denominated formula meeting CPU-denominated evidence, and it is visible rather than hidden."
+    },
+    {
+      "id": "MD-2",
+      "decision": "Where the registry itself supplies the CPU->wall conversion, the conversion is used and cited.",
+      "reason": "Section 2-b requires the removable fraction to be argued and stated. The registry argues it for some candidates (IMP-012 'projects 0.998 s', IMP-013 'about 0.12 s of wall', IMP-019 'about 0.220 s of the 4.039 s median at the measured U=5.89315', IMP-031 '2.02% of CUBRID's CPU and 2.05% of its wall'). Those are stated wall conversions, not inferences of ours.",
+      "q22_equivalence": "For Q22 specifically, IMP-031 measured the same mechanism at 2.02% of CPU and 2.05% of wall on the same statement, i.e. a CPU share and a wall share coincide within 1.5% relative on this query. IMP-029 and IMP-030 are Q22 core-second shares of the SAME 5.453622 core-s statement, so that measured equivalence is the stated argument that licenses their conversion. It is cited per term and is not generalized to any other query."
+    },
+    {
+      "id": "MD-3",
+      "decision": "An effect measured only outside the WARM-converged regime is not removable from a WARM baseline.",
+      "reason": "Phase 1A proves WARM convergence before measuring (section 3-c step 3), so fresh_base_median_q is a saturated-regime value. IMP-018's direct A/B is 3.544 s -> 1.342 s where 3.544 s is the FIRST connection's block median and 1.342 s is the SATURATED one (registry measurement.cubrid_block_median_s = {connection_1_of_the_query: 3.544, saturated: 1.342}); the connection sweep converges to 1.344-1.349 s by connection 6. The cost the candidate removes is therefore already absent from the baseline it would be scored against. The evidence is sound — triage confirmed it — but soundness is about the defect being real, not about the WARM baseline containing it.",
+      "consequence": "IMP-018 contributes 0 expected saved seconds while remaining a genuine defect for cold or short-lived-connection workloads. That distinction is stated in the ranking rather than resolved by arithmetic."
+    },
+    {
+      "id": "MD-4",
+      "decision": "A PostgreSQL figure may be used as an achievable FLOOR in a bound argument, never as a denominator of an effect.",
+      "reason": "Section 3-d forbids expressing a patch's effect as a ratio against PostgreSQL, and makes PostgreSQL a source contrast that motivates a change direction. IMP-009 and IMP-023 both argue their removable fraction by naming PostgreSQL's own measured value on the same plan shape as the floor. That is a stated removable-fraction argument (which section 2-b demands) and the resulting term is CUBRID-over-CUBRID. Every such term is marked postgresql_floor_argument=true and carries the Upper bound weight."
+    },
+    {
+      "id": "MD-5",
+      "decision": "A defect measured on a synthetic probe is not transferred to a named query without a stated transfer argument.",
+      "reason": "IMP-021's 1.5617x is measured on an isolated 1,500,000-group aggregate constructed to expose the defect, not on Q13. The registry supplies no quantified transfer to Q13's wall. Section 2-b's 'no numeric basis contributes 0 seconds' therefore applies to the Q13 term."
+    }
+  ],
+  "candidates": {
+    "IMP-001": {
+      "lane": "performance",
+      "benefit_status": "BENEFIT_PENDING_DENOMINATOR",
+      "scored": false,
+      "ranked": false,
+      "excluded_from_percentile_population": true,
+      "blocker": "Is the internal prototype's ~13% a WALL or a CPU reduction? expected_saved_seconds multiplies a wall median, so a CPU-side figure would overstate the benefit, possibly by a large factor.",
+      "authority": "triage-adjustments.json, normative under AMEND-F section 2-b-1",
+      "band_refutation": "The 62.35% expression/NUMERIC/DB_VALUE band is refuted as a removable effect by the prototype's ~13%; the band is a cost observation, not an effect.",
+      "terms": [
+        {"q": "Q01", "fraction": null, "evidence": "unmeasured", "basis": "no numeric benefit permitted while BENEFIT_PENDING_DENOMINATOR", "citation": "triage-adjustments.json IMP-001"},
+        {"q": "Q11", "fraction": null, "evidence": "unmeasured", "basis": "no numeric benefit permitted while BENEFIT_PENDING_DENOMINATOR", "citation": "triage-adjustments.json IMP-001"}
+      ]
+    },
+    "IMP-002": {
+      "lane": "deferred_research",
+      "benefit_status": "BENEFIT_CONFOUNDED",
+      "scored": false,
+      "ranked": false,
+      "excluded_from_percentile_population": true,
+      "blocker": "The Q04 1.160 core-s attribution is confounded with the IMP-018 mechanism; effective evidence weight 0.00 until IMP-018 and IMP-010 are fixed. Independent of its deferred_research lane, which alone already removes it from the ranked set.",
+      "authority": "triage-adjustments.json; lane from feasibility-assessment.json",
+      "terms": []
+    },
+    "IMP-003": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "cluster_note": "Alternative cluster with IMP-004 on Q02; IMP-003 is the queued member because its effect is measured on Q02's WALL. Also containment: IMP-003 contains IMP-004 for Q02. One-branch conflict with IMP-022 (same function region).",
+      "upstream_scope_gate": true,
+      "terms": [
+        {"q": "Q02", "fraction": 0.531, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "-53.1% of Q02 median wall (353 ms -> ~166 ms) from reordering alone. Used as the observed effect rate, not rounded up.",
+         "citation": "improvement-registry.json IMP-003.effect_range"},
+        {"q": "Q09", "fraction": 0.0, "evidence": "unmeasured",
+         "basis": "NO_NUMERIC_BASIS — 'Generalizes to any query whose cheap predicate is estimated less selective than an expensive string predicate' is a mechanism statement with no per-query number. Registry also records IMP-003 rejected by measurement as Q09's deciding term.",
+         "citation": "improvement-registry.json IMP-003.effect_range, IMP-014.alternatives"},
+        {"q": "Q16", "fraction": 0.0, "evidence": "unmeasured",
+         "basis": "NO_NUMERIC_BASIS — no per-query figure.",
+         "citation": "improvement-registry.json IMP-003.effect_range"}
+      ]
+    },
+    "IMP-004": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "cluster_note": "Alternative cluster with IMP-003 on Q02 and contained by it; NOT additive with IMP-003 (registry states this explicitly).",
+      "upstream_scope_gate": false,
+      "terms": [
+        {"q": "Q02", "fraction": 0.0, "evidence": "upper_bound", "wall_basis": false,
+         "basis": "MD-1. The quantified figure is a CPU band: 'Upper bound on Q02 is the 46.72% band (0.836 of 1.79 core-s)'. The 8.64x-9.75x figure is a reduction of the per-row LIKE cost, not of Q02's wall, and no active-unit count is given for Q02, so no wall conversion is available. Contributes 0 s and is listed.",
+         "citation": "improvement-registry.json IMP-004.effect_range"},
+        {"q": "Q13", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS — no per-query figure.", "citation": "improvement-registry.json IMP-004.q_relations"},
+        {"q": "Q16", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS — no per-query figure.", "citation": "improvement-registry.json IMP-004.q_relations"}
+      ]
+    },
+    "IMP-005": {
+      "lane": "enabler",
+      "scored": true,
+      "ranked": false,
+      "queue_position_rule": "Enabler-Predecessor: inserted immediately ahead of the dependent it unblocks (IMP-009 and IMP-012), inheriting the dependent's position, never its own benefit score (section 4-a).",
+      "terms": [
+        {"q": "*", "fraction": 0.0, "evidence": "unmeasured",
+         "basis": "'Diagnosability only; zero measured runtime effect (query results and headline timings are unaffected).' A zero benefit score is correct and expected for this lane.",
+         "citation": "improvement-registry.json IMP-005.effect_range"}
+      ]
+    },
+    "IMP-006": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "hard_stop_flag": "XASL serialization (section 5-d independent hard stop)",
+      "terms": [
+        {"q": "Q03", "fraction": 0.0, "evidence": "upper_bound", "wall_basis": false,
+         "basis": "MD-1. 'Upper bound on Q03's controlled plan is the 6.26 core-second band ... No wall-clock claim is made for CUBRID's native plan.' The registry itself declines the wall claim.",
+         "citation": "improvement-registry.json IMP-006.effect_range"},
+        {"q": "Q10", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-006.q_relations"},
+        {"q": "Q11", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-006.q_relations"},
+        {"q": "Q21", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-006.q_relations"}
+      ]
+    },
+    "IMP-007": {
+      "lane": "external_tracking",
+      "external_reference": "CBRD-26788",
+      "external_state": "watch",
+      "scored": false,
+      "ranked": false,
+      "note": "Moved to external_tracking by the user-led triage (AMEND-F section 4-a). Excluded from the implementation queue but still tracked to a resolution. This is not a benefit judgment. Its feasibility record also carries eligibility=blocked and lane deferred_research; the triage lane change supersedes for queue purposes.",
+      "authority": "triage-adjustments.json",
+      "terms": []
+    },
+    "IMP-008": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "terms": [
+        {"q": "Q04", "fraction": 0.0, "evidence": "attribution", "wall_basis": false,
+         "basis": "MD-1. '0.825 core-s of the 4.558 core-s Q04 CPU excess (18.1%) ... No wall-clock claim is made: at 5.4 active units a CPU saving converts to wall only in proportion.' The registry gives U=5.4 but also states the realistic target is only 'the coercion and domain-resolution prologue, since the comparison itself is irreducible', without quantifying that prologue. With no quantified removable portion there is nothing to convert.",
+         "citation": "improvement-registry.json IMP-008.effect_range"},
+        {"q": "Q06", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"},
+        {"q": "Q10", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"},
+        {"q": "Q12", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"},
+        {"q": "Q15", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"},
+        {"q": "Q16", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"},
+        {"q": "Q17", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"},
+        {"q": "Q19", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"},
+        {"q": "Q20", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"},
+        {"q": "Q21", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"},
+        {"q": "Q22", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-008.q_relations"}
+      ]
+    },
+    "IMP-009": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "predecessors": ["IMP-005"],
+      "cluster_note": "Containment with IMP-012 (the sibling SCAN branch of the same function compute_parallel_degree); effects on distinct queries, so no suppression is triggered, but the shared function is recorded.",
+      "terms": [
+        {"q": "Q05", "fraction": 0.8107, "evidence": "upper_bound", "wall_basis": true, "postgresql_floor_argument": true,
+         "basis": "MD-4. 'Upper bound on what perfect parallelization of this node recovers; the realistic bound is PostgreSQL's own 5.43 units on the same plan, i.e. CUBRID's 9.615 s would approach 9.8863 core-s / 5.43 units = 1.82 s.' The removable fraction is argued (PostgreSQL's own unit count on the SAME plan shape is the achievable floor), so the band rule is satisfied: 1 - 1.82/9.615 = 0.8107. Carried at the Upper bound weight 0.35 because the registry labels it an upper bound. The fraction transfers; the 9.615 s does NOT — the scorer multiplies this campaign's fresh_base_median_Q05.",
+         "citation": "improvement-registry.json IMP-009.effect_range"},
+        {"q": "Q11", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-009.q_relations"},
+        {"q": "Q16", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS — the registry attributes Q16's side effect to how many times the RHS is built, not a quantified wall term.", "citation": "improvement-registry.json IMP-025.containment"},
+        {"q": "Q20", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-009.q_relations"},
+        {"q": "Q21", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-009.q_relations"}
+      ]
+    },
+    "IMP-010": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "write_path_flag": true,
+      "terms": [
+        {"q": "Q06", "fraction": 0.0, "evidence": "direct_ab", "wall_basis": false,
+         "basis": "MD-1. The directly measured quantity is physical page reads per statement (458,209 -> 158,930, -4.57 GiB of page-cache traffic). The core-second consequence is explicitly conditional — 'IF the kernel read band scales with bytes, the 2.543 core-s band falls to about 0.882 core-s, releasing roughly 1.66 core-s of the 14.023 core-s Q06 CPU excess (11.8%)' — and no wall conversion is given. A conditional CPU band is not a wall fraction.",
+         "citation": "improvement-registry.json IMP-010.effect_range"},
+        {"q": "Q12", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-010.q_relations"},
+        {"q": "Q13", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-010.q_relations"}
+      ]
+    },
+    "IMP-011": {
+      "lane": "deferred_research",
+      "scored": true,
+      "ranked": false,
+      "upstream_scope_gate": true,
+      "cluster_note": "Contained by IMP-014 on Q09 — 'IMP-014 supplies the cardinality this candidate costs; Q09 effects overlap completely and must never be summed'. Listed with lane and rationale, no queue position (section 4-a: only the Performance lane is ranked).",
+      "terms": [
+        {"q": "Q07", "fraction": 0.7275, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "'3.6694x on Q07's CUBRID wall (23.719 s -> 6.464 s)'. Observed effect rate: 1 - 6.464/23.719 = 0.7275. Recorded for information only; the deferred_research lane carries no queue position, so this term never enters a campaign-level total.",
+         "citation": "improvement-registry.json IMP-011.effect_range"},
+        {"q": "Q09", "fraction": 0.0, "evidence": "unmeasured", "basis": "SUPPRESSED_OVERLAP — contained by IMP-014 on Q09; effects overlap completely and must never be summed.", "citation": "improvement-registry.json IMP-011.containment"},
+        {"q": "Q10", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-011.q_relations"},
+        {"q": "Q11", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-011.q_relations"},
+        {"q": "Q14", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-011.q_relations"}
+      ]
+    },
+    "IMP-012": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "predecessors": ["IMP-005"],
+      "triage_note": "PRIORITY_DISAGREEMENT — the 0.138 s projection does not support the registry's P0. That is a priority note, not a benefit block; the discovery Priority field is left untouched.",
+      "terms": [
+        {"q": "Q08", "fraction": 0.1215, "evidence": "projection", "wall_basis": true,
+         "basis": "MD-2. 'Amdahl on the measured split ... reconstructs the measured 1.136 s exactly at 5 units and projects 0.998 s at 6 units.' Stated wall conversion: 1 - 0.998/1.136 = 0.1215. Evidence level Projection because the registry labels the 0.998 s figure a projection (the F_units decomposition itself is attribution).",
+         "citation": "improvement-registry.json IMP-012.effect_range and IMP-012.evidence_type"},
+        {"q": "Q17", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-012.q_relations"},
+        {"q": "Q19", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-012.q_relations"}
+      ]
+    },
+    "IMP-013": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "triage_note": "BENEFIT_BASIS_CORRECTED — the benefit MUST be computed from the realistic 0.47 core-s target, never from the 32.7% band upper bound (AMEND-F section 2-b-1, cited by name).",
+      "write_path_flag": true,
+      "terms": [
+        {"q": "Q08", "fraction": 0.1056, "evidence": "attribution", "wall_basis": true,
+         "basis": "MD-2 + triage. 'A realistic target is the pgbuf_lru_boost_bcb plus mutex portion, 10.73% of profiled self cost, i.e. about 0.47 core-s of the 4.34 core-s statement, which at the measured U is about 0.12 s of wall.' The 4.34 core-s statement is Q08 (IMP-012 records total_query_cpu 4.3442 core-s per Q08 statement). Stated wall conversion 0.12 s against the 1.136 s Q08 median: 0.12/1.136 = 0.1056. This is the triage-mandated 0.47 core-s basis, not the 27.41%+5.32% band.",
+         "citation": "improvement-registry.json IMP-013.effect_range; triage-adjustments.json IMP-013; IMP-012.effect_range for the Q08 core-s identification"},
+        {"q": "Q09", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-013.q_relations"},
+        {"q": "Q10", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-013.q_relations"},
+        {"q": "Q11", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-013.q_relations"},
+        {"q": "Q13", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-013.q_relations"},
+        {"q": "Q15", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-013.q_relations"},
+        {"q": "Q19", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-013.q_relations"},
+        {"q": "Q20", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-013.q_relations"},
+        {"q": "Q21", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-013.q_relations"},
+        {"q": "Q22", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-013.q_relations"}
+      ]
+    },
+    "IMP-014": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "upstream_scope_gate": true,
+      "cluster_note": "Contains IMP-011 on Q09; IMP-014 is the registry's deciding term for Q09 and IMP-011's Q09 saving is suppressed.",
+      "terms": [
+        {"q": "Q09", "fraction": 0.35171, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "'Lower bound 1.5425x on Q09's wall by direct A/B (10.980999 s -> 7.118999 s)'. Observed effect rate 1 - 7.118999/10.980999 = 0.35171. The registry calls the FACTOR a lower bound while the measurement is a direct A/B on the wall, so the Direct A/B weight applies to the observed rate (section 2-b: 'for a direct A/B candidate, conservative_effect_fraction_q is the observed effect rate from that A/B'). Explicitly not generalized: the registry records Q08 as a measured positive control where forcing the hash shape makes CUBRID 1.5123x SLOWER.",
+         "citation": "improvement-registry.json IMP-014.effect_range"}
+      ]
+    },
+    "IMP-015": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "campaign_status": "ALREADY IMPLEMENTED AND MEASURED IN THIS CAMPAIGN — implementation-results.json records verdict 'accepted (provisional)' on branch impl/tpch-sspq-impl-r1-20260803/IMP-015-gby-sort-runtime-px, Notion synced. It is therefore not a queue candidate; it is listed with its recorded verdict.",
+      "cluster_note": "Alternative cluster with IMP-016 on Q10 (fixing either recovers the same 1.313675x); IMP-015 is the measured route and the implemented one, so IMP-016's Q10 term is suppressed. Contained by IMP-021, which removes the sort IMP-015 parallelizes — not additive.",
+      "terms": [
+        {"q": "Q10", "fraction": 0.23877, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "'Direct A/B on the query as written: 7.128 s -> 5.426 s, i.e. 1.313675x'. Observed effect rate 1 - 5.426/7.128 = 0.23877. This campaign's own re-measurement recorded a smaller realized effect and a lower achieved degree (parallel workers: 4, not 6) — see IMP-015/report.md; the registry rate is retained here because section 2-b prescribes the A/B's observed rate, and the divergence is reported in the ranking rationale rather than silently re-based.",
+         "citation": "improvement-registry.json IMP-015.effect_range; tpch-sspq/impl/IMP-015/report.md"},
+        {"q": "Q11", "fraction": 0.0, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "MEASURED NEGATIVE CONTROL, contributing 0: 'the controlled block measures /*+ NO_HASH_AGGREGATE */ at 1.340000 s against native 1.342000 s - F_plan 1.001493x, inside the 1.28% CUBRID block band'. Q11's group-by sorts 1,516 pages against the 2048-page threshold, so compute_parallel_degree returns < 2 regardless.",
+         "citation": "improvement-registry.json IMP-015.q_evidence.Q11"},
+        {"q": "Q15", "fraction": 0.0, "evidence": "unmeasured", "wall_basis": true,
+         "basis": "REFUTED THIS RUN. The registry listed Q15 as 'armed, lower-bound corroboration', but the handoff task 2 diagnosis proves the mechanism cannot arm on Q15: Q15's group-by input arrives through the parallel-heap-scan mergeable-list gather, where the leader never runs its own hash pass, so its agg_hash_context->state stays HS_ACCEPT_ALL and sort_check_parallelism returns 1 at external_sort.c:5232 before any size/degree/worker logic. The trace's 'hash: partial' on Q15 is a label force-assigned at px_scan_result_handler.cpp:635, not the runtime state the gate reads. Reproduced by a 4-leg hint contrast pair on the preserved IMP-015 binary.",
+         "citation": "tpch-sspq/impl/diagnosis/Q15-parallel-non-arming.md sections 2-3; IMP-032/report.md D1 probe"},
+        {"q": "Q18", "fraction": 0.0, "evidence": "upper_bound", "wall_basis": false,
+         "basis": "MD-1 plus a refuted target. The registry offers 'upper bound ~1.98x (63.4% of a 140.50 s block at ~1 active unit); no direct A/B available' — a previous-campaign block figure, not a wall fraction of this campaign's Q18. The IMP-032 D1 perf attribution further showed that the sort which actually parallelizes on Q18 is the partial hash-list sort (688 of 716 samples co-occur with qexec_hash_gby_put_next; ZERO with qexec_gby_put_next), i.e. IMP-015 change (b), not the main group-by sort this term was meant to price.",
+         "citation": "improvement-registry.json IMP-015.effect_range; IMP-032/report.md section 2; diagnosis/Q15-parallel-non-arming.md section 5"}
+      ]
+    },
+    "IMP-016": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "predecessors": ["IMP-017"],
+      "cluster_note": "Alternative cluster with IMP-015 on Q10; IMP-015 is implemented and accepted (provisional), so IMP-016's Q10 saving is SUPPRESSED_OVERLAP and must not be summed. IMP-017 is the predecessor for its memory arm.",
+      "terms": [
+        {"q": "Q10", "fraction": 0.0, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "SUPPRESSED_OVERLAP. 'On Q10 the whole observable effect is the fallback IMP-015 prices at 1.313675x'; the alternative-cluster rule queues at most one member and counts only the highest-scoring member's saving. IMP-015 already landed. The registry also declines to claim how much better IMP-016 alone would be, because the server-parameter experiment is blocked by IMP-017.",
+         "citation": "improvement-registry.json IMP-016.effect_range"},
+        {"q": "Q11", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-016.q_relations"},
+        {"q": "Q18", "fraction": 0.0, "evidence": "attribution", "wall_basis": false,
+         "basis": "MD-1. The only independently recoverable figure is '1.32% of profile spent on the discarded hash' — a CPU profile share with no wall conversion.",
+         "citation": "improvement-registry.json IMP-016.effect_range"}
+      ]
+    },
+    "IMP-017": {
+      "lane": "diagnostic",
+      "scored": true,
+      "ranked": false,
+      "queue_position_rule": "Diagnostic-Measurement-correctness: listed with lane and rationale, no queue position (section 4-a). It is a predecessor of IMP-016's memory arm.",
+      "terms": [
+        {"q": "Q10", "fraction": 0.0, "evidence": "unmeasured",
+         "basis": "'Zero measured effect on Q10's wall by itself, because HS_REJECT_ALL on Q10 is set by the selectivity test and not by the memory limit (query_executor.c:4845 is the only assignment site).' Independently re-confirmed this run: :4845 is still the only assignment site at the pinned base SHA.",
+         "citation": "improvement-registry.json IMP-017.effect_range; diagnosis/Q15-parallel-non-arming.md section 2-b #9"},
+        {"q": "Q18", "fraction": 0.0, "evidence": "unmeasured", "basis": "Diagnostic lane; not ranked for performance benefit.", "citation": "improvement-registry.json IMP-017.q_relations"}
+      ]
+    },
+    "IMP-018": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "write_path_flag": true,
+      "terms": [
+        {"q": "Q11", "fraction": 0.0, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "MD-3. The direct A/B is 3.544 s -> 1.342 s, but registry measurement.cubrid_block_median_s labels 3.544 s 'connection_1_of_the_query' and 1.342 s 'saturated', and connection_sweep_median_s converges to 1.344-1.349 s by connection 6. Phase 1A proves WARM convergence before measuring, so fresh_base_median_Q11 is the saturated value and does not contain the cost this candidate removes. Contributes 0 s against a WARM baseline while remaining a real defect for cold or short-lived-connection workloads.",
+         "citation": "improvement-registry.json IMP-018.measurement.cubrid_block_median_s and .connection_sweep_median_s"},
+        {"q": "Q14", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-018.q_relations"}
+      ]
+    },
+    "IMP-019": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "upstream_scope_gate": true,
+      "terms": [
+        {"q": "Q12", "fraction": 0.05447, "evidence": "projection", "wall_basis": true,
+         "basis": "MD-2. 'about 0.220 s of the 4.039 s median at the measured U=5.89315' — a stated wall conversion from measured counts times a measured unit cost: 0.220/4.039 = 0.05447. Evidence level Projection, exactly as the registry labels it.",
+         "citation": "improvement-registry.json IMP-019.effect_range and IMP-019.evidence_type"},
+        {"q": "Q17", "fraction": 0.0, "evidence": "unmeasured", "basis": "NO_NUMERIC_BASIS.", "citation": "improvement-registry.json IMP-019.q_relations"}
+      ]
+    },
+    "IMP-020": {
+      "lane": "deferred_research",
+      "scored": true,
+      "ranked": false,
+      "terms": [
+        {"q": "Q12", "fraction": 0.0, "evidence": "attribution", "wall_basis": false,
+         "basis": "MD-1 and lane. 'band A +3.2854 core-s and band B +1.4219 core-s, together +4.7073 core-s of Q12's +6.7771 core-s total query CPU excess (69.5%)' — core-second bands with no wall conversion. Deferred research carries no queue position regardless.",
+         "citation": "improvement-registry.json IMP-020.effect_range"}
+      ]
+    },
+    "IMP-021": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "cluster_note": "CONTAINS IMP-015 and IMP-023 — it removes the sort IMP-015 parallelizes and the input IMP-023's per-group loop consumes; not additive. Ordering matters: IMP-015 has already been measured, so if IMP-021 later lands it renders that measured gain moot. Recorded as a sequencing hazard, not a benefit change.",
+      "terms": [
+        {"q": "Q13", "fraction": 0.0, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "MD-5. The 1.5617x (0.883 s -> 1.379 s, medians of 5) is measured on an ISOLATED 1,500,000-group aggregate constructed so that the only change is adding a 1-row cross join. It is a clean demonstration of the defect but not a measurement of Q13, and the registry supplies no quantified transfer to Q13's wall.",
+         "citation": "improvement-registry.json IMP-021.effect_range"}
+      ]
+    },
+    "IMP-022": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "upstream_scope_gate": true,
+      "cluster_note": "One-branch conflict with IMP-003 (edits the same function region); sibling arm of the same estimator, effects never additive on a single term.",
+      "terms": [
+        {"q": "Q16", "fraction": 0.0, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "MEASURED ZERO, stated by the registry: '36.61x selectivity error on one sarg, 39.24x on the part-side conjunct, 0.0000x measured wall effect ... upper bound on Q16 is zero seconds.' A LATENT plan-space defect: real, provably pattern-independent, and worth zero seconds on this workload.",
+         "citation": "improvement-registry.json IMP-022.effect_range"}
+      ]
+    },
+    "IMP-023": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "hard_stop_flag": "XASL serialization (section 5-d independent hard stop)",
+      "cluster_note": "Contained by IMP-021 (which removes the input this loop consumes); shares qfile_* profile symbols with IMP-006 — bands must not be summed.",
+      "terms": [
+        {"q": "Q16", "fraction": 0.2599, "evidence": "upper_bound", "wall_basis": true, "postgresql_floor_argument": true,
+         "basis": "MD-4. 'Addressable band on Q16 = the serial-phase differential, 1.041 - 0.291 = 0.750 s of 2.886 s (25.99%) against the plan-controlled PostgreSQL leg.' This is a wall-seconds differential of the serial phase, and PostgreSQL's own 0.291 s on the plan-controlled leg is the argued achievable floor, satisfying the band rule. Carried at Upper bound weight 0.35 because it is an addressable band, and because sub-item (a) is bounded above by PostgreSQL's own measurement of the same optimization.",
+         "citation": "improvement-registry.json IMP-023.effect_range"}
+      ]
+    },
+    "IMP-024": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "hard_stop_flag": "XASL serialization (section 5-d independent hard stop)",
+      "cluster_note": "Orthogonal to IMP-015 and IMP-016 (compounds rather than overlaps); additive with IMP-026.",
+      "terms": [
+        {"q": "Q10", "fraction": 0.0, "evidence": "projection", "wall_basis": false,
+         "basis": "'Unquantified-in-this-campaign for wall-time' — the registry states plainly that no controlled reduced-key A/B was run and only the key-byte-width comparison is measured. NO_NUMERIC_BASIS.",
+         "citation": "improvement-registry.json IMP-024.effect_range and IMP-024.evidence_type"}
+      ]
+    },
+    "IMP-025": {
+      "lane": "external_tracking",
+      "external_reference": "#7533",
+      "external_state": "open pull request",
+      "scored": false,
+      "ranked": false,
+      "note": "Moved to external_tracking by the user-led triage (AMEND-F). Excluded from the implementation queue but still tracked to a resolution; not a benefit judgment. OQ-F4 requires confirming whether PR #7533 merged before closeout.",
+      "authority": "triage-adjustments.json",
+      "terms": []
+    },
+    "IMP-026": {
+      "lane": "deferred_research",
+      "scored": true,
+      "ranked": false,
+      "terms": [
+        {"q": "Q10", "fraction": 0.0, "evidence": "attribution", "wall_basis": false,
+         "basis": "'Unquantified as an isolated wall-time delta - report.md itself states this band cannot be separated from the surrounding sort in this campaign's measurement setup.' The 8.91% CPU-cycle share is the only quantified figure. NO_NUMERIC_BASIS.",
+         "citation": "improvement-registry.json IMP-026.effect_range"}
+      ]
+    },
+    "IMP-027": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "terms": [
+        {"q": "Q19", "fraction": 0.99177, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "'121.4491x wall on Q19 (46.514998 s -> 0.383000 s)', same-engine controlled, three gated blocks per configuration, corroborated by engine trace, /proc and independent COUNT(*) ground truth. Observed effect rate 1 - 0.383/46.514998 = 0.99177. The further 1.31x available from the FORM of the emitted clause is deliberately NOT added — section 2-b forbids rounding up a direct A/B.",
+         "citation": "improvement-registry.json IMP-027.effect_range and IMP-027.evidence_type"}
+      ]
+    },
+    "IMP-028": {
+      "lane": "external_tracking",
+      "external_reference": "#7533",
+      "external_state": "open pull request",
+      "scored": false,
+      "ranked": false,
+      "note": "Moved to external_tracking by the user-led triage (AMEND-F). Also structurally impossible in-campaign: semi/anti join is absent from CUBRID (0 grep hits tree-wide) per feasibility-assessment.json. Contains IMP-031, but since IMP-028 is not scored the containment does not suppress IMP-031 — recorded so a later lane decision re-applies it.",
+      "authority": "triage-adjustments.json; feasibility-assessment.json",
+      "terms": []
+    },
+    "IMP-029": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "cluster_note": "Shares the per-row DB_VALUE alloc/copy/clear band on Q22 with IMP-020 — must not be double counted. IMP-020 is deferred_research and unscored, so no suppression fires here. Sibling of IMP-025 on a different path; complementary to IMP-008.",
+      "terms": [
+        {"q": "Q22", "fraction": 0.20903, "evidence": "attribution", "wall_basis": true,
+         "basis": "MD-2 (Q22 CPU/wall equivalence). 'the recoverable range is 1.14-2.41 core-s of 5.453622 core-s per statement', with PostgreSQL's 0.22160 core-s named as the achievable floor for the same work. Section 2-b requires the conservative LOWER bound of a range: 1.14/5.453622 = 0.20903. Converted to a wall share on the strength of IMP-031's measurement on the SAME Q22 statement, where the same kind of band was 2.02% of CPU and 2.05% of wall. Carried at Attribution weight 0.70 because the isolating measurement is a band probe rather than a whole-query A/B.",
+         "citation": "improvement-registry.json IMP-029.effect_range and IMP-029.evidence_type; IMP-031.effect_range for the Q22 CPU/wall equivalence"}
+      ]
+    },
+    "IMP-030": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "acceptance_criterion_caveat": "feasibility-assessment.json records that the replacement is MORE accurate than the current string round-trip, so 'results unchanged' cannot be this candidate's acceptance criterion. That is an acceptance-design item for its implementation plan, not a benefit adjustment.",
+      "terms": [
+        {"q": "Q22", "fraction": 0.02310, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "MD-2 (Q22 CPU/wall equivalence). '0.126-0.190 core-s per statement (the observed replicate range), i.e. 2.3-3.5% of CUBRID's 5.453622 core-s', paired B6/B7, 4 replicates per engine, row set held identical at 190,691. Conservative lower bound of the range: 0.126/5.453622 = 0.02310, converted to a wall share on IMP-031's same-statement CPU/wall equivalence.",
+         "citation": "improvement-registry.json IMP-030.effect_range and IMP-030.evidence_type; IMP-031.effect_range for the Q22 CPU/wall equivalence"}
+      ]
+    },
+    "IMP-031": {
+      "lane": "performance",
+      "scored": true,
+      "ranked": true,
+      "cluster_note": "Contained by IMP-028 ('if IMP-028 ever landed this becomes moot — do not implement both, and do not sum them'). IMP-028 is external_tracking and unscored, so IMP-031 is not suppressed now; the containment is recorded so a later IMP-028 lane decision re-applies it.",
+      "terms": [
+        {"q": "Q22", "fraction": 0.0205, "evidence": "direct_ab", "wall_basis": true,
+         "basis": "'0.11004 core-s per statement on Q22, measured, i.e. 2.02% of CUBRID's CPU and 2.05% of its wall.' The wall share is stated directly by the registry, so no conversion is needed: 0.0205. Explicitly a LOWER bound on the general effect (on Q22 the orders heap pages are buffer-resident, trace ioread 0, so the eliminated lookups cost only CPU); the lower bound is what is used.",
+         "citation": "improvement-registry.json IMP-031.effect_range and IMP-031.evidence_type"}
+      ]
+    }
+  },
+  "clusters": [
+    {"type": "alternative", "members": ["IMP-003", "IMP-004"], "query_scope": ["Q02"], "queued": "IMP-003", "why": "IMP-003's effect is measured on Q02's WALL (-53.1%); IMP-004's Q02 figure is a CPU band with no wall conversion. The registry states the two are NOT additive."},
+    {"type": "containment", "members": ["IMP-003", "IMP-004"], "container": "IMP-003", "query_scope": ["Q02"], "why": "registry records 'IMP-004 (for Q02)' as contained by IMP-003."},
+    {"type": "alternative", "members": ["IMP-002", "IMP-007"], "queued": null, "why": "Both are excluded from the ranked set — IMP-002 by lane and BENEFIT_CONFOUNDED, IMP-007 by the external_tracking lane change."},
+    {"type": "alternative", "members": ["IMP-015", "IMP-016"], "query_scope": ["Q10"], "queued": "IMP-015", "why": "'fixing either recovers Q10's measured 1.313675x'; IMP-015 is the measured route and is already implemented with verdict 'accepted (provisional)'. IMP-016's Q10 saving is SUPPRESSED_OVERLAP."},
+    {"type": "predecessor", "members": ["IMP-017", "IMP-016"], "order": ["IMP-017", "IMP-016"], "why": "IMP-017 restores the max_agg_hash_size control that makes IMP-016's memory-limit hypothesis testable."},
+    {"type": "predecessor", "members": ["IMP-005", "IMP-009", "IMP-012"], "order": ["IMP-005", "IMP-009", "IMP-012"], "why": "The nested-chain trace merge is corrupt, so degree changes cannot be honestly read until IMP-005 lands. IMP-005 also shares a 176-line file with IMP-009/IMP-012 and must be sequenced."},
+    {"type": "containment", "members": ["IMP-014", "IMP-011"], "container": "IMP-014", "query_scope": ["Q09"], "why": "IMP-014 supplies the cardinality IMP-011 costs; Q09 effects overlap completely and must never be summed."},
+    {"type": "containment", "members": ["IMP-021", "IMP-015", "IMP-023"], "container": "IMP-021", "why": "IMP-021 removes the sort IMP-015 parallelizes and the input IMP-023's per-group loop consumes. Ordering hazard: IMP-015 is already measured, so landing IMP-021 later would render that measured gain moot."},
+    {"type": "containment", "members": ["IMP-028", "IMP-031"], "container": "IMP-028", "query_scope": ["Q22"], "why": "IMP-028's Q22 anti-join band contains IMP-031's 0.11004 core-s. IMP-028 is external_tracking and unscored, so the suppression is recorded but not applied."},
+    {"type": "containment", "members": ["IMP-020", "IMP-029"], "container": null, "query_scope": ["Q22"], "why": "Shared per-row DB_VALUE alloc/copy/clear band; IMP-020 is deferred_research and unscored, so no suppression fires."},
+    {"type": "conflict_one_branch_rule", "members": ["IMP-003", "IMP-022"], "why": "They edit the same function region; the one-branch rule (section 5-b) forbids one branch carrying both."}
+  ],
+  "id_unassigned_new_candidates": [
+    {
+      "label": "NEW-CAND-A",
+      "id": "UNASSIGNED — section 1-b forbids this campaign allocating a new IMP ID without user direction (next_id is IMP-032, consumed)",
+      "title": "Group-by fallback sort parallel eligibility on the parallel-scan mergeable-list gather path",
+      "source": "tpch-sspq/impl/diagnosis/Q15-parallel-non-arming.md (handoff task 2, this run)",
+      "problem": "px_scan_result_handler.cpp:635 force-assigns groupby_stats.groupby_hash = HS_REJECT_ALL for the trace label only, while the leader's agg_hash_context->state stays HS_ACCEPT_ALL because the leader never runs its own hash pass (:628-641). query_executor.c:5682 (IMP-015) / :5657 (base) therefore yields hash_eligible = 1 and sort_check_parallelism returns 1 at external_sort.c:5232 before any size, degree or worker logic.",
+      "two_arms": {
+        "performance": "Make the eligibility decision reflect call-site truth on the gather path, as IMP-015 change (b) already does unconditionally for the partial hash-list sort.",
+        "measurement_correctness": "Separate the forced trace label from the runtime state. The current trace cannot distinguish whether the leader ran a hash pass, and that ambiguity already caused a real candidate-selection error (IMP-015 plan section 5-c item 7 listed Q15 as 'armed')."
+      },
+      "relations": {"predecessor_of": ["IMP-032"], "complementary_to": ["IMP-015"], "anti_additive_with": ["IMP-021"], "lane_character": "performance + Diagnostic-Measurement-correctness"},
+      "target_queries": ["Q15 (2 group-by nodes)", "Q18"],
+      "expected_effect": "NOT DETERMINED. Task 2 was read-only; no section 6-c A/B was run. The leg A<->B and C<->D wall differences also change scan parallelism and therefore cannot be converted into an effect for the sort parallelization alone.",
+      "decision_requested": "Whether to allocate an IMP ID and, if so, whether the performance and measurement-correctness arms are one candidate or two."
+    }
+  ]
+}
