@@ -184,13 +184,41 @@ def main():
     corr = d.get("restart_variance_correction") or {}
     comb = corr.get("combination_rule") or {}
     if comb:
-        w(f"**Combination rule chosen: `{comb.get('rule')}`.** "
-          + (f"Value {comb.get('value'):.4f}. " if comb.get("value") is not None else "")
-          + (f"Form `{comb.get('form')}` with a={comb.get('a')}, b={comb.get('b')}. "
-             if comb.get("form") else ""))
-        w("")
-        w(comb.get("reason", ""))
-        w("")
+        if comb.get("rule") == "USER_DECISION_REQUIRED":
+            w("### ⛔ STOP-AND-REPORT — the combination rule is escalated to the user")
+            w("")
+            w("**IMPL-SSOT section 6-d-1 escalation, section 11-a.** The six calibration points "
+              "support neither a single pooled factor nor a defensible wall-magnitude-dependent "
+              "one, and section 6-d-1 forbids picking a factor to keep the sweep moving. **No "
+              "factor was chosen here.**")
+            w("")
+            w(f"Every corrected MDE in this file is therefore **PROVISIONAL**, computed under the "
+              f"most conservative of the six measured factors "
+              f"(**{comb.get('provisional_value'):.4f}x**, the maximum observed). That choice "
+              f"cannot under-correct, and under-correction is the single failure mode section "
+              f"6-d-1 exists to prevent — an MDE smaller than real A/B noise causes false "
+              f"accepts. {comb.get('provisional_is_not_a_decision', '')}")
+            w("")
+            w("The three candidate rules and their per-query consequences are tabulated in "
+              "`tpch-sspq/impl/priority-ranking.md`, together with the "
+              "additive-versus-multiplicative diagnostic that explains the direction of the "
+              "failure and the fourth option — collecting more calibration blocks, which answers "
+              "the question by measurement instead of by model choice.")
+            w("")
+            w("**Why neither rule fits:**")
+            w("")
+            for para in (comb.get("reason") or "").split("\n"):
+                if para.strip():
+                    w(f"- {para.strip()}")
+            w("")
+        else:
+            w(f"**Combination rule chosen: `{comb.get('rule')}`.** "
+              + (f"Value {comb.get('value'):.4f}. " if comb.get("value") is not None else "")
+              + (f"Form `{comb.get('form')}` with a={comb.get('a')}, b={comb.get('b')}. "
+                 if comb.get("form") else ""))
+            w("")
+            w(comb.get("reason", ""))
+            w("")
         sp = corr.get("inflation_factor_spread") or {}
         if sp:
             w(f"Per-query clamped factors: "

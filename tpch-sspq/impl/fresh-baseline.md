@@ -119,13 +119,21 @@ The fast Phase 1A regime runs all six blocks of a query on **one continuous serv
 
 `corrected_MDE_q = max(1%, 2 × inflation × paired_CV_fast_q)` for Q07–Q22. Q01–Q06 use their **directly measured** restart-regime paired CV instead: there is no reason to estimate a quantity that was measured. The inflation factor, its six per-query points, their spread and the written reason for how they were combined are published separately in `tpch-sspq/impl/restart-variance-calibration.json` so the factor is auditable independently of this file.
 
-**Combination rule chosen: `USER_DECISION_REQUIRED`.** 
+### ⛔ STOP-AND-REPORT — the combination rule is escalated to the user
 
-NEITHER a single pooled factor NOR a defensible wall-magnitude-dependent factor fits the six calibration points.
-(a) The wall-dependent fit is not robust. Full-sample pearson r = 0.7150 clears the declared 0.70 threshold by 0.015 and the residual reduction 30.1% clears the declared 30% threshold by 0.1 points, but leave-one-out shows the association is carried by individual points: dropping Q01 gives r=+0.3928, Q04 gives r=+0.6878 (all six: Q01:+0.3928, Q02:+0.7189, Q03:+0.7833, Q04:+0.6878, Q05:+0.8027, Q06:+0.7754).
-(b) A single pooled factor is out of range: the clamped factors span 1.4039..15.3158, a ratio of 10.91, beyond the declared stop ratio of 10.0.
-(c) The model is contradicted directly by near-equal walls: Q03 at 4.539s has factor 1.452 while Q06 at 3.846s has factor 6.424 — walls differ 1.18x, factors differ 4.43x.
-(d) Mechanism for the instability, so this is not left as an unexplained anomaly: the ratio's DENOMINATOR is at the resolution floor for the two queries carrying the extreme factors. Fast-regime paired CV is 0.000972 for Q01 and 0.001123 for Q06, each estimated from only 3 pairs. A ratio whose denominator is a 3-pair estimate of a ~0.1% dispersion is not a stable quantity, and that is exactly where the 15.3x and 6.4x factors come from.
+**IMPL-SSOT section 6-d-1 escalation, section 11-a.** The six calibration points support neither a single pooled factor nor a defensible wall-magnitude-dependent one, and section 6-d-1 forbids picking a factor to keep the sweep moving. **No factor was chosen here.**
+
+Every corrected MDE in this file is therefore **PROVISIONAL**, computed under the most conservative of the six measured factors (**15.3158x**, the maximum observed). That choice cannot under-correct, and under-correction is the single failure mode section 6-d-1 exists to prevent — an MDE smaller than real A/B noise causes false accepts. Section 6-d-1 forbids picking a factor to keep the sweep moving. This value is not picked for convenience: it is the most conservative of the six measured factors, so it cannot under-correct and therefore cannot cause a false accept. Every downstream artifact produced under it is labelled provisional, and the consequences of all three candidate rules are published side by side so the decision is the user's.
+
+The three candidate rules and their per-query consequences are tabulated in `tpch-sspq/impl/priority-ranking.md`, together with the additive-versus-multiplicative diagnostic that explains the direction of the failure and the fourth option — collecting more calibration blocks, which answers the question by measurement instead of by model choice.
+
+**Why neither rule fits:**
+
+- NEITHER a single pooled factor NOR a defensible wall-magnitude-dependent factor fits the six calibration points.
+- (a) The wall-dependent fit is not robust. Full-sample pearson r = 0.7150 clears the declared 0.70 threshold by 0.015 and the residual reduction 30.1% clears the declared 30% threshold by 0.1 points, but leave-one-out shows the association is carried by individual points: dropping Q01 gives r=+0.3928, Q04 gives r=+0.6878 (all six: Q01:+0.3928, Q02:+0.7189, Q03:+0.7833, Q04:+0.6878, Q05:+0.8027, Q06:+0.7754).
+- (b) A single pooled factor is out of range: the clamped factors span 1.4039..15.3158, a ratio of 10.91, beyond the declared stop ratio of 10.0.
+- (c) The model is contradicted directly by near-equal walls: Q03 at 4.539s has factor 1.452 while Q06 at 3.846s has factor 6.424 — walls differ 1.18x, factors differ 4.43x.
+- (d) Mechanism for the instability, so this is not left as an unexplained anomaly: the ratio's DENOMINATOR is at the resolution floor for the two queries carrying the extreme factors. Fast-regime paired CV is 0.000972 for Q01 and 0.001123 for Q06, each estimated from only 3 pairs. A ratio whose denominator is a 3-pair estimate of a ~0.1% dispersion is not a stable quantity, and that is exactly where the 15.3x and 6.4x factors come from.
 
 Per-query clamped factors: Q01 15.3158, Q02 1.4039, Q03 1.4516, Q04 1.4760, Q05 2.2719, Q06 6.4235. Spread 1.4039..15.3158 (ratio 10.91), geometric mean 2.9598, pearson r of ln(inflation) vs ln(wall) = 0.7150.
 
