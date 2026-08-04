@@ -225,17 +225,48 @@ def build():
         if pooled_resid_sd:
             reduction = (pooled_resid_sd - fit_resid_sd) / pooled_resid_sd
 
+    # ---- G4: leave-one-out robustness of the wall-magnitude fit -------------
+    # DISCLOSURE: G1-G3 and the two acceptance thresholds were declared before the
+    # fast-regime data existed. G4 was added AFTER the first run came in marginal —
+    # pearson r = 0.7150 against a 0.70 threshold and a 30.1% residual reduction
+    # against a 30% threshold, i.e. both criteria passed by roughly a tenth of a
+    # percentage point. A criterion that a dataset clears by that margin is not
+    # evidence of a relationship; it is evidence that the test is under-powered at
+    # n = 6. G4 only ever TIGHTENS acceptance — it can turn an accepted fit into a
+    # stop-and-report, never the reverse — and leave-one-out is the standard
+    # robustness check for a correlation at this sample size, not a threshold tuned
+    # to this data.
+    loo = {}
+    for drop in CALIB_QUERIES:
+        sub = [q for q in CALIB_QUERIES if q != drop]
+        rr = pearson([math.log(walls[q]) for q in sub], [math.log(factors[q]) for q in sub])
+        loo[drop] = rr
+    loo_fails = sorted(q for q, rr in loo.items()
+                       if rr is None or abs(rr) < R_ACCEPT)
+    fit_is_robust = not loo_fails
+
     accept_fit = bool(
         r is not None and abs(r) >= R_ACCEPT
-        and reduction is not None and reduction >= RESIDUAL_REDUCTION_ACCEPT)
+        and reduction is not None and reduction >= RESIDUAL_REDUCTION_ACCEPT
+        and fit_is_robust)
     spread_ratio = (max(fv) / min(fv)) if min(fv) else float("inf")
-    if not accept_fit and spread_ratio > SPREAD_STOP_RATIO:
-        raise StopAndReport(
-            f"clamped inflation factors span {min(fv):.4f}..{max(fv):.4f} "
-            f"(ratio {spread_ratio:.2f} > {SPREAD_STOP_RATIO}) and the wall-magnitude fit "
-            f"was not accepted (|r|={None if r is None else abs(r):.4f}, "
-            f"residual reduction={reduction}). No single pooled factor and no defensible "
-            "wall-dependent factor fits — section 6-d-1 escalation / section 11-a")
+
+    # Near-equal-wall contradiction: the sharpest single test of a wall-magnitude
+    # model is whether two queries at nearly the same wall carry nearly the same
+    # factor. Reported whether or not it trips anything.
+    pairs = []
+    for i, qa in enumerate(CALIB_QUERIES):
+        for qb in CALIB_QUERIES[i + 1:]:
+            wr = max(walls[qa], walls[qb]) / min(walls[qa], walls[qb])
+            fr = max(factors[qa], factors[qb]) / min(factors[qa], factors[qb])
+            if wr <= 1.5:
+                pairs.append({"queries": [qa, qb], "wall_ratio": wr, "factor_ratio": fr,
+                              "walls_s": [walls[qa], walls[qb]],
+                              "factors": [factors[qa], factors[qb]]})
+    contradictions = [p for p in pairs if p["factor_ratio"] > 2.0]
+
+    pooled_ok = spread_ratio <= SPREAD_STOP_RATIO
+    max_factor = max(fv)
 
     if accept_fit:
         combination = {
@@ -245,40 +276,109 @@ def build():
             "reason": (
                 f"The six points show a strong log-log association between the restart "
                 f"penalty and the query's wall magnitude (pearson r = {r:.4f} on "
-                f"ln(inflation) vs ln(wall), |r| >= {R_ACCEPT}), and the log-linear fit "
+                f"ln(inflation) vs ln(wall), |r| >= {R_ACCEPT}), the log-linear fit "
                 f"cuts the residual spread of ln(inflation) by {reduction:.1%} "
                 f"(>= {RESIDUAL_REDUCTION_ACCEPT:.0%}) versus a single pooled factor "
-                f"({pooled_resid_sd:.4f} -> {fit_resid_sd:.4f}). A pooled factor would "
-                f"therefore systematically over-correct one end of the 0.35 s..31 s wall "
-                f"span and under-correct the other, and under-correction is the direction "
-                f"that causes false accepts."),
+                f"({pooled_resid_sd:.4f} -> {fit_resid_sd:.4f}), and the association "
+                f"survives leave-one-out on all six points. A pooled factor would "
+                f"therefore systematically over-correct one end of the wall span and "
+                f"under-correct the other, and under-correction is the direction that "
+                f"causes false accepts."),
         }
-    else:
+    elif pooled_ok:
         combination = {
             "rule": "single_pooled_factor",
             "value": pooled,
             "statistic": "geometric mean of the six clamped per-query factors",
             "reason": (
-                f"The six points do NOT support a wall-magnitude-dependent factor: "
-                f"pearson r = {r if r is None else round(r, 4)} on ln(inflation) vs "
-                f"ln(wall) (acceptance needs |r| >= {R_ACCEPT}) and the log-linear fit "
-                f"changes the residual spread of ln(inflation) by "
-                f"{'n/a' if reduction is None else format(reduction, '.1%')} "
-                f"(acceptance needs >= {RESIDUAL_REDUCTION_ACCEPT:.0%}). With no wall "
-                f"dependence to model, a single pooled factor is the honest reduction. "
+                f"The six points do NOT support a wall-magnitude-dependent factor "
+                f"(pearson r = {r if r is None else round(r, 4)}, residual reduction "
+                f"{'n/a' if reduction is None else format(reduction, '.1%')}, "
+                f"leave-one-out failures: {loo_fails or 'none'}). With no wall dependence "
+                f"that survives scrutiny, a single pooled factor is the honest reduction. "
                 f"The geometric mean is used because an inflation factor is a ratio, so "
-                f"the pooled value must be multiplicative; the arithmetic mean would bias "
-                f"the factor upward for no measured reason. Factor spread "
+                f"the pooled value must be multiplicative. Factor spread "
                 f"{min(fv):.4f}..{max(fv):.4f} (ratio {spread_ratio:.2f}, within the "
                 f"declared stop threshold {SPREAD_STOP_RATIO})."),
         }
+    else:
+        # Section 6-d-1 escalation: neither form fits. The factor is NOT chosen here.
+        # A provisional CONSERVATIVE factor is applied so the rest of Phase 1 can be
+        # produced and read, and it is the maximum observed factor precisely because
+        # over-correction is the safe direction — under-correction is what causes false
+        # accepts. This is a fail-safe, not a decision.
+        combination = {
+            "rule": "USER_DECISION_REQUIRED",
+            "STOP_AND_REPORT": True,
+            "section": "IMPL-SSOT 6-d-1 escalation / 11-a",
+            "provisional_rule_applied": "max_observed_factor",
+            "provisional_value": max_factor,
+            "provisional_is_not_a_decision": (
+                "Section 6-d-1 forbids picking a factor to keep the sweep moving. This "
+                "value is not picked for convenience: it is the most conservative of the "
+                "six measured factors, so it cannot under-correct and therefore cannot "
+                "cause a false accept. Every downstream artifact produced under it is "
+                "labelled provisional, and the consequences of all three candidate rules "
+                "are published side by side so the decision is the user's."),
+            "reason": (
+                f"NEITHER a single pooled factor NOR a defensible wall-magnitude-dependent "
+                f"factor fits the six calibration points.\n"
+                f"(a) The wall-dependent fit is not robust. Full-sample pearson r = "
+                f"{r:.4f} clears the declared 0.70 threshold by 0.015 and the residual "
+                f"reduction {reduction:.1%} clears the declared 30% threshold by 0.1 "
+                f"points, but leave-one-out shows the association is carried by "
+                f"individual points: dropping "
+                + ", ".join(f"{q} gives r={loo[q]:+.4f}" for q in loo_fails)
+                + f" (all six: "
+                + ", ".join(f"{q}:{loo[q]:+.4f}" for q in CALIB_QUERIES) + ").\n"
+                f"(b) A single pooled factor is out of range: the clamped factors span "
+                f"{min(fv):.4f}..{max(fv):.4f}, a ratio of {spread_ratio:.2f}, beyond the "
+                f"declared stop ratio of {SPREAD_STOP_RATIO}.\n"
+                f"(c) The model is contradicted directly by near-equal walls: "
+                + "; ".join(
+                    f"{p['queries'][0]} at {p['walls_s'][0]:.3f}s has factor "
+                    f"{p['factors'][0]:.3f} while {p['queries'][1]} at "
+                    f"{p['walls_s'][1]:.3f}s has factor {p['factors'][1]:.3f} — walls "
+                    f"differ {p['wall_ratio']:.2f}x, factors differ {p['factor_ratio']:.2f}x"
+                    for p in contradictions) + ".\n"
+                f"(d) Mechanism for the instability, so this is not left as an unexplained "
+                f"anomaly: the ratio's DENOMINATOR is at the resolution floor for the two "
+                f"queries carrying the extreme factors. Fast-regime paired CV is "
+                f"{per_query['Q01']['fast_regime']['paired_cv']:.6f} for Q01 and "
+                f"{per_query['Q06']['fast_regime']['paired_cv']:.6f} for Q06, each "
+                f"estimated from only 3 pairs. A ratio whose denominator is a 3-pair "
+                f"estimate of a ~0.1% dispersion is not a stable quantity, and that is "
+                f"exactly where the 15.3x and 6.4x factors come from."),
+        }
 
-    def factor_for(wall_s):
-        if combination["rule"] == "wall_magnitude_dependent":
-            return max(1.0, math.exp(combination["a"] + combination["b"] * math.log(wall_s)))
-        return combination["value"]
+    combination["leave_one_out_pearson_r"] = loo
+    combination["leave_one_out_failures"] = loo_fails
+    combination["near_equal_wall_pairs"] = pairs
+    combination["near_equal_wall_contradictions"] = contradictions
+    combination["candidate_rules_for_user_decision"] = {
+        "wall_magnitude_dependent": {"a": a, "b": b, "full_sample_pearson_r": r,
+                                     "residual_reduction": reduction,
+                                     "robust_under_leave_one_out": fit_is_robust},
+        "single_pooled_geometric_mean": {"value": pooled, "spread_ratio": spread_ratio,
+                                         "within_declared_stop_ratio": pooled_ok},
+        "max_observed_factor": {"value": max_factor,
+                                "property": "cannot under-correct; cannot cause a false accept"},
+    }
 
-    max_factor = max(fv)
+    def factor_for(wall_s, rule=None):
+        rule = rule or combination["rule"]
+        if rule == "wall_magnitude_dependent":
+            return max(1.0, math.exp(a + b * math.log(wall_s)))
+        if rule == "single_pooled_factor":
+            return combination["value"]
+        if rule == "single_pooled_geometric_mean":
+            return pooled
+        if rule in ("max_observed_factor", "USER_DECISION_REQUIRED"):
+            return max_factor
+        raise ValueError(rule)
+
+    ALT_RULES = ("wall_magnitude_dependent", "single_pooled_geometric_mean",
+                 "max_observed_factor")
 
     # ---- steps 5/6: corrected MDE per query --------------------------------
     corrected = {}
@@ -317,14 +417,32 @@ def build():
                 "paired_cv_used": inf * f["paired_cv"],
                 "corrected_mde": max(0.01, 2 * inf * f["paired_cv"]),
                 "corrected_mde_at_max_factor": max(0.01, 2 * max_factor * f["paired_cv"]),
+                "corrected_mde_under_each_candidate_rule": {
+                    rule: max(0.01, 2 * factor_for(wall or 1.0, rule) * f["paired_cv"])
+                    for rule in ALT_RULES},
+                "inflation_under_each_candidate_rule": {
+                    rule: factor_for(wall or 1.0, rule) for rule in ALT_RULES},
             })
             if (rec["corrected_mde"] != rec["corrected_mde_at_max_factor"]):
                 flip.append(q)
         corrected[q] = rec
 
+    stop = combination.get("STOP_AND_REPORT", False)
     out = {
         "PARTIAL": False,
-        "phase": "Phase 1A complete — fast regime measured, restart-variance correction applied",
+        "STOP_AND_REPORT": stop,
+        "user_decision_required": (
+            "IMPL-SSOT section 6-d-1 escalation: neither a single pooled factor nor a "
+            "defensible wall-magnitude-dependent factor fits the six calibration points. "
+            "The corrected MDE published here, and every UNPROVABLE_ON_THIS_HOST verdict "
+            "derived from it, is PROVISIONAL and was computed under the most conservative "
+            "of the six measured factors so it cannot under-correct. Choose the "
+            "combination rule, or direct more calibration blocks, before any Phase 2 A/B "
+            "accept decision uses this MDE." if stop else None),
+        "phase": ("Phase 1A complete — fast regime measured; restart-variance correction "
+                  "computed but the combination rule is ESCALATED to the user"
+                  if stop else
+                  "Phase 1A complete — fast regime measured, restart-variance correction applied"),
         "campaign_id": cfg.CAMPAIGN,
         "impl_ssot_commit": cfg.IMPL_SSOT_COMMIT,
         "impl_ssot_blob": cfg.IMPL_SSOT_BLOB,

@@ -272,6 +272,33 @@ def build(impl_dir):
         },
         "fresh_base_medians_seconds": medians,
         "corrected_mde": corrected,
+        "calibration_status": {
+            "STOP_AND_REPORT": calib.get("STOP_AND_REPORT", False),
+            "combination_rule": (calib.get("combination") or {}).get("rule"),
+            "provisional_rule_applied": (calib.get("combination") or {}).get("provisional_rule_applied"),
+            "provisional_value": (calib.get("combination") or {}).get("provisional_value"),
+            "user_decision_required": calib.get("user_decision_required"),
+            "reason": (calib.get("combination") or {}).get("reason"),
+            "candidate_rules_for_user_decision": (calib.get("combination") or {}).get(
+                "candidate_rules_for_user_decision"),
+            "leave_one_out_pearson_r": (calib.get("combination") or {}).get("leave_one_out_pearson_r"),
+            "near_equal_wall_contradictions": (calib.get("combination") or {}).get(
+                "near_equal_wall_contradictions"),
+            "effect_on_this_ranking": (
+                "Every UNPROVABLE_ON_THIS_HOST verdict below is computed against the "
+                "PROVISIONAL corrected MDE. Because the provisional factor is the most "
+                "conservative of the six measured factors, the flag can only be raised too "
+                "OFTEN here, never too rarely: a candidate marked provable is provable under "
+                "every candidate rule, while a candidate marked UNPROVABLE may become "
+                "provable if the user selects a smaller factor."
+                if calib.get("STOP_AND_REPORT") else
+                "The combination rule was accepted, so the corrected MDE is final."),
+        },
+        "corrected_mde_under_each_candidate_rule": {
+            q: (r or {}).get("corrected_mde_under_each_candidate_rule")
+            for q, r in calib["corrected_mde"].items()
+            if (r or {}).get("corrected_mde_under_each_candidate_rule")
+        },
         "candidates": records,
         "queue": queue,
         "sensitivity": {

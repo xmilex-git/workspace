@@ -74,6 +74,77 @@ def main():
       "code — MUST NOT begin until the user has explicitly approved this ranking and the "
       "resulting candidate queue. There is no implicit promotion from Phase 1 to Phase 2.")
     w()
+    cs = d.get("calibration_status") or {}
+    if cs.get("STOP_AND_REPORT"):
+        w("---")
+        w()
+        w("## ⛔ STOP-AND-REPORT — the restart-variance combination rule is a user decision")
+        w()
+        w("**IMPL-SSOT section 6-d-1 escalation, section 11-a.** The six calibration points "
+          "support **neither** a single pooled factor **nor** a defensible "
+          "wall-magnitude-dependent one. Section 6-d-1 is explicit that in this case the "
+          "worker reports the calibration data and asks, and **MUST NOT pick a factor to "
+          "keep the sweep moving**.")
+        w()
+        w("Nothing here was picked for convenience. So that the rest of Phase 1 could still "
+          "be produced and read, the corrected MDE below was computed under the "
+          f"**most conservative** of the six measured factors "
+          f"(**{cs.get('provisional_value'):.4f}x**). That choice cannot under-correct, and "
+          "under-correction is the single failure mode section 6-d-1 exists to prevent — an "
+          "MDE smaller than real A/B noise causes **false accepts**.")
+        w()
+        w("**Consequence for reading this document:** every `UNPROVABLE_ON_THIS_HOST` verdict "
+          "is provisional and errs toward flagging. A candidate marked provable here is "
+          "provable under *every* candidate rule; a candidate marked `UNPROVABLE_ON_THIS_HOST` "
+          "may become provable if a smaller factor is chosen.")
+        w()
+        w("### Why neither rule fits")
+        w()
+        for para in (cs.get("reason") or "").split("\n"):
+            if para.strip():
+                w(f"- {para.strip()}")
+        w()
+        loo = cs.get("leave_one_out_pearson_r") or {}
+        if loo:
+            w("Leave-one-out pearson r on ln(inflation) vs ln(wall) — the association is "
+              "carried by individual points, which is what a genuine relationship at n=6 "
+              "must not do:")
+            w()
+            w("| dropped query | r on the remaining five |")
+            w("|---|---:|")
+            for q in sorted(loo):
+                v = loo[q]
+                mark = " **fails the 0.70 threshold**" if (v is None or abs(v) < 0.70) else ""
+                w(f"| {q} | {'—' if v is None else f'{v:+.4f}'}{mark} |")
+            w()
+        w("### The three candidate rules, side by side")
+        w()
+        w("| Rule | Value / form | Status |")
+        w("|---|---|---|")
+        for name, r in (cs.get("candidate_rules_for_user_decision") or {}).items():
+            if name == "wall_magnitude_dependent":
+                val = f"inflation(wall) = max(1, exp({r.get('a'):.4f} + {r.get('b'):.4f}·ln wall))"
+                st = (f"full-sample r={r.get('full_sample_pearson_r'):.4f}, residual cut "
+                      f"{r.get('residual_reduction'):.1%}, robust under leave-one-out: "
+                      f"**{r.get('robust_under_leave_one_out')}**")
+            elif name == "single_pooled_geometric_mean":
+                val = f"{r.get('value'):.4f}x (geometric mean)"
+                st = (f"factor spread ratio {r.get('spread_ratio'):.2f}; within the declared "
+                      f"stop ratio of 10: **{r.get('within_declared_stop_ratio')}**")
+            else:
+                val = f"{r.get('value'):.4f}x"
+                st = r.get("property", "")
+            w(f"| `{name}` | {val} | {st} |")
+        w()
+        w("A fourth option exists and is not a rule choice: **collect more calibration "
+          "blocks**. The instability's mechanism is that the ratio's denominator — the "
+          "fast-regime paired CV — is a 3-pair estimate of a ~0.1% dispersion for the two "
+          "queries carrying the extreme factors, so more blocks per query would shrink the "
+          "denominator's uncertainty directly rather than model around it.")
+        w()
+        w("Per-query corrected MDE under each candidate rule is tabulated in the "
+          "**Expected effect against the CORRECTED MDE** section below.")
+        w()
     w("## Inputs (section 2-b-1 requires all three)")
     w()
     w("| # | Input | Role |")
@@ -230,11 +301,28 @@ def main():
     w()
     w("### Per-query corrected MDE")
     w()
-    w("| Query | Fresh base median (s) | Corrected MDE |")
-    w("|---|---|---|")
-    for q in sorted(medians):
-        m = medians[q]
-        w(f"| {q} | {'—' if m is None else f'{m:.4f}'} | {fmt_pct(mde.get(q))} |")
+    alt = d.get("corrected_mde_under_each_candidate_rule") or {}
+    rules = sorted({r for v in alt.values() for r in (v or {})})
+    if rules:
+        w("| Query | Fresh base median (s) | Corrected MDE (applied) | "
+          + " | ".join(f"under `{r}`" for r in rules) + " |")
+        w("|---|---|---|" + "---|" * len(rules))
+        for q in sorted(medians):
+            m = medians[q]
+            cells = [fmt_pct((alt.get(q) or {}).get(r)) if alt.get(q) else "measured directly"
+                     for r in rules]
+            w(f"| {q} | {'—' if m is None else f'{m:.4f}'} | {fmt_pct(mde.get(q))} | "
+              + " | ".join(cells) + " |")
+        w()
+        w("`measured directly` marks Q01–Q06, which use their **measured** restart-regime "
+          "paired CV rather than an inflated fast-regime one (section 6-d-1 step 6), so no "
+          "combination rule applies to them and the pending decision cannot move them.")
+    else:
+        w("| Query | Fresh base median (s) | Corrected MDE |")
+        w("|---|---|---|")
+        for q in sorted(medians):
+            m = medians[q]
+            w(f"| {q} | {'—' if m is None else f'{m:.4f}'} | {fmt_pct(mde.get(q))} |")
     w()
     w("**The 6.0 core-s/s external-CPU gate does not guarantee that this host can resolve "
       "small effects.** It bounds only gross contention. Resolution is carried by the paired "
