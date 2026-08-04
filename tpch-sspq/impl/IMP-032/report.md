@@ -201,6 +201,24 @@ Q10 비대칭 가드(IMP-015가 확보한 −9.92%)는 이 IMP로 인해 위협�
 | **P** | **없음** |
 | runtime conf | `ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff` (§6-a-2 핀 일치, 프로브 블록에서 검증) |
 
+## 14-a. 종료 검증 코호트 (기각 기록 자체에 대한 검증)
+
+기각은 "측정하지 않았다"가 아니라 "측정해서 표적이 없음을 확인했다"이므로, 그 기록 자체를 동결하고
+검증했다. 동결 스냅샷의 `sourceHash`와 경로별 sha256은 `closeout/verify-report.json`이 보유한다(이 문서에
+해시를 적으면 자기참조가 되므로 여기에는 적지 않는다). generation 2 = 아래 cleaner 수정 2건 + red-team
+정밀도 수정 1건 반영 후 재동결.
+
+| lane | 결과 |
+|---|---|
+| cleaner (ai-slop-cleaner) | BLOCKING 2건 → 리더가 수정. `raw-manifest.json`의 죽은 필드 `verdict_absent_reason` 제거, `ab_evidence_absent_reason`/`phase`의 결정 이전 시제 표현 정정. advisory 3건은 보고서에만 기록. 리포트: `closeout/ai-slop-cleanup-report.md` |
+| 기계 검증 | `closeout/verify_closeout.py` **15/15 통과**. 초기 실행에서 2개 체크가 실제로 실패해(문자열 오매칭, `pgrep` 자기매칭) 수정한 이력이 있다 — 하네스가 실패를 가리지 않는다는 증거다 |
+| architect (read-only) | architecture/product/code = WATCH/WATCH/WATCH, recommendation COMMENT. 프레임 파일 자체의 결함은 없고, 유일한 blocker는 **Notion append가 아직 실행되지 않았다**는 것(§15 참조) |
+| executor QA / red-team | **passed, 반증 0건.** 독립 파서(`closeout/redteam/recount.py`)로 Q15 5,088/0/0과 Q18 10,684/716/103/1,203/1,700/688/0을 전부 재도출해 일치 확인. `nm`/`objdump`로 `sort_run_final_single`·`sort_merge_worker_runs_to_one`이 인라인되어 심볼이 사라질 수 있음을 확인하고, 그래도 `sort_end_parallelism`·`sort_listfile_execute`·`qfile_sort_get_next_parallel`·트레이스 `parallel workers` 서브라인이라는 **인라인 무관 신호**로 Q15 직렬 판정이 유지됨을 검증. `grep`으로 반경 내 대체 복제 기계장치를 탐색해 부재 확인(A3 반증 유지). 리포트: `closeout/redteam/redteam-report.json` |
+
+red-team이 지적한 정밀도 수정 1건을 반영했다: D1 보고서 Q15 표의 `sort_listfile` 480은 **부분문자열**
+계수여서 파생 심볼(`sort_listfile_internal`/`_execute`)까지 포함하며 정확 토큰 계수는 459다. 판정에 사용한
+심볼들은 다른 심볼의 접두사가 아니어서 두 방법이 일치한다 — 해당 caveat을 D1 보고서에 명기했다.
+
 ## 15. Notion 동기화 상태
 
 이 호스트에 Notion 커넥터/`ntn` CLI가 없다(§10-c: 원격 워커는 Notion 쓰기를 수행하지 않는다).

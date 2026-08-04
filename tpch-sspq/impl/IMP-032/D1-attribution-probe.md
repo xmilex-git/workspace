@@ -123,13 +123,15 @@ GROUPBY (time: 2586, hash: partial, sort: true, page: 13787, ioread: 14971, rows
 
 | 심볼 | 표본 |
 |---|---|
-| `sort_listfile` | 480 |
+| `sort_listfile` | 480 (부분문자열 계수 — `sort_listfile_internal`/`sort_listfile_execute`까지 함께 집계됨; 정확 토큰 계수는 **459**) |
 | `sort_exphase_merge` (직렬 병합/드레인) | 379 |
 | `qexec_gby_put_next` | 299 |
 | `sort_put_result_from_tmpfile` (③) | **0** |
 | `sort_end_parallelism` | **0** |
 | `sort_merge_nruns` (②) | **0** |
 | `qexec_hash_gby_put_next` | **0** |
+
+**계수 방법 주의**: 위 표의 심볼 카운트는 콜체인 라인에 대한 **부분문자열** 매칭이다. `sort_listfile`처럼 다른 심볼의 접두사인 이름은 파생 심볼까지 함께 집계되므로(480 vs 정확 토큰 459), 이 항목은 존재/부재 판정에만 쓰고 정량 비교에는 쓰지 않는다. 판정에 사용한 심볼(`sort_put_result_from_tmpfile`, `sort_merge_nruns`, `sort_end_parallelism`, `qexec_gby_put_next`, `qexec_hash_gby_put_next`, `sort_exphase_merge`)은 다른 심볼의 접두사가 아니어서 두 방법의 계수가 일치한다 — 독립 red-team 재계수(`closeout/redteam/recount.py`, 자체 파서)로 전 항목 일치를 확인했다.
 
 포괄 비율(`q15.phase-attrib.txt`): `sort_listfile` 10.00%, `sort_exphase_merge` 8.24%,
 `qexec_gby_put_next` 6.51%, `sort_inphase_sort` 2.41%, `qexec_groupby` 3.47%;
