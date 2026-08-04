@@ -1,6 +1,6 @@
 # Phase 1B priority ranking — campaign `tpch-sspq-impl-r1-20260803`
 
-Generated 2026-08-04T14:53:22Z. Pinned norm `tpch-sspq/IMPL-SSOT.md` commit `eccdd1ae58cd733ed3121585146d68b9ae54a73f`, blob `15b42ddca521444fa54b34b0fa8477ed2df643f6` (AMEND-A..G).
+Generated 2026-08-04T15:07:29Z. Pinned norm `tpch-sspq/IMPL-SSOT.md` commit `eccdd1ae58cd733ed3121585146d68b9ae54a73f`, blob `15b42ddca521444fa54b34b0fa8477ed2df643f6` (AMEND-A..G).
 
 **Phase gate.** This document is a Phase 1 deliverable. Phase 2 — writing any engine code — MUST NOT begin until the user has explicitly approved this ranking and the resulting candidate queue. There is no implicit promotion from Phase 1 to Phase 2.
 
@@ -12,7 +12,9 @@ Generated 2026-08-04T14:53:22Z. Pinned norm `tpch-sspq/IMPL-SSOT.md` commit `ecc
 
 Nothing here was picked for convenience. So that the rest of Phase 1 could still be produced and read, the corrected MDE below was computed under the **most conservative** of the six measured factors (**15.3158x**). That choice cannot under-correct, and under-correction is the single failure mode section 6-d-1 exists to prevent — an MDE smaller than real A/B noise causes **false accepts**.
 
-**Consequence for reading this document:** **no `UNPROVABLE_ON_THIS_HOST` verdict is asserted anywhere in it.** Every determination that would depend on the factor is **WITHHELD** until the rule is chosen, and what each of the three candidate rules would give is published beside it. Rows whose outcome is the same under all three are marked `rule-invariant`, so the pending decision cannot move them; the remaining rows are marked as depending on the decision, and those are the ones the choice actually settles. The corrected MDE figures printed below are provisional and illustrative only — they exist so the table can be read, not so a verdict can be drawn from them.
+**Consequence for reading this document:** **no `UNPROVABLE_ON_THIS_HOST` verdict is asserted for any query whose MDE depends on the undecided factor.** Every such determination is **WITHHELD** until the rule is chosen, and what each of the three candidate rules would give is published beside it. Rows whose outcome is the same under all three are marked `rule-invariant`, so the pending decision cannot move them; the remaining rows are marked as depending on the decision, and those are the ones the choice actually settles. Corrected MDE figures for those queries are provisional and illustrative only — they exist so the table can be read, not so a verdict can be drawn from them.
+
+**Q01–Q06 are the exception, and their verdicts ARE asserted.** Section 6-d-1 step 6 uses their DIRECTLY MEASURED restart-regime paired CV, so no combination rule enters their MDE and the pending decision cannot change them. Their rows therefore carry real `resolvable` / `unprovable` verdicts rather than a withholding, and those are campaign determinations under section 6-d, not provisional ones.
 
 ### Why neither rule fits
 
@@ -343,7 +345,7 @@ The Phase 1B ranking MUST carry every candidate's expected effect against the MD
 
 **No `UNPROVABLE_ON_THIS_HOST` verdict is asserted in this document.** Section 6-d-1 says that when the calibration supports no combination rule the worker reports and asks, and MUST NOT pick a factor. The corrected MDE is therefore not a campaign fact yet, and a verdict computed from one would be this campaign quietly making the user's decision. Each affected row is **WITHHELD**, and what each candidate rule *would* give is published instead so the decision is informed. Rows marked `rule-invariant` come out the same under all three candidate rules, so the pending decision cannot move them.
 
-| IMP ID | Query | Predicted effect | Corrected MDE (provisional) | Verdict | Under each candidate rule |
+| IMP ID | Query | Predicted effect | Corrected MDE (provisional for factor-dependent queries) | Verdict | Under each candidate rule |
 |---|---|---|---|---|---|
 | `IMP-003` | Q02 | 53.100% | 1.368% | resolvable | — |
 | `IMP-009` | Q05 | 81.070% | 4.458% | resolvable | — |

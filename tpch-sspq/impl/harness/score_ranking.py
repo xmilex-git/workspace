@@ -392,10 +392,14 @@ def build(impl_dir):
             "near_equal_wall_contradictions": (calib.get("combination") or {}).get(
                 "near_equal_wall_contradictions"),
             "effect_on_this_ranking": (
-                "NO UNPROVABLE_ON_THIS_HOST verdict is asserted in this ranking. Section "
+                "NO UNPROVABLE_ON_THIS_HOST verdict is asserted for any query whose MDE "
+                "depends on the undecided combination factor. Section "
                 "6-d-1 forbids this campaign from choosing the combination rule, so a verdict "
                 "computed from the corrected MDE would be the campaign making the user's "
-                "decision. Every factor-dependent determination is therefore WITHHELD "
+                "decision. Q01-Q06 are the exception: section 6-d-1 step 6 uses their DIRECTLY "
+                "MEASURED restart-regime paired CV, no rule enters their MDE, and their "
+                "verdicts are therefore asserted as normal section 6-d determinations. "
+                "Every factor-dependent determination is WITHHELD "
                 "(verdict `withheld_pending_user_factor_decision`) and each row publishes what "
                 "all three candidate rules would give, plus `verdict_is_rule_invariant` "
                 "separating the rows the pending decision cannot move from the rows it "

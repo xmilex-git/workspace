@@ -108,14 +108,20 @@ def main():
           "MDE smaller than real A/B noise causes **false accepts**.")
         w()
         w("**Consequence for reading this document:** **no `UNPROVABLE_ON_THIS_HOST` verdict "
-          "is asserted anywhere in it.** Every determination that would depend on the factor "
-          "is **WITHHELD** until the rule is chosen, and what each of the three candidate "
-          "rules would give is published beside it. Rows whose outcome is the same under all "
-          "three are marked `rule-invariant`, so the pending decision cannot move them; the "
-          "remaining rows are marked as depending on the decision, and those are the ones the "
-          "choice actually settles. The corrected MDE figures printed below are provisional "
-          "and illustrative only — they exist so the table can be read, not so a verdict can "
-          "be drawn from them.")
+          "is asserted for any query whose MDE depends on the undecided factor.** Every such "
+          "determination is **WITHHELD** until the rule is chosen, and what each of the three "
+          "candidate rules would give is published beside it. Rows whose outcome is the same "
+          "under all three are marked `rule-invariant`, so the pending decision cannot move "
+          "them; the remaining rows are marked as depending on the decision, and those are "
+          "the ones the choice actually settles. Corrected MDE figures for those queries are "
+          "provisional and illustrative only — they exist so the table can be read, not so a "
+          "verdict can be drawn from them.")
+        w()
+        w("**Q01–Q06 are the exception, and their verdicts ARE asserted.** Section 6-d-1 step 6 "
+          "uses their DIRECTLY MEASURED restart-regime paired CV, so no combination rule enters "
+          "their MDE and the pending decision cannot change them. Their rows therefore carry "
+          "real `resolvable` / `unprovable` verdicts rather than a withholding, and those are "
+          "campaign determinations under section 6-d, not provisional ones.")
         w()
         w("### Why neither rule fits")
         w()
@@ -344,7 +350,14 @@ def main():
           "informed. Rows marked `rule-invariant` come out the same under all three "
           "candidate rules, so the pending decision cannot move them.")
         w()
-    w("| IMP ID | Query | Predicted effect | Corrected MDE (provisional) | Verdict | Under each candidate rule |")
+    # The header is CONDITIONED, not hardcoded. "(provisional)" is true only while the
+    # combination rule is open; once a rule is chosen score_ranking.py's own methodology
+    # text states the corrected MDE is final, and a header still saying "provisional"
+    # over those numbers would be the same defect class in mirror image.
+    w("| IMP ID | Query | Predicted effect | "
+      + ("Corrected MDE (provisional for factor-dependent queries)"
+         if cs.get("STOP_AND_REPORT") else "Corrected MDE")
+      + " | Verdict | Under each candidate rule |")
     w("|---|---|---|---|---|---|")
     any_row = False
     for imp in sorted(C):
