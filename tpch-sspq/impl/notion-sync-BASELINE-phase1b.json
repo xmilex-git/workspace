@@ -1,0 +1,235 @@
+{
+  "overall": "partial",
+  "n_candidates_attempted": 31,
+  "n_candidates_synced": 29,
+  "n_candidates_failed": 2,
+  "operational_state_page": {
+    "synced": true,
+    "detail": "action recorded at write time; scoped corruption_check=clean over 7 authored blocks"
+  },
+  "per_candidate": {
+    "IMP-001": {
+      "page_id": "3adf947f-1be1-8110-ac10-fc0054281cf4",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-002": {
+      "page_id": "3adf947f-1be1-817c-af99-e6dcf53c819e",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-003": {
+      "page_id": "3adf947f-1be1-8108-9c2a-d3342ab917ef",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-004": {
+      "page_id": "3adf947f-1be1-819a-990e-d38ba49d7130",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-005": {
+      "page_id": "3adf947f-1be1-81ed-827c-c7e650996d62",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-006": {
+      "page_id": "3adf947f-1be1-8167-97c8-f9dae5408078",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-007": {
+      "page_id": "3adf947f-1be1-8107-b0cf-d7aad31de82e",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-008": {
+      "page_id": "3adf947f-1be1-8190-a2b1-dc5997a1ecca",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-009": {
+      "page_id": "3adf947f-1be1-8120-b450-f0fa04a61d1a",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-010": {
+      "page_id": "3adf947f-1be1-8129-abbd-dc90b05f787a",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-011": {
+      "page_id": "3aef947f-1be1-8112-b3b4-c5427e48466d",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-012": {
+      "page_id": "3aef947f-1be1-81dc-a157-e010af7830ea",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-013": {
+      "page_id": "3aef947f-1be1-818c-87e9-fd11fa01cf51",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-014": {
+      "page_id": "3aef947f-1be1-81d8-ae77-cc685a5255fb",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-015": {
+      "page_id": "3aef947f-1be1-816f-b19e-f3679f3e978f",
+      "action": "replaced",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-016": {
+      "page_id": "3aef947f-1be1-81a2-b8b5-f18bae1c63c9",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-017": {
+      "page_id": "3aef947f-1be1-81e7-b355-cf87a2bbaf61",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-018": {
+      "page_id": "3aef947f-1be1-817b-ae30-e52f291ce7a1",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-019": {
+      "page_id": null,
+      "action": "unresolved",
+      "refetch_verified": false,
+      "corruption_check": "skipped",
+      "error": "Notion 'IMP ID' auto_increment number and page title prefix disagree for this candidate (cross-check ambiguity); resolution skipped per instructions rather than guessed."
+    },
+    "IMP-020": {
+      "page_id": null,
+      "action": "unresolved",
+      "refetch_verified": false,
+      "corruption_check": "skipped",
+      "error": "Notion 'IMP ID' auto_increment number and page title prefix disagree for this candidate (cross-check ambiguity); resolution skipped per instructions rather than guessed."
+    },
+    "IMP-021": {
+      "page_id": "3aef947f-1be1-815a-86d7-e3e10d0232fd",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-022": {
+      "page_id": "3aff947f-1be1-81f0-a15e-e5c65b8fa36e",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-023": {
+      "page_id": "3aff947f-1be1-81a0-8d59-d2dc89fc1e38",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-024": {
+      "page_id": "3b0f947f-1be1-81d7-b12a-da20813227d1",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-025": {
+      "page_id": "3b0f947f-1be1-8120-9ade-cb539d22e13c",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-026": {
+      "page_id": "3b0f947f-1be1-81c6-8e61-f7eecf771b85",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-027": {
+      "page_id": "3b0f947f-1be1-8166-ae25-d7cfe47a1755",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-028": {
+      "page_id": "3b0f947f-1be1-81cb-8190-e5d2d8435f76",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-029": {
+      "page_id": "3b0f947f-1be1-81d9-8759-c06791fd58ae",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-030": {
+      "page_id": "3b0f947f-1be1-818d-b7f3-d5fc1ef9bd3a",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    },
+    "IMP-031": {
+      "page_id": "3b0f947f-1be1-819e-ad4e-f0e7d74596bd",
+      "action": "created",
+      "refetch_verified": true,
+      "corruption_check": "clean",
+      "error": null
+    }
+  },
+  "discovery_fields_untouched": true,
+  "method": "ntn CLI, body-section fallback per section 10-e, server-side refetch + corruption check (check scoped to the authored section only; unrelated pre-existing page content, e.g. code snippets containing '<' or a bare 'n' identifier, is not part of what we wrote and is left untouched)",
+  "blockers": [
+    "IMP-019: unresolved — Notion data source 'IMP ID' unique_id number and page title IMP-NNN prefix are swapped between the two pages (unique_id=19 has title 'IMP-020: ...', unique_id=20 has title 'IMP-019: ...'); cannot resolve unambiguously without guessing.",
+    "IMP-020: unresolved — Notion data source 'IMP ID' unique_id number and page title IMP-NNN prefix are swapped between the two pages (unique_id=19 has title 'IMP-020: ...', unique_id=20 has title 'IMP-019: ...'); cannot resolve unambiguously without guessing."
+  ]
+}
