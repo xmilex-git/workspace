@@ -1,0 +1,27 @@
+{
+  "overall": "synced",
+  "page_id": "3b1f947f-1be1-81d9-b7d4-fecf8bc04fbe",
+  "existing_blocks_before": 83,
+  "blocks_deleted": [],
+  "blocks_appended": 83,
+  "blocks_after": 166,
+  "prior_section_found": false,
+  "table_rendering": "notion_table",
+  "paragraphs_split_for_2000_char_limit": 0,
+  "refetch_verified": true,
+  "corruption_check": "clean",
+  "sections_published": [
+    "1. 현재 상태 요약",
+    "2. 작업 2 — Q15 병렬 미발동 원인 규명 (읽기 전용, 완료)",
+    "3. Phase 1A fresh baseline (AMEND-G fast 레짐, 완료)",
+    "4. §6-d-1 restart-variance 보정 — STOP-AND-REPORT (사용자 결정 필요)",
+    "5. Phase 1B 랭킹 (산출 완료)",
+    "6. 품질 게이트 이력 (참고)",
+    "7. 사용자 결정 대기 항목 (Phase 2 개시 전 필요)",
+    "8. Phase 2 계획 (승인 후 수행, 규범 §5·§6·§7)",
+    "9. Phase 2 이후 (§11-b 종결)",
+    "10. 환경 수칙 (재발견 금지)"
+  ],
+  "content_fidelity_check": "Re-fetched the appended children (GET /v1/blocks/{page}/children, paginated, plus GET .../children on both table block ids) after the PATCH and confirmed these values are byte-exact vs. the source markdown: '262.5440' (median wall total, section 3), 'external_sort.c:5232' (root-cause citation, section 2), '15.3158' (Q01 inflation factor, section 4), 'query_executor.c:5682' (IMP-015 citation, section 2), and frozen base SHA '607f1ee9fb2394de129e083602c84a6525fc685c' (section 8) and IMPL-SSOT commit 'eccdd1ae58cd733ed3121585146d68b9ae54a73f' (intro paragraph) — all present verbatim in the server-returned plain_text.",
+  "blockers": []
+}
