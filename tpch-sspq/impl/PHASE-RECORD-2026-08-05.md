@@ -54,12 +54,13 @@ IMP-015의 검증된 적용 범위는 **"리더가 해시 패스를 수행하는
   `q15_gated_block.sh`의 세션 단위 분기를 함께 옮기지 않아 문장 단위 `warm_establish.py`가
   `create view`/`drop view` DDL을 타이밍에 섞었다(steady 0.003 s, spread 335,899%). 게이트가
   구조적으로 수렴 불가여서 Q15가 0/6이었다. 드라이버의 질의별 WARM을 Q15에 대해
-  `q15_session.py`로 분기해 수정(핀 파라미터 변경 0건), 이후 steady 10.054 s로 수렴하고 6/6 확보.
+  `q15_session.py`로 분기해 수정(핀 파라미터 변경 0건), 이후 WARM 게이트가
+`steady_state_median_s` 10.054 s로 수렴하고 6/6 확보. 이 값은 WARM 수렴 판정값이며
+블록 median 10.0245 s와는 다른 양이다.
   재실행은 두 번째 인스턴스(pid 3566510)에서 돌았고 그 사실이 `QUERY-COMPLETE.json`의
   `server_at_completion`에 기록된다.
 
-주요 질의 median (s): Q01 31.65 · Q07 18.65 · Q09 10.58 · Q10 7.04 · Q11 3.23 · Q13 11.33 ·
-Q15 10.02 · Q18 37.48 · Q19 43.96 · Q21 52.59 · Q22 1.12.
+주요 질의 median (s, `fresh-baseline.json`에서 그대로 인용): Q01 31.64 · Q07 18.65 · Q09 10.58 · Q10 7.04 · Q11 3.23 · Q13 11.33 · Q15 10.02 · Q18 37.48 · Q19 43.96 · Q21 52.59 · Q22 1.12.
 
 산출물: `tpch-sspq/impl/fresh-baseline.json`, `fresh-baseline.md`, `baseline-raw-manifest.json`.
 
