@@ -1,14 +1,14 @@
 {
   "attempt_outcomes_summary": {
     "discarded_by_reason": {
-      "INVALID_BACKGROUND_LOAD": 2,
-      "WARM_NOT_CONVERGED": 14
+      "INVALID_BACKGROUND_LOAD": 11
     },
-    "n_attempts_accepted": 36,
-    "n_attempts_discarded": 16,
-    "n_attempts_total": 53,
+    "n_attempts_accepted": 131,
+    "n_attempts_discarded": 11,
+    "n_attempts_total": 142,
     "note": "Attempt-level outcomes parsed from the Phase 1A driver log, which is the only complete durable record: work/<QNN>/ per-attempt artifacts are overwritten by the next block of the same query.",
-    "source_log": "/data/tpch-sspq/tpch-sspq-impl-r1-20260803/work/BASELINE/phase1a-driver.log"
+    "source_log": "phase1a-fast-driver.log",
+    "source_log_pin_verified": true
   },
   "binaries": {
     "csql": {
@@ -110,7 +110,7 @@
   "database_files": "/home/cubrid/dev/workspace/.git_ignored_dir/tpch-sspq/cubrid-databases",
   "external_load_gate_core_s_per_s": 6.0,
   "external_load_gate_source": "IMPL-SSOT section 3-a, AMEND-D",
-  "generated_utc": "2026-08-04T10:51:09Z",
+  "generated_utc": "2026-08-05T03:15:16Z",
   "impl_ssot_blob": "15b42ddca521444fa54b34b0fa8477ed2df643f6",
   "impl_ssot_blob_at_driver_start": "1118b18ff1718f8493d72921fb7bb8851e6a1d8c",
   "impl_ssot_commit": "eccdd1ae58cd733ed3121585146d68b9ae54a73f",
@@ -269,71 +269,8 @@
         31.570999,
         31.858999
       ],
-      "attempt_invalidations": [
-        {
-          "attempt": 1,
-          "block": 5,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q01",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "monotone trailing window (still drifting) after None steady 30.909999"
-        },
-        {
-          "attempt": 2,
-          "block": 5,
-          "external_max_1s_core_s_per_s": 14.2955,
-          "external_max_core_s_per_s": 15.5419,
-          "external_mean_core_s_per_s": 6.0952,
-          "gate_field": "verdict",
-          "headline_rc": 0,
-          "invalid_reason": "INVALID_BACKGROUND_LOAD",
-          "load_verdict": "INVALID_BACKGROUND_LOAD",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q01",
-          "strict_verdict": "INVALID_BACKGROUND_LOAD",
-          "warm_converged": true,
-          "warm_rc": 0,
-          "warm_verdict": "half-split trend -0.0871% within 2.00% over 12 statements, trailing spread 2.5982% after 12 steady 31.020999"
-        },
-        {
-          "attempt": 3,
-          "block": 5,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q01",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "half-split trend +2.8838% exceeds 2.00% over 12 statements (level still moving) after None steady 32.014998"
-        },
-        {
-          "attempt": 1,
-          "block": 6,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q01",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "half-split trend +5.5097% exceeds 2.00% over 12 statements (level still moving) after None steady 32.822999"
-        },
-        {
-          "attempt": 2,
-          "block": 6,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q01",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "half-split trend +2.2991% exceeds 2.00% over 12 statements (level still moving) after None steady 32.592999"
-        }
-      ],
-      "attempts_invalidated": 5,
+      "attempt_invalidations": [],
+      "attempts_invalidated": 0,
       "block_dispersion_cv": 0.0007836384715125545,
       "block_dispersion_sd_s": 0.024793144213673013,
       "block_medians_s": [
@@ -2317,42 +2254,8 @@
         1.683,
         1.671
       ],
-      "attempt_invalidations": [
-        {
-          "attempt": 1,
-          "block": 1,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q04",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "spread 5.9877% > 3.00% (unstable) after 12 steady 1.954"
-        },
-        {
-          "attempt": 1,
-          "block": 4,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q04",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "monotone trailing window (still drifting) after 12 steady 1.911"
-        },
-        {
-          "attempt": 2,
-          "block": 4,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q04",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "half-split trend -2.2200% exceeds 1.00% over 20 statements (level still moving) after None steady 1.895"
-        }
-      ],
-      "attempts_invalidated": 3,
+      "attempt_invalidations": [],
+      "attempts_invalidated": 0,
       "block_dispersion_cv": 0.001598909402277159,
       "block_dispersion_sd_s": 0.0026645825188948854,
       "block_medians_s": [
@@ -3013,31 +2916,8 @@
         10.449999,
         10.396
       ],
-      "attempt_invalidations": [
-        {
-          "attempt": 1,
-          "block": 5,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q05",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "half-split trend -6.2806% exceeds 4.00% over 24 statements (level still moving) after 17 steady 10.868"
-        },
-        {
-          "attempt": 1,
-          "block": 6,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q05",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "spread 10.1097% > 7.00% (unstable) after None steady 12.037999"
-        }
-      ],
-      "attempts_invalidated": 2,
+      "attempt_invalidations": [],
+      "attempts_invalidated": 0,
       "block_dispersion_cv": 0.00909626347323176,
       "block_dispersion_sd_s": 0.09375215553077533,
       "block_medians_s": [
@@ -3699,60 +3579,8 @@
         3.844,
         3.842
       ],
-      "attempt_invalidations": [
-        {
-          "attempt": 1,
-          "block": 5,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q06",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "monotone trailing window (still drifting) after 12 steady 4.000999"
-        },
-        {
-          "attempt": 2,
-          "block": 5,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q06",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "monotone trailing window (still drifting) after 12 steady 3.989"
-        },
-        {
-          "attempt": 3,
-          "block": 5,
-          "external_max_1s_core_s_per_s": 6.3799,
-          "external_max_core_s_per_s": 6.9442,
-          "external_mean_core_s_per_s": 5.9972,
-          "gate_field": "verdict",
-          "headline_rc": 0,
-          "invalid_reason": "INVALID_BACKGROUND_LOAD",
-          "load_verdict": "INVALID_BACKGROUND_LOAD",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q06",
-          "strict_verdict": "INVALID_BACKGROUND_LOAD",
-          "warm_converged": true,
-          "warm_rc": 0,
-          "warm_verdict": "half-split trend +0.4517% within 4.00% over 40 statements, trailing spread 0.3494% after 12 steady 4.006999"
-        },
-        {
-          "attempt": 4,
-          "block": 5,
-          "invalid_reason": "WARM_NOT_CONVERGED",
-          "max_attempts": 4,
-          "outcome": "REJECTED",
-          "qnn": "Q06",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "monotone trailing window (still drifting) after 12 steady 4.008999"
-        }
-      ],
-      "attempts_invalidated": 4,
+      "attempt_invalidations": [],
+      "attempts_invalidated": 0,
       "block_dispersion_cv": 0.0008180221115679165,
       "block_dispersion_sd_s": 0.0031465219158089727,
       "block_medians_s": [
@@ -4418,24 +4246,32 @@
         {
           "attempt": 1,
           "block": 1,
-          "invalid_reason": "WARM_NOT_CONVERGED",
+          "external_max_1s_core_s_per_s": 15.9801,
+          "external_max_core_s_per_s": 16.0595,
+          "external_mean_core_s_per_s": 10.425,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
           "max_attempts": 4,
           "outcome": "REJECTED",
           "qnn": "Q07",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "monotone trailing window (still drifting) after None steady 22.015999"
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
         },
         {
-          "attempt": 2,
-          "block": 1,
-          "invalid_reason": "WARM_NOT_CONVERGED",
+          "attempt": 1,
+          "block": 6,
+          "external_max_1s_core_s_per_s": 4.8743,
+          "external_max_core_s_per_s": 6.1205,
+          "external_mean_core_s_per_s": 1.3961,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
           "max_attempts": 4,
           "outcome": "REJECTED",
           "qnn": "Q07",
-          "warm_converged": false,
-          "warm_rc": 4,
-          "warm_verdict": "spread 8.8049% > 7.00% (unstable) after None steady 18.818999"
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
         }
       ],
       "attempts_invalidated": 2,
@@ -5101,8 +4937,24 @@
         1.015,
         1.145
       ],
-      "attempt_invalidations": [],
-      "attempts_invalidated": 0,
+      "attempt_invalidations": [
+        {
+          "attempt": 1,
+          "block": 6,
+          "external_max_1s_core_s_per_s": 6.426,
+          "external_max_core_s_per_s": 6.9562,
+          "external_mean_core_s_per_s": 4.6198,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
+          "max_attempts": 4,
+          "outcome": "REJECTED",
+          "qnn": "Q08",
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
+        }
+      ],
+      "attempts_invalidated": 1,
       "block_dispersion_cv": 0.025755681002409152,
       "block_dispersion_sd_s": 0.026051871333936858,
       "block_medians_s": [
@@ -5754,8 +5606,114 @@
         10.566,
         10.555999
       ],
-      "attempt_invalidations": [],
-      "attempts_invalidated": 0,
+      "attempt_invalidations": [
+        {
+          "attempt": 1,
+          "block": 3,
+          "external_max_1s_core_s_per_s": 15.7427,
+          "external_max_core_s_per_s": 15.9807,
+          "external_mean_core_s_per_s": 2.5032,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
+          "max_attempts": 4,
+          "outcome": "REJECTED",
+          "qnn": "Q09",
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
+        },
+        {
+          "attempt": 2,
+          "block": 3,
+          "external_max_1s_core_s_per_s": 7.3784,
+          "external_max_core_s_per_s": 8.3701,
+          "external_mean_core_s_per_s": 2.17,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
+          "max_attempts": 4,
+          "outcome": "REJECTED",
+          "qnn": "Q09",
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
+        },
+        {
+          "attempt": 3,
+          "block": 3,
+          "external_max_1s_core_s_per_s": 13.6486,
+          "external_max_core_s_per_s": 14.2298,
+          "external_mean_core_s_per_s": 4.1191,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
+          "max_attempts": 4,
+          "outcome": "REJECTED",
+          "qnn": "Q09",
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
+        },
+        {
+          "attempt": 4,
+          "block": 3,
+          "external_max_1s_core_s_per_s": 15.9645,
+          "external_max_core_s_per_s": 15.9965,
+          "external_mean_core_s_per_s": 2.2412,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
+          "max_attempts": 4,
+          "outcome": "REJECTED",
+          "qnn": "Q09",
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
+        },
+        {
+          "attempt": 1,
+          "block": 4,
+          "external_max_1s_core_s_per_s": 6.6475,
+          "external_max_core_s_per_s": 8.591,
+          "external_mean_core_s_per_s": 0.9666,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
+          "max_attempts": 4,
+          "outcome": "REJECTED",
+          "qnn": "Q09",
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
+        },
+        {
+          "attempt": 1,
+          "block": 5,
+          "external_max_1s_core_s_per_s": 11.1643,
+          "external_max_core_s_per_s": 15.6028,
+          "external_mean_core_s_per_s": 2.9486,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
+          "max_attempts": 4,
+          "outcome": "REJECTED",
+          "qnn": "Q09",
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
+        },
+        {
+          "attempt": 2,
+          "block": 5,
+          "external_max_1s_core_s_per_s": 15.8547,
+          "external_max_core_s_per_s": 15.9951,
+          "external_mean_core_s_per_s": 12.2045,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
+          "max_attempts": 4,
+          "outcome": "REJECTED",
+          "qnn": "Q09",
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
+        }
+      ],
+      "attempts_invalidated": 7,
       "block_dispersion_cv": 0.001722964864719319,
       "block_dispersion_sd_s": 0.018225866242787953,
       "block_medians_s": [
@@ -8295,8 +8253,24 @@
         11.316,
         11.323
       ],
-      "attempt_invalidations": [],
-      "attempts_invalidated": 0,
+      "attempt_invalidations": [
+        {
+          "attempt": 1,
+          "block": 6,
+          "external_max_1s_core_s_per_s": 6.9538,
+          "external_max_core_s_per_s": 9.07,
+          "external_mean_core_s_per_s": 0.9526,
+          "gate_field": "verdict",
+          "headline_rc": 0,
+          "invalid_reason": "INVALID_BACKGROUND_LOAD",
+          "load_verdict": "INVALID_BACKGROUND_LOAD",
+          "max_attempts": 4,
+          "outcome": "REJECTED",
+          "qnn": "Q13",
+          "strict_verdict": "INVALID_BACKGROUND_LOAD"
+        }
+      ],
+      "attempts_invalidated": 1,
       "block_dispersion_cv": 0.001556223249507076,
       "block_dispersion_sd_s": 0.017648089612381786,
       "block_medians_s": [

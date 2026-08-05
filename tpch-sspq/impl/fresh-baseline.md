@@ -32,7 +32,7 @@ This baseline is the **only** "before" this campaign's scoring (section 2-b) and
 | Phase 1A driver tmux session | `tpch-sspq-impl-r1-20260803-phase1a-driver` |
 | Phase 1A driver PID | `2848446` |
 | Collection window start (UTC) | 2026-08-03T01:30:44Z |
-| Aggregated (UTC) | 2026-08-04T10:51:09Z |
+| Aggregated (UTC) | 2026-08-05T03:15:16Z |
 
 ## Per-query baseline
 
@@ -216,24 +216,19 @@ Section 3-a requires every invalidation to be recorded with its cause and the me
 
 | Query | reason | measured external load (core-s/s) | gate | detail |
 |---|---|---:|---:|---|
-| Q01 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q01 | `INVALID_BACKGROUND_LOAD` | max 15.5419 | — | — |
-| Q01 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q01 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q01 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q04 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q04 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q04 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q05 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q05 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q06 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q06 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q06 | `INVALID_BACKGROUND_LOAD` | max 6.9442 | — | — |
-| Q06 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q07 | `WARM_NOT_CONVERGED` | — | — | — |
-| Q07 | `WARM_NOT_CONVERGED` | — | — | — |
+| Q07 | `INVALID_BACKGROUND_LOAD` | max 16.0595 | — | — |
+| Q07 | `INVALID_BACKGROUND_LOAD` | max 6.1205 | — | — |
+| Q08 | `INVALID_BACKGROUND_LOAD` | max 6.9562 | — | — |
+| Q09 | `INVALID_BACKGROUND_LOAD` | max 15.9807 | — | — |
+| Q09 | `INVALID_BACKGROUND_LOAD` | max 8.3701 | — | — |
+| Q09 | `INVALID_BACKGROUND_LOAD` | max 14.2298 | — | — |
+| Q09 | `INVALID_BACKGROUND_LOAD` | max 15.9965 | — | — |
+| Q09 | `INVALID_BACKGROUND_LOAD` | max 8.591 | — | — |
+| Q09 | `INVALID_BACKGROUND_LOAD` | max 15.6028 | — | — |
+| Q09 | `INVALID_BACKGROUND_LOAD` | max 15.9951 | — | — |
+| Q13 | `INVALID_BACKGROUND_LOAD` | max 9.07 | — | — |
 
-**Totals: 1 invalidated blocks, 16 discarded attempts.**
+**Totals: 1 invalidated blocks, 11 discarded attempts.**
 
 ## How WARM convergence was determined
 

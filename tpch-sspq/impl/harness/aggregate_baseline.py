@@ -101,15 +101,43 @@ def _load_attempts():
     global _ATTEMPTS
     if _ATTEMPTS is not None:
         return _ATTEMPTS
-    log = os.path.join(cfg.RAW_ROOT, "work", "BASELINE", "phase1a-driver.log")
+    # The log MUST be the one that produced the blocks being aggregated. An earlier
+    # revision hardcoded `phase1a-driver.log`, the ABANDONED pre-AMEND-G run pinned to
+    # IMPL-SSOT commit ed6fb39f..., while the blocks in raw/ come from the AMEND-G fast
+    # run recorded in `phase1a-fast-driver.log` (pin eccdd1ae..., blob 15b42ddc...). The
+    # baseline consequently published 16 attempt invalidations from the wrong run,
+    # including WARM_NOT_CONVERGED entries that cannot occur under AMEND-G at all because
+    # AMEND-G moves WARM out of the block. Section 3-a requires every invalidation to be
+    # recorded with its cause and measured load, so publishing another run's causes is a
+    # provenance violation, not a cosmetic one.
+    log = os.path.join(cfg.RAW_ROOT, "work", "BASELINE", "phase1a-fast-driver.log")
+    if not os.path.exists(log):
+        raise SystemExit(f"attempt provenance: pinned driver log not found at {log}. "
+                         "Refusing to fall back to any other log — reading a different "
+                         "run's attempt outcomes silently corrupts the section 3-a record.")
+    # Fail closed on a pin mismatch: the log's own header records the IMPL-SSOT commit and
+    # blob it ran under. If that is not the pin this aggregation is for, the log is from a
+    # different campaign state and its attempt causes do not describe these blocks.
+    with open(log, errors="replace") as f:
+        header = f.read(8192)
+    if cfg.IMPL_SSOT_COMMIT not in header or cfg.IMPL_SSOT_BLOB not in header:
+        raise SystemExit(
+            f"attempt provenance: {os.path.basename(log)} does not carry the pinned "
+            f"commit {cfg.IMPL_SSOT_COMMIT} and blob {cfg.IMPL_SSOT_BLOB} in its header. "
+            "Refusing to publish attempt invalidations from a differently-pinned run.")
+
     out = os.path.join(cfg.RAW_ROOT, "work", "BASELINE", "attempt-outcomes.json")
-    subprocess.run(["python3.11", os.path.join(cfg.HARNESS, "extract_attempts.py"),
-                    log, out], capture_output=True, text=True)
-    try:
-        with open(out) as f:
-            _ATTEMPTS = json.load(f)
-    except (OSError, ValueError):
-        _ATTEMPTS = {"discarded_by_query": {}, "n_attempts_discarded": 0}
+    # Always re-extract. An earlier revision tolerated a stale existing attempt-outcomes
+    # file, which is how the wrong run's numbers survived across regenerations.
+    r = subprocess.run(["python3.11", os.path.join(cfg.HARNESS, "extract_attempts.py"),
+                        log, out], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"attempt provenance: extract_attempts.py failed rc={r.returncode}: "
+                         f"{(r.stderr or r.stdout)[:400]}")
+    with open(out) as f:
+        _ATTEMPTS = json.load(f)
+    _ATTEMPTS["source_log"] = os.path.basename(log)
+    _ATTEMPTS["source_log_pin_verified"] = True
     return _ATTEMPTS
 
 

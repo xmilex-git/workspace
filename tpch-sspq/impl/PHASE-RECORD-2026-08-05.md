@@ -54,8 +54,21 @@ IMP-015의 검증된 적용 범위는 **"리더가 해시 패스를 수행하는
   허용된 4회 시도가 전부 `INVALID_BACKGROUND_LOAD`로 반려됐고 시도별 `external_max`는
   15.9807 / 8.3701 / 14.2298 / 15.9965 core-s/s로 세 번이 6.0 게이트를 크게 초과했다
   (두 번째 8.3701도 초과). 즉 게이트가 오염 블록을 **측정해 통과시키지 않고 버린** 정상
-  동작이다. `attempts_invalidated`는 0인데, 이 카운터는 블록이 성립한 뒤의 시도 무효화를
-  세는 필드여서 블록 자체가 반려된 이 경로에서는 증가하지 않는다.
+  동작이다. Q09의 `attempts_invalidated`는 **7**이다 — 이 질의가 스윕 전체에서 가장 많은
+  시도 반려를 겪었다. 스윕 전체 시도 반려는 11건(Q07 2 · Q08 1 · Q09 7 · Q13 1)이고 전부
+  `INVALID_BACKGROUND_LOAD`이다.
+
+  이 문서의 이전 판은 `attempts_invalidated`를 0으로 적고 "이 카운터는 블록 성립 후의 시도
+  무효화를 세므로 블록이 반려된 경로에서는 증가하지 않는다"고 설명했다. **그 설명은 내가
+  틀린 숫자에 붙인 합리화였다.** 진짜 원인은 산출물 생산자의 결함이었다 —
+  `aggregate_baseline._load_attempts()`가 AMEND-G fast 런의 로그가 아니라 **폐기된**
+  pre-AMEND-G 런의 `phase1a-driver.log`(핀 `ed6fb39f…`)를 읽고 있었다. 그래서 baseline이
+  다른 런의 시도 무효화 16건을 실었고, 그중 14건은 AMEND-G에서 **구조적으로 불가능한**
+  `WARM_NOT_CONVERGED`였다(AMEND-G가 WARM을 블록 밖으로 옮겼으므로 블록 안에서 WARM이
+  실패할 수 없다). generation 16 심사가 이것을 잡았다. 생산자를 핀된 fast 로그로 고치고
+  로그 헤더의 핀 불일치 시 **실행을 거부**하도록 했으며, 재생성 결과 median wall 합계
+  262.5440 s, 블록 131/1, 인자, 랭킹 수치는 **전부 불변**이고 `priority-ranking.json`의
+  수치 leaf 843개 중 변경 0건이다. 결함은 시도 수준 provenance 메타데이터에 국한됐다.
 - **Q15 하니스 결함 발견·수정**: AMEND-G가 WARM을 블록 밖 질의 단위로 옮길 때
   `q15_gated_block.sh`의 세션 단위 분기를 함께 옮기지 않아 문장 단위 `warm_establish.py`가
   `create view`/`drop view` DDL을 타이밍에 섞었다(steady 0.003 s, spread 335,899%). 게이트가
