@@ -119,9 +119,13 @@ Phase 2를 시작하지 말고, 대신 다음 중 사용자가 지시한 것만 
 
 ## 큐와 후보별 주의 (전문은 priority-ranking.md)
 
-큐: IMP-015 → IMP-005 → IMP-009 → IMP-018 → IMP-014 → IMP-027 → IMP-003 → IMP-029 →
-IMP-019 → IMP-023 → IMP-030 → IMP-013 → IMP-012 → IMP-031 → IMP-022 → IMP-017 → IMP-016 →
-IMP-004 → IMP-021 → IMP-010 → IMP-008 → IMP-024 → IMP-006.
+큐(22개): IMP-015 → IMP-005 → IMP-009 → IMP-018 → IMP-014 → IMP-027 → IMP-003 → IMP-029 →
+IMP-019 → IMP-023 → IMP-030 → IMP-013 → IMP-012 → IMP-031 → IMP-022 → IMP-016 → IMP-004 →
+IMP-021 → IMP-010 → IMP-008 → IMP-024 → IMP-006.
+
+IMP-017은 큐에 없다 — diagnostic 레인은 §4-a에 따라 큐 위치를 갖지 않는다. IMP-016의
+메모리 arm을 시험 가능하게 만드는 선행 조건이지만 큐 항목으로 착수할 대상이 아니다.
+enabler인 IMP-005만 IMP-009 바로 앞 위치를 상속해 큐에 들어간다.
 
 - IMP-015는 이미 구현·측정되어 accepted (provisional)이다. 재구현 대상이 아니라, 작업 2가
   좁힌 적용 범위(리더가 해시 패스를 수행하는 group-by에 한정)를 반영해 재검토할 대상이다.

@@ -114,9 +114,9 @@ Phase 1A fresh baseline. 판정과 산술을 파일 단위로 분리했다 —
 IMP-027이 기대절감 43.60 s로 최대이나 feasibility 41.0이 총점을 누른다.
 
 **후보 큐** (§4-a, enabler는 의존 후보 바로 앞 위치 상속):
-IMP-015 → **IMP-005** → IMP-009 → IMP-018 → IMP-014 → IMP-027 → IMP-003 → IMP-029 → IMP-019 →
-IMP-023 → IMP-030 → IMP-013 → IMP-012 → IMP-031 → IMP-022 → **IMP-017** → IMP-016 → IMP-004 →
-IMP-021 → IMP-010 → IMP-008 → IMP-024 → IMP-006.
+IMP-015 → **IMP-005** → IMP-009 → IMP-018 → IMP-014 → IMP-027 → IMP-003 → IMP-029 → IMP-019 → IMP-023 → IMP-030 → IMP-013 → IMP-012 → IMP-031 → IMP-022 → IMP-016 → IMP-004 → IMP-021 → IMP-010 → IMP-008 → IMP-024 → IMP-006 (총 22개).
+
+IMP-017은 큐에 **없다** — diagnostic 레인은 §4-a에 따라 큐 위치를 갖지 않는다. IMP-016의 메모리 arm을 시험 가능하게 만드는 선행 조건이지만 그 자체가 큐 항목은 아니다. enabler인 IMP-005만 의존 후보(IMP-009) 바로 앞 위치를 상속한다.
 
 **§2-d 민감도**: 증거가중 ±0.15 양방향 섭동에서 상위 5의 순서·구성이 바뀌어
 **`RANKING_UNSTABLE`** 표시. pessimistic에서 IMP-027이 빠지고 IMP-003이 들어오며, optimistic에서
@@ -124,8 +124,7 @@ IMP-014↔IMP-027 순서가 바뀐다. 이 구간의 큐 순서는 증거로 지
 
 **랭킹 제외**: IMP-001(`BENEFIT_PENDING_DENOMINATOR` — 13%가 wall인지 CPU인지 미확정),
 IMP-002(`BENEFIT_CONFOUNDED`), IMP-007·IMP-025·IMP-028(`external_tracking`),
-IMP-011·IMP-020·IMP-026(deferred_research), IMP-017(diagnostic, 큐 위치는 IMP-016 앞 상속 대상
-아님 — §4-a에 따라 큐 위치 없음), IMP-005(enabler, 큐 위치 상속).
+IMP-011·IMP-020·IMP-026(deferred_research), IMP-017(diagnostic — §4-a에 따라 큐 위치 없음). IMP-005만 enabler로서 큐에 들어가 IMP-009의 위치를 상속한다.
 
 **방법론 판단 5건**(랭킹 보고서에 전문 수록): MD-1 CPU 수치를 wall 분모에 대입하지 않는다 /
 MD-2 레지스트리가 CPU→wall 환산을 제시한 경우에만 환산하고 인용한다 / MD-3 WARM 레짐 밖 효과
