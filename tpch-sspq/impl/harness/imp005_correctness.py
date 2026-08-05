@@ -53,7 +53,7 @@ def run_logged(cmd, env, log_path, timeout=600):
     return p.returncode
 
 
-def csql_file(cfg, env, sqlfile, out_path, timeout):
+def csql_file(cfg, env, sqlfile, out_path, timeout, allow_empty=False):
     cmd = [os.path.join(cfg.CUBRID_HOME, "bin", "csql"), "-u", "dba",
            cfg.CUBRID_DB, "-q", "-N", f"--delimiter={DELIM}",
            "--enclosure=\"", "-i", sqlfile]
@@ -65,7 +65,7 @@ def csql_file(cfg, env, sqlfile, out_path, timeout):
         die(f"csql rc={p.returncode} for {sqlfile}: {p.stderr[:2000]}")
     if "ERROR" in p.stderr:
         die(f"csql stderr ERROR for {sqlfile}: {p.stderr[:2000]}")
-    if not p.stdout.strip():
+    if not p.stdout.strip() and not allow_empty:
         die(f"csql produced EMPTY output (aborted statement?): {sqlfile}")
     if "ERROR" in p.stdout:
         die(f"csql output body contains ERROR: {sqlfile}")
@@ -127,11 +127,11 @@ def cmd_run(args):
             die("Q15 view revenue0 already exists before create")
         summary["q15_pre_absent"] = True
         csql_file(cfg, env, os.path.join(cfg.QUERIES, "q15_create_view-cubrid.sql"),
-                  os.path.join(outdir, "q15_create.out"), 300)
+                  os.path.join(outdir, "q15_create.out"), 300, allow_empty=True)
         csql_file(cfg, env, os.path.join(cfg.QUERIES, "q15_select-cubrid.sql"),
                   os.path.join(outdir, "q15.out"), cfg.TIMEOUT + 300)
         csql_file(cfg, env, os.path.join(cfg.QUERIES, "q15_drop_view-cubrid.sql"),
-                  os.path.join(outdir, "q15_drop.out"), 300)
+                  os.path.join(outdir, "q15_drop.out"), 300, allow_empty=True)
         if view_exists(cfg, env):
             die("Q15 view revenue0 still exists after drop")
         summary["q15_post_absent"] = True
