@@ -193,17 +193,40 @@ IMP-021 → IMP-010 → IMP-008 → IMP-024 → IMP-006
 
 ## 보정 추가 수집 (사용자가 (d)를 고른 경우에만)
 
-Q01~Q06을 fast 레짐에서 블록 수를 늘려 재측정해 fast CV의 3-pair 불확실성을 줄인다.
-드라이버는 tpch-sspq/impl/harness/phase1a_fast_driver.sh, TPCH_SSPQ_BLOCKS로 블록 수를
-올린다. **핀 파라미터는 바꾸지 마라** — WARM 게이트, 외부부하 6.0 core-s/s 게이트,
-1 warmup + 3 measured. 수집 후 calibrate_restart_variance.py를 다시 돌려 G1~G4 가드가
-어떻게 판정하는지 보고하고, 규칙이 정해지면 §6-d-1 escalation을 해소한 뒤 Phase 2로 간다.
+Q01~Q06을 fast 레짐에서 블록을 **추가**해 fast CV의 3-pair 분모 불확실성을 줄인다.
 
-## 인수 시점의 미해결 채무 (숨기지 말고 먼저 확인하라)
+주의: 이전 판은 "TPCH_SSPQ_BLOCKS를 올려 드라이버를 돌려라"라고만 적었는데 **그건
+아무 일도 하지 않는다.** phase1a_fast_driver.sh의 재개 가드가 raw/<QNN>/QUERY-COMPLETE.json
+이 있으면 그 질의를 무조건 skip하고 Q01~Q06 마커 6개가 전부 존재하므로 수집 블록이 0개다.
+마커만 지우면 block1~6을 덮어써 append-only 증거 경계를 깨고, aggregate_baseline은
+1..N_BLOCKS만 읽으므로 추가 블록을 소비조차 하지 않았다. 터미널 critic 4차 심사가 이걸
+잡았고, 세 가지를 다 고쳐 두었다.
 
-- 경계 완료 코호트 generation 19가 미완이다(레인 인프라 실패, 결함 발견 아님). G004는
-  review_blocked이고 ultragoal 실행은 완료로 표시되지 않았다. 터미널 critic 누적 non-OKAY
-  3회(ceiling 5).
+실제 절차:
+
+```bash
+cd /home/cubrid/dev/tpch-sspq-impl-r1/harness
+# 기존 6블록은 그대로 두고 block7..block12를 append한다.
+# BLOCK_START가 1보다 크면 재개 가드가 열리고, 그 범위에 이미 블록이 있으면 exit 3으로 거부한다.
+TPCH_SSPQ_BLOCK_START=7 TPCH_SSPQ_BLOCKS=6 ./phase1a_fast_driver.sh Q01 Q02 Q03 Q04 Q05 Q06
+```
+
+그 다음 `aggregate_baseline.py` → `calibrate_restart_variance.py`를 다시 돌린다.
+aggregate는 `N_BLOCKS`를 **최소값**으로 취급해 `block7-headline.json` 이후를 자동으로
+포함하므로(추가 블록이 없으면 동작이 종전과 바이트 동일), 12블록 = 6 pair로 fast CV가
+재추정된다. 그 뒤 G1~G4 가드가 어떻게 판정하는지 보고하라 — 범위 비율이 10 아래로
+떨어지면 pooled가 성립하고, leave-one-out r이 임계를 넘으면 벽시계 의존이 성립한다.
+
+**핀 파라미터는 바꾸지 마라** — WARM 게이트, 외부부하 6.0 core-s/s 게이트,
+1 warmup + 3 measured. 바뀌는 것은 블록 수와 시작 번호뿐이다.
+
+## 인수 시점의 기록 (live 상태는 직접 확인하라)
+
+- **게이트 상태는 이 문서에 적지 않는다.** 워크플로 상태는 계속 움직이므로 여기 박아 두면
+  낡는다. 현재 상태는 `gjc ultragoal status`와
+  `.gjc/_session-*/ultragoal/ledger.jsonl`의 `critic_verdict` 이벤트로 직접 확인하라.
+  generation 19는 미해결 채무가 아니라 레인 인프라 사건이며 generation 21이 그 범위를
+  대체해 세 레인 clean으로 닫았다.
 - 지난 세션이 잡은 가장 무거운 결함: aggregate_baseline._load_attempts()가 폐기된
   pre-AMEND-G 런의 로그를 읽어 baseline이 다른 런의 시도 무효화를 싣고 있었다(§3-a 위반).
   생산자를 핀된 fast 로그로 고치고 fail-closed 가드를 넣었다. 재생성 후 median·CV·MDE·인자·

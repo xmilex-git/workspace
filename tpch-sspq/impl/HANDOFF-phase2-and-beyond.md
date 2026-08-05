@@ -91,10 +91,9 @@ git fetch origin main 후 핀을 검증하고 이 파일을 끝까지 읽어라.
 
 Phase 2를 시작하지 말고, 대신 다음 중 사용자가 지시한 것만 수행하라.
 (a) 승인 대기 8건을 정리해 다시 제시하고 대기,
-(b) §6-d-1 보정 블록 추가 수집(결합규칙을 모형 선택이 아니라 측정으로 결정하는 길). 이 경우
-    Q01~Q06을 fast 레짐에서 블록 수를 늘려 재측정해 fast CV의 3-pair 불확실성을 줄인다.
-    드라이버는 tpch-sspq/impl/harness/phase1a_fast_driver.sh, TPCH_SSPQ_BLOCKS로 블록 수를
-    올릴 수 있다. 핀 파라미터(WARM 게이트, 6.0 게이트, 1 warmup + 3 measured)는 바꾸지 마라.
+(b) §6-d-1 보정 블록 추가 수집. **이 절차는 HANDOFF-FINAL.md를 보라** — 여기 적혀 있던
+    "TPCH_SSPQ_BLOCKS를 올려라"는 아무 일도 하지 않는다(재개 가드가 Q01~Q06을 전부 skip).
+    올바른 명령은 TPCH_SSPQ_BLOCK_START로 append하는 것이고 HANDOFF-FINAL.md에 있다.
 (c) 랭킹 재검토 — 사용자가 IMP-001 분모나 상류 매핑을 제공하면 benefit-inputs.json의 해당
     항만 갱신하고 harness/score_ranking.py와 두 렌더러를 재실행하라. 판정은
     benefit-inputs.json에만, 산술은 score_ranking.py에만 둔다는 분리를 깨지 마라.

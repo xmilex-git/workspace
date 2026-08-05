@@ -33,6 +33,7 @@ Usage: aggregate_baseline.py [OUT_DIR]
 import glob
 import json
 import os
+import re
 import statistics
 import subprocess
 import sys
@@ -147,8 +148,19 @@ def attempt_invalidations(qnn):
 
 def load_query(qnn):
     d = os.path.join(cfg.RAW_ROOT, "raw", qnn)
+    # Block discovery: the pinned N_BLOCKS is the MINIMUM, not the maximum. A section
+    # 6-d-1 re-calibration may append blocks beyond it (block7, block8, ...) and those
+    # observations must be consumed, otherwise collecting them is a no-op. With no extra
+    # blocks on disk this reduces exactly to range(1, N_BLOCKS+1), so an existing baseline
+    # aggregates bit-identically.
+    extra = sorted(
+        int(m.group(1))
+        for f in os.listdir(d) if os.path.isdir(d)
+        for m in [re.fullmatch(r"block(\d+)-headline\.json", f)]
+        if m and int(m.group(1)) > cfg.N_BLOCKS
+    ) if os.path.isdir(d) else []
     blocks, invalid = [], []
-    for b in range(1, cfg.N_BLOCKS + 1):
+    for b in list(range(1, cfg.N_BLOCKS + 1)) + extra:
         hp = os.path.join(d, f"block{b}-headline.json")
         ip = os.path.join(d, f"block{b}-INVALID.json")
         if os.path.exists(hp):
@@ -282,7 +294,9 @@ def build(qnn):
             "statdump_post": rj.get("statdump_post"),
             "path": ref,
         }
-    rec["status"] = "OK" if len(blocks) == cfg.N_BLOCKS else "PARTIAL"
+    # N_BLOCKS is the minimum; extra appended blocks keep the status OK rather than
+    # making a MORE heavily sampled query look partial.
+    rec["status"] = "OK" if len(blocks) >= cfg.N_BLOCKS else "PARTIAL"
     return rec
 
 

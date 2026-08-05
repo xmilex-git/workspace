@@ -83,6 +83,9 @@ if [ "${#QUERIES_TO_RUN[@]}" -eq 0 ]; then
 fi
 
 BLOCKS="${TPCH_SSPQ_BLOCKS:-$N_BLOCKS}"
+# First block number to write. 1 for a fresh sweep; >1 to APPEND to an already-complete
+# query without overwriting its evidence (see the resumability guard below).
+BLOCK_START="${TPCH_SSPQ_BLOCK_START:-1}"
 MAX_ATTEMPTS="${TPCH_SSPQ_MAX_ATTEMPTS:-4}"
 MAX_WAIT_S="${TPCH_SSPQ_MAX_WAIT_S:-1800}"
 QUERY_ATTEMPTS="${TPCH_SSPQ_QUERY_ATTEMPTS:-2}"
@@ -193,9 +196,29 @@ for QNN in "${QUERIES_TO_RUN[@]}"; do
   mkdir -p "$QDIR" "$W/sink"
 
   # ---- resumability: a completed query is never re-measured ----
+  # EXCEPT in append-only extension mode. A section 6-d-1 re-calibration needs MORE blocks
+  # for an already-complete query, and the plain resume guard makes that a zero-work run:
+  # every Q01-Q06 marker exists, so raising TPCH_SSPQ_BLOCKS alone collects nothing.
+  # Extension is opt-in and refuses to overwrite existing evidence:
+  #   TPCH_SSPQ_BLOCK_START=<n>  numbering starts at n, so blocks 1..n-1 are never touched
+  # The marker is only bypassed when BLOCK_START is past every block already on disk.
   if [ -f "${QDIR}/QUERY-COMPLETE.json" ]; then
-    log "########## ${QNN} — SKIPPED, already complete (resume) ##########"
-    continue
+    if [ "$BLOCK_START" -gt 1 ]; then
+      _clash=0
+      for _b in $(seq "$BLOCK_START" "$((BLOCK_START + BLOCKS - 1))"); do
+        if [ -e "${QDIR}/block${_b}-headline.json" ] || [ -e "${QDIR}/block${_b}-INVALID.json" ]; then
+          _clash=1; break
+        fi
+      done
+      if [ "$_clash" -eq 1 ]; then
+        log "########## ${QNN} — REFUSED: block${_b} already exists; extension must not overwrite evidence ##########"
+        exit 3
+      fi
+      log "########## ${QNN} — EXTENDING: appending blocks ${BLOCK_START}..$((BLOCK_START + BLOCKS - 1)) (existing evidence preserved) ##########"
+    else
+      log "########## ${QNN} — SKIPPED, already complete (resume) ##########"
+      continue
+    fi
   fi
 
   for qattempt in $(seq 1 "$QUERY_ATTEMPTS"); do
@@ -286,7 +309,7 @@ json.dump({'campaign_id':'${CAMPAIGN}','qnn':'${QNN}','query_attempt':${qattempt
 
     # ---- the blocks: NO restart between them ----
     accepted=0
-    for b in $(seq 1 "$BLOCKS"); do
+    for b in $(seq "$BLOCK_START" "$((BLOCK_START + BLOCKS - 1))"); do
       BP="${QDIR}/block${b}"
       log "  --- ${QNN} block ${b}/${BLOCKS}"
 
