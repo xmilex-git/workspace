@@ -205,7 +205,10 @@ generation 13~15가 잡은 것은 `PHASE-RECORD-2026-08-05.md`와
 공통 성격은 하나다 — **검증했다고 말한 범위가 실제 검증한 범위보다 넓었다.** 생산자 결함도
 같은 성격이다: 나는 baseline을 "검증했다"고 적었으나 그 안의 시도 provenance는 한 번도
 확인하지 않았다. 수정 후 재생성 결과 median wall 262.5440 s, 블록 131/1, 인자, 랭킹은 전부
-불변이고 `priority-ranking.json`의 수치 leaf 843개 중 변경 0건 — 결함은 시도 수준
+불변이고 `priority-ranking.json`의 수치 leaf 843개 중 변경 0건이다.
+`fresh-baseline.json`은 공유 수치 leaf 7,188개 중 13개가 바뀌었고 **전부 시도 provenance
+필드**다(요약 4개 + 질의별 `attempts_invalidated` 7개 + Q07 시도 색인 2개). median·paired
+CV·corrected MDE·인자·점수·순위·큐·민감도 중 바뀐 것은 없다 — 결함은 시도 수준
 메타데이터에 국한됐다. 그러나 §3-a는 모든 무효화를 원인과 측정 부하와 함께 기록하도록
 요구하므로, 다른 런의 원인을 싣는 것은 미용 문제가 아니다.
 `doc-claim-audit.md`는 세 번 고쳐 이제 결속을 단정하지 않고 후보 경로를 나열하며, 자기

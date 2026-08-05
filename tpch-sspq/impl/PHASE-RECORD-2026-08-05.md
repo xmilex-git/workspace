@@ -68,7 +68,16 @@ IMP-015의 검증된 적용 범위는 **"리더가 해시 패스를 수행하는
   실패할 수 없다). generation 16 심사가 이것을 잡았다. 생산자를 핀된 fast 로그로 고치고
   로그 헤더의 핀 불일치 시 **실행을 거부**하도록 했으며, 재생성 결과 median wall 합계
   262.5440 s, 블록 131/1, 인자, 랭킹 수치는 **전부 불변**이고 `priority-ranking.json`의
-  수치 leaf 843개 중 변경 0건이다. 결함은 시도 수준 provenance 메타데이터에 국한됐다.
+  수치 leaf 843개 중 **변경 0건**이고, `fresh-baseline.json`은 공유 수치 leaf 7,188개 중
+  **13개**가 바뀌었다 — 전부 시도 provenance 필드다: `attempt_outcomes_summary`의 4개
+  (`n_attempts_total` 53→142, `n_attempts_accepted` 36→131, `n_attempts_discarded` 16→11,
+  `discarded_by_reason.INVALID_BACKGROUND_LOAD` 2→11), 질의별 `attempts_invalidated` 7개
+  (Q01 5→0 · Q04 3→0 · Q05 2→0 · Q06 4→0 · Q08 0→1 · Q09 0→7 · Q13 0→1), Q07 시도 기록의
+  attempt·block 색인 2개. **median·paired CV·corrected MDE·인자·점수·순위·큐·민감도 중
+  바뀐 것은 하나도 없다.** Q01·Q04·Q05·Q06이 0이 되는 것이 맞다 — 그 질의들의 시도 반려는
+  폐기된 런에만 있던 `WARM_NOT_CONVERGED`이고 fast 런에서는 반려가 없었다.
+
+  결함은 시도 수준 provenance 메타데이터에 국한됐다.
 - **Q15 하니스 결함 발견·수정**: AMEND-G가 WARM을 블록 밖 질의 단위로 옮길 때
   `q15_gated_block.sh`의 세션 단위 분기를 함께 옮기지 않아 문장 단위 `warm_establish.py`가
   `create view`/`drop view` DDL을 타이밍에 섞었다(steady 0.003 s, spread 335,899%). 게이트가
