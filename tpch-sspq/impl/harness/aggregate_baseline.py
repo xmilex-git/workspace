@@ -66,6 +66,9 @@ def paired_cv(medians, pairing):
     the per-block CV implied by the paired spread. Every pair is reported so the
     number can be audited rather than trusted.
     """
+    # Only the pinned block slots participate. If more medians are supplied the surplus is
+    # IGNORED BY DESIGN (see the note on ADJACENT/SPACED); callers must not read a change in
+    # this number as evidence that extra blocks were incorporated.
     pairs, rel = [], []
     for i, j in pairing:
         if i >= len(medians) or j >= len(medians):
@@ -82,8 +85,21 @@ def paired_cv(medians, pairing):
     return sd(rel) / (2 ** 0.5), pairs
 
 
+# The pairing rule is PINNED by the norm, not a tunable. IMPL-SSOT section 6-d-1 step 2
+# requires the fast-regime and restart-regime paired CVs to be computed with "the identical
+# estimator and the identical pairing rule that section 3-c step 6 fixes, so the two numbers
+# are comparable by construction rather than by assertion". The inflation ratio divides one by
+# the other, so silently widening the pairing on one side would compare two quantities computed
+# under different rules — precisely what that clause forbids.
+#
+# Consequence, stated because it was briefly misunderstood: appending blocks beyond N_BLOCKS
+# does NOT re-estimate paired_cv. The extra blocks are recorded (count, medians, dispersion)
+# but paired_cv deliberately stays on the pinned six-block pairing. Reducing the 3-pair
+# denominator uncertainty requires extending BOTH regimes symmetrically under one new pinned
+# pairing rule, which is a norm-level change and a section 11-a user decision.
 ADJACENT = [(0, 1), (2, 3), (4, 5)]
 SPACED = [(0, 3), (1, 4), (2, 5)]
+PINNED_PAIRING_BLOCKS = 6  # the block count the pinned pairings above are defined over
 
 
 _ATTEMPTS = None
@@ -365,7 +381,12 @@ def main():
         },
         "external_load_gate_core_s_per_s": cfg.EXTERNAL_LOAD_THRESHOLD,
         "external_load_gate_source": "IMPL-SSOT section 3-a, AMEND-D",
-        "blocks_per_query": cfg.N_BLOCKS,
+        # Pinned MINIMUM, not the actual count. Per-query `blocks_collected` may exceed it
+        # when a query has been extended, so publishing this as though it were the actual
+        # per-query count made the report internally inconsistent.
+        "blocks_per_query_pinned_minimum": cfg.N_BLOCKS,
+        "paired_cv_pinned_pairing_blocks": PINNED_PAIRING_BLOCKS,
+        "paired_cv_ignores_blocks_beyond_pinned_pairing": True,
         "measured_runs_per_block": cfg.N_MEASURED,
         "mde_formula": "max(1%, 2 x baseline_paired_CV)  (section 6-d)",
         "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

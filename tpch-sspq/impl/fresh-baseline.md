@@ -27,12 +27,13 @@ This baseline is the **only** "before" this campaign's scoring (section 2-b) and
 | Collector CPUs | `20-23` |
 | Isolation mechanism | taskset + numactl applied at process start (IMPL-SSOT section 3-a); never cpuset cgroups, never post-hoc re-pinning |
 | External-CPU invalidation gate | 6.0 core-s/s (IMPL-SSOT section 3-a, AMEND-D) |
-| Blocks per query | 6 |
+| Blocks per query (pinned minimum) | 6 |
+| paired CV pairing (pinned, section 6-d-1 step 2) | 6 blocks; blocks beyond it are recorded but NOT used by paired_cv |
 | Measured runs per block | 3 |
 | Phase 1A driver tmux session | `tpch-sspq-impl-r1-20260803-phase1a-driver` |
 | Phase 1A driver PID | `2848446` |
 | Collection window start (UTC) | 2026-08-03T01:30:44Z |
-| Aggregated (UTC) | 2026-08-05T03:15:16Z |
+| Aggregated (UTC) | 2026-08-05T07:33:09Z |
 
 ## Per-query baseline
 
