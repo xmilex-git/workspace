@@ -48,8 +48,14 @@ IMP-015의 검증된 적용 범위는 **"리더가 해시 패스를 수행하는
   **262.5440 s** (이전 캠페인 264 s와 ±0.5% 내).
 - 전 구간 **단일 `cub_server` 인스턴스**(pid 3285405, start 04:59:27Z) — 전 identity 산출물에서
   pid·start_time 각 1종뿐이라 §3-c-1의 인스턴스 교체 조건 미발동. off_sut TID **0건**.
-- 무효 1건은 Q09 block3 `INVALID_BACKGROUND_LOAD` — 4회 시도 모두 외부부하 최대 14.2~16.0
-  core-s/s로 6.0 게이트 초과. 게이트가 오염 블록을 버린 정상 동작.
+- 무효 1건은 **Q09 block 3**. 산출물에 기록된 블록 수준 사유는
+  `MEASURE_BLOCK_REJECTED`(`measure_block_rc: 1`, `blocks_invalidated: 1`,
+  `raw/Q09/block3-INVALID.json`)이고, 그 블록이 거부된 **원인**은 드라이버 로그가 보여준다 —
+  허용된 4회 시도가 전부 `INVALID_BACKGROUND_LOAD`로 반려됐고 시도별 `external_max`는
+  15.9807 / 8.3701 / 14.2298 / 15.9965 core-s/s로 세 번이 6.0 게이트를 크게 초과했다
+  (두 번째 8.3701도 초과). 즉 게이트가 오염 블록을 **측정해 통과시키지 않고 버린** 정상
+  동작이다. `attempts_invalidated`는 0인데, 이 카운터는 블록이 성립한 뒤의 시도 무효화를
+  세는 필드여서 블록 자체가 반려된 이 경로에서는 증가하지 않는다.
 - **Q15 하니스 결함 발견·수정**: AMEND-G가 WARM을 블록 밖 질의 단위로 옮길 때
   `q15_gated_block.sh`의 세션 단위 분기를 함께 옮기지 않아 문장 단위 `warm_establish.py`가
   `create view`/`drop view` DDL을 타이밍에 섞었다(steady 0.003 s, spread 335,899%). 게이트가
