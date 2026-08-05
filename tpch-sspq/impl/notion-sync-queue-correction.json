@@ -1,0 +1,22 @@
+{
+  "overall": "synced",
+  "page_id": "3b1f947f-1be1-81d9-b7d4-fecf8bc04fbe",
+  "artifact_queue_verified": true,
+  "artifact_queue_length": 22,
+  "blocks_examined": 166,
+  "blocks_patched": [
+    {
+      "block_id": "3b3f947f-1be1-8165-b982-c1799e15a854",
+      "before": "후보 큐 (§4-a, enabler는 의존 후보 바로 앞 위치 상속): IMP-015 → IMP-005 → IMP-009 → IMP-018 → IMP-014 → IMP-027 → IMP-003 → IMP-029 → IMP-019 → IMP-023 → IMP-030 → IMP-013 → IMP-012 → IMP-031 → IMP-022 → IMP-017 → IMP-016 → IMP-004 → IMP-021 → IMP-010 → IMP-008 → IMP-024 → IMP-006. (23 entries; IMP-017 wrongly bolded and inserted between IMP-022 and IMP-016, no explanatory sentence for IMP-017's exclusion existed anywhere on the page)"
+    }
+  ],
+  "blocks_appended": 0,
+  "block_id_list_unchanged": true,
+  "imp017_still_in_any_arrow_chain": true,
+  "refetch_verified": true,
+  "corruption_check": "clean",
+  "blockers": [
+    "Not a fix failure, informational scope note: after correcting the target 'candidate queue' block (3b3f947f-1be1-8165-b982-c1799e15a854), IMP-017 still textually appears inside one unrelated arrow chain in a different, untouched section: block c4c507cf-529c-4b71-afa2-a1f2f45bc6c5 under heading '5. 버킷 배치 (순서 = 착수 순)' (a distinct Notion-page heading numbered coincidentally the same as the source markdown's '5. Phase 1B 랭킹' section), reading '지금 바로: IMP-015 → IMP-018 → IMP-010 → IMP-005 → IMP-017 → IMP-030'. This is a pre-existing 'quick win bucket' list, not the §4-a ranked candidate queue, does not pair IMP-017 with IMP-022, and does not assert a queue position for IMP-017 — it is unrelated to the single factual error this task was scoped to fix, so per 'touch nothing else' it was left unmodified. Flagging for the leader in case §4-a scope should later be extended to that section.",
+    "corruption_check heuristic also flagged 3 pre-existing, untouched blocks containing legitimate literal '<' characters unrelated to this edit: 181f6e45-af3a-4d05-ac93-059feb5b88ab ('UPPER BOUND < 1%'), 3b3f947f-1be1-81e6-8e58-fe11f6d368a6 ('worktrees/IMP-NNN-<slug>'), 3b3f947f-1be1-8148-9dfe-de3f8f8b8ec2 ('</dev/null'). None of these were touched by this PATCH; the patched block itself contains no '<', '&lt;', or isolated 'n' token."
+  ]
+}
