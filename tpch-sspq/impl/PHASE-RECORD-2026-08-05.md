@@ -178,8 +178,11 @@ MD-2 레지스트리가 CPU→wall 환산을 제시한 경우에만 환산하고
 경계 완료 코호트를 **16세대** 돌렸다(이 절이 쓰인 시점은 12세대였고 이후 13~16세대가 더 돌았다). cleaner·architect·QA 세 레인이 매 세대 동일 frozen
 `sourceHash`에 결속되어 심사했고, 실제 결함을 다수 잡았다: §4-a 큐 위치 규칙 위반(diagnostic
 IMP-017이 큐에 들어가고 enabler IMP-005에 모순 문구), §2-e 표의 데이터 행이 13열이던 문제,
-그리고 터미널 critic이 2회 ITERATE로 잡은 **민감도 채점기가 본 채점과 다른 모집단·정렬을 쓰던
-결함**(`RANKING_UNSTABLE`이 무효였다)과 **§6-d-1 인자 의존 판정을 단정하던 절차 위반**.
+그리고 터미널 critic이 잡은 **민감도 채점기가 본 채점과 다른 모집단·정렬을 쓰던
+결함**(`RANKING_UNSTABLE`이 무효였다)과 **§6-d-1 인자 의존 판정을 단정하던 절차 위반**. 3차 심사는 그보다 무거운 것을 잡았다 —
+`aggregate_baseline._load_attempts()`가 폐기된 pre-AMEND-G 런의 로그를 읽어 baseline이
+**다른 런의 시도 무효화**를 싣고 있었다(§3-a 증거 계약 위반). 터미널 critic 누적 non-OKAY는
+3회이고 규범 ceiling은 5다.
 
 "상태 의존 문구를 상태로 조건화하지 않음" 결함이 아홉 번 반복되고 매번 그 시점 delta 밖이라
 리뷰가 놓쳤으므로, 통제 수단을 리뷰에서 생성기로 옮겼다 — `harness/state_labels.py`가 생성기

@@ -222,7 +222,7 @@ CV·corrected MDE·인자·점수·순위·큐·민감도 중 바뀐 것은 없�
 
 - **G004는 `review_blocked`이고 ultragoal 실행은 완료로 표시되지 않았다.** generation 16의
   blocker를 수정한 뒤(`17d7e64`) 그 수정에 대한 코호트 재심사와 터미널 critic 재심사가 남았다.
-- 터미널 critic 누적 non-OKAY 2회(ITERATE). 규범 ceiling은 5.
+- 터미널 critic 누적 non-OKAY **3회**(전부 ITERATE). 규범 ceiling은 5이므로 2회 여유.
 - generation 12는 세 레인이 인프라 사유로 3회 재시도 후 실패했다(레인 실패이며 결함 발견이
   아니다). generation 13이 그 심사 범위를 다시 덮었다.
 - `harness/`에 상주 단위 시험이 없다. 생성기 계약은 코호트 QA 레인이 매 세대 재작성해
