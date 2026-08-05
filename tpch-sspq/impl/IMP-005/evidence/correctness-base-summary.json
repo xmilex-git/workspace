@@ -1,0 +1,76 @@
+{
+  "variant": "base",
+  "cubrid_home": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base",
+  "conf_sha256": "ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff",
+  "queries": {
+    "q1": {
+      "rows": 4
+    },
+    "q2": {
+      "rows": 100
+    },
+    "q3": {
+      "rows": 10
+    },
+    "q4": {
+      "rows": 5
+    },
+    "q5": {
+      "rows": 5
+    },
+    "q6": {
+      "rows": 1
+    },
+    "q7": {
+      "rows": 4
+    },
+    "q8": {
+      "rows": 2
+    },
+    "q9": {
+      "rows": 175
+    },
+    "q10": {
+      "rows": 20
+    },
+    "q11": {
+      "rows": 8685
+    },
+    "q12": {
+      "rows": 2
+    },
+    "q13": {
+      "rows": 46
+    },
+    "q14": {
+      "rows": 1
+    },
+    "q16": {
+      "rows": 27840
+    },
+    "q17": {
+      "rows": 1
+    },
+    "q18": {
+      "rows": 100
+    },
+    "q19": {
+      "rows": 1
+    },
+    "q20": {
+      "rows": 1804
+    },
+    "q21": {
+      "rows": 100
+    },
+    "q22": {
+      "rows": 7
+    },
+    "q15": {
+      "rows": 1
+    }
+  },
+  "pass": true,
+  "q15_pre_absent": true,
+  "q15_post_absent": true
+}

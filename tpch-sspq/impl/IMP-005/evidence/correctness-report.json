@@ -1,0 +1,159 @@
+{
+  "queries": {
+    "q1": {
+      "ordered": true,
+      "rows": 4,
+      "rows_patch": 4,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q2": {
+      "ordered": true,
+      "rows": 100,
+      "rows_patch": 100,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q3": {
+      "ordered": true,
+      "rows": 10,
+      "rows_patch": 10,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q4": {
+      "ordered": true,
+      "rows": 5,
+      "rows_patch": 5,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q5": {
+      "ordered": true,
+      "rows": 5,
+      "rows_patch": 5,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q6": {
+      "ordered": false,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q7": {
+      "ordered": true,
+      "rows": 4,
+      "rows_patch": 4,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q8": {
+      "ordered": true,
+      "rows": 2,
+      "rows_patch": 2,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q9": {
+      "ordered": true,
+      "rows": 175,
+      "rows_patch": 175,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q10": {
+      "ordered": true,
+      "rows": 20,
+      "rows_patch": 20,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q11": {
+      "ordered": true,
+      "rows": 8685,
+      "rows_patch": 8685,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q12": {
+      "ordered": true,
+      "rows": 2,
+      "rows_patch": 2,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q13": {
+      "ordered": true,
+      "rows": 46,
+      "rows_patch": 46,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q14": {
+      "ordered": false,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q16": {
+      "ordered": true,
+      "rows": 27840,
+      "rows_patch": 27840,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q17": {
+      "ordered": false,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q18": {
+      "ordered": true,
+      "rows": 100,
+      "rows_patch": 100,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q19": {
+      "ordered": false,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q20": {
+      "ordered": true,
+      "rows": 1804,
+      "rows_patch": 1804,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q21": {
+      "ordered": true,
+      "rows": 100,
+      "rows_patch": 100,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q22": {
+      "ordered": true,
+      "rows": 7,
+      "rows_patch": 7,
+      "equal": true,
+      "nonvacuous": true
+    },
+    "q15": {
+      "ordered": true,
+      "rows": 1,
+      "rows_patch": 1,
+      "equal": true,
+      "nonvacuous": true
+    }
+  },
+  "pass": true
+}

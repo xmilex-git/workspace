@@ -1,0 +1,797 @@
+{
+  "queries": {
+    "q5": {
+      "status": "OK",
+      "nodes": [
+        {
+          "depth": 12,
+          "kind": "table",
+          "name": "dba.region",
+          "serial": {
+            "readrows": 5,
+            "rows": 1
+          },
+          "base_par": {
+            "readrows": 5,
+            "rows": 1
+          },
+          "patch_par": {
+            "readrows": 5,
+            "rows": 1
+          },
+          "multiplicity_readrows": 1,
+          "serial_ref_readrows": 5,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 1
+        },
+        {
+          "depth": 14,
+          "kind": "index",
+          "name": "dba.nation.fk_nation_region",
+          "serial": {
+            "readkeys": 1,
+            "filteredkeys": 1,
+            "rows": 10
+          },
+          "base_par": {
+            "readkeys": 1,
+            "filteredkeys": 1,
+            "rows": 10
+          },
+          "patch_par": {
+            "readkeys": 1,
+            "filteredkeys": 1,
+            "rows": 10
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 1,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 1,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 10
+        },
+        {
+          "depth": 16,
+          "kind": "index",
+          "name": "dba.customer.fk_customer_nation",
+          "serial": {
+            "readkeys": 5,
+            "filteredkeys": 5,
+            "rows": 600540
+          },
+          "base_par": {
+            "readkeys": 5,
+            "filteredkeys": 5,
+            "rows": 600540
+          },
+          "patch_par": {
+            "readkeys": 5,
+            "filteredkeys": 5,
+            "rows": 600540
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 5,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 5,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 600540
+        },
+        {
+          "depth": 18,
+          "kind": "index",
+          "name": "dba.orders.fk_orders_customer",
+          "serial": {
+            "readkeys": 300270,
+            "filteredkeys": 200267,
+            "rows": 3463151
+          },
+          "base_par": {
+            "readkeys": 300270,
+            "filteredkeys": 200267,
+            "rows": 3463151
+          },
+          "patch_par": {
+            "readkeys": 300270,
+            "filteredkeys": 200267,
+            "rows": 3463151
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 300270,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 200267,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 3463151
+        },
+        {
+          "depth": 20,
+          "kind": "index",
+          "name": "dba.lineitem.fk_lineitem_orders",
+          "serial": {
+            "readkeys": 456771,
+            "filteredkeys": 456771,
+            "rows": 3651712
+          },
+          "base_par": {
+            "readkeys": 456771,
+            "filteredkeys": 456771,
+            "rows": 3651712
+          },
+          "patch_par": {
+            "readkeys": 456771,
+            "filteredkeys": 456771,
+            "rows": 3651712
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 456771,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 456771,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 3651712
+        },
+        {
+          "depth": 12,
+          "kind": "table",
+          "name": "dba.supplier",
+          "serial": {
+            "readrows": 100000,
+            "rows": 100000
+          },
+          "base_par": {
+            "readrows": 100000,
+            "rows": 100000
+          },
+          "patch_par": {
+            "readrows": 100000,
+            "rows": 100000
+          },
+          "multiplicity_readrows": 1,
+          "serial_ref_readrows": 100000,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 100000
+        }
+      ]
+    },
+    "q7": {
+      "status": "OK",
+      "nodes": [
+        {
+          "depth": 4,
+          "kind": "table",
+          "name": "dba.nation",
+          "serial": {
+            "readrows": 25,
+            "rows": 2
+          },
+          "base_par": {
+            "readrows": 25,
+            "rows": 2
+          },
+          "patch_par": {
+            "readrows": 25,
+            "rows": 2
+          },
+          "multiplicity_readrows": 1,
+          "serial_ref_readrows": 25,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 2
+        },
+        {
+          "depth": 6,
+          "kind": "table",
+          "name": "dba.nation",
+          "serial": {
+            "readrows": 50,
+            "rows": 2
+          },
+          "base_par": {
+            "readrows": 50,
+            "rows": 2
+          },
+          "patch_par": {
+            "readrows": 50,
+            "rows": 2
+          },
+          "multiplicity_readrows": 1,
+          "serial_ref_readrows": 50,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 2
+        },
+        {
+          "depth": 8,
+          "kind": "index",
+          "name": "dba.customer.fk_customer_nation",
+          "serial": {
+            "readkeys": 2,
+            "filteredkeys": 2,
+            "rows": 240938
+          },
+          "base_par": {
+            "readkeys": 2,
+            "filteredkeys": 2,
+            "rows": 240938
+          },
+          "patch_par": {
+            "readkeys": 2,
+            "filteredkeys": 2,
+            "rows": 240938
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 2,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 2,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 240938
+        },
+        {
+          "depth": 10,
+          "kind": "index",
+          "name": "dba.orders.fk_orders_customer",
+          "serial": {
+            "readkeys": 120469,
+            "filteredkeys": 80447,
+            "rows": 2411616
+          },
+          "base_par": {
+            "readkeys": 120469,
+            "filteredkeys": 80447,
+            "rows": 2411616
+          },
+          "patch_par": {
+            "readkeys": 120469,
+            "filteredkeys": 80447,
+            "rows": 2411616
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 120469,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 80447,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 2411616
+        },
+        {
+          "depth": 12,
+          "kind": "index",
+          "name": "dba.lineitem.fk_lineitem_orders",
+          "serial": {
+            "readkeys": 1205808,
+            "filteredkeys": 1205808,
+            "rows": 6282928
+          },
+          "base_par": {
+            "readkeys": 1205808,
+            "filteredkeys": 1205808,
+            "rows": 6282928
+          },
+          "patch_par": {
+            "readkeys": 1205808,
+            "filteredkeys": 1205808,
+            "rows": 6282928
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 1205808,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 1205808,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 6282928
+        },
+        {
+          "depth": 14,
+          "kind": "index",
+          "name": "dba.supplier.pk_supplier_s_suppkey",
+          "serial": {
+            "readkeys": 1463762,
+            "filteredkeys": 1463762,
+            "rows": 1522127
+          },
+          "base_par": {
+            "readkeys": 1463762,
+            "filteredkeys": 1463762,
+            "rows": 1522127
+          },
+          "patch_par": {
+            "readkeys": 1463762,
+            "filteredkeys": 1463762,
+            "rows": 1522127
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 1463762,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 1463762,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 1522127
+        }
+      ]
+    },
+    "q8": {
+      "status": "OK",
+      "nodes": [
+        {
+          "depth": 14,
+          "kind": "index",
+          "name": "dba.supplier.pk_supplier_s_suppkey",
+          "serial": {
+            "readkeys": 24055,
+            "filteredkeys": 24055,
+            "rows": 48110
+          },
+          "base_par": {
+            "readkeys": 24055,
+            "filteredkeys": 24055,
+            "rows": 48110
+          },
+          "patch_par": {
+            "readkeys": 24055,
+            "filteredkeys": 24055,
+            "rows": 48110
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 24055,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 24055,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 48110
+        },
+        {
+          "depth": 28,
+          "kind": "table",
+          "name": "dba.part",
+          "serial": {
+            "readrows": 2000000,
+            "rows": 13452
+          },
+          "base_par": {
+            "readrows": 0,
+            "rows": 0
+          },
+          "patch_par": {
+            "readrows": 0,
+            "rows": 0
+          },
+          "serial_ref_readrows": 2000000,
+          "serial_ref_rows": 13452
+        },
+        {
+          "depth": 30,
+          "kind": "index",
+          "name": "dba.lineitem.fk_lineitem_partsupp",
+          "serial": {
+            "readkeys": 67236,
+            "filteredkeys": 53784,
+            "rows": 806974
+          },
+          "base_par": {
+            "readkeys": 67236,
+            "filteredkeys": 53784,
+            "rows": 806974
+          },
+          "patch_par": {
+            "readkeys": 67236,
+            "filteredkeys": 53784,
+            "rows": 806974
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 67236,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 53784,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 806974
+        },
+        {
+          "depth": 32,
+          "kind": "index",
+          "name": "dba.orders.pk_orders_o_orderkey",
+          "serial": {
+            "readkeys": 403487,
+            "filteredkeys": 403487,
+            "rows": 525891
+          },
+          "base_par": {
+            "readkeys": 806974,
+            "filteredkeys": 806974,
+            "rows": 1051782
+          },
+          "patch_par": {
+            "readkeys": 403487,
+            "filteredkeys": 403487,
+            "rows": 525891
+          },
+          "multiplicity_readkeys": 2,
+          "serial_ref_readkeys": 403487,
+          "multiplicity_filteredkeys": 2,
+          "serial_ref_filteredkeys": 403487,
+          "multiplicity_rows": 2,
+          "serial_ref_rows": 525891
+        },
+        {
+          "depth": 34,
+          "kind": "index",
+          "name": "dba.customer.pk_customer_c_custkey",
+          "serial": {
+            "readkeys": 122403,
+            "filteredkeys": 122403,
+            "rows": 244806
+          },
+          "base_par": {
+            "readkeys": 367194,
+            "filteredkeys": 367194,
+            "rows": 734388
+          },
+          "patch_par": {
+            "readkeys": 122398,
+            "filteredkeys": 122398,
+            "rows": 244796
+          },
+          "multiplicity_readkeys": 3,
+          "serial_ref_readkeys": 122403,
+          "multiplicity_filteredkeys": 3,
+          "serial_ref_filteredkeys": 122403,
+          "multiplicity_rows": 3,
+          "serial_ref_rows": 244806
+        },
+        {
+          "depth": 28,
+          "kind": "table",
+          "name": "dba.nation",
+          "serial": {
+            "readrows": 25,
+            "rows": 25
+          },
+          "base_par": {
+            "readrows": 25,
+            "rows": 25
+          },
+          "patch_par": {
+            "readrows": 25,
+            "rows": 25
+          },
+          "multiplicity_readrows": 1,
+          "serial_ref_readrows": 25,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 25
+        },
+        {
+          "depth": 20,
+          "kind": "table",
+          "name": "dba.region",
+          "serial": {
+            "readrows": 5,
+            "rows": 1
+          },
+          "base_par": {
+            "readrows": 5,
+            "rows": 1
+          },
+          "patch_par": {
+            "readrows": 5,
+            "rows": 1
+          },
+          "multiplicity_readrows": 1,
+          "serial_ref_readrows": 5,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 1
+        },
+        {
+          "depth": 12,
+          "kind": "table",
+          "name": "dba.nation",
+          "serial": {
+            "readrows": 25,
+            "rows": 25
+          },
+          "base_par": {
+            "readrows": 25,
+            "rows": 25
+          },
+          "patch_par": {
+            "readrows": 25,
+            "rows": 25
+          },
+          "multiplicity_readrows": 1,
+          "serial_ref_readrows": 25,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 25
+        }
+      ]
+    },
+    "q9": {
+      "status": "OK",
+      "nodes": [
+        {
+          "depth": 4,
+          "kind": "table",
+          "name": "dba.part",
+          "serial": {
+            "readrows": 2000000,
+            "rows": 108782
+          },
+          "base_par": {
+            "readrows": 0,
+            "rows": 0
+          },
+          "patch_par": {
+            "readrows": 0,
+            "rows": 0
+          },
+          "serial_ref_readrows": 2000000,
+          "serial_ref_rows": 108782
+        },
+        {
+          "depth": 6,
+          "kind": "index",
+          "name": "dba.partsupp.fk_partsupp_part",
+          "serial": {
+            "readkeys": 108782,
+            "filteredkeys": 108782,
+            "rows": 870256
+          },
+          "base_par": {
+            "readkeys": 108782,
+            "filteredkeys": 108782,
+            "rows": 870256
+          },
+          "patch_par": {
+            "readkeys": 108782,
+            "filteredkeys": 108782,
+            "rows": 870256
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 108782,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 108782,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 870256
+        },
+        {
+          "depth": 8,
+          "kind": "index",
+          "name": "dba.lineitem.fk_lineitem_partsupp",
+          "serial": {
+            "readkeys": 435128,
+            "filteredkeys": 434907,
+            "rows": 6523226
+          },
+          "base_par": {
+            "readkeys": 870256,
+            "filteredkeys": 869814,
+            "rows": 13046452
+          },
+          "patch_par": {
+            "readkeys": 435128,
+            "filteredkeys": 434907,
+            "rows": 6523226
+          },
+          "multiplicity_readkeys": 2,
+          "serial_ref_readkeys": 435128,
+          "multiplicity_filteredkeys": 2,
+          "serial_ref_filteredkeys": 434907,
+          "multiplicity_rows": 2,
+          "serial_ref_rows": 6523226
+        },
+        {
+          "depth": 10,
+          "kind": "index",
+          "name": "dba.orders.pk_orders_o_orderkey",
+          "serial": {
+            "readkeys": 3261613,
+            "filteredkeys": 3261613,
+            "rows": 6523226
+          },
+          "base_par": {
+            "readkeys": 9784839,
+            "filteredkeys": 9784839,
+            "rows": 19569678
+          },
+          "patch_par": {
+            "readkeys": 3261613,
+            "filteredkeys": 3261613,
+            "rows": 6523226
+          },
+          "multiplicity_readkeys": 3,
+          "serial_ref_readkeys": 3261613,
+          "multiplicity_filteredkeys": 3,
+          "serial_ref_filteredkeys": 3261613,
+          "multiplicity_rows": 3,
+          "serial_ref_rows": 6523226
+        },
+        {
+          "depth": 12,
+          "kind": "index",
+          "name": "dba.supplier.pk_supplier_s_suppkey",
+          "serial": {
+            "readkeys": 3219075,
+            "filteredkeys": 3219075,
+            "rows": 6438150
+          },
+          "base_par": {
+            "readkeys": 12197824,
+            "filteredkeys": 12197824,
+            "rows": 24395648
+          },
+          "patch_par": {
+            "readkeys": 3049456,
+            "filteredkeys": 3049456,
+            "rows": 6098912
+          },
+          "multiplicity_readkeys": 4,
+          "serial_ref_readkeys": 3219075,
+          "multiplicity_filteredkeys": 4,
+          "serial_ref_filteredkeys": 3219075,
+          "multiplicity_rows": 4,
+          "serial_ref_rows": 6438150
+        },
+        {
+          "depth": 14,
+          "kind": "index",
+          "name": "dba.nation.pk_nation_n_nationkey",
+          "serial": {
+            "readkeys": 25,
+            "filteredkeys": 25,
+            "rows": 50
+          },
+          "base_par": {
+            "readkeys": 625,
+            "filteredkeys": 625,
+            "rows": 1250
+          },
+          "patch_par": {
+            "readkeys": 125,
+            "filteredkeys": 125,
+            "rows": 250
+          },
+          "multiplicity_readkeys": 5,
+          "serial_ref_readkeys": 25,
+          "multiplicity_filteredkeys": 5,
+          "serial_ref_filteredkeys": 25,
+          "multiplicity_rows": 5,
+          "serial_ref_rows": 50
+        }
+      ]
+    },
+    "q21": {
+      "status": "OK",
+      "nodes": [
+        {
+          "depth": 20,
+          "kind": "table",
+          "name": "dba.orders",
+          "serial": {
+            "readrows": 15000000,
+            "rows": 7309184
+          },
+          "base_par": {
+            "readrows": 0,
+            "rows": 0
+          },
+          "patch_par": {
+            "readrows": 0,
+            "rows": 0
+          },
+          "serial_ref_readrows": 15000000,
+          "serial_ref_rows": 7309184
+        },
+        {
+          "depth": 22,
+          "kind": "index",
+          "name": "dba.lineitem.fk_lineitem_orders",
+          "serial": {
+            "readkeys": 7309184,
+            "filteredkeys": 7309184,
+            "rows": 47379520
+          },
+          "base_par": {
+            "readkeys": 7309184,
+            "filteredkeys": 7309184,
+            "rows": 47379520
+          },
+          "patch_par": {
+            "readkeys": 7309184,
+            "filteredkeys": 7309184,
+            "rows": 47379520
+          },
+          "multiplicity_readkeys": 1,
+          "serial_ref_readkeys": 7309184,
+          "multiplicity_filteredkeys": 1,
+          "serial_ref_filteredkeys": 7309184,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 47379520
+        },
+        {
+          "depth": 26,
+          "kind": "index",
+          "name": "dba.lineitem.fk_lineitem_orders",
+          "serial": {
+            "readkeys": 18321400,
+            "filteredkeys": 18321400,
+            "rows": 39907302
+          },
+          "base_par": {
+            "readkeys": 36642798,
+            "filteredkeys": 36642798,
+            "rows": 79814600
+          },
+          "patch_par": {
+            "readkeys": 18321399,
+            "filteredkeys": 18321399,
+            "rows": 39907300
+          },
+          "multiplicity_readkeys": 2,
+          "serial_ref_readkeys": 18321400,
+          "multiplicity_filteredkeys": 2,
+          "serial_ref_filteredkeys": 18321400,
+          "multiplicity_rows": 2,
+          "serial_ref_rows": 39907302
+        },
+        {
+          "depth": 26,
+          "kind": "index",
+          "name": "dba.lineitem.fk_lineitem_orders",
+          "serial": {
+            "readkeys": 17654363,
+            "filteredkeys": 17654363,
+            "rows": 49064889
+          },
+          "base_par": {
+            "readkeys": 35308724,
+            "filteredkeys": 35308724,
+            "rows": 98129768
+          },
+          "patch_par": {
+            "readkeys": 17654362,
+            "filteredkeys": 17654362,
+            "rows": 49064884
+          },
+          "multiplicity_readkeys": 2,
+          "serial_ref_readkeys": 17654363,
+          "multiplicity_filteredkeys": 2,
+          "serial_ref_filteredkeys": 17654363,
+          "multiplicity_rows": 2,
+          "serial_ref_rows": 49064889
+        },
+        {
+          "depth": 20,
+          "kind": "table",
+          "name": "dba.supplier",
+          "serial": {
+            "readrows": 100000,
+            "rows": 100000
+          },
+          "base_par": {
+            "readrows": 100000,
+            "rows": 100000
+          },
+          "patch_par": {
+            "readrows": 100000,
+            "rows": 100000
+          },
+          "multiplicity_readrows": 1,
+          "serial_ref_readrows": 100000,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 100000
+        },
+        {
+          "depth": 12,
+          "kind": "table",
+          "name": "dba.nation",
+          "serial": {
+            "readrows": 25,
+            "rows": 1
+          },
+          "base_par": {
+            "readrows": 25,
+            "rows": 1
+          },
+          "patch_par": {
+            "readrows": 25,
+            "rows": 1
+          },
+          "multiplicity_readrows": 1,
+          "serial_ref_readrows": 25,
+          "multiplicity_rows": 1,
+          "serial_ref_rows": 1
+        }
+      ]
+    }
+  },
+  "pass": true,
+  "strict_improvement_seen": true
+}
