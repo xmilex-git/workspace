@@ -326,17 +326,30 @@ Q18 포괄 분포: `qexec_hash_gby_agg_tuple` 39.39%, `sort_listfile` 21.02%, `s
 
 ## 15. Notion sync state
 
-대상: IC-5/IMP-032 카드 `3adf947f-1be1-81e8-acb5-f583ec2e4a2a` (사용자 지정). 상태는
-`notion_backfill_pending.jsonl`의 live 레코드가 보유한다.
+**synced.** 대상: IC-5 / IMP-032 카드 `3adf947f-1be1-81e8-acb5-f583ec2e4a2a` (사용자 지정).
 
-이 호스트에는 Notion 쓰기 수단이 **없다** — `~/.gjc/agent/config.yml`에 MCP 서버 미구성, `ntn` CLI가
-`PATH`/`~/.bun/bin`/`~/.local/bin`/`/usr/local/bin`/global node_modules/`.claude/skills` 어디에도 없음.
-§10-c는 원격 워커의 Notion 쓰기를 금지하고 컨트롤러가 Notion 가능한 subagent를 디스패치하도록 규정하는데,
-이 머신에서 스폰되는 subagent도 동일한 빈 툴셋을 물려받는다. 따라서 §10-f에 따라 **완전한 payload를 담은
-idempotent 백필 레코드**를 기록했다(포인터 아님). §10-e discovery 필드
-(`Priority`/`Difficulty`/`Expected effect`/`Root cause`/`CUBRID source`/`PostgreSQL source`/
-`Evidence level`/`Evidence event`/`Category`/`Queries`/`Status`)는 **불가침**이며 payload에 포함하지 않았다.
-payload는 §10-d 손상 스캔(literal `\n` 0, 고립 `n` 토큰 0, escaped table 0)을 통과했다.
+§10-d 프로토콜 그대로 수행했다: (1) 쓰기 직전 fresh fetch → 조립 기준 사본과 **바이트 동일** 확인,
+(2) 최소 갱신 — 기존 body를 그대로 두고 `## 구현 캠페인 tpch-sspq-impl-r1-20260803 — IMP-032 (구 IC-5)
+종결: verdict stopped` 섹션만 뒤에 붙였다, (3) 쓰기 후 server-side refetch + 손상 스캔.
+
+| 검증 항목 | 결과 |
+|---|---|
+| 종결 섹션 존재 (refetch) | 있음 |
+| verdict 문자열 존재 | `A3-refuted; UNPROVABLE_ON_THIS_HOST on Q15` |
+| 고립 literal `n` / literal `\n` | 0 / 0 |
+| escaped `&lt;` / raw `<table` | 0 / 0 |
+| 기존 콘텐츠 보존 | `## 측정 근거`, `## 구현 방향`, `## 검증 기준`, `## 구현 스펙 확정 — 그릴링 세션 2026-08-04`, `<callout>` 전부 유지 |
+| **§10-e discovery 필드** | front matter 전수 비교 결과 **Notion이 자동 관리하는 `마지막 수정` 타임스탬프만** 변화(2026-08-03T16:02Z → 2026-08-04T04:14Z). `상태`(검증됨)·`난이도`·`근거 이벤트`·`범주`·`소스 위치`·`대상 질의`·`후보 ID/번호`·`등록 구분` **전부 바이트 동일 — 불가침 유지** |
+| refetch 사본 sha256 | `c18afd406c995137…` |
+
+도구: `ntn` CLI (`/home/cubrid/.hermes/node/bin/ntn` — `PATH`에 없어서 최초 탐색에서 부재로 판정됐던 것을
+재탐색으로 찾았다), `NOTION_KEYRING=0` + `~/.config/notion/auth.json`, bot
+`3b1f947f-1be1-8125-b178-0027fe1a7f14` / workspace `f7437487-79d6-4cdc-85ac-90fd1abdfa1b`.
+증거: `closeout/notion/{card-before.md,card-refetch-prewrite.md,append-section.md,body-after.md,card-after.md,edit.out}`.
+
+§10-f 백필 레코드는 §10-f 규정대로 **refetch 확인 후에만** `status=synced`, `pending_cleared=true`로
+전환했다(`tpch-sspq/impl/notion_backfill_pending.jsonl`의 live 레코드). 이전 두 레코드는 verdict가
+`rejected`이거나 대상이 IMP-015 행이었으므로 `superseded`로 표시했고, 어느 것도 Notion에 쓰이지 않았다.
 
 ## 16. IMP-015와의 관계 — 오해 방지
 

@@ -1,6 +1,6 @@
 ---
 name: cubrid-jira-issue-write
-description: Write a concise, paste-ready CUBRID JIRA issue body in Korean using JIRA wiki markup. Uses the official template for Correct Error, Improve/Development/Refactoring, or Internal Management work and keeps developer-only analysis out of the issue body.
+description: Write a concise, paste-ready CUBRID JIRA issue body in Korean using JIRA wiki markup, plus the design.md/test.md attachments required by company policy at work completion. Uses the official template for Correct Error, Improve/Development/Refactoring, or Internal Management work and keeps developer-only analysis out of the issue body. Use also when a JIRA body already exists and only the design.md/test.md attachments are needed.
 ---
 
 # CUBRID JIRA Issue Writer
@@ -15,8 +15,33 @@ Read [`tone_guide.md`](./tone_guide.md) before drafting. It is authoritative for
 - Use the ticket key from the argument or current branch. Use `CBRD-XXXXX` for an unfiled draft.
 - The file extension is `.md`, but its contents are JIRA wiki markup, not Markdown.
 - Write only the JIRA Description field body in the file. Do not put the proposed Summary/title in it.
-- In the completion message, report the file path, issue type, and proposed Summary separately.
+- In the completion message, report the file path, issue type, proposed Summary, and whether `design.md`/`test.md` were written or skipped (with the reason) separately.
 - If `.git_ignored_dir/jira/` does not exist, stop and ask the user to create it. The per-ticket directory may be created as needed.
+
+## Attachments-only mode
+
+If the JIRA issue already has a Description body — the user says so, provides it, or existing JIRA context shows it — do not draft or rewrite the body. Write only `design.md` and `test.md` per the policy below, using the existing body and available material as input.
+
+## Required attachments: design.md and test.md
+
+Company policy: at work completion, `design.md` and `test.md` must be attached to the JIRA issue.
+
+- Write both files to `.git_ignored_dir/jira/<TICKET_KEY>/design.md` and `.git_ignored_dir/jira/<TICKET_KEY>/test.md`.
+- Follow the fixed templates in [`attachment_templates.md`](./attachment_templates.md) exactly. Do not invent alternative section layouts; the uniform template is deliberate token optimization.
+- Contents are Markdown, in Korean, point-focused: the consumer on the other side is also an LLM. `design.md` carries the code-level design detail banned from the JIRA body. `test.md` is a QA TC authoring guide for `cubrid-testcases`/`cubrid-testcases-private-ex` — scenarios and pass/fail points, never internal verification records (measurement campaigns, sanitizer/diagnostic builds).
+- Skip both files only when, in your judgment, the design is still undecided AND the implementation approach is undecided. If either is settled, write both files. When skipping, state the skip and its reason in the completion message.
+- Attach the written files to the issue via the JIRA REST API (credentials in `~/.config/cubrid-skills/jira.env`):
+
+  ```bash
+  source ~/.config/cubrid-skills/jira.env
+  curl -sS -u "$JIRA_USERNAME:$JIRA_PASSWORD" -X POST \
+    -H "X-Atlassian-Token: no-check" \
+    -F "file=@.git_ignored_dir/jira/<TICKET_KEY>/design.md" \
+    -F "file=@.git_ignored_dir/jira/<TICKET_KEY>/test.md" \
+    "$JIRA_BASE_URL/rest/api/2/issue/<TICKET_KEY>/attachments"
+  ```
+
+  Verify with `GET .../issue/<TICKET_KEY>?fields=attachment`. For an unfiled draft (`CBRD-XXXXX`), skip the upload and tell the user to attach after filing.
 
 ## Choose the template by work, not hierarchy
 
@@ -87,21 +112,22 @@ Explain the purpose and scope in one to three short paragraphs. Do not manufactu
 
 ## Supporting analysis
 
-Do not create an analysis attachment by default. Create one only when:
+Do not create an analysis attachment by default. `design.md` and `test.md` cover design and verification detail; create an additional analysis attachment only when:
 
 - the user requests it;
-- existing backtraces, call paths, root-cause analysis, or detailed verification records are worth preserving; or
+- existing backtraces, call paths, root-cause analysis, or detailed verification records are worth preserving and do not fit the `design.md`/`test.md` templates; or
 - omitting the evidence would leave the responsible developer without necessary context.
 
 Keep it in the ticket directory and reference it briefly from `Additional Information`. Attachments may contain developer-only detail that does not belong in the JIRA body.
 
 ## Workflow
 
-1. Resolve the ticket key and issue type.
+1. Resolve the ticket key and issue type. If the issue body already exists, switch to attachments-only mode.
 2. Read relevant user material, source code, analysis, and existing JIRA context. Prefer checking available evidence over asking the user.
 3. Ask only for missing facts that materially affect correctness, such as the issue type, exact repro, changed specification, or an agreed performance target.
-4. Draft the minimum complete body using the appropriate template and `tone_guide.md`.
-5. Save the body and any justified attachment.
-6. Verify the structure, JIRA markup, verbosity, and absence of invented details before reporting the result.
+4. Draft the minimum complete body using the appropriate template and `tone_guide.md` (skip in attachments-only mode).
+5. Decide whether the design and implementation approach are settled. If settled, write `design.md` and `test.md` from `attachment_templates.md`; otherwise skip both and note the reason.
+6. Save the body and any justified attachment, then upload `design.md`/`test.md` to the issue via the REST API and verify the attachment list.
+7. Verify the structure, JIRA markup, verbosity, template conformance of `design.md`/`test.md`, and absence of invented details before reporting the result.
 
 `grill-with-docs` is not mandatory. Use it only when the user requests it.
