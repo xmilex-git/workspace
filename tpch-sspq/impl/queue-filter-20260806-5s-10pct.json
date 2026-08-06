@@ -1,0 +1,698 @@
+{
+  "campaign_id": "tpch-sspq-impl-r1-20260803",
+  "generated_utc": "2026-08-06T03:42:00Z",
+  "rule": {
+    "decision_utc": "2026-08-06",
+    "source": "user instruction 2026-08-06",
+    "statement": "Phase 2 implements only candidates whose target query has a baseline median >= 5 s AND a quantified expected improvement >= 10% of that query's wall time; sub-5 s targets are out of scope because a real improvement cannot be told apart from noise there.",
+    "min_baseline_median_seconds": 5.0,
+    "min_expected_improvement_fraction": 0.1,
+    "explicit_exception": "IMP-005 (enabler) is executed first regardless — direct user instruction 2026-08-06; it is a statistics-only predecessor of IMP-009, not a performance candidate."
+  },
+  "inputs": {
+    "medians": "impl/fresh-baseline.json (fresh_base_medians_seconds via priority-ranking.json)",
+    "benefit": "impl/benefit-inputs.json per_query fraction + priority-ranking.json per_query_terms expected_saved_seconds"
+  },
+  "candidates": {
+    "IMP-005": {
+      "lane": "enabler",
+      "rank": null,
+      "expected_saved_seconds_total": 0.0,
+      "verdict": "in_scope_exception",
+      "reason": "enabler lane, zero expected runtime effect by construction; executed first by direct user instruction because IMP-009's trace/degree readings are untrustworthy until the nl-join trace merge stops over-counting",
+      "per_query": [
+        {
+          "q": "*",
+          "baseline_median_s": null,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": null,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "'Diagnosability only; zero measured runtime effect (query results and headline timings are unaffected).' A zero benefit score is correct and expected for this lane.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-009": {
+      "lane": "performance",
+      "rank": 2,
+      "expected_saved_seconds_total": 2.932646,
+      "verdict": "in_scope",
+      "reason": "target query Q05 passes both thresholds",
+      "per_query": [
+        {
+          "q": "Q05",
+          "baseline_median_s": 10.3355,
+          "expected_saved_s": 2.932646,
+          "expected_improvement_fraction_conservative": 0.2837449567026269,
+          "benefit_fraction_as_scored": 0.8107,
+          "evidence_level": "upper_bound",
+          "basis": "MD-4. 'Upper bound on what perfect parallelization of this node recovers; the realistic bound is PostgreSQL's own 5.43 units on the same plan, i.e. CUBRID's 9.615 s would approach 9.8863 core-s / 5.43 units = 1.82 s.' The removable fraction is argued (PostgreSQL's own unit count on the SAME plan shape is the achievable floor), so the band rule is satisfied: 1 - 1.82/9.615 = 0.8107. Carried at the Upper bound weight 0.35 because the registry labels it an upper bound. The fraction transfers; the 9.615 s does NOT — the scorer multiplies this campaign's fresh_base_median_Q05.",
+          "meets_rule": true
+        },
+        {
+          "q": "Q11",
+          "baseline_median_s": 3.2285,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q16",
+          "baseline_median_s": 2.918,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS — the registry attributes Q16's side effect to how many times the RHS is built, not a quantified wall term.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q20",
+          "baseline_median_s": 3.0,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q21",
+          "baseline_median_s": 52.586499,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-018": {
+      "lane": "performance",
+      "rank": 3,
+      "expected_saved_seconds_total": 1.886413,
+      "verdict": "out_of_scope_sub5s_target",
+      "reason": "all target queries are below 5 s (Q11 3.23s, Q14 3.12s)",
+      "per_query": [
+        {
+          "q": "Q11",
+          "baseline_median_s": 3.2285,
+          "expected_saved_s": 1.886413,
+          "expected_improvement_fraction_conservative": 0.5843001393836147,
+          "benefit_fraction_as_scored": 0.5843,
+          "evidence_level": "direct_ab",
+          "basis": "CORRECTED (see MD-3). The cost IMP-018 removes IS present in this campaign's Q11 baseline. Three independent observations: (i) the fresh Phase 1A median is 3.2285 s, +140.57% against the previous campaign's 1.342 s — the largest divergence in the sweep — and within 9% of IMP-018's own measured `connection_1_of_the_query` value of 3.544 s, i.e. this baseline sits in the amplified regime, not the saturated one; (ii) Q11's six block medians decline MONOTONICALLY 3.529 / 3.404 / 3.298 / 3.159 / 3.040 / 2.961, which is the across-CONNECTION decay signature the registry records as `connection_sweep_median_s` [1.581, 1.54, 1.436, 1.353, 1.352, 1.349, 1.344, 1.346] with `connection_sweep_reads_per_statement` [49292, 34538, 18306, 3519, 135, 119, 127, 124]; Phase 1A opens one connection per block, so each block re-pays it; (iii) Q11 is the ONLY query of 22 with a monotone across-block drift above 3% (-16.10%; every other query is within +/-2.42% and non-monotone), so the drift is specific to this mechanism rather than an artefact of the fast regime. The fraction is the CONSERVATIVE of the two readings the A/B supports: the raw observed rate 1 - 1.342/3.544 = 0.62133, versus taking the A/B's measured saturated endpoint 1.342 s against THIS campaign's median, (3.2285 - 1.342)/3.2285 = 0.58430. The smaller is used, so the term cannot over-claim, and the previous campaign's absolute time is never used as the 'before' (section 3) — the before is this campaign's own fresh median.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q14",
+          "baseline_median_s": 3.117,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-029": {
+      "lane": "performance",
+      "rank": 7,
+      "expected_saved_seconds_total": 0.163733,
+      "verdict": "out_of_scope_sub5s_target",
+      "reason": "all target queries are below 5 s (Q22 1.12s)",
+      "per_query": [
+        {
+          "q": "Q22",
+          "baseline_median_s": 1.119,
+          "expected_saved_s": 0.163733,
+          "expected_improvement_fraction_conservative": 0.14632082216264522,
+          "benefit_fraction_as_scored": 0.20903,
+          "evidence_level": "attribution",
+          "basis": "MD-2 (Q22 CPU/wall equivalence). 'the recoverable range is 1.14-2.41 core-s of 5.453622 core-s per statement', with PostgreSQL's 0.22160 core-s named as the achievable floor for the same work. Section 2-b requires the conservative LOWER bound of a range: 1.14/5.453622 = 0.20903. Converted to a wall share on the strength of IMP-031's measurement on the SAME Q22 statement, where the same kind of band was 2.02% of CPU and 2.05% of wall. Carried at Attribution weight 0.70 because the isolating measurement is a band probe rather than a whole-query A/B.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-023": {
+      "lane": "performance",
+      "rank": 9,
+      "expected_saved_seconds_total": 0.265436,
+      "verdict": "out_of_scope_sub5s_target",
+      "reason": "all target queries are below 5 s (Q16 2.92s)",
+      "per_query": [
+        {
+          "q": "Q16",
+          "baseline_median_s": 2.918,
+          "expected_saved_s": 0.265436,
+          "expected_improvement_fraction_conservative": 0.09096504455106237,
+          "benefit_fraction_as_scored": 0.2599,
+          "evidence_level": "upper_bound",
+          "basis": "MD-4. 'Addressable band on Q16 = the serial-phase differential, 1.041 - 0.291 = 0.750 s of 2.886 s (25.99%) against the plan-controlled PostgreSQL leg.' This is a wall-seconds differential of the serial phase, and PostgreSQL's own 0.291 s on the plan-controlled leg is the argued achievable floor, satisfying the band rule. Carried at Upper bound weight 0.35 because it is an addressable band, and because sub-item (a) is bounded above by PostgreSQL's own measurement of the same optimization.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-030": {
+      "lane": "performance",
+      "rank": 10,
+      "expected_saved_seconds_total": 0.025849,
+      "verdict": "out_of_scope_sub5s_target",
+      "reason": "all target queries are below 5 s (Q22 1.12s)",
+      "per_query": [
+        {
+          "q": "Q22",
+          "baseline_median_s": 1.119,
+          "expected_saved_s": 0.025849,
+          "expected_improvement_fraction_conservative": 0.023100089365504915,
+          "benefit_fraction_as_scored": 0.0231,
+          "evidence_level": "direct_ab",
+          "basis": "MD-2 (Q22 CPU/wall equivalence). '0.126-0.190 core-s per statement (the observed replicate range), i.e. 2.3-3.5% of CUBRID's 5.453622 core-s', paired B6/B7, 4 replicates per engine, row set held identical at 190,691. Conservative lower bound of the range: 0.126/5.453622 = 0.02310, converted to a wall share on IMP-031's same-statement CPU/wall equivalence.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-013": {
+      "lane": "performance",
+      "rank": 11,
+      "expected_saved_seconds_total": 0.074474,
+      "verdict": "out_of_scope_unquantified_on_heavy_query",
+      "reason": "the only quantified benefit sits on a sub-5 s query; the >=5 s targets (Q09, Q10, Q13, Q15, Q19, Q21) carry NO_NUMERIC_BASIS / no wall-clock claim after Phase 1, so a >=10% claim cannot be made or judged under this rule",
+      "per_query": [
+        {
+          "q": "Q08",
+          "baseline_median_s": 1.0074999999999998,
+          "expected_saved_s": 0.074474,
+          "expected_improvement_fraction_conservative": 0.0739196029776675,
+          "benefit_fraction_as_scored": 0.1056,
+          "evidence_level": "attribution",
+          "basis": "MD-2 + triage. 'A realistic target is the pgbuf_lru_boost_bcb plus mutex portion, 10.73% of profiled self cost, i.e. about 0.47 core-s of the 4.34 core-s statement, which at the measured U is about 0.12 s of wall.' The 4.34 core-s statement is Q08 (IMP-012 records total_query_cpu 4.3442 core-s per Q08 statement). Stated wall conversion 0.12 s against the 1.136 s Q08 median: 0.12/1.136 = 0.1056. This is the triage-mandated 0.47 core-s basis, not the 27.41%+5.32% band.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q09",
+          "baseline_median_s": 10.578,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q10",
+          "baseline_median_s": 7.0439995,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q11",
+          "baseline_median_s": 3.2285,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q13",
+          "baseline_median_s": 11.334499999999998,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q15",
+          "baseline_median_s": 10.024499500000001,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q19",
+          "baseline_median_s": 43.9639985,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q20",
+          "baseline_median_s": 3.0,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q21",
+          "baseline_median_s": 52.586499,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q22",
+          "baseline_median_s": 1.119,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-012": {
+      "lane": "performance",
+      "rank": 12,
+      "expected_saved_seconds_total": 0.061206,
+      "verdict": "out_of_scope_unquantified_on_heavy_query",
+      "reason": "the only quantified benefit sits on a sub-5 s query; the >=5 s targets (Q19) carry NO_NUMERIC_BASIS / no wall-clock claim after Phase 1, so a >=10% claim cannot be made or judged under this rule",
+      "per_query": [
+        {
+          "q": "Q08",
+          "baseline_median_s": 1.0074999999999998,
+          "expected_saved_s": 0.061206,
+          "expected_improvement_fraction_conservative": 0.06075037220843674,
+          "benefit_fraction_as_scored": 0.1215,
+          "evidence_level": "projection",
+          "basis": "MD-2. 'Amdahl on the measured split ... reconstructs the measured 1.136 s exactly at 5 units and projects 0.998 s at 6 units.' Stated wall conversion: 1 - 0.998/1.136 = 0.1215. Evidence level Projection because the registry labels the 0.998 s figure a projection (the F_units decomposition itself is attribution).",
+          "meets_rule": false
+        },
+        {
+          "q": "Q17",
+          "baseline_median_s": 0.1465,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q19",
+          "baseline_median_s": 43.9639985,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-031": {
+      "lane": "performance",
+      "rank": 13,
+      "expected_saved_seconds_total": 0.02294,
+      "verdict": "out_of_scope_sub5s_target",
+      "reason": "all target queries are below 5 s (Q22 1.12s)",
+      "per_query": [
+        {
+          "q": "Q22",
+          "baseline_median_s": 1.119,
+          "expected_saved_s": 0.02294,
+          "expected_improvement_fraction_conservative": 0.020500446827524575,
+          "benefit_fraction_as_scored": 0.0205,
+          "evidence_level": "direct_ab",
+          "basis": "'0.11004 core-s per statement on Q22, measured, i.e. 2.02% of CUBRID's CPU and 2.05% of its wall.' The wall share is stated directly by the registry, so no conversion is needed: 0.0205. Explicitly a LOWER bound on the general effect (on Q22 the orders heap pages are buffer-resident, trace ioread 0, so the eliminated lookups cost only CPU); the lower bound is what is used.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-016": {
+      "lane": "performance",
+      "rank": 15,
+      "expected_saved_seconds_total": 0.0,
+      "verdict": "out_of_scope_unquantified_on_heavy_query",
+      "reason": "the only quantified benefit sits on a sub-5 s query; the >=5 s targets (Q10, Q18) carry NO_NUMERIC_BASIS / no wall-clock claim after Phase 1, so a >=10% claim cannot be made or judged under this rule",
+      "per_query": [
+        {
+          "q": "Q10",
+          "baseline_median_s": 7.0439995,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "direct_ab",
+          "basis": "SUPPRESSED_OVERLAP. 'On Q10 the whole observable effect is the fallback IMP-015 prices at 1.313675x'; the alternative-cluster rule queues at most one member and counts only the highest-scoring member's saving. IMP-015 already landed. The registry also declines to claim how much better IMP-016 alone would be, because the server-parameter experiment is blocked by IMP-017.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q11",
+          "baseline_median_s": 3.2285,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q18",
+          "baseline_median_s": 37.481499,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "attribution",
+          "basis": "MD-1. The only independently recoverable figure is '1.32% of profile spent on the discarded hash' — a CPU profile share with no wall conversion.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-004": {
+      "lane": "performance",
+      "rank": 16,
+      "expected_saved_seconds_total": 0.0,
+      "verdict": "out_of_scope_unquantified_on_heavy_query",
+      "reason": "the only quantified benefit sits on a sub-5 s query; the >=5 s targets (Q13) carry NO_NUMERIC_BASIS / no wall-clock claim after Phase 1, so a >=10% claim cannot be made or judged under this rule",
+      "per_query": [
+        {
+          "q": "Q02",
+          "baseline_median_s": 0.3645,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "upper_bound",
+          "basis": "MD-1. The quantified figure is a CPU band: 'Upper bound on Q02 is the 46.72% band (0.836 of 1.79 core-s)'. The 8.64x-9.75x figure is a reduction of the per-row LIKE cost, not of Q02's wall, and no active-unit count is given for Q02, so no wall conversion is available. Contributes 0 s and is listed.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q13",
+          "baseline_median_s": 11.334499999999998,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS — no per-query figure.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q16",
+          "baseline_median_s": 2.918,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS — no per-query figure.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-021": {
+      "lane": "performance",
+      "rank": 17,
+      "expected_saved_seconds_total": 0.0,
+      "verdict": "out_of_scope_unquantified_on_heavy_query",
+      "reason": "the only quantified benefit sits on a sub-5 s query; the >=5 s targets (Q13) carry NO_NUMERIC_BASIS / no wall-clock claim after Phase 1, so a >=10% claim cannot be made or judged under this rule",
+      "per_query": [
+        {
+          "q": "Q13",
+          "baseline_median_s": 11.334499999999998,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "direct_ab",
+          "basis": "MD-5. The 1.5617x (0.883 s -> 1.379 s, medians of 5) is measured on an ISOLATED 1,500,000-group aggregate constructed so that the only change is adding a 1-row cross join. It is a clean demonstration of the defect but not a measurement of Q13, and the registry supplies no quantified transfer to Q13's wall.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-010": {
+      "lane": "performance",
+      "rank": 18,
+      "expected_saved_seconds_total": 0.0,
+      "verdict": "out_of_scope_unquantified_on_heavy_query",
+      "reason": "the only quantified benefit sits on a sub-5 s query; the >=5 s targets (Q13) carry NO_NUMERIC_BASIS / no wall-clock claim after Phase 1, so a >=10% claim cannot be made or judged under this rule",
+      "per_query": [
+        {
+          "q": "Q06",
+          "baseline_median_s": 3.8455000000000004,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "direct_ab",
+          "basis": "MD-1. The directly measured quantity is physical page reads per statement (458,209 -> 158,930, -4.57 GiB of page-cache traffic). The core-second consequence is explicitly conditional — 'IF the kernel read band scales with bytes, the 2.543 core-s band falls to about 0.882 core-s, releasing roughly 1.66 core-s of the 14.023 core-s Q06 CPU excess (11.8%)' — and no wall conversion is given. A conditional CPU band is not a wall fraction.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q12",
+          "baseline_median_s": 3.9505,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q13",
+          "baseline_median_s": 11.334499999999998,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-008": {
+      "lane": "performance",
+      "rank": 19,
+      "expected_saved_seconds_total": 0.0,
+      "verdict": "out_of_scope_unquantified_on_heavy_query",
+      "reason": "the only quantified benefit sits on a sub-5 s query; the >=5 s targets (Q10, Q15, Q19, Q21) carry NO_NUMERIC_BASIS / no wall-clock claim after Phase 1, so a >=10% claim cannot be made or judged under this rule",
+      "per_query": [
+        {
+          "q": "Q04",
+          "baseline_median_s": 1.666,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "attribution",
+          "basis": "MD-1. '0.825 core-s of the 4.558 core-s Q04 CPU excess (18.1%) ... No wall-clock claim is made: at 5.4 active units a CPU saving converts to wall only in proportion.' The registry gives U=5.4 but also states the realistic target is only 'the coercion and domain-resolution prologue, since the comparison itself is irreducible', without quantifying that prologue. With no quantified removable portion there is nothing to convert.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q06",
+          "baseline_median_s": 3.8455000000000004,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q10",
+          "baseline_median_s": 7.0439995,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q12",
+          "baseline_median_s": 3.9505,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q15",
+          "baseline_median_s": 10.024499500000001,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q16",
+          "baseline_median_s": 2.918,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q17",
+          "baseline_median_s": 0.1465,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q19",
+          "baseline_median_s": 43.9639985,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q20",
+          "baseline_median_s": 3.0,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q21",
+          "baseline_median_s": 52.586499,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q22",
+          "baseline_median_s": 1.119,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-024": {
+      "lane": "performance",
+      "rank": 20,
+      "expected_saved_seconds_total": 0.0,
+      "verdict": "out_of_scope_unquantified_on_heavy_query",
+      "reason": "the only quantified benefit sits on a sub-5 s query; the >=5 s targets (Q10) carry NO_NUMERIC_BASIS / no wall-clock claim after Phase 1, so a >=10% claim cannot be made or judged under this rule",
+      "per_query": [
+        {
+          "q": "Q10",
+          "baseline_median_s": 7.0439995,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "projection",
+          "basis": "'Unquantified-in-this-campaign for wall-time' — the registry states plainly that no controlled reduced-key A/B was run and only the key-byte-width comparison is measured. NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        }
+      ]
+    },
+    "IMP-006": {
+      "lane": "performance",
+      "rank": 21,
+      "expected_saved_seconds_total": 0.0,
+      "verdict": "out_of_scope_unquantified_on_heavy_query",
+      "reason": "the only quantified benefit sits on a sub-5 s query; the >=5 s targets (Q10, Q21) carry NO_NUMERIC_BASIS / no wall-clock claim after Phase 1, so a >=10% claim cannot be made or judged under this rule",
+      "per_query": [
+        {
+          "q": "Q03",
+          "baseline_median_s": 4.5394995,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "upper_bound",
+          "basis": "MD-1. 'Upper bound on Q03's controlled plan is the 6.26 core-second band ... No wall-clock claim is made for CUBRID's native plan.' The registry itself declines the wall claim.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q10",
+          "baseline_median_s": 7.0439995,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q11",
+          "baseline_median_s": 3.2285,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        },
+        {
+          "q": "Q21",
+          "baseline_median_s": 52.586499,
+          "expected_saved_s": 0.0,
+          "expected_improvement_fraction_conservative": 0.0,
+          "benefit_fraction_as_scored": 0.0,
+          "evidence_level": "unmeasured",
+          "basis": "NO_NUMERIC_BASIS.",
+          "meets_rule": false
+        }
+      ]
+    }
+  },
+  "summary": {
+    "in_scope": [
+      "IMP-005",
+      "IMP-009"
+    ],
+    "out_of_scope": {
+      "IMP-018": "out_of_scope_sub5s_target",
+      "IMP-029": "out_of_scope_sub5s_target",
+      "IMP-023": "out_of_scope_sub5s_target",
+      "IMP-030": "out_of_scope_sub5s_target",
+      "IMP-013": "out_of_scope_unquantified_on_heavy_query",
+      "IMP-012": "out_of_scope_unquantified_on_heavy_query",
+      "IMP-031": "out_of_scope_sub5s_target",
+      "IMP-016": "out_of_scope_unquantified_on_heavy_query",
+      "IMP-004": "out_of_scope_unquantified_on_heavy_query",
+      "IMP-021": "out_of_scope_unquantified_on_heavy_query",
+      "IMP-010": "out_of_scope_unquantified_on_heavy_query",
+      "IMP-008": "out_of_scope_unquantified_on_heavy_query",
+      "IMP-024": "out_of_scope_unquantified_on_heavy_query",
+      "IMP-006": "out_of_scope_unquantified_on_heavy_query"
+    },
+    "execution_queue_after_rule": [
+      "IMP-005",
+      "IMP-009"
+    ]
+  }
+}
