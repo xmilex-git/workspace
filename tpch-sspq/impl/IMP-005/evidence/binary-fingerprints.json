@@ -1,0 +1,27 @@
+{
+  "campaign_id": "tpch-sspq-impl-r1-20260803",
+  "cubrid_base_sha": "607f1ee9fb2394de129e083602c84a6525fc685c",
+  "imp_id": "IMP-005",
+  "impl_ssot_blob": "15b42ddca521444fa54b34b0fa8477ed2df643f6",
+  "impl_ssot_commit": "eccdd1ae58cd733ed3121585146d68b9ae54a73f",
+  "variants": {
+    "IMP-005": {
+      "binary_sha256": {
+        "csql": "4e873fc2ef66aaa93a857f431fa36c885ac3003cbd835628820a7c24fe662cdd",
+        "cub_master": "e3e9ca0b0cbed7102b588dd9c10c0df18d50d1e1118bc2ee164fb70d4f1aead9",
+        "cub_server": "e970cffdf9026ad18bde9508df7ec8ea558119618420a4cd4b5505b1b7cd2e9e"
+      },
+      "conf_sha256": "ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff",
+      "prefix": "/home/cubrid/dev/tpch-sspq-impl-r1/install/IMP-005"
+    },
+    "base": {
+      "binary_sha256": {
+        "csql": "14b5b86865a5cafeb6b34ffa01a958b6d0e2da6e72d2e982e0527bac581a84b8",
+        "cub_master": "003cae2331d0d0632bc450cc7520c40fcbd88190b548e828af13a7b1b9a890a5",
+        "cub_server": "16abc26afa1db16992b6213ecc02adc193d674eb8ba91f0963ae414abd953199"
+      },
+      "conf_sha256": "ad19f5ac1e7e983e4a0b1c113d21e25e096d02d3160445f9d10a2e8b6d9cb9ff",
+      "prefix": "/home/cubrid/dev/tpch-sspq-impl-r1/install/base"
+    }
+  }
+}
