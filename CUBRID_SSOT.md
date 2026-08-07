@@ -29,10 +29,11 @@
 
 ### 실수 6: 검증 수단의 한계를 모른 채 "clean"을 선언한다
 - release 빌드는 `er_log_debug`가 no-op → release 로그로 신경로 발동 실증 불가(debug 로그 또는 카운터로).
-- release는 NDEBUG라 heap corruption이 silent SIGSEGV + 0-byte coredump → gdb attach batch로 스택 확보가 정석.
+- release는 NDEBUG라 heap corruption이 silent SIGSEGV + 0-byte coredump → ~~gdb attach batch로 스택 확보~~ (2026-08-06 supersede: 라이브 gdb attach 금지 — 아래 gdb 배제 규칙 참조. 코어 파일 오프라인 판독은 허용).
 - resource_tracker(alloc/pgbuf) 누수 검출은 **CS(server) 모드 per-request에서만** 동작. SA(`csql -S`) selftest·bootless unit test는 누수를 못 잡는다 — selftest PASS인데 라이브 쿼리가 서버 크래시한 실사례. **라이브 검증은 반드시 CS 모드 optdebug 서버로.**
 - 64bit libasan을 사용할 수 없는 환경에서는 ASAN 게이트를 **valgrind memcheck**(`--leak-check=full --track-origins=yes`)로 대체한다.
 - 디버거 line-bp는 편집으로 라인이 밀리면 죽은 줄을 짚을 수 있다. 함수-bp 또는 **카운터(statdump)로 하네스-단언 가능하게** 만드는 편이 안전하다.
+- **(2026-08-06) gdb를 이용한 검증은 전면 배제한다** — 라이브 서버 attach·함수-bp 경로 실증 포함. gdb attach 세션이 서버 코어 덤프를 유발한 인시던트(CBRD-27181 QA 중 core.cub_server 생성). 코드 경로 발동 실증은 **perf 심볼 밴드**(해당 경로 유발 질의 루프 중 `perf record -p <pid>` 후 심볼 존재/부재 확인), 카운터, 차등 A/B 출력으로 한다.
 
 ---
 
@@ -74,6 +75,7 @@
 11. **공유 디스크 주의** — 대형 evidence, backup, DB는 생성 전에 예상 크기를 계산하고 상한을 둔다.
 12. **인덱스 검증 쿼리는 sargable 술어 필수** — CUBRID는 인덱스 컬럼 조건(`col > 0` 등)이 없으면 인덱스를 사용하지 않을 수 있다. 인덱스 경로 검증은 (a) 인덱스 컬럼 술어 포함 쿼리와 (b) `;plan simple` 등 실제 인덱스 스캔 증거를 함께 확인한다.
 13. **(2026-08-06) 장기 백그라운드 작업은 `nohup`/`setsid` 금지 — tmux 세션을 할당해 그 안에서 실행한다.** agent shell에서 `nohup …&`/`setsid …&`로 띄운 TC 재현·빌드가 launcher 호출 종료 직후 **소리 없이 죽는** 인시던트 2회(출력 0바이트, 프로세스 부재, 에러 없음). 같은 호출 안에 `sleep`을 넣어 자식을 안착시키는 우회는 비결정적이라 금지. 정석: `tmux new-session -d -s <name> '<cmd>'`로 실행하고 `tmux capture-pane`/로그 파일로 폴링, 종료 후 `tmux kill-session`. 완료 판정은 프로세스 부재가 아니라 **결과 파일/로그의 종료 마커**로 한다.
+14. **(2026-08-07) 대용량 DB를 새로 적재할 땐 인덱스 단계를 분리해 loaddb `--no-logging-index`로 태운다** (PR #7504 / CBRD-27071, develop `1aa79a03b`). 스키마(인덱스 제외) → 데이터 → **인덱스 파일** 3단계로 나누고 마지막 단계만 `cubrid loaddb -i <index.sql> --no-logging-index <db>`로 적재하면 no-redo 병렬 벌크 빌드가 발화한다(341M행 기준 609.2s → 245.5s, 2.48×). 발화 조건이 좁다: **서버가 떠 있는 CS 모드**여야 하고(SA 모드는 플래그를 무시한다 — `load_db.c:842`), 서버가 loaddb 계열 client type의 요청만 허용하며(`network_interface_sr.cpp:4729`), `-i` 인덱스 로드 구간에만 적용된다. PK/FK를 `-s` 스키마 파일에 남겨두면 이 경로를 타지 못하고 데이터 적재 중 인덱스 유지 비용까지 그대로 낸다. WITH ONLINE 인덱스와 정렬 런이 부족한 소형 테이블은 옵션과 무관하게 기존 로깅 빌드로 폴백한다. **적재 후에는 전체 백업을 새로 받는다** — 로그 체인에 barrier가 남아 이전 백업 체인으로는 그 지점을 넘는 replay가 거부된다(`log_recovery.c:3272`).
 
 ---
 
