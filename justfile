@@ -32,6 +32,7 @@
 #   WORKSPACE=<src> just deploy [mode] [version]           stop server (if any) -> build -> conf
 #   WORKSPACE=<src> just ctest [mode]                      ctest against the build tree
 #   just shell-debug <TEST_DIR>                            run one CTP shell test (or subtree) via ~/cubrid-testtools/CTP
+#   just ctp-parallel [ORCH_ARGS...]                       run the whole CTP SQL suite in parallel podman shards
 #
 # Campaign: debug install for D1/D2/D3, release install for D4 — switch via `just use <mode>`.
 
@@ -337,3 +338,37 @@ shell-debug-interactive:
     export CTP_HOME=~/cubrid-testtools/CTP
     export init_path="$CTP_HOME/shell/init_path"
     "$CTP_HOME/bin/ctp.sh" shell --interactive -c "$CTP_HOME/conf/shell_ci.conf"
+
+# Run the full CTP SQL suite in N parallel rootless-podman shards (the `ctp-parallel` skill).
+# Thin wrapper: it execs the CANONICAL orchestrator in .agents/skills/ctp-parallel/ (no copy
+# of the split/merge logic lives here). A bare `just ctp-parallel` is the one-click form and
+# uses the skill's optimal defaults (7 shards, per-bulk split, time-balanced) with:
+#   build      ${CUBRID}   or $HOME/CUBRID
+#   testcases  ${TESTCASES} or $HOME/cubrid-testcases
+#   CTP_HOME   ${CTP_HOME}  or $HOME/cubrid-testtools/CTP
+#   out        this repo's .git_ignored_dir/scratch/ctp-parallel-out   (never /tmp)
+# Any extra arguments are forwarded to the orchestrator verbatim (quoting/space safe), and
+# since its parser takes the LAST occurrence of an option, an explicit --out/--build/
+# --testcases/--ctp overrides the default above. Run `just ctp-parallel --help` for all flags.
+#
+# Usage:
+#   just ctp-parallel                                   full parallel run, defaults
+#   just ctp-parallel --dry-run                          plan + validate the split only (no podman)
+#   just ctp-parallel --shards 10 --no-webconsole        CircleCI-parity shard count, skip the merge
+#   just ctp-parallel --env CUBRID_WM_SORT_NEW=1         extra env vars into every shard container
+#   just ctp-parallel --out /some/other/out-dir          explicit output dir (wins over the default)
+[doc("Run the whole CTP SQL suite in parallel podman shards (ctp-parallel skill)")]
+[positional-arguments]
+ctp-parallel *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    orch="{{justfile_directory()}}/.agents/skills/ctp-parallel/scripts/ctp_parallel.sh"
+    [ -x "$orch" ] || { echo "ERROR: ctp-parallel orchestrator not found/executable: $orch" >&2; exit 1; }
+    out="{{justfile_directory()}}/.git_ignored_dir/scratch/ctp-parallel-out"
+    mkdir -p "$(dirname "$out")"
+    exec "$orch" \
+        --build      "${CUBRID:-$HOME/CUBRID}" \
+        --testcases  "${TESTCASES:-$HOME/cubrid-testcases}" \
+        --ctp        "${CTP_HOME:-$HOME/cubrid-testtools/CTP}" \
+        --out        "$out" \
+        "$@"
