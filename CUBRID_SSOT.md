@@ -108,3 +108,40 @@
 - [ ] CS 모드 optdebug 서버에서 라이브 실행(assert/crash/tracker leak 0)
 - [ ] orphan-zero(정상/비정상 종료 + kill-9 후 임시파일 잔존 0)
 - [ ] 트리 원상복구 + 데몬 정리 + proof에 `cubrid_rel` 기록
+
+---
+
+## 7. GJC/하네스 메모리 및 결과 전달 규칙
+
+### 7.1 OOM 종류를 분리해 진단한다
+
+- `CONSTRAINT_MEMCG`와 `Killed process`가 kernel 로그에 있으면 컨테이너 memory cgroup OOM이다. `RangeError: Out of memory`와 exit status 1만 있고 signal 9/kernel OOM 기록이 없으면 Bun/JSC 또는 하네스 내부의 주소공간·할당 실패로 분류한다.
+- 원격 rootless Podman의 cgroups v1 환경에서는 rootless user manager에 memory controller delegation이 없을 수 있다. `systemd-run --user --property=MemoryMax/MemoryLimit`의 표시값만으로 실제 cgroup 제한이 적용됐다고 선언하지 말고, `/proc/<pid>/cgroup`와 해당 memory controller의 실제 limit을 검증한다.
+- 진짜 cgroup 제한이 확인되지 않으면 이를 명시적으로 보고한다. 주소공간 제한(`RLIMIT_AS`)은 RSS 제한이 아닌 fallback guard다.
+
+### 7.2 GJC 실행 메모리와 병렬성
+
+- GJC의 task/subagent는 별도 프로세스가 아니라 동일 Bun 프로세스와 heap에서 실행될 수 있다. 병렬·team·background subagent를 기본값으로 사용하지 말고, 장시간 검증은 순차·유계 실행으로 운영한다. 불가피한 경우에도 동시에 하나만 실행한다.
+- 원격에서 확인된 Bun/GJC의 20GiB `ulimit -v`는 allocator/JSC 예약만으로 정상 세션을 죽일 수 있으므로 사용하지 않는다. 진짜 cgroup delegation이 없는 동안에는 64GiB `RLIMIT_AS`를 임시 fallback으로 사용하고, RSS가 약 40GiB에 접근하면 추가 작업을 중단하고 짧은 상태 파일을 디스크에 남긴다. 이는 20GiB cgroup이 아니며, 실제 RSS 보호를 보장하지 않는다.
+- 동일 대화·checkout·DB·포트에 GJC를 중복 실행하지 않는다. 새 세션을 띄우기 전에 GJC PID, tmux pane, server/master, DB/port ownership을 확인한다. `1gjc` sentinel과 관계없는 사용자/notify/claude 세션은 건드리지 않는다.
+- GJC 재개 후에는 `/proc/<pid>/status`의 `VmRSS/VmSize`, `/proc/<pid>/limits`, cgroup 경로, kernel OOM 로그를 확인해 guard와 실제 상태를 검증한다. 화면의 `Working`/`done`만으로 안전성이나 완료를 선언하지 않는다.
+
+### 7.3 결과·로그·임시 파일의 디스크 전달
+
+- 결과, 다운로드, evidence, command log, scratch는 반드시 tooling repo의 git-ignored 디스크 경로인 `.git_ignored_dir/scratch/`와 그 하위 디렉터리에 직접 저장한다. `/tmp`, `/var/tmp`, 상속된 `$TMPDIR`에 대형 결과를 저장하지 않는다.
+- `TMPDIR`, `TMP`, `TEMP`는 명시적인 디스크 경로로 지정한다. `TMUX_TMPDIR`은 결과 저장 경로가 아니다. 외부 tmux server의 ownership/visibility를 깨뜨릴 수 있으므로 임의로 디스크 scratch로 바꾸지 말고, runtime socket과 결과 파일을 구분한다.
+- 대형 결과·JSONL·로그·artifact를 GJC 컨텍스트에 직접 열거나 `Read artifact://...`, `@` 첨부로 가져오지 않는다. 파일은 디스크에 남기고 GJC에는 경로, 크기, checksum, exit code, 유계 요약만 전달한다.
+- 명령 stdout은 파일로 redirect하고, 대화에는 필요한 짧은 tail·summary만 넣는다. 파일 크기와 출력 상한을 먼저 정하고 무제한 `cat`/전체 로그 import를 하지 않는다.
+
+### 7.4 하네스 도구별 유계 실행
+
+- `find`는 명시적인 작은 경로와 modest `limit`을 사용한다. 넓은 tree를 검색할 때는 결과 수와 출력 바이트를 별도로 제한한다.
+- `find` progress callback이 매 tick마다 누적 배열을 `slice/join`하지 않는지 확인한다. `find` 자체가 작은 결과를 반환해도 이미 주소공간 ceiling에 도달한 프로세스에서는 progress callback의 작은 할당이 uncaught `RangeError`를 일으킬 수 있다.
+- progress/render callback의 할당 실패가 전체 GJC 프로세스를 종료시키지 않도록 upstream 수정 여부를 추적한다. 수정 전에는 bounded reproducer와 stack trace를 확보하고, 대규모 메모리 할당으로 재현하지 않는다.
+- 저장된 세션·artifact의 전체 크기가 작다는 사실만으로 live heap의 일시적 폭증을 배제하지 않는다. persisted state와 in-process subagent/tool-output retention을 별도로 측정한다.
+
+### 7.5 조사·재개 완료 기준
+
+- OOM 조사는 kernel evidence, process RSS/VAS, cgroup 실제 limit, GJC crash stack, session/tool-log 크기를 각각 확인하고, 확정 사실·추정 원인·배제 가설을 분리해 디스크 보고서로 남긴다.
+- 재개 prompt에는 조사 보고서 경로, remaining scope, sequential/bounded 규칙, 결과 디스크 경로, 메모리 중단 기준, resource ownership, 검증 명령을 명시한다.
+- 조사 결과와 재개 prompt가 디스크에 존재하는 것을 확인한 뒤 GJC를 띄운다. launch 후에는 새 tmux session/pane, 실제 GJC PID/cwd, session identity, memory guard, 현재 RSS/VAS, readiness, 새 OOM 부재를 확인한다.
