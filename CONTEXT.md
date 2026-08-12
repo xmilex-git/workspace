@@ -40,6 +40,38 @@ _Avoid_: 텔레메트리 패스, A/B 블록
 XASL 생성 시 select 리스트와 HAVING절의 형태만으로 결정되는 정적 플래그로, 런타임에 해시가 실제로 유지됐는지와는 별개다. 런타임 해시 상태와 혼용하지 않는다.
 _Avoid_: 런타임 해시 상태, hash: true/partial
 
+**스트라이프 디렉터리 (stripe directory)**:
+columnar 파일 메타페이지 체인에 사는 고정폭 엔트리 목록이다. 엔트리 append 1건이 undo-redo 로그 1건이며, 엔트리가 보이면 그 stripe는 flush 완료다(Citus의 3-상태 stripe 판정을 대체).
+_Avoid_: 3-상태 stripe 판정, 메타 테이블 MVCC 행
+
+**스트라이프 footer (stripe footer)**:
+stripe 연속 페이지 말미에 같은 sysop으로 기록되는 chunk 스킵리스트(chunk별 min/max·오프셋·압축정보)다. 스킵 판정은 footer 1~2페이지 read로 끝난다.
+_Avoid_: 메타페이지에 저장된 스킵리스트
+
+**고정폭 raw 직렬화 (fixed-width raw serialization)**:
+columnar chunk에서 디스크 고정폭 도메인(수치·날짜시간·NUMERIC(p,s)·CHAR(n)·BIT(n))을 per-value 헤더 없이 타입 자연 정렬 raw 배열로 눥히는 규약이다. NULL은 0바이트(exists 비트맵이 대변). 경계 기준은 타입 리스트가 아니라 도메인 고정폭 여부(PG `attlen>0` 등가)다. 압축은 경량 인코딩 없이 chunk 단위 코덱(NONE/LZ4/ZSTD)만 적용한다 — Citus 동일 범위.
+_Avoid_: OR 전면 직렬화, dictionary/RLE/delta 인코딩(미채택)
+
 **신선한 체크포인트 (fresh checkpoint)**:
 온라인 FULL 백업 진입 시점에 capture한 append LSA(T) 이후에 완료되어 redo LSA(R) ≥ T를 만족하는 checkpoint다. 백업 진입 전부터 진행 중이던 checkpoint는 R이 T보다 앞설 수 있으므로 아무리 기다려도 fresh로 인정하지 않는다.
 _Avoid_: "진행 중 checkpoint 대기 완료"를 fresh로 간주, 최신 checkpoint
+
+**columnar 블록 실행기 (columnar block executor)**:
+columnar 읽기가 scan_manager·attrinfo·fetch.c를 일절 타지 않고 qexec 분기에서 stripe→chunk→bitmap 단위로 완결되는 자체 실행 경로다. 조인에는 행을 공급하지 않고 물질화된 list로만 참여한다.
+_Avoid_: S_COLUMNAR_SCAN(폐기된 설계), scan_next 심, row-at-a-time 공급
+
+**벡터화 필터 (vectorized filter)**:
+chunk의 raw 배열에 컴파일 시점 선택된 타입 특화 비교 커널을 직접 적용해 uint64 bitmap을 만드는 WHERE 처리다. NUMERIC은 17B big-endian two's complement 부호반전 비교, CHAR(n)은 고정폭 memcmp, LIKE는 바이트 매처(binary collation 한정), col-op-col 포함.
+_Avoid_: DB_VALUE 행 단위 eval_data_filter, tp_value_compare 루프
+
+**columnar leaf step**:
+step program(PR CUBRID/cubrid#7658)의 leaf를 대체하는 columnar 전용 스텝이다. 컴파일 시점 도메인 확정 decode_fn이 raw 배열에서 프로그램 셀로 직행한다 — case문·fetch_peek_dbval 없음.
+_Avoid_: expr_k_leaf_fetch, attr cache 경유
+
+**폴백 제로 (zero-fallback)**:
+columnar 실행에서 커버리지 밖 식을 느린 경로로 우회시키지 않고 서버 컴파일 시점에 ER_COLUMNAR_UNSUPPORTED_EXPR로 거절하는 정책이다. 커버리지는 TPC-H 형태부터 시작해 확장한다.
+_Avoid_: expr_k_fallback 배선, row-at-a-time 폴백 경로
+
+**파생 테이블 승격 물질화 (derived-table promotion)**:
+조인에 낀 columnar 참조를 XASL 생성 시 sargable pred+필요 컬럼만의 단일 테이블 서브 XASL(aptr)로 재작성하고 본 spec을 list scan으로 바꾸는 규약이다. columnar 실행기는 항상 단일 테이블 블록만 본다. CUBRID 실행기 전반의 flat program화 이후 해제를 재검토한다.
+_Avoid_: 서버 즉석 spec 변조, scan 인터페이스로의 조인 참여
