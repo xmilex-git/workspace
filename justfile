@@ -331,6 +331,105 @@ shell-debug-optdebug +TEST_DIRS:
     export HOME="$runtime_home"
     just shell-debug-selected {{TEST_DIRS}}
 
+# Run one CTP SQL test directory (or subtree) against the local build.
+# Mirrors the shell-debug pattern for SQL tests.  CTP discovers every
+# cases/*.sql under `scenario=` and diffs stdout against answers/*.answer.
+#
+# ARG SHAPE
+#   TEST_DIR is the directory that contains `cases/*.sql` and `answers/*.answer`,
+#   or any ancestor to run a wider subtree (CTP recurses).
+#   Pass the .sql file itself and it will be resolved to its parent directory.
+#
+# Usage:
+#   just sql-debug ~/cubrid-testcases/sql/_35_fig_cake/cbrd_25382
+#   just sql-debug ~/cubrid-testcases/sql/_35_fig_cake/cbrd_25382/cases/cbrd_25382_1.sql
+#   just sql-debug ~/cubrid-testcases/sql/_13_issues/_23_1h   # whole bucket
+sql-debug TEST_DIR:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export CTP_HOME="${CTP_HOME:-$HOME/cubrid-testtools/CTP}"
+    export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-1.8.0-openjdk}"
+    SRC="$CTP_HOME/conf/sql.conf"
+    [ -f "$SRC" ] || { echo "ERROR: CTP conf not found: $SRC (is CTP installed?)" >&2; exit 1; }
+    TARGET="{{TEST_DIR}}"
+    # If a .sql file was passed, resolve to the grandparent (cases/ -> test dir).
+    if [[ "$TARGET" == *.sql ]]; then
+        TARGET="$(dirname "$(dirname "$TARGET")")"
+    fi
+    TARGET="$(realpath "$TARGET")"
+    [ -d "$TARGET" ] || { echo "ERROR: directory not found: $TARGET" >&2; exit 1; }
+    SCRATCH="{{justfile_directory()}}/.git_ignored_dir/scratch"
+    mkdir -p "$SCRATCH"
+    CONF=$(mktemp "$SCRATCH/sql_single.XXXXXX.conf")
+    cp "$SRC" "$CONF"
+    sed -i "s|^scenario=.*|scenario=$TARGET|"              "$CONF"
+    sed -i "s|^testcase_exclude_from_file=.*|#&|"           "$CONF"
+    sed -i "s|^test_category=.*|test_category=sql_debug|"   "$CONF"
+    sed -i "s|^need_make_locale=.*|need_make_locale=no|"    "$CONF"
+    echo "[sql-debug] scenario=$TARGET"
+    echo "[sql-debug] conf=$CONF"
+    script -qefc "$CTP_HOME/bin/ctp.sh sql -c $CONF" /dev/null
+
+# Run explicit, non-contiguous SQL test directories in one CTP session.
+# Every argument must be a directory containing cases/*.sql (leaf) or an
+# ancestor; all must belong to the same testcases checkout.
+#
+# Usage:
+#   just sql-debug-selected ~/cubrid-testcases/sql/_35_fig_cake/cbrd_25382 ~/cubrid-testcases/sql/_13_issues/_23_1h
+sql-debug-selected +TEST_DIRS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export CTP_HOME="${CTP_HOME:-$HOME/cubrid-testtools/CTP}"
+    export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-1.8.0-openjdk}"
+    SRC="$CTP_HOME/conf/sql.conf"
+    [ -f "$SRC" ] || { echo "ERROR: CTP conf not found: $SRC (is CTP installed?)" >&2; exit 1; }
+    dirs=( {{TEST_DIRS}} )
+    first="$(realpath "${dirs[0]}")"
+    tc_root="$(git -C "$first" rev-parse --show-toplevel)"
+    sql_root="$tc_root/sql"
+    selected=()
+    for dir in "${dirs[@]}"; do
+        dir="$(realpath "$dir")"
+        [ "$(git -C "$dir" rev-parse --show-toplevel)" = "$tc_root" ] || {
+            echo "ERROR: all test directories must belong to the same testcase checkout." >&2
+            exit 1
+        }
+        selected+=("$dir")
+    done
+    SCRATCH="{{justfile_directory()}}/.git_ignored_dir/scratch"
+    mkdir -p "$SCRATCH"
+    EXCLUDES=$(mktemp "$SCRATCH/sql_selected_excludes.XXXXXX.conf")
+    python3 - "$sql_root" "$EXCLUDES" "${selected[@]}" <<'PY'
+    import os
+    import sys
+
+    sql_root, output, *selected = sys.argv[1:]
+    selected = {os.path.realpath(path) for path in selected}
+    home = os.path.realpath(os.path.expanduser("~"))
+    excluded = []
+    for root, dirs, files in os.walk(sql_root):
+        if os.path.basename(root) != "cases":
+            continue
+        test_dir = os.path.realpath(os.path.dirname(root))
+        sql_files = [f for f in files if f.endswith(".sql")]
+        if sql_files and not any(test_dir.startswith(s) or s.startswith(test_dir) for s in selected):
+            excluded.append(os.path.relpath(test_dir, home))
+    with open(output, "w", encoding="utf-8") as stream:
+        for path in sorted(excluded):
+            stream.write(path + "\n")
+    PY
+    CONF=$(mktemp "$SCRATCH/sql_selected.XXXXXX.conf")
+    cp "$SRC" "$CONF"
+    sed -i "s|^scenario=.*|scenario=$sql_root|"                        "$CONF"
+    sed -i "s|^testcase_exclude_from_file=.*|testcase_exclude_from_file=$EXCLUDES|" "$CONF"
+    sed -i "s|^test_category=.*|test_category=sql_debug|"               "$CONF"
+    sed -i "s|^need_make_locale=.*|need_make_locale=no|"                "$CONF"
+    echo "[sql-debug-selected] scenario=$sql_root"
+    echo "[sql-debug-selected] selected=${#selected[@]}"
+    printf '[sql-debug-selected] test=%s\n' "${selected[@]}"
+    echo "[sql-debug-selected] conf=$CONF"
+    script -qefc "$CTP_HOME/bin/ctp.sh sql -c $CONF" /dev/null
+
 # Interactive picker against the UNMODIFIED conf (testcase_update_yn=true still git-pulls).
 shell-debug-interactive:
     #!/usr/bin/env bash
