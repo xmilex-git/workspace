@@ -162,6 +162,84 @@ conf:
     cp -f "$src" "$dest"
     echo "copied $src -> $dest"
 
+# Ensure ALL conf files that CTP/shell expects exist in $CUBRID/conf/.
+# CTP shell backup/restore + ini.sh cycle can delete cubrid_ha.conf, cm.conf,
+# cubrid_gateway.conf, etc.  When missing, ini.sh crashes and subsequent
+# cubrid commands emit "Can't access system configuration file" to stderr,
+# causing false diff failures in shell TCs.
+# Uses the CUBRID source checkout (WORKSPACE) to get canonical defaults;
+# falls back to minimal stubs when WORKSPACE is unavailable.
+_ensure-conf-full:
+    #!/usr/bin/env bash
+    set -eu
+    [ -n "${CUBRID:-}" ] || { echo "ERROR: \$CUBRID not set." >&2; exit 1; }
+    confdir="$CUBRID/conf"
+    [ -d "$confdir" ] || { echo "ERROR: $confdir not found." >&2; exit 1; }
+    ws="{{workspace}}"
+    srcconf=""
+    if [ -n "$ws" ] && [ -d "$ws/conf" ]; then
+        srcconf="$ws/conf"
+    elif [ -d "${CUBRID_SRC:-}/conf" ]; then
+        srcconf="${CUBRID_SRC}/conf"
+    fi
+    restored=0
+    for f in cubrid_ha.conf cubrid_broker.conf cubrid_gateway.conf cubrid_hosts.conf; do
+        if [ ! -f "$confdir/$f" ]; then
+            if [ -n "$srcconf" ] && [ -f "$srcconf/$f" ]; then
+                cp -f "$srcconf/$f" "$confdir/$f"
+                echo "conf: restored $f from source"
+            else
+                # Create minimal stub so ini.sh / CTP backup/restore won't crash
+                case "$f" in
+                    cubrid_ha.conf)
+                        printf '[common]\nha_mode=yes\n' > "$confdir/$f" ;;
+                    cubrid_gateway.conf)
+                        printf '[gateway]\nMASTER_SHM_ID=40001\n' > "$confdir/$f" ;;
+                    cubrid_hosts.conf)
+                        printf '# hosts\n' > "$confdir/$f" ;;
+                    *)
+                        touch "$confdir/$f" ;;
+                esac
+                echo "conf: created stub $f"
+            fi
+            restored=$((restored+1))
+        fi
+    done
+    # cm.conf is expected by CTP but not shipped by cmake install
+    if [ ! -f "$confdir/cm.conf" ]; then
+        printf '[cm]\ncm_port=8001\n' > "$confdir/cm.conf"
+        echo "conf: created stub cm.conf"
+        restored=$((restored+1))
+    fi
+    if [ $restored -eq 0 ]; then
+        echo "conf: all CTP-required conf files present"
+    fi
+    # CTP shell's resetCUBRID() does `rm -rf $CUBRID/conf/*` then
+    # `cp -rf ~/.CUBRID_SHELL_FM/conf/* $CUBRID/conf/`.  When $CUBRID
+    # (~/CUBRID) is a symlink, CTP's DeployOneNode does
+    #   `cp -r ${CUBRID} ~/.CUBRID_SHELL_FM`
+    # which creates ANOTHER symlink (cp -r preserves symlinks on Linux).
+    # Then the rm wipes the only real copy → "Can't access" errors.
+    #
+    # Fix: materialize the ~/CUBRID symlink into a real directory.
+    # `just use`/`just build` will recreate the symlink on next build,
+    # and _ensure-conf-full will re-materialize it on next CTP run.
+    cubrid_path="$CUBRID"
+    if [ -L "$cubrid_path" ]; then
+        real_target="$(readlink -f "$cubrid_path")"
+        rm "$cubrid_path"                       # remove the symlink itself
+        cp -rL "$real_target" "$cubrid_path"     # copy the real dir in its place
+        echo "conf: materialized $cubrid_path symlink → real dir (was → $real_target)"
+    fi
+    # Now rebuild .CUBRID_SHELL_FM as a real copy (CTP will recreate it with
+    # `cp -r $CUBRID`, which now copies a real directory → real backup).
+    fm="$HOME/.CUBRID_SHELL_FM"
+    if [ -L "$fm" ] || [ ! -d "$fm/conf" ] || [ ! -f "$fm/conf/cubrid.conf" ]; then
+        rm -rf "$fm"
+        cp -r "$CUBRID" "$fm"
+        echo "conf: rebuilt .CUBRID_SHELL_FM (real copy)"
+    fi
+
 # Full local refresh: stop server (if any) -> build -> conf.
 # `cubrid service stop` output is detached to avoid the known pipe-hang under captured shells.
 # Forwards WORKSPACE to the nested build (so `just workspace=... deploy` works too).
@@ -196,7 +274,7 @@ ctest mode="debug":
 #
 # Usage:
 #   just shell-debug ~/cubrid-testcases-private-ex/shell/_06_issues/_10_1h/bug_1638
-shell-debug TEST_DIR:
+shell-debug TEST_DIR: conf _ensure-conf-full
     #!/usr/bin/env bash
     set -euo pipefail
     # CTP requires these in the environment (vimkim's .envrc exports the same two).
@@ -226,7 +304,7 @@ shell-debug-many SUBTREE: (shell-debug SUBTREE)
 # Run explicit, non-contiguous test directories in one CTP session.
 # Every argument must be a leaf test directory containing cases/<dirname>.sh,
 # and all directories must belong to the same shell testcase checkout.
-shell-debug-selected +TEST_DIRS:
+shell-debug-selected +TEST_DIRS: conf _ensure-conf-full
     #!/usr/bin/env bash
     set -euo pipefail
     export CTP_HOME="${CTP_HOME:-$HOME/cubrid-testtools/CTP}"
@@ -344,7 +422,7 @@ shell-debug-optdebug +TEST_DIRS:
 #   just sql-debug ~/cubrid-testcases/sql/_35_fig_cake/cbrd_25382
 #   just sql-debug ~/cubrid-testcases/sql/_35_fig_cake/cbrd_25382/cases/cbrd_25382_1.sql
 #   just sql-debug ~/cubrid-testcases/sql/_13_issues/_23_1h   # whole bucket
-sql-debug TEST_DIR:
+sql-debug TEST_DIR: conf _ensure-conf-full
     #!/usr/bin/env bash
     set -euo pipefail
     export CTP_HOME="${CTP_HOME:-$HOME/cubrid-testtools/CTP}"
@@ -376,7 +454,7 @@ sql-debug TEST_DIR:
 #
 # Usage:
 #   just sql-debug-selected ~/cubrid-testcases/sql/_35_fig_cake/cbrd_25382 ~/cubrid-testcases/sql/_13_issues/_23_1h
-sql-debug-selected +TEST_DIRS:
+sql-debug-selected +TEST_DIRS: conf _ensure-conf-full
     #!/usr/bin/env bash
     set -euo pipefail
     export CTP_HOME="${CTP_HOME:-$HOME/cubrid-testtools/CTP}"
