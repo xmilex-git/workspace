@@ -43,3 +43,21 @@ _Avoid_: 런타임 해시 상태, hash: true/partial
 **신선한 체크포인트 (fresh checkpoint)**:
 온라인 FULL 백업 진입 시점에 capture한 append LSA(T) 이후에 완료되어 redo LSA(R) ≥ T를 만족하는 checkpoint다. 백업 진입 전부터 진행 중이던 checkpoint는 R이 T보다 앞설 수 있으므로 아무리 기다려도 fresh로 인정하지 않는다.
 _Avoid_: "진행 중 checkpoint 대기 완료"를 fresh로 간주, 최신 checkpoint
+
+### HTAP POC (지도: xmilex-git/workspace#30)
+
+**CUBRID CDC 인프라**:
+CUBRID에 이미 존재하는 로그 변경 추출 층 — 서버측 `cdc_*`(log_manager.c) 데몬과 클라이언트 라이브러리 `cubrid_log` C API. 이벤트를 서빙할 뿐, 소비 루프는 포함하지 않는다.
+_Avoid_: CDC agent(소비자와 혼동), 복제 기능
+
+**CUBRID Debezium 커넥터 (debezium-connector-cubrid)**:
+CUBRID CDC 인프라를 JNA로 소비해 Debezium envelope로 Kafka에 내보내는 정식 Debezium 소스 커넥터. 이 프로젝트가 만드는 유일한 CDC 소비자다 (ADR 0002).
+_Avoid_: cubrid-cdc-agent(자체 agent 안 — 기각됨), CDC 도구
+
+**current-state 복제본**:
+ClickHouse ReplacingMergeTree(`_version`, `_is_deleted`)에 유지되는 원본 테이블의 최신 상태 사본. 정확한 조회는 canonical `FINAL` view를 통해서만 한다.
+_Avoid_: 미러, 실시간 동기 테이블(동기 복제로 오해)
+
+**쓰기 정지 스냅샷 (write-stop snapshot)**:
+대상 테이블 쓰기를 멈추고 barrier LSA를 기록한 뒤 full scan을 적재하고, CDC를 barrier 이후부터 시작하는 POC용 초기 적재 방식. online snapshot은 제품 단계 과제다.
+_Avoid_: 온라인 스냅샷, 일관 스냅샷(MVCC token 기반과 혼동)
