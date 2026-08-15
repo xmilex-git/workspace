@@ -46,6 +46,7 @@ htap-poc/harness/run_scenarios.sh htapdb
 | `s06_savepoint_partial_rollback.sql` | savepoint 부분 rollback |
 | `s07_trigger_dml.sql` | trigger 유발 DML (TRIGGER_INSERT 여부) |
 | `s08_large_txn.sql` | 30,000행 단일 txn (커밋본은 발췌, 전체는 scratch) |
+| `s09_crash_recovery.sql` | 미커밋 txn 진행 중 `cub_server` kill -9 → recovery undo — **`run_scenarios.sh`가 아니라 `s09_crash_recovery.sh`로 실행** (세션을 열어둔 채 서버를 죽여야 하므로) |
 
 ## 덤프 읽는 법
 

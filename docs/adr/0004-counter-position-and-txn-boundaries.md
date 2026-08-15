@@ -81,6 +81,15 @@ event_counter(따라서 동일한 `_version`)와 동일한 내용을 가지므�
   배치 경계는 달랐음(65 vs 66 라운드) — 카운터 position 성립. ② **크래시 복구 트랜잭션의 DCL 방출 여부** — 서버 kill 후
   recovery가 undo한 트랜잭션이 ABORT DCL을 내보내는지. 안 내보내면 좀비 trid 버퍼
   오염이 가능하므로 "서버 재연결 감지 시 전체 버퍼 폐기" 규칙을 확정한다.
+  → **검증 통과 — ABORT 방출됨** (#44, 2026-08-16, `htap-poc/dumps/s09_crash_recovery.dump`):
+  autocommit off로 DML 3건(INSERT×2+UPDATE, trid=165) 후 COMMIT 없이 `cub_server`를
+  kill -9 → cub_master가 auto-restart → recovery가 undo하며 해당 trid의 **ABORT DCL을
+  supplemental log에 기록**(DML 뒤 스트림에 정상 도착, timestamp는 recovery 시각).
+  재기동 후 새 트랜잭션은 더 높은 trid(175)를 받았고 크래시 행은 테이블에서 소멸.
+  따라서 기존 버퍼링 규칙(trid별 DCL 시 publish/폐기)만으로 충분하다 — ABORT가 로그
+  자체에 남으므로 커넥터가 anchor에서 재추출해도 같은 DML+ABORT 시퀀스를 재생해
+  좀비 trid가 생기지 않는다. "재연결 감지 시 전체 버퍼 폐기"는 필수 규칙이 아니라
+  선택적 방어(무해)로 강등한다.
 - **savepoint 부분 rollback은 정합성 미보장 — POC 알려진 제약.** s06 실측: `ROLLBACK TO
   SAVEPOINT`로 취소된 DML이 보상 이벤트 없이 스트림에 그대로 남고 COMMIT까지 도착한다.
   COMMIT-publish 규칙은 이 경우 **팬텀 행**(커밋된 적 없는 INSERT/UPDATE)을 ClickHouse에
