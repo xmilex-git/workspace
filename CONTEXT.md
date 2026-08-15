@@ -73,3 +73,7 @@ _Avoid_: full image 제공(엔진이 준다는 오해), lookback
 **쓰기 정지 스냅샷 (write-stop snapshot)**:
 대상 테이블 쓰기를 멈추고 barrier LSA를 기록한 뒤 full scan을 적재하고, CDC를 barrier 이후부터 시작하는 POC용 초기 적재 방식. online snapshot은 제품 단계 과제다.
 _Avoid_: 온라인 스냅샷, 일관 스냅샷(MVCC token 기반과 혼동)
+
+**barrier LSA**:
+쓰기 정지 중 캡처한, 스냅샷과 스트리밍의 경계가 되는 로그 위치. 스냅샷이 담은 상태와 CDC가 이어받는 지점의 정합을 보장하는 유일한 기준점이며, 재시작 anchor의 초기값이 된다. 스냅샷 row는 모두 이 경계 "이하"의 version(이벤트 카운터 0)을 받는다.
+_Avoid_: 시작 LSA(스트리밍 관점만), 체크포인트(서버 내부 개념과 혼동)
