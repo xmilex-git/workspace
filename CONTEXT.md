@@ -54,6 +54,14 @@ _Avoid_: CDC agent(소비자와 혼동), 복제 기능
 CUBRID CDC 인프라를 JNA로 소비해 Debezium envelope로 Kafka에 내보내는 정식 Debezium 소스 커넥터. 이 프로젝트가 만드는 유일한 CDC 소비자다 (ADR 0002).
 _Avoid_: cubrid-cdc-agent(자체 agent 안 — 기각됨), CDC 도구
 
+**이벤트 카운터 (event counter)**:
+커넥터가 CUBRID CDC 스트림의 비-TIMER 로그 아이템에 부여하는 결정적 일련번호. per-item LSA가 없는 CUBRID CDC에서 이벤트 position의 역할을 하며 `_version`과 `source.lsn`의 재료다. 같은 이벤트는 재전송돼도 같은 번호를 받는다.
+_Avoid_: LSA(배치 커서일 뿐), Kafka offset
+
+**재시작 anchor**:
+커넥터가 재시작 시 로그 추출을 재개하는 배치 경계 LSA — 아직 COMMIT되지 않은 가장 오래된 in-flight 트랜잭션의 첫 DML이 도착한 배치의 경계(없으면 마지막 배치 out_lsa). COMMIT 위치가 아니다.
+_Avoid_: 마지막 커밋 위치, 마지막 처리 위치
+
 **current-state 복제본**:
 ClickHouse ReplacingMergeTree(`_version`, `_is_deleted`)에 유지되는 원본 테이블의 최신 상태 사본. 정확한 조회는 canonical `FINAL` view를 통해서만 한다.
 _Avoid_: 미러, 실시간 동기 테이블(동기 복제로 오해)
