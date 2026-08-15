@@ -1,0 +1,64 @@
+CONFIG db=htapdb host=localhost port=1523 user=dba start_ts=1786782012 all_in_cond=-1 max_log_item=-1 idle_limit=5
+CONNECT rc=0
+FIND_LSA rc=0 in_ts=1786782012 out_ts=1786782012 lsa=0x2b980000000000ab (pageid?=171 offset?=11160)
+EXTRACT round=1 rc=0 n=27 in_lsa=0x2b980000000000ab (pageid?=171 offset?=11160) -> out_lsa=0x15280000000000b0 (pageid?=176 offset?=5416)
+ITEM #1 trid=0 user=(null) type=3(TIMER) timestamp=1786782012
+ITEM #2 trid=0 user=(null) type=3(TIMER) timestamp=1786782013
+ITEM #3 trid=15 user=DBA type=0(DDL) ddl_type=0(CREATE) obj_type=0(TABLE) oid=18446744073709551615 classoid=17179869379 stmt_len=414
+    stmt="-- s00: schema setup. Runs with autocommit ON so the dump also captures DDL\x0a-- events (CREATE TABLE stmt + classoid), which doubles as the\x0a-- classoid -> table-name mapping for every later scenario dump.\x0a\x0a-- representative types: INT / VARCHAR / DECIMAL / DATETIME (map #30 P0 scope)\x0aCREATE TABLE t_order (\x0a  id         INT PRIMARY KEY,\x0a  customer   VARCHAR(64),\x0a  amount     DECIMAL(15,4),\x0a  created_at DATETIME\x0a)"
+ITEM #4 trid=15 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786782014(2026-08-15 17:20:14)
+ITEM #5 trid=16 user=DBA type=0(DDL) ddl_type=0(CREATE) obj_type=0(TABLE) oid=18446744073709551615 classoid=21474836675 stmt_len=91
+    stmt="CREATE TABLE t_item (\x0a  sku   VARCHAR(32) PRIMARY KEY,\x0a  qty   INT,\x0a  price DECIMAL(10,2)\x0a)"
+ITEM #6 trid=16 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786782014(2026-08-15 17:20:14)
+ITEM #7 trid=17 user=DBA type=0(DDL) ddl_type=0(CREATE) obj_type=0(TABLE) oid=18446744073709551615 classoid=17179869388 stmt_len=67
+    stmt="CREATE TABLE t_audit (\x0a  id   INT PRIMARY KEY,\x0a  note VARCHAR(64)\x0a)"
+ITEM #8 trid=17 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786782014(2026-08-15 17:20:14)
+ITEM #9 trid=18 user=DBA type=0(DDL) ddl_type=0(CREATE) obj_type=0(TABLE) oid=18446744073709551615 classoid=12884902097 stmt_len=73
+    stmt="CREATE TABLE big_txn (\x0a  id      INT PRIMARY KEY,\x0a  payload VARCHAR(64)\x0a)"
+ITEM #10 trid=18 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786782014(2026-08-15 17:20:14)
+ITEM #11 trid=19 user=DBA type=0(DDL) ddl_type=0(CREATE) obj_type=0(TABLE) oid=18446744073709551615 classoid=17179869393 stmt_len=121
+    stmt="-- digit helper for the large-transaction scenario (no generate_series in CUBRID)\x0aCREATE TABLE digits (n INT PRIMARY KEY)"
+ITEM #12 trid=19 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786782014(2026-08-15 17:20:14)
+ITEM #13 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=00000000 as_int=0 as_float=0 as_str="\x00\x00\x00\x00"
+ITEM #14 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=01000000 as_int=1 as_float=1.4013e-45 as_str="\x01\x00\x00\x00"
+ITEM #15 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=02000000 as_int=2 as_float=2.8026e-45 as_str="\x02\x00\x00\x00"
+ITEM #16 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=03000000 as_int=3 as_float=4.2039e-45 as_str="\x03\x00\x00\x00"
+ITEM #17 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=04000000 as_int=4 as_float=5.60519e-45 as_str="\x04\x00\x00\x00"
+ITEM #18 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=05000000 as_int=5 as_float=7.00649e-45 as_str="\x05\x00\x00\x00"
+ITEM #19 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=06000000 as_int=6 as_float=8.40779e-45 as_str="\x06\x00\x00\x00"
+ITEM #20 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=07000000 as_int=7 as_float=9.80909e-45 as_str="\x07\x00\x00\x00"
+ITEM #21 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=08000000 as_int=8 as_float=1.12104e-44 as_str="\x08\x00\x00\x00"
+ITEM #22 trid=20 user=DBA type=1(DML) dml_type=0(INSERT) classoid=17179869393 num_changed=1 num_cond=0
+    changed[0] col_index=0 len=4 raw=09000000 as_int=9 as_float=1.26117e-44 as_str="\x09\x00\x00\x00"
+ITEM #23 trid=20 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786782014(2026-08-15 17:20:14)
+ITEM #24 trid=21 user=DBA type=0(DDL) ddl_type=0(CREATE) obj_type=6(TRIGGER) oid=18446744073709551615 classoid=17179869379 stmt_len=195
+    stmt="-- trigger-driven DML: every t_order insert writes one t_audit row\x0aCREATE TRIGGER trg_order_audit\x0a  AFTER INSERT ON t_order\x0a  EXECUTE INSERT INTO t_audit (id, note) VALUES (obj.id, 'via-trigger')"
+ITEM #25 trid=21 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786782014(2026-08-15 17:20:14)
+ITEM #26 trid=0 user=(null) type=3(TIMER) timestamp=1786782014
+ITEM #27 trid=0 user=(null) type=3(TIMER) timestamp=1786782015
+EXTRACT round=2 rc=0 n=2 in_lsa=0x15280000000000b0 (pageid?=176 offset?=5416) -> out_lsa=0x15880000000000b0 (pageid?=176 offset?=5512)
+ITEM #28 trid=0 user=(null) type=3(TIMER) timestamp=1786782016
+ITEM #29 trid=0 user=(null) type=3(TIMER) timestamp=1786782017
+EXTRACT round=3 rc=0 n=2 in_lsa=0x15880000000000b0 (pageid?=176 offset?=5512) -> out_lsa=0x15e80000000000b0 (pageid?=176 offset?=5608)
+ITEM #30 trid=0 user=(null) type=3(TIMER) timestamp=1786782018
+ITEM #31 trid=0 user=(null) type=3(TIMER) timestamp=1786782019
+EXTRACT round=4 rc=0 n=2 in_lsa=0x15e80000000000b0 (pageid?=176 offset?=5608) -> out_lsa=0x16480000000000b0 (pageid?=176 offset?=5704)
+ITEM #32 trid=0 user=(null) type=3(TIMER) timestamp=1786782020
+ITEM #33 trid=0 user=(null) type=3(TIMER) timestamp=1786782021
+EXTRACT round=5 rc=0 n=2 in_lsa=0x16480000000000b0 (pageid?=176 offset?=5704) -> out_lsa=0x16a80000000000b0 (pageid?=176 offset?=5800)
+ITEM #34 trid=0 user=(null) type=3(TIMER) timestamp=1786782022
+ITEM #35 trid=0 user=(null) type=3(TIMER) timestamp=1786782023
+EXTRACT round=6 rc=0 n=2 in_lsa=0x16a80000000000b0 (pageid?=176 offset?=5800) -> out_lsa=0x17080000000000b0 (pageid?=176 offset?=5896)
+ITEM #36 trid=0 user=(null) type=3(TIMER) timestamp=1786782024
+ITEM #37 trid=0 user=(null) type=3(TIMER) timestamp=1786782025
+DONE total_items=37 rounds=6
+FINALIZE rc=0

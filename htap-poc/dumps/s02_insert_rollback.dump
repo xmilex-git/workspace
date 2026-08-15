@@ -1,0 +1,28 @@
+CONFIG db=htapdb host=localhost port=1523 user=dba start_ts=1786782038 all_in_cond=-1 max_log_item=-1 idle_limit=5
+CONNECT rc=0
+FIND_LSA rc=0 in_ts=1786782038 out_ts=1786782038 lsa=0x1e480000000000b0 (pageid?=176 offset?=7752)
+EXTRACT round=1 rc=0 n=1 in_lsa=0x1e480000000000b0 (pageid?=176 offset?=7752) -> out_lsa=0x1e780000000000b0 (pageid?=176 offset?=7800)
+ITEM #1 trid=0 user=(null) type=3(TIMER) timestamp=1786782038
+EXTRACT round=2 rc=0 n=4 in_lsa=0x1e780000000000b0 (pageid?=176 offset?=7800) -> out_lsa=0x22600000000000b0 (pageid?=176 offset?=8800)
+ITEM #2 trid=0 user=(null) type=3(TIMER) timestamp=1786782039
+ITEM #3 trid=37 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0
+    changed[0] col_index=0 len=12 raw=534b552d524f4c4c4241434b as_str="SKU-ROLLBACK"
+    changed[1] col_index=1 len=4 raw=63000000 as_int=99 as_float=1.38729e-43 as_str="c\x00\x00\x00"
+    changed[2] col_index=2 len=4 raw=312e3030 as_int=808463921 as_float=6.40941e-10 as_str="1.00"
+ITEM #4 trid=37 user=DBA type=2(DCL) dcl_type=1(ABORT) timestamp=1786782040(2026-08-15 17:20:40)
+ITEM #5 trid=0 user=(null) type=3(TIMER) timestamp=1786782040
+EXTRACT round=3 rc=0 n=1 in_lsa=0x22600000000000b0 (pageid?=176 offset?=8800) -> out_lsa=0x22900000000000b0 (pageid?=176 offset?=8848)
+ITEM #6 trid=0 user=(null) type=3(TIMER) timestamp=1786782041
+EXTRACT round=4 rc=0 n=1 in_lsa=0x22900000000000b0 (pageid?=176 offset?=8848) -> out_lsa=0x22c00000000000b0 (pageid?=176 offset?=8896)
+ITEM #7 trid=0 user=(null) type=3(TIMER) timestamp=1786782042
+EXTRACT round=5 rc=0 n=2 in_lsa=0x22c00000000000b0 (pageid?=176 offset?=8896) -> out_lsa=0x23200000000000b0 (pageid?=176 offset?=8992)
+ITEM #8 trid=0 user=(null) type=3(TIMER) timestamp=1786782043
+ITEM #9 trid=0 user=(null) type=3(TIMER) timestamp=1786782044
+EXTRACT round=6 rc=0 n=2 in_lsa=0x23200000000000b0 (pageid?=176 offset?=8992) -> out_lsa=0x23800000000000b0 (pageid?=176 offset?=9088)
+ITEM #10 trid=0 user=(null) type=3(TIMER) timestamp=1786782045
+ITEM #11 trid=0 user=(null) type=3(TIMER) timestamp=1786782046
+EXTRACT round=7 rc=0 n=2 in_lsa=0x23800000000000b0 (pageid?=176 offset?=9088) -> out_lsa=0x23e00000000000b0 (pageid?=176 offset?=9184)
+ITEM #12 trid=0 user=(null) type=3(TIMER) timestamp=1786782047
+ITEM #13 trid=0 user=(null) type=3(TIMER) timestamp=1786782048
+DONE total_items=13 rounds=7
+FINALIZE rc=0

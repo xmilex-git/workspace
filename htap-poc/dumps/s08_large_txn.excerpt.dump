@@ -1,0 +1,408 @@
+# s08_large_txn — excerpt; full dump: .git_ignored_dir/scratch/htap-dumps/s08_large_txn.full.dump
+# event counts:
+     14 user=(null)
+  30001 user=DBA
+# extract rounds:
+68
+# ---- head -300 ----
+CONFIG db=htapdb host=localhost port=1523 user=dba start_ts=1786782125 all_in_cond=-1 max_log_item=-1 idle_limit=5
+SET extraction_timeout(120) rc=0
+CONNECT rc=0
+FIND_LSA rc=0 in_ts=1786782125 out_ts=1786782125 lsa=0x0ef00000000000b1 (pageid?=177 offset?=3824)
+EXTRACT round=1 rc=0 n=2 in_lsa=0x0ef00000000000b1 (pageid?=177 offset?=3824) -> out_lsa=0x0f500000000000b1 (pageid?=177 offset?=3920)
+ITEM #1 trid=0 user=(null) type=3(TIMER) timestamp=1786782125
+ITEM #2 trid=0 user=(null) type=3(TIMER) timestamp=1786782126
+EXTRACT round=2 rc=0 n=14 in_lsa=0x0f500000000000b1 (pageid?=177 offset?=3920) -> out_lsa=0x20c00000000000b1 (pageid?=177 offset?=8384)
+ITEM #3 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=00000000 as_int=0 as_float=0 as_str="\x00\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303030 as_str="payload-00000000"
+ITEM #4 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=01000000 as_int=1 as_float=1.4013e-45 as_str="\x01\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303031 as_str="payload-00000001"
+ITEM #5 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=02000000 as_int=2 as_float=2.8026e-45 as_str="\x02\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303032 as_str="payload-00000002"
+ITEM #6 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=03000000 as_int=3 as_float=4.2039e-45 as_str="\x03\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303033 as_str="payload-00000003"
+ITEM #7 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=04000000 as_int=4 as_float=5.60519e-45 as_str="\x04\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303034 as_str="payload-00000004"
+ITEM #8 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=05000000 as_int=5 as_float=7.00649e-45 as_str="\x05\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303035 as_str="payload-00000005"
+ITEM #9 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=06000000 as_int=6 as_float=8.40779e-45 as_str="\x06\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303036 as_str="payload-00000006"
+ITEM #10 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=07000000 as_int=7 as_float=9.80909e-45 as_str="\x07\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303037 as_str="payload-00000007"
+ITEM #11 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=08000000 as_int=8 as_float=1.12104e-44 as_str="\x08\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303038 as_str="payload-00000008"
+ITEM #12 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=09000000 as_int=9 as_float=1.26117e-44 as_str="\x09\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303039 as_str="payload-00000009"
+ITEM #13 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=0a000000 as_int=10 as_float=1.4013e-44 as_str="\x0a\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303130 as_str="payload-00000010"
+ITEM #14 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=0b000000 as_int=11 as_float=1.54143e-44 as_str="\x0b\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303131 as_str="payload-00000011"
+ITEM #15 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=0c000000 as_int=12 as_float=1.68156e-44 as_str="\x0c\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303132 as_str="payload-00000012"
+ITEM #16 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=0d000000 as_int=13 as_float=1.82169e-44 as_str="\x0d\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303133 as_str="payload-00000013"
+EXTRACT round=3 rc=0 n=53 in_lsa=0x20c00000000000b1 (pageid?=177 offset?=8384) -> out_lsa=0x21800000000000b2 (pageid?=178 offset?=8576)
+ITEM #17 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=0e000000 as_int=14 as_float=1.96182e-44 as_str="\x0e\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303134 as_str="payload-00000014"
+ITEM #18 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=0f000000 as_int=15 as_float=2.10195e-44 as_str="\x0f\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303135 as_str="payload-00000015"
+ITEM #19 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=10000000 as_int=16 as_float=2.24208e-44 as_str="\x10\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303136 as_str="payload-00000016"
+ITEM #20 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=11000000 as_int=17 as_float=2.38221e-44 as_str="\x11\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303137 as_str="payload-00000017"
+ITEM #21 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=12000000 as_int=18 as_float=2.52234e-44 as_str="\x12\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303138 as_str="payload-00000018"
+ITEM #22 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=13000000 as_int=19 as_float=2.66247e-44 as_str="\x13\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303139 as_str="payload-00000019"
+ITEM #23 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=14000000 as_int=20 as_float=2.8026e-44 as_str="\x14\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303230 as_str="payload-00000020"
+ITEM #24 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=15000000 as_int=21 as_float=2.94273e-44 as_str="\x15\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303231 as_str="payload-00000021"
+ITEM #25 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=16000000 as_int=22 as_float=3.08286e-44 as_str="\x16\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303232 as_str="payload-00000022"
+ITEM #26 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=17000000 as_int=23 as_float=3.22299e-44 as_str="\x17\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303233 as_str="payload-00000023"
+ITEM #27 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=18000000 as_int=24 as_float=3.36312e-44 as_str="\x18\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303234 as_str="payload-00000024"
+ITEM #28 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=19000000 as_int=25 as_float=3.50325e-44 as_str="\x19\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303235 as_str="payload-00000025"
+ITEM #29 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1a000000 as_int=26 as_float=3.64338e-44 as_str="\x1a\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303236 as_str="payload-00000026"
+ITEM #30 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1b000000 as_int=27 as_float=3.78351e-44 as_str="\x1b\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303237 as_str="payload-00000027"
+ITEM #31 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1c000000 as_int=28 as_float=3.92364e-44 as_str="\x1c\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303238 as_str="payload-00000028"
+ITEM #32 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1d000000 as_int=29 as_float=4.06377e-44 as_str="\x1d\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303239 as_str="payload-00000029"
+ITEM #33 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1e000000 as_int=30 as_float=4.2039e-44 as_str="\x1e\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303330 as_str="payload-00000030"
+ITEM #34 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1f000000 as_int=31 as_float=4.34403e-44 as_str="\x1f\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303331 as_str="payload-00000031"
+ITEM #35 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=20000000 as_int=32 as_float=4.48416e-44 as_str=" \x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303332 as_str="payload-00000032"
+ITEM #36 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=21000000 as_int=33 as_float=4.62428e-44 as_str="!\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303333 as_str="payload-00000033"
+ITEM #37 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=22000000 as_int=34 as_float=4.76441e-44 as_str="\"\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303334 as_str="payload-00000034"
+ITEM #38 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=23000000 as_int=35 as_float=4.90454e-44 as_str="#\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303335 as_str="payload-00000035"
+ITEM #39 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=24000000 as_int=36 as_float=5.04467e-44 as_str="$\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303336 as_str="payload-00000036"
+ITEM #40 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=25000000 as_int=37 as_float=5.1848e-44 as_str="%\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303337 as_str="payload-00000037"
+ITEM #41 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=26000000 as_int=38 as_float=5.32493e-44 as_str="&\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303338 as_str="payload-00000038"
+ITEM #42 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=27000000 as_int=39 as_float=5.46506e-44 as_str="'\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303339 as_str="payload-00000039"
+ITEM #43 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=28000000 as_int=40 as_float=5.60519e-44 as_str="(\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303430 as_str="payload-00000040"
+ITEM #44 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=29000000 as_int=41 as_float=5.74532e-44 as_str=")\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303431 as_str="payload-00000041"
+ITEM #45 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2a000000 as_int=42 as_float=5.88545e-44 as_str="*\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303432 as_str="payload-00000042"
+ITEM #46 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2b000000 as_int=43 as_float=6.02558e-44 as_str="+\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303433 as_str="payload-00000043"
+ITEM #47 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2c000000 as_int=44 as_float=6.16571e-44 as_str=",\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303434 as_str="payload-00000044"
+ITEM #48 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2d000000 as_int=45 as_float=6.30584e-44 as_str="-\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303435 as_str="payload-00000045"
+ITEM #49 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2e000000 as_int=46 as_float=6.44597e-44 as_str=".\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303436 as_str="payload-00000046"
+ITEM #50 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2f000000 as_int=47 as_float=6.5861e-44 as_str="/\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303437 as_str="payload-00000047"
+ITEM #51 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=30000000 as_int=48 as_float=6.72623e-44 as_str="0\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303438 as_str="payload-00000048"
+ITEM #52 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=31000000 as_int=49 as_float=6.86636e-44 as_str="1\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303439 as_str="payload-00000049"
+ITEM #53 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=32000000 as_int=50 as_float=7.00649e-44 as_str="2\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303530 as_str="payload-00000050"
+ITEM #54 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=33000000 as_int=51 as_float=7.14662e-44 as_str="3\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303531 as_str="payload-00000051"
+ITEM #55 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=34000000 as_int=52 as_float=7.28675e-44 as_str="4\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303532 as_str="payload-00000052"
+ITEM #56 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=35000000 as_int=53 as_float=7.42688e-44 as_str="5\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303533 as_str="payload-00000053"
+ITEM #57 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=36000000 as_int=54 as_float=7.56701e-44 as_str="6\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303534 as_str="payload-00000054"
+ITEM #58 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=37000000 as_int=55 as_float=7.70714e-44 as_str="7\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303535 as_str="payload-00000055"
+ITEM #59 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=38000000 as_int=56 as_float=7.84727e-44 as_str="8\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303536 as_str="payload-00000056"
+ITEM #60 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=39000000 as_int=57 as_float=7.9874e-44 as_str="9\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303537 as_str="payload-00000057"
+ITEM #61 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=3a000000 as_int=58 as_float=8.12753e-44 as_str=":\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303538 as_str="payload-00000058"
+ITEM #62 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=3b000000 as_int=59 as_float=8.26766e-44 as_str=";\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303539 as_str="payload-00000059"
+ITEM #63 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=3c000000 as_int=60 as_float=8.40779e-44 as_str="<\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303630 as_str="payload-00000060"
+ITEM #64 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=3d000000 as_int=61 as_float=8.54792e-44 as_str="=\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303631 as_str="payload-00000061"
+ITEM #65 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=3e000000 as_int=62 as_float=8.68805e-44 as_str=">\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303632 as_str="payload-00000062"
+ITEM #66 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=3f000000 as_int=63 as_float=8.82818e-44 as_str="?\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303633 as_str="payload-00000063"
+ITEM #67 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=40000000 as_int=64 as_float=8.96831e-44 as_str="@\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303634 as_str="payload-00000064"
+ITEM #68 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=41000000 as_int=65 as_float=9.10844e-44 as_str="A\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303635 as_str="payload-00000065"
+ITEM #69 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=42000000 as_int=66 as_float=9.24857e-44 as_str="B\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303636 as_str="payload-00000066"
+EXTRACT round=4 rc=0 n=160 in_lsa=0x21800000000000b2 (pageid?=178 offset?=8576) -> out_lsa=0x24c80000000000b5 (pageid?=181 offset?=9416)
+ITEM #70 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=43000000 as_int=67 as_float=9.3887e-44 as_str="C\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303637 as_str="payload-00000067"
+ITEM #71 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=44000000 as_int=68 as_float=9.52883e-44 as_str="D\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303638 as_str="payload-00000068"
+ITEM #72 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=45000000 as_int=69 as_float=9.66896e-44 as_str="E\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303639 as_str="payload-00000069"
+ITEM #73 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=46000000 as_int=70 as_float=9.80909e-44 as_str="F\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303730 as_str="payload-00000070"
+ITEM #74 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=47000000 as_int=71 as_float=9.94922e-44 as_str="G\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303731 as_str="payload-00000071"
+ITEM #75 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=48000000 as_int=72 as_float=1.00893e-43 as_str="H\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303732 as_str="payload-00000072"
+ITEM #76 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=49000000 as_int=73 as_float=1.02295e-43 as_str="I\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303733 as_str="payload-00000073"
+ITEM #77 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=4a000000 as_int=74 as_float=1.03696e-43 as_str="J\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303734 as_str="payload-00000074"
+ITEM #78 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=4b000000 as_int=75 as_float=1.05097e-43 as_str="K\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303735 as_str="payload-00000075"
+ITEM #79 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=4c000000 as_int=76 as_float=1.06499e-43 as_str="L\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303736 as_str="payload-00000076"
+ITEM #80 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=4d000000 as_int=77 as_float=1.079e-43 as_str="M\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303737 as_str="payload-00000077"
+ITEM #81 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=4e000000 as_int=78 as_float=1.09301e-43 as_str="N\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303738 as_str="payload-00000078"
+ITEM #82 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=4f000000 as_int=79 as_float=1.10703e-43 as_str="O\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303739 as_str="payload-00000079"
+ITEM #83 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=50000000 as_int=80 as_float=1.12104e-43 as_str="P\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303830 as_str="payload-00000080"
+ITEM #84 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=51000000 as_int=81 as_float=1.13505e-43 as_str="Q\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303831 as_str="payload-00000081"
+ITEM #85 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=52000000 as_int=82 as_float=1.14906e-43 as_str="R\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303832 as_str="payload-00000082"
+ITEM #86 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=53000000 as_int=83 as_float=1.16308e-43 as_str="S\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303833 as_str="payload-00000083"
+ITEM #87 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=54000000 as_int=84 as_float=1.17709e-43 as_str="T\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303834 as_str="payload-00000084"
+ITEM #88 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=55000000 as_int=85 as_float=1.1911e-43 as_str="U\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303835 as_str="payload-00000085"
+ITEM #89 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=56000000 as_int=86 as_float=1.20512e-43 as_str="V\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303836 as_str="payload-00000086"
+ITEM #90 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=57000000 as_int=87 as_float=1.21913e-43 as_str="W\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303837 as_str="payload-00000087"
+ITEM #91 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=58000000 as_int=88 as_float=1.23314e-43 as_str="X\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303838 as_str="payload-00000088"
+ITEM #92 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=59000000 as_int=89 as_float=1.24716e-43 as_str="Y\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303839 as_str="payload-00000089"
+ITEM #93 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=5a000000 as_int=90 as_float=1.26117e-43 as_str="Z\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303930 as_str="payload-00000090"
+ITEM #94 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=5b000000 as_int=91 as_float=1.27518e-43 as_str="[\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303931 as_str="payload-00000091"
+ITEM #95 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=5c000000 as_int=92 as_float=1.28919e-43 as_str="\\\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303932 as_str="payload-00000092"
+ITEM #96 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=5d000000 as_int=93 as_float=1.30321e-43 as_str="]\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303933 as_str="payload-00000093"
+ITEM #97 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=5e000000 as_int=94 as_float=1.31722e-43 as_str="^\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303934 as_str="payload-00000094"
+ITEM #98 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=5f000000 as_int=95 as_float=1.33123e-43 as_str="_\x00\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303030303935 as_str="payload-00000095"
+ITEM #99 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=60000000 as_int=96 as_float=1.34525e-43 as_str="`\x00\x00\x00"
+# ---- tail -100 ----
+    changed[0] col_index=0 len=4 raw=15750000 as_int=29973 as_float=4.20011e-41 as_str="\x15u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393733 as_str="payload-00029973"
+ITEM #29977 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=16750000 as_int=29974 as_float=4.20025e-41 as_str="\x16u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393734 as_str="payload-00029974"
+ITEM #29978 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=17750000 as_int=29975 as_float=4.20039e-41 as_str="\x17u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393735 as_str="payload-00029975"
+ITEM #29979 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=18750000 as_int=29976 as_float=4.20053e-41 as_str="\x18u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393736 as_str="payload-00029976"
+ITEM #29980 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=19750000 as_int=29977 as_float=4.20067e-41 as_str="\x19u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393737 as_str="payload-00029977"
+ITEM #29981 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1a750000 as_int=29978 as_float=4.20081e-41 as_str="\x1au\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393738 as_str="payload-00029978"
+ITEM #29982 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1b750000 as_int=29979 as_float=4.20095e-41 as_str="\x1bu\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393739 as_str="payload-00029979"
+ITEM #29983 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1c750000 as_int=29980 as_float=4.20109e-41 as_str="\x1cu\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393830 as_str="payload-00029980"
+ITEM #29984 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1d750000 as_int=29981 as_float=4.20123e-41 as_str="\x1du\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393831 as_str="payload-00029981"
+ITEM #29985 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1e750000 as_int=29982 as_float=4.20137e-41 as_str="\x1eu\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393832 as_str="payload-00029982"
+ITEM #29986 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=1f750000 as_int=29983 as_float=4.20151e-41 as_str="\x1fu\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393833 as_str="payload-00029983"
+ITEM #29987 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=20750000 as_int=29984 as_float=4.20165e-41 as_str=" u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393834 as_str="payload-00029984"
+ITEM #29988 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=21750000 as_int=29985 as_float=4.20179e-41 as_str="!u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393835 as_str="payload-00029985"
+ITEM #29989 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=22750000 as_int=29986 as_float=4.20193e-41 as_str="\"u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393836 as_str="payload-00029986"
+ITEM #29990 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=23750000 as_int=29987 as_float=4.20207e-41 as_str="#u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393837 as_str="payload-00029987"
+ITEM #29991 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=24750000 as_int=29988 as_float=4.20221e-41 as_str="$u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393838 as_str="payload-00029988"
+ITEM #29992 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=25750000 as_int=29989 as_float=4.20235e-41 as_str="%u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393839 as_str="payload-00029989"
+ITEM #29993 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=26750000 as_int=29990 as_float=4.20249e-41 as_str="&u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393930 as_str="payload-00029990"
+ITEM #29994 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=27750000 as_int=29991 as_float=4.20263e-41 as_str="'u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393931 as_str="payload-00029991"
+ITEM #29995 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=28750000 as_int=29992 as_float=4.20277e-41 as_str="(u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393932 as_str="payload-00029992"
+ITEM #29996 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=29750000 as_int=29993 as_float=4.20291e-41 as_str=")u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393933 as_str="payload-00029993"
+ITEM #29997 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2a750000 as_int=29994 as_float=4.20305e-41 as_str="*u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393934 as_str="payload-00029994"
+ITEM #29998 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2b750000 as_int=29995 as_float=4.20319e-41 as_str="+u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393935 as_str="payload-00029995"
+ITEM #29999 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2c750000 as_int=29996 as_float=4.20333e-41 as_str=",u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393936 as_str="payload-00029996"
+ITEM #30000 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2d750000 as_int=29997 as_float=4.20348e-41 as_str="-u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393937 as_str="payload-00029997"
+ITEM #30001 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2e750000 as_int=29998 as_float=4.20362e-41 as_str=".u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393938 as_str="payload-00029998"
+ITEM #30002 trid=93 user=DBA type=1(DML) dml_type=0(INSERT) classoid=12884902097 num_changed=2 num_cond=0
+    changed[0] col_index=0 len=4 raw=2f750000 as_int=29999 as_float=4.20376e-41 as_str="/u\x00\x00"
+    changed[1] col_index=1 len=16 raw=7061796c6f61642d3030303239393939 as_str="payload-00029999"
+ITEM #30003 trid=93 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786782127(2026-08-15 17:22:07)
+ITEM #30004 trid=0 user=(null) type=3(TIMER) timestamp=1786782127
+ITEM #30005 trid=0 user=(null) type=3(TIMER) timestamp=1786782128
+EXTRACT round=64 rc=0 n=2 in_lsa=0x1ef000000000039b (pageid?=923 offset?=7920) -> out_lsa=0x1f5000000000039b (pageid?=923 offset?=8016)
+ITEM #30006 trid=0 user=(null) type=3(TIMER) timestamp=1786782129
+ITEM #30007 trid=0 user=(null) type=3(TIMER) timestamp=1786782130
+EXTRACT round=65 rc=0 n=2 in_lsa=0x1f5000000000039b (pageid?=923 offset?=8016) -> out_lsa=0x1fb000000000039b (pageid?=923 offset?=8112)
+ITEM #30008 trid=0 user=(null) type=3(TIMER) timestamp=1786782131
+ITEM #30009 trid=0 user=(null) type=3(TIMER) timestamp=1786782132
+EXTRACT round=66 rc=0 n=2 in_lsa=0x1fb000000000039b (pageid?=923 offset?=8112) -> out_lsa=0x201000000000039b (pageid?=923 offset?=8208)
+ITEM #30010 trid=0 user=(null) type=3(TIMER) timestamp=1786782133
+ITEM #30011 trid=0 user=(null) type=3(TIMER) timestamp=1786782134
+EXTRACT round=67 rc=0 n=2 in_lsa=0x201000000000039b (pageid?=923 offset?=8208) -> out_lsa=0x207000000000039b (pageid?=923 offset?=8304)
+ITEM #30012 trid=0 user=(null) type=3(TIMER) timestamp=1786782135
+ITEM #30013 trid=0 user=(null) type=3(TIMER) timestamp=1786782136
+EXTRACT round=68 rc=0 n=2 in_lsa=0x207000000000039b (pageid?=923 offset?=8304) -> out_lsa=0x20d000000000039b (pageid?=923 offset?=8400)
+ITEM #30014 trid=0 user=(null) type=3(TIMER) timestamp=1786782137
+ITEM #30015 trid=0 user=(null) type=3(TIMER) timestamp=1786782138
+DONE total_items=30015 rounds=68
+FINALIZE rc=0
