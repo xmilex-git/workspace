@@ -32,6 +32,7 @@ htap-poc/infra/reset.sh   # 정지 + 데이터 초기화 (plugin dir는 보존)
   하므로 호스트 사용자의 평범한 `rm -rf`는 Permission denied.
 - SELinux disabled 호스트라 `:Z`는 no-op — enforcing 호스트에서는 재검증 필요.
 - ClickHouse는 기본 사용자 무설정이라 `default` 유저의 원격 접속이 잠긴다
-  (컨테이너 내부/localhost 사용은 정상). 외부 접속 인증은 sink 연결 티켓에서 결정.
+  (컨테이너 내부/localhost 사용은 정상). sink 접속은 #39에서 결정한 전용 유저
+  `htap_sink`(`clickhouse/users.d/htap-sink.xml`, up.sh가 마운트)를 쓴다.
 - JNA용 `.so`는 plugin.path **밖**에 배포해야 한다(#32 결정) — 마운트 지점 추가는
   커넥터 배포 티켓에서.

@@ -1,0 +1,4 @@
+{"sku":"A"}	{"sku":"A","qty":10,"price":"1.50","_op":"c","_version":2001,"_is_deleted":false}
+{"sku":"B"}	{"sku":"B","qty":5,"price":"2.25","_op":"c","_version":2002,"_is_deleted":false}
+{"sku":"A"}	{"sku":"A","qty":7,"price":"1.50","_op":"u","_version":2003,"_is_deleted":false}
+{"sku":"B"}	{"sku":"B","qty":5,"price":"2.25","_op":"d","_version":2004,"_is_deleted":true}

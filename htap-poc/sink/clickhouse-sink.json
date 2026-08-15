@@ -1,0 +1,25 @@
+{
+  "name": "clickhouse-sink-poc",
+  "config": {
+    "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
+    "tasks.max": "1",
+    "hostname": "clickhouse",
+    "port": "8123",
+    "ssl": "false",
+    "database": "htap",
+    "username": "htap_sink",
+    "password": "htap-sink-poc",
+
+    "topics": "htapcdc.htapdb.t_order,htapcdc.htapdb.t_item",
+    "topic2TableMap": "htapcdc.htapdb.t_order=t_order_local,htapcdc.htapdb.t_item=t_item_local",
+
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+
+    "exactlyOnce": "false",
+    "errors.retry.timeout": "60000",
+    "errors.tolerance": "none",
+    "clickhouseSettings": "date_time_input_format=best_effort"
+  }
+}

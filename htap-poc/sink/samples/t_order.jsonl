@@ -1,0 +1,6 @@
+{"id":1}	{"id":1,"customer":"alice","amount":"12.3400","created_at":"2026-08-16T03:00:00.123Z","_op":"c","_version":1001,"_is_deleted":false}
+{"id":2}	{"id":2,"customer":"bob","amount":"5.0000","created_at":"2026-08-16T03:01:00Z","_op":"c","_version":1002,"_is_deleted":false}
+{"id":3}	{"id":3,"customer":"carol","amount":"7.7700","created_at":"2026-08-16T02:00:00Z","_op":"r","_version":0,"_is_deleted":false}
+{"id":1}	{"id":1,"customer":"alice","amount":"99.5000","created_at":"2026-08-16T03:00:00.123Z","_op":"u","_version":1005,"_is_deleted":false}
+{"id":2}	{"id":2,"customer":"bob","amount":"5.0000","created_at":"2026-08-16T03:01:00Z","_op":"d","_version":1007,"_is_deleted":true}
+{"id":3}	{"id":3,"customer":"carol-updated","amount":"7.7700","created_at":"2026-08-16T02:00:00Z","_op":"u","_version":1009,"_is_deleted":false}

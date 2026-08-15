@@ -1,0 +1,21 @@
+<!-- htap-poc ticket #39: dedicated user for the ClickHouse Kafka Connect
+     Sink. The image's default user is (correctly) locked for remote
+     connections; the sink connects over the podman network, so it needs
+     its own network-enabled user. POC-only plaintext password — this
+     stack never leaves the dev host. -->
+<clickhouse>
+    <users>
+        <htap_sink>
+            <password>htap-sink-poc</password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <grants>
+                <query>GRANT SELECT, INSERT ON htap.*</query>
+                <query>GRANT SELECT ON system.*</query>
+            </grants>
+        </htap_sink>
+    </users>
+</clickhouse>

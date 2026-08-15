@@ -13,7 +13,8 @@ HTAP_DATA="${HTAP_DATA:-$HOME/htap-data}"
 NET=htap-net
 
 mkdir -p "$HTAP_DATA/kafka" "$HTAP_DATA/clickhouse" \
-         "$HTAP_DATA/connect-plugins/debezium-connector-cubrid"
+         "$HTAP_DATA/connect-plugins/debezium-connector-cubrid" \
+         "$HTAP_DATA/connect-plugins/clickhouse-kafka-connect"
 
 podman network exists "$NET" || podman network create "$NET"
 
@@ -53,6 +54,7 @@ else
         -p 8123:8123 -p 9000:9000 \
         --ulimit nofile=262144:262144 \
         -v "$HTAP_DATA/clickhouse":/var/lib/clickhouse:Z,U \
+        -v "$HERE/clickhouse/users.d/htap-sink.xml":/etc/clickhouse-server/users.d/htap-sink.xml:ro,Z \
         "$CLICKHOUSE_IMAGE"
     echo "clickhouse: started ($CLICKHOUSE_IMAGE)"
 fi
@@ -67,6 +69,7 @@ else
         --cgroupns=private \
         -p 8083:8083 \
         -v "$HTAP_DATA/connect-plugins/debezium-connector-cubrid":/kafka/connect/debezium-connector-cubrid:Z,U \
+        -v "$HTAP_DATA/connect-plugins/clickhouse-kafka-connect":/kafka/connect/clickhouse-kafka-connect:Z,U \
         -e BOOTSTRAP_SERVERS=kafka:19092 \
         -e GROUP_ID=htap-connect \
         -e CONFIG_STORAGE_TOPIC=htap_connect_configs \
