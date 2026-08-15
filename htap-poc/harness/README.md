@@ -18,6 +18,9 @@ WORKSPACE=$HOME/dev/cubrid/.not_git_tracking/htap-cdc-wt \
 
 # 1) 하네스 환경 (이 셸에서만)
 export CUBRID=$HOME/htap-cdc/CUBRID-11.5-htapcdc
+# 셸 프로필의 CUBRID_DATABASES(=/home/cubrid/databases)를 물려받으면
+# "Database htapdb is unknown" 으로 기동 실패 — 격리 설치 것으로 반드시 덮는다
+export CUBRID_DATABASES=$CUBRID/databases
 export PATH=$CUBRID/bin:$PATH LD_LIBRARY_PATH=$CUBRID/lib:${LD_LIBRARY_PATH:-}
 
 # 2) DB 생성 + supplemental_log=1 + 서버 기동 (server-control 래퍼 경유)

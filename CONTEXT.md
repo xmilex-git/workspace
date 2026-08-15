@@ -58,6 +58,10 @@ _Avoid_: cubrid-cdc-agent(자체 agent 안 — 기각됨), CDC 도구
 ClickHouse ReplacingMergeTree(`_version`, `_is_deleted`)에 유지되는 원본 테이블의 최신 상태 사본. 정확한 조회는 canonical `FINAL` view를 통해서만 한다.
 _Avoid_: 미러, 실시간 동기 테이블(동기 복제로 오해)
 
+**full image 병합 (cond ⊕ changed)**:
+`all_in_cond=1`로 확장된 cond(전 컬럼 before-image)에 changed(바뀐 컬럼의 after 값)를 덮어써 full after-image를 만드는 커넥터측 순수 계산. 상태 저장·추가 조회·엔진 패치가 없다 (ADR 0003).
+_Avoid_: full image 제공(엔진이 준다는 오해), lookback
+
 **쓰기 정지 스냅샷 (write-stop snapshot)**:
 대상 테이블 쓰기를 멈추고 barrier LSA를 기록한 뒤 full scan을 적재하고, CDC를 barrier 이후부터 시작하는 POC용 초기 적재 방식. online snapshot은 제품 단계 과제다.
 _Avoid_: 온라인 스냅샷, 일관 스냅샷(MVCC token 기반과 혼동)
