@@ -76,7 +76,9 @@ event_counter(따라서 동일한 `_version`)와 동일한 내용을 가지므�
 
 - **전제 2건은 실측 티켓으로 검증한다**(둘 다 이 ADR의 성립 조건):
   ① **replay 결정성** — 같은 LSA에서 2회 추출한 비-TIMER 아이템 시퀀스 diff. 깨지면
-  엔진 패치 fallback 승격. ② **크래시 복구 트랜잭션의 DCL 방출 여부** — 서버 kill 후
+  엔진 패치 fallback 승격. → **검증 통과** (#43, 2026-08-16): 동일 start_ts 2회 추출,
+  s08 30k-행 트랜잭션 포함 비-TIMER 30,072 아이템(정규화 90,182라인)이 byte-identical.
+  배치 경계는 달랐음(65 vs 66 라운드) — 카운터 position 성립. ② **크래시 복구 트랜잭션의 DCL 방출 여부** — 서버 kill 후
   recovery가 undo한 트랜잭션이 ABORT DCL을 내보내는지. 안 내보내면 좀비 trid 버퍼
   오염이 가능하므로 "서버 재연결 감지 시 전체 버퍼 폐기" 규칙을 확정한다.
 - **savepoint 부분 rollback은 정합성 미보장 — POC 알려진 제약.** s06 실측: `ROLLBACK TO
