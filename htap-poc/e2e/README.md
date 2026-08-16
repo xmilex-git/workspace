@@ -1,4 +1,4 @@
-# E2E 수직 슬라이스 — 스냅샷 후 I/U/D/COMMIT/ABORT 전 구간 관통 (ticket #40)
+# E2E 수직 슬라이스 — 스냅샷 후 I/U/D/COMMIT/ABORT 전 구간 관통 (ticket #40, #41)
 
 티켓: [#40](https://github.com/xmilex-git/workspace/issues/40) · 근거: ADR 0003(cond⊕changed 병합)·
 ADR 0004(카운터 position·트랜잭션 버퍼링)·ADR 0005(JDBC 스냅샷·쓰기 정지 barrier),
@@ -18,6 +18,8 @@ Kafka `htapcdc.htapdb.<table>` → 공식 ClickHouse sink → RMT → canonical 
 | `seed-cubrid.sql` | 쓰기 정지 하 스냅샷 대상 상태 (t_order 2행, t_item 2행) |
 | `streaming-workload.sql` | I/U/D × COMMIT/ABORT + §7.7 전 케이스 (T1~T7) |
 | `run-e2e.sh` | 전체 오케스트레이션 + 완료 조건 3건 assert |
+| `diff-check.sh` | differential check (#41) — CUBRID ↔ canonical view를 range별(md5(pk)%8 버킷) row count + per-column checksum으로 비교, 0 mismatch면 exit 0 (`--quiet`는 폴링용) |
+| `run-faults.sh` | 장애·재시작·중복 검증 (#41) — ① 소스 태스크 restart ② Connect 워커 hard restart ③ ClickHouse 정지 중 쓰기 후 재개 ④ sink 컨슈머 offset earliest 리셋으로 전체 토픽 중복 재전송. 각 시나리오 후 diff-check 0 mismatch, ④는 canonical view byte-identical까지 assert |
 
 실행 (인프라·sink 체인·htapdb 서버 준비 후):
 
@@ -59,6 +61,27 @@ Kafka `htapcdc.htapdb.<table>` → 공식 ClickHouse sink → RMT → canonical 
   libcubridcs가 프로세스를 종료시켜 워커 사망). 컨테이너→호스트 CUBRID 접속은
   `cubrid-host`(호스트 LAN IP `--add-host`) — rootless netavark에서 게이트웨이/
   host.containers.internal 경유 불가.
+
+## 장애·재시작·중복 실측 (#41, 2026-08-16)
+
+`run-faults.sh` 4개 시나리오 전부 PASS — 각 시나리오 후 `diff-check.sh` 0 mismatch,
+이벤트 유실 0 (row count + per-column checksum 기준):
+
+- **S1 태스크 restart / S2 워커 hard restart**: 둘 다 영속 anchor에서 재개
+  ("Resuming ... at anchor LSA(page=1071,...)"), anchor 이후 committed 구간이
+  재발행됐지만(at-least-once) 동일 `_version`이라 RMT 수렴 — ADR 0004의 재계수
+  규칙이 실제 장애에서 동작함을 확인.
+- **S3 ClickHouse 정지 중 쓰기 → 재개**: 정지 동안 커밋된 변경이 재개 후 sink
+  재시도로 전부 도달 (`errors.retry.timeout=60000` 내 자체 복구, 태스크 FAILED 시
+  restart는 스크립트가 방어적으로 수행).
+- **S4 동일 배치 중복 전송**: sink stop → 컨슈머 그룹 offset `--to-earliest` 리셋 →
+  resume으로 **전체 토픽 이력 재전송**. 재전송 후 모든 이벤트가 RMT에 물리적으로
+  2벌(copies=2, 동일 `_version`) 존재하나 canonical view는 **byte-identical** —
+  결정적 `_version` → RMT 수렴 주장의 직접 실증. barrier 초 단위 중첩 재생(ADR 0006
+  Consequences)도 같은 메커니즘으로 무해함이 함께 커버된다.
+- **모든 시나리오에 ABORT txn 포함**: 장애 타이밍과 무관하게 committed-only 유지.
+- diff-check 검증기 자체도 검증함: ClickHouse에 가짜 행 주입 시 해당 버킷의
+  row count + 3컬럼 checksum mismatch로 즉시 검출 (tamper test).
 
 ## 결정 (traceability)
 
