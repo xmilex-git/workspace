@@ -53,6 +53,12 @@ t0=$(now)
 run_sql "$HERE/scenarios/s04_multi_update_commit.sql"
 dump_since "$t0" "$DUMPDIR/s04_multi_update_commit.allincond1.dump" -a 1
 
+# s10 statement failure — needs all_in_cond=1 like the connector; rerun requires
+# a fresh db (fixed SKUs collide with a previous run, like the other scenarios)
+t0=$(now)
+run_sql "$HERE/scenarios/s10_statement_failure.sql"
+dump_since "$t0" "$DUMPDIR/s10_statement_failure.dump" -a 1
+
 # s08 large txn — full dump stays in scratch, committed evidence is a
 # head+tail excerpt plus event counts
 t0=$(now)

@@ -47,6 +47,7 @@ htap-poc/harness/run_scenarios.sh htapdb
 | `s07_trigger_dml.sql` | trigger 유발 DML (TRIGGER_INSERT 여부) |
 | `s08_large_txn.sql` | 30,000행 단일 txn (커밋본은 발췌, 전체는 scratch) |
 | `s09_crash_recovery.sql` | 미커밋 txn 진행 중 `cub_server` kill -9 → recovery undo — **`run_scenarios.sh`가 아니라 `s09_crash_recovery.sh`로 실행** (세션을 열어둔 채 서버를 죽여야 하므로) |
+| `s10_statement_failure.sql` | txn 도중 문장 실패(멀티행 INSERT PK 위반) 후 COMMIT — 실패 문장의 부분 DML이 보상 없이 스트림에 남음(팬텀·오염, ADR 0004 개정 근거, #42) |
 
 ## 덤프 읽는 법
 

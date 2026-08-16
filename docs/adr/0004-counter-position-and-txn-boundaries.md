@@ -96,6 +96,16 @@ event_counter(따라서 동일한 `_version`)와 동일한 내용을 가지므�
   싣는다. 스트림만으로는 식별이 원천 불가능해 커넥터 측 완화가 없다. POC 완료 계약
   (differential check)의 워크로드에서 savepoint를 배제하고, 프로덕션 경로는 supplemental
   log에 savepoint 마커/보상 이벤트를 추가하는 엔진 보강이 필요하다(지도 fog에 기록).
+  **[개정 2026-08-16, #42]** 이 제약의 실제 범위는 명시적 SAVEPOINT보다 넓다 — s10 실측
+  (`htap-poc/dumps/s10_statement_failure.dump`): 트랜잭션 도중 **문장 하나가 실패**
+  (멀티행 INSERT의 2번째 행 PK 위반)하고 앱이 에러를 삼킨 채 COMMIT하면, CUBRID의
+  문장 단위 롤백(내부 savepoint)으로 취소된 부분 DML이 보상 없이 스트림에 남는다.
+  결과는 (a) 커밋된 적 없는 팬텀 행, (b) 더 나쁘게는 실패 문장의 값이 더 높은
+  `_version`으로 **실존 행을 덮어쓰는 오염**. 즉 "savepoint 워크로드 배제"가 아니라
+  "문장 실패를 catch하고 트랜잭션을 계속 진행하는 모든 앱"(try-insert-catch-duplicate,
+  배치 부분 실패 허용)이 영향권이다. 에러 시 트랜잭션 전체를 rollback하는 앱은 안전
+  (ABORT로 버퍼 폐기). 이에 따라 엔진 보강(savepoint/보상 마커)은 제품화의 선택
+  과제가 아니라 **선결 과제(P0)로 격상**한다.
 - 카운터는 커넥터 프로세스 상태가 아니라 **offset의 일부**다 — Kafka Connect offset
   topic이 유일한 영속화 지점이며, offset 초기화(스트림 재시작)는 카운터 세대가 바뀌는
   것이므로 스냅샷 재수행 없이 offset만 지우는 운영은 금지다(version 비교 축이 무너진다).
