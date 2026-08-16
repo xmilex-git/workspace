@@ -1,0 +1,37 @@
+{
+  "name": "cubrid-source-poc",
+  "config": {
+    "connector.class": "io.debezium.connector.cubrid.CubridConnector",
+    "tasks.max": "1",
+
+    "topic.prefix": "htapcdc",
+    "database.hostname": "cubrid-host",
+    "database.port": "33000",
+    "cdc.port": "1523",
+    "database.user": "dba",
+    "database.password": "",
+    "database.dbname": "htapdb",
+    "table.include.list": "htapdb.t_order,htapdb.t_item",
+
+    "snapshot.mode": "initial",
+    "snapshot.max.threads": "1",
+
+    "decimal.handling.mode": "string",
+    "heartbeat.interval.ms": "5000",
+
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "transforms": "unwrap,renameDeleted,castDeleted",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.delete.tombstone.handling.mode": "rewrite",
+    "transforms.unwrap.add.fields": "op:_op,source.lsn:_version",
+    "transforms.unwrap.add.fields.prefix": "",
+    "transforms.renameDeleted.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
+    "transforms.renameDeleted.renames": "__deleted:_is_deleted",
+    "transforms.castDeleted.type": "org.apache.kafka.connect.transforms.Cast$Value",
+    "transforms.castDeleted.spec": "_is_deleted:boolean"
+  }
+}
