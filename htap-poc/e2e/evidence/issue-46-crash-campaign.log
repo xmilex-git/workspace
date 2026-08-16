@@ -1,0 +1,264 @@
+17:00:22 ==== #46 crash campaign start: N=30000 RUNS=1 scenarios=cp3 ====
+17:00:22 == cp3 run 1/1 try 1 ==
+17:04:35 ==== #46 crash campaign start: N=30000 RUNS=1 scenarios=cp3 ====
+17:04:35 == cp3 run 1/1 try 1 ==
+17:05:19 ==== #46 crash campaign start: N=30000 RUNS=1 scenarios=cp3 ====
+17:05:19 == cp3 run 1/1 try 1 ==
+17:05:37   >> podman kill htap-connect (SIGKILL)
+17:05:37   cp3: killed at produced=N=30000 with last flushed anchor seq=0 (c0=0) — post-txn anchor not yet durable
+17:07:13 ==== #46 crash campaign start: N=30000 RUNS=1 scenarios=cp3 ====
+17:07:13 == cp3 run 1/1 try 1 ==
+17:07:29   >> podman kill htap-connect (SIGKILL)
+17:07:29   cp3: killed at produced=N=30000 with last flushed anchor seq=418 (c0=418) — post-txn anchor not yet durable
+17:08:18   verify(cp3): diff=0 divergent=0 raw-dup-groups(order=1629,item=0) produced=60000 flushed_seq=30419 (c0=418)
+17:08:18   cp3: full-txn replay expected — produced=60000 (duplicates 30000, all same-_version)
+17:08:18 PASS: cp3 run 1
+17:08:18 ==== CAMPAIGN PASS: all scenarios (cp3) x 1 consecutive runs, 0 mismatch, 0 loss, duplicates same-_version only ====
+17:08:33 ==== #46 crash campaign start: N=30000 RUNS=3 scenarios=cp1 cp2 cp3 cp4 cp5 ====
+17:08:33 == cp1 run 1/3 try 1 ==
+17:08:53   >> podman kill htap-connect (SIGKILL)
+17:08:54   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:09:42   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:09:42 PASS: cp1 run 1
+17:09:42 == cp1 run 2/3 try 1 ==
+17:10:57 ==== #46 crash campaign start: N=30000 RUNS=3 scenarios=cp1 cp2 cp3 cp4 cp5 ====
+17:10:57 == cp1 run 1/3 try 1 ==
+17:11:16   >> podman kill htap-connect (SIGKILL)
+17:11:17   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:12:05   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:12:05 PASS: cp1 run 1
+17:12:05 == cp1 run 2/3 try 1 ==
+17:12:24   >> podman kill htap-connect (SIGKILL)
+17:12:25   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:13:14   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:13:14 PASS: cp1 run 2
+17:13:14 == cp1 run 3/3 try 1 ==
+17:14:25 ==== #46 crash campaign start: N=30000 RUNS=3 scenarios=cp1 cp2 cp3 cp4 cp5 ====
+17:14:25 == cp1 run 1/3 try 1 ==
+17:14:45   >> podman kill htap-connect (SIGKILL)
+17:14:46   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:15:34   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:15:34 PASS: cp1 run 1
+17:15:34 == cp1 run 2/3 try 1 ==
+17:16:49 ==== #46 crash campaign start: N=30000 RUNS=3 scenarios=cp1 cp2 cp3 cp4 cp5 ====
+17:16:49 == cp1 run 1/3 try 1 ==
+17:16:56   prep: reset ok
+17:17:03 ERR trap: line 150: python3 -c '
+import sys, json
+seq = -1
+for line in sys.stdin:
+    parts = line.rstrip("\n").split("\t", 1)
+    if len(parts) != 2 or not parts[1].strip() or parts[1].strip() == "null":
+        continue
+    try:
+        v = json.loads(parts[1])
+    except json.JSONDecodeError:
+        continue
+    if isinstance(v, dict) and "seq" in v:
+        seq = v["seq"]
+print(seq)' (rc=1)
+17:17:03 ERR trap: line 231: python3 -c '
+import sys, json
+seq = -1
+for line in sys.stdin:
+    parts = line.rstrip("\n").split("\t", 1)
+    if len(parts) != 2 or not parts[1].strip() or parts[1].strip() == "null":
+        continue
+    try:
+        v = json.loads(parts[1])
+    except json.JSONDecodeError:
+        continue
+    if isinstance(v, dict) and "seq" in v:
+        seq = v["seq"]
+print(seq)' (rc=1)
+17:17:03 ERR trap: line 231: C0="$(flushed_seq)" (rc=1)
+17:17:28 ==== #46 crash campaign start: N=30000 RUNS=3 scenarios=cp1 cp2 cp3 cp4 cp5 ====
+17:17:28 == cp1 run 1/3 try 1 ==
+17:17:36   prep: reset ok
+17:17:48   >> podman kill htap-connect (SIGKILL)
+17:17:49   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:18:37   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:18:37 PASS: cp1 run 1
+17:18:37 == cp1 run 2/3 try 1 ==
+17:18:47   prep: reset ok
+17:18:59   >> podman kill htap-connect (SIGKILL)
+17:19:00   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:19:49   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:19:49 PASS: cp1 run 2
+17:19:49 == cp1 run 3/3 try 1 ==
+17:19:56   prep: reset ok
+17:20:09   >> podman kill htap-connect (SIGKILL)
+17:20:10   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:20:59   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30001 (c0=0)
+17:20:59 PASS: cp1 run 3
+17:20:59 == cp2 run 1/3 try 1 ==
+17:21:06   prep: reset ok
+17:21:15   >> podman kill htap-connect (SIGKILL)
+17:21:15   cp2: killed mid-publish at produced=18275/30000, mid-flushed anchor seq=0 (c0=0)
+17:22:10   verify(cp2): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=48275 flushed_seq=30001 (c0=0)
+17:22:10   cp2: replay produced 18275 duplicate records over N=30000 — all same-_version (checked above)
+17:22:10 PASS: cp2 run 1
+17:22:10 == cp2 run 2/3 try 1 ==
+17:22:17   prep: reset ok
+17:22:27   >> podman kill htap-connect (SIGKILL)
+17:22:27   cp2: killed mid-publish at produced=16528/30000, mid-flushed anchor seq=402 (c0=402)
+17:23:19   verify(cp2): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=46528 flushed_seq=30403 (c0=402)
+17:23:19   cp2: replay produced 16528 duplicate records over N=30000 — all same-_version (checked above)
+17:23:20 PASS: cp2 run 2
+17:23:20 == cp2 run 3/3 try 1 ==
+17:23:27   prep: reset ok
+17:23:35   >> podman kill htap-connect (SIGKILL)
+17:23:35   cp2: killed mid-publish at produced=22589/30000, mid-flushed anchor seq=418 (c0=418)
+17:24:31   verify(cp2): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=52589 flushed_seq=30419 (c0=418)
+17:24:31   cp2: replay produced 22589 duplicate records over N=30000 — all same-_version (checked above)
+17:24:31 PASS: cp2 run 3
+17:24:31 == cp3 run 1/3 try 1 ==
+17:24:39   prep: reset ok
+17:24:49   >> podman kill htap-connect (SIGKILL)
+17:24:49   cp3: killed at produced=N=30000 with last flushed anchor seq=418 (c0=418) — post-txn anchor not yet durable
+17:25:39   verify(cp3): diff=0 divergent=0 raw-dup-groups(order=1530,item=0) produced=60000 flushed_seq=30419 (c0=418)
+17:25:39   cp3: full-txn replay expected — produced=60000 (duplicates 30000, all same-_version)
+17:25:39 PASS: cp3 run 1
+17:25:39 == cp3 run 2/3 try 1 ==
+17:25:47   prep: reset ok
+17:25:57   >> podman kill htap-connect (SIGKILL)
+17:25:57   cp3: killed at produced=N=30000 with last flushed anchor seq=418 (c0=418) — post-txn anchor not yet durable
+17:26:46   verify(cp3): diff=0 divergent=0 raw-dup-groups(order=1544,item=0) produced=60000 flushed_seq=30419 (c0=418)
+17:26:46   cp3: full-txn replay expected — produced=60000 (duplicates 30000, all same-_version)
+17:26:46 PASS: cp3 run 2
+17:26:46 == cp3 run 3/3 try 1 ==
+17:26:54   prep: reset ok
+17:27:03   >> podman kill htap-connect (SIGKILL)
+17:27:03   cp3: killed at produced=N=30000 with last flushed anchor seq=418 (c0=418) — post-txn anchor not yet durable
+17:27:52   verify(cp3): diff=0 divergent=0 raw-dup-groups(order=1389,item=0) produced=60000 flushed_seq=30419 (c0=418)
+17:27:52   cp3: full-txn replay expected — produced=60000 (duplicates 30000, all same-_version)
+17:27:52 PASS: cp3 run 3
+17:27:52 == cp4 run 1/3 try 1 ==
+17:28:00   prep: reset ok
+17:28:12   >> podman kill htap-connect (SIGKILL)
+17:28:12   cp4: killed after post-txn anchor durable (flushed seq=30419 >= c0+N=30418)
+17:28:45   verify(cp4): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:28:45   cp4: zero republish after restart (produced stayed 30000)
+17:28:45 PASS: cp4 run 1
+17:28:45 == cp4 run 2/3 try 1 ==
+17:28:52   prep: reset ok
+17:29:16   >> podman kill htap-connect (SIGKILL)
+17:29:16   cp4: killed after post-txn anchor durable (flushed seq=30001 >= c0+N=30000)
+17:29:49   verify(cp4): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30001 (c0=0)
+17:29:49   cp4: zero republish after restart (produced stayed 30000)
+17:29:49 PASS: cp4 run 2
+17:29:49 == cp4 run 3/3 try 1 ==
+17:29:56   prep: reset ok
+17:30:14   >> podman kill htap-connect (SIGKILL)
+17:30:14   cp4: killed after post-txn anchor durable (flushed seq=30001 >= c0+N=30000)
+17:30:47   verify(cp4): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30001 (c0=0)
+17:30:47   cp4: zero republish after restart (produced stayed 30000)
+17:30:48 PASS: cp4 run 3
+17:30:48 == cp5 run 1/3 try 1 ==
+17:30:55   prep: reset ok
+17:34:08   cp5 timing miss: produced=0 at kill decision
+17:34:08 ERR trap: line 460: return 1 (rc=1)
+17:34:08   (cp5 run 1 try 1 was a timing miss — retrying)
+17:34:08 == cp5 run 1/3 try 2 ==
+17:34:13   prep: reset ok
+17:34:31 ==== #46 crash campaign start: N=30000 RUNS=3 scenarios=cp1 cp2 cp3 cp4 cp5 ====
+17:34:31 == cp1 run 1/3 try 1 ==
+17:34:39   prep: reset ok
+17:34:52   >> podman kill htap-connect (SIGKILL)
+17:34:53   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:35:41   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:35:41 PASS: cp1 run 1
+17:35:41 == cp1 run 2/3 try 1 ==
+17:35:49   prep: reset ok
+17:36:02   >> podman kill htap-connect (SIGKILL)
+17:36:03   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:36:51   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:36:52 PASS: cp1 run 2
+17:36:52 == cp1 run 3/3 try 1 ==
+17:37:01   prep: reset ok
+17:37:14   >> podman kill htap-connect (SIGKILL)
+17:37:15   cp1: killed with 0 produced, COMMIT executed while Connect was down
+17:38:03   verify(cp1): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:38:04 PASS: cp1 run 3
+17:38:04 == cp2 run 1/3 try 1 ==
+17:38:11   prep: reset ok
+17:38:19   >> podman kill htap-connect (SIGKILL)
+17:38:19   cp2: killed mid-publish at produced=14608/30000, mid-flushed anchor seq=418 (c0=418)
+17:39:15   verify(cp2): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=44608 flushed_seq=30419 (c0=418)
+17:39:15   cp2: replay produced 14608 duplicate records over N=30000 — all same-_version (checked above)
+17:39:15 PASS: cp2 run 1
+17:39:15 == cp2 run 2/3 try 1 ==
+17:39:22   prep: reset ok
+17:39:32   >> podman kill htap-connect (SIGKILL)
+17:39:32   cp2: killed mid-publish at produced=18708/30000, mid-flushed anchor seq=0 (c0=0)
+17:40:24   verify(cp2): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=48708 flushed_seq=30001 (c0=0)
+17:40:24   cp2: replay produced 18708 duplicate records over N=30000 — all same-_version (checked above)
+17:40:24 PASS: cp2 run 2
+17:40:24 == cp2 run 3/3 try 1 ==
+17:40:31   prep: reset ok
+17:40:41   >> podman kill htap-connect (SIGKILL)
+17:40:41   cp2: killed mid-publish at produced=9557/30000, mid-flushed anchor seq=168 (c0=168)
+17:41:33   verify(cp2): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=39557 flushed_seq=30169 (c0=168)
+17:41:33   cp2: replay produced 9557 duplicate records over N=30000 — all same-_version (checked above)
+17:41:34 PASS: cp2 run 3
+17:41:34 == cp3 run 1/3 try 1 ==
+17:41:41   prep: reset ok
+17:41:50   >> podman kill htap-connect (SIGKILL)
+17:41:50   cp3: killed at produced=N=30000 with last flushed anchor seq=418 (c0=418) — post-txn anchor not yet durable
+17:42:39   verify(cp3): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=60000 flushed_seq=30419 (c0=418)
+17:42:39   cp3: full-txn replay expected — produced=60000 (duplicates 30000, all same-_version)
+17:42:39 PASS: cp3 run 1
+17:42:39 == cp3 run 2/3 try 1 ==
+17:42:47   prep: reset ok
+17:42:56   >> podman kill htap-connect (SIGKILL)
+17:42:56   cp3: killed at produced=N=30000 with last flushed anchor seq=418 (c0=418) — post-txn anchor not yet durable
+17:43:46   verify(cp3): diff=0 divergent=0 raw-dup-groups(order=1994,item=0) produced=60000 flushed_seq=30419 (c0=418)
+17:43:46   cp3: full-txn replay expected — produced=60000 (duplicates 30000, all same-_version)
+17:43:46 PASS: cp3 run 2
+17:43:46 == cp3 run 3/3 try 1 ==
+17:43:53   prep: reset ok
+17:44:03   >> podman kill htap-connect (SIGKILL)
+17:44:03   cp3: killed at produced=N=30000 with last flushed anchor seq=0 (c0=0) — post-txn anchor not yet durable
+17:44:56   verify(cp3): diff=0 divergent=0 raw-dup-groups(order=1325,item=0) produced=60000 flushed_seq=30001 (c0=0)
+17:44:56   cp3: full-txn replay expected — produced=60000 (duplicates 30000, all same-_version)
+17:44:56 PASS: cp3 run 3
+17:44:56 == cp4 run 1/3 try 1 ==
+17:45:04   prep: reset ok
+17:45:18   >> podman kill htap-connect (SIGKILL)
+17:45:18   cp4: killed after post-txn anchor durable (flushed seq=30419 >= c0+N=30418)
+17:45:50   verify(cp4): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30419 (c0=418)
+17:45:50   cp4: zero republish after restart (produced stayed 30000)
+17:45:51 PASS: cp4 run 1
+17:45:51 == cp4 run 2/3 try 1 ==
+17:45:58   prep: reset ok
+17:46:22   >> podman kill htap-connect (SIGKILL)
+17:46:22   cp4: killed after post-txn anchor durable (flushed seq=30001 >= c0+N=30000)
+17:46:54   verify(cp4): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30001 (c0=0)
+17:46:54   cp4: zero republish after restart (produced stayed 30000)
+17:46:55 PASS: cp4 run 2
+17:46:55 == cp4 run 3/3 try 1 ==
+17:47:02   prep: reset ok
+17:47:19   >> podman kill htap-connect (SIGKILL)
+17:47:19   cp4: killed after post-txn anchor durable (flushed seq=30001 >= c0+N=30000)
+17:47:52   verify(cp4): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=30000 flushed_seq=30001 (c0=0)
+17:47:52   cp4: zero republish after restart (produced stayed 30000)
+17:47:52 PASS: cp4 run 3
+17:47:52 == cp5 run 1/3 try 1 ==
+17:47:59   prep: reset ok
+17:48:13   >> podman kill htap-connect (SIGKILL)
+17:48:13   cp5: killed mid-publish of T1 at produced=6140/30001 (T2 open), mid-flushed anchor seq=0 (c0=0)
+17:49:02   verify(cp5): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=36142 flushed_seq=30004 (c0=0)
+17:49:02 PASS: cp5 run 1
+17:49:03 == cp5 run 2/3 try 1 ==
+17:49:11   prep: reset ok
+17:49:25   >> podman kill htap-connect (SIGKILL)
+17:49:25   cp5: killed mid-publish of T1 at produced=8951/30001 (T2 open), mid-flushed anchor seq=418 (c0=418)
+17:50:21   verify(cp5): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=38953 flushed_seq=30422 (c0=418)
+17:50:21 PASS: cp5 run 2
+17:50:21 == cp5 run 3/3 try 1 ==
+17:50:29   prep: reset ok
+17:50:41   >> podman kill htap-connect (SIGKILL)
+17:50:41   cp5: killed mid-publish of T1 at produced=11608/30001 (T2 open), mid-flushed anchor seq=0 (c0=0)
+17:51:37   verify(cp5): diff=0 divergent=0 raw-dup-groups(order=0,item=0) produced=41610 flushed_seq=30004 (c0=0)
+17:51:37 PASS: cp5 run 3
+17:51:37 ==== CAMPAIGN PASS: all scenarios (cp1 cp2 cp3 cp4 cp5) x 3 consecutive runs, 0 mismatch, 0 loss, duplicates same-_version only ====

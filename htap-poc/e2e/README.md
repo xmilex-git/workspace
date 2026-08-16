@@ -18,8 +18,9 @@ Kafka `htapcdc.htapdb.<table>` → 공식 ClickHouse sink → RMT → canonical 
 | `seed-cubrid.sql` | 쓰기 정지 하 스냅샷 대상 상태 (t_order 2행, t_item 2행) |
 | `streaming-workload.sql` | I/U/D × COMMIT/ABORT + §7.7 전 케이스 (T1~T7) |
 | `run-e2e.sh` | 전체 오케스트레이션 + 완료 조건 3건 assert |
-| `diff-check.sh` | differential check (#41) — CUBRID ↔ canonical view를 range별(md5(pk)%8 버킷) row count + per-column checksum으로 비교, 0 mismatch면 exit 0 (`--quiet`는 폴링용) |
-| `run-faults.sh` | 장애·재시작·중복 검증 (#41) — ① 소스 태스크 restart ② Connect 워커 hard restart ③ ClickHouse 정지 중 쓰기 후 재개 ④ sink 컨슈머 offset earliest 리셋으로 전체 토픽 중복 재전송. 각 시나리오 후 diff-check 0 mismatch, ④는 canonical view byte-identical까지 assert |
+| `diff-check.sh` + `diff_check.py` | differential check (#41, #46 Gate C에서 keyed full-row digest로 교체) — CUBRID ↔ canonical view를 range별(md5(pk)%8 버킷) row count + **PK-값 결합을 보존하는 length-prefix 행 직렬화의 정렬 digest**로 비교. 구 per-column checksum은 mismatch 시 진단 출력으로 강등. `--self-test`가 value-swap tamper를 재현(keyed는 FAIL, 구방식은 통과) |
+| `run-faults.sh` | 장애·재시작·중복 검증 (#41, #46 Gate D에서 S4 assert 강화) — ① 소스 태스크 restart ② Connect 워커 hard restart ③ ClickHouse 정지 중 쓰기 후 재개 ④ sink 컨슈머 offset earliest 리셋으로 전체 토픽 중복 재전송. 각 시나리오 후 diff-check 0 mismatch, ④는 lag==0 강제 + reset 전후 committed/end offset + raw RMT 중복이 동일 `_version`뿐임을 assert, canonical view byte-identical까지 |
+| `run-crash-campaign.sh` | partial-publish crash 캠페인 (#46 Gate B) — 30k 단일 txn publish 창에 Connect SIGKILL을 crash point 4종(①0건 발행 ②mid-publish+offset flush 후 ③전량 발행·anchor 미영속 ④anchor 영속 후) + interleaved(T1 publish 중 kill, T2 open)로 주입, 시나리오당 3연속 keyed diff 0·유실 0·중복 동일 `_version`을 assert. 실행 전 `OFFSET_FLUSH_INTERVAL_MS=1000 ../infra/up.sh`로 Connect 재생성 필요. 증거: `evidence/` |
 
 실행 (인프라·sink 체인·htapdb 서버 준비 후):
 

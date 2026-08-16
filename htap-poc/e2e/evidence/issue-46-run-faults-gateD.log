@@ -1,0 +1,30 @@
+== S0. preconditions: connectors RUNNING, baseline diff-check ==
+t_order: cubrid=30004 rows, clickhouse=30004 rows, 8 buckets x keyed full-row digest
+t_item: cubrid=2 rows, clickhouse=2 rows, 8 buckets x keyed full-row digest
+DIFF-CHECK: 0 mismatch
+== S1. source task restart mid-stream ==
+  wrote workload s1 phase 1
+  wrote workload s1 phase 2
+converged: diff-check 0 mismatch
+== S2. Connect worker hard restart (JVM kill) ==
+  wrote workload s2 phase 1
+  wrote workload s2 phase 2
+converged: diff-check 0 mismatch
+== S3. ClickHouse outage during writes, then recovery ==
+  wrote workload s3 phase 1
+  wrote workload s3 phase 2
+converged: diff-check 0 mismatch
+== S4. duplicate delivery: sink offsets reset to earliest ==
+  before reset: committed=41634 end=41634
+
+GROUP                          TOPIC                          PARTITION  NEW-OFFSET     connect-clickhouse-sink-poc    htapcdc.htapdb.t_order         0          0              
+GROUP                          TOPIC                          PARTITION  NEW-OFFSET     connect-clickhouse-sink-poc    htapcdc.htapdb.t_item          0          0                after reset: committed=0 (must be rewound to earliest)
+  redelivery drained: lag=0 committed=41634 end=41634
+  raw RMT duplicate (pk,_version) groups: t_order=1981 t_item=2
+converged: diff-check 0 mismatch
+  canonical views byte-identical before/after redelivery
+== final differential check ==
+t_order: cubrid=30007 rows, clickhouse=30007 rows, 8 buckets x keyed full-row digest
+t_item: cubrid=2 rows, clickhouse=2 rows, 8 buckets x keyed full-row digest
+DIFF-CHECK: 0 mismatch
+PASS: all 4 fault scenarios converged with 0 mismatch

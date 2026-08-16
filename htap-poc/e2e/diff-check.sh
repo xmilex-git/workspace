@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Differential check (#41): compare live CUBRID tables against the ClickHouse
-# canonical FINAL views — per-range row counts + per-column checksums.
+# Differential check (#41, keyed full-row digest since #46): compare live
+# CUBRID tables against the ClickHouse canonical FINAL views.
 #
 # Both sides are dumped as one canonical string per row ('|~|' separated,
 # '\N' for NULL) and compared host-side in a single normalizer:
@@ -11,6 +11,13 @@
 # D1: checksums are computed host-side, not in-engine — the engines' hash
 # functions differ, a single normalizer guarantees identical canonicalization,
 # and POC tables are tiny. At scale, swap the dump for engine-side hashing.
+# D2 (#46 Gate C): the comparison unit is a KEYED FULL-ROW digest — every row
+# is serialized collision-free (length-prefixed PK + all columns) and each
+# bucket compares the sorted multiset of row serializations. The former
+# per-column independent checksums pass value-swap tampering (same column
+# multisets, different PK-value pairing) and are demoted to a diagnostic
+# printed only when a bucket already mismatches. `--self-test` proves the
+# tamper case: keyed digest FAILs it, legacy column checksums pass it.
 #
 # Exit 0 = 0 mismatch. --quiet suppresses the report (for convergence polling).
 set -euo pipefail
@@ -21,6 +28,10 @@ CUBRID_DATABASES="${CUBRID_DATABASES:-$HOME/htap-cdc/db}"
 DB="${DB:-htapdb}"
 QUIET=""
 [ "${1:-}" = "--quiet" ] && QUIET=yes
+
+if [ "${1:-}" = "--self-test" ]; then
+    exec python3 "$HERE/diff_check.py" --self-test
+fi
 
 SCRATCH="$HERE/../../.git_ignored_dir/scratch/diffcheck.$$"
 mkdir -p "$SCRATCH"
@@ -44,64 +55,4 @@ ch_dump  "$CH_ORDER"  > "$SCRATCH/t_order.ch"
 cub_dump "$CUB_ITEM"  > "$SCRATCH/t_item.cub"
 ch_dump  "$CH_ITEM"   > "$SCRATCH/t_item.ch"
 
-python3 - "$SCRATCH" "${QUIET:-no}" <<'PYEOF'
-import sys, hashlib
-from decimal import Decimal
-
-scratch, quiet = sys.argv[1], sys.argv[2] == "yes"
-NBUCKETS = 8
-TABLES = {
-    "t_order": ["id:int", "customer:str", "amount:dec", "created_at:dt"],
-    "t_item":  ["sku:str", "qty:int", "price:dec"],
-}
-
-def norm(v, t):
-    if v == r"\N":
-        return v
-    if t == "dec":
-        s = format(Decimal(v), "f")
-        return s.rstrip("0").rstrip(".") if "." in s else s
-    return v
-
-def load(path, types):
-    buckets = {}
-    with open(path) as f:
-        for line in f:
-            line = line.rstrip("\n")
-            if not line:
-                continue
-            cols = line.split("|~|")
-            assert len(cols) == len(types), f"{path}: bad row {line!r}"
-            vals = [norm(c, t) for c, t in zip(cols, types)]
-            b = int(hashlib.md5(vals[0].encode()).hexdigest(), 16) % NBUCKETS
-            buckets.setdefault(b, []).append(vals)
-    return buckets
-
-mismatches = []
-for table, spec in TABLES.items():
-    names = [s.split(":")[0] for s in spec]
-    types = [s.split(":")[1] for s in spec]
-    cub = load(f"{scratch}/{table}.cub", types)
-    ch = load(f"{scratch}/{table}.ch", types)
-    for b in range(NBUCKETS):
-        crows, hrows = cub.get(b, []), ch.get(b, [])
-        if len(crows) != len(hrows):
-            mismatches.append(f"{table} bucket {b}: row count cubrid={len(crows)} clickhouse={len(hrows)}")
-        for i, col in enumerate(names):
-            cs = hashlib.md5("\n".join(sorted(r[i] for r in crows)).encode()).hexdigest()
-            hs = hashlib.md5("\n".join(sorted(r[i] for r in hrows)).encode()).hexdigest()
-            if cs != hs:
-                mismatches.append(f"{table} bucket {b} column {col}: checksum {cs[:8]} != {hs[:8]}")
-    if not quiet:
-        nc = sum(len(v) for v in cub.values())
-        nh = sum(len(v) for v in ch.values())
-        print(f"{table}: cubrid={nc} rows, clickhouse={nh} rows, {NBUCKETS} buckets x {len(names)} column checksums")
-
-if mismatches:
-    for m in mismatches:
-        print(f"MISMATCH: {m}", file=sys.stderr)
-    print(f"DIFF-CHECK: {len(mismatches)} mismatch(es)", file=sys.stderr)
-    sys.exit(1)
-if not quiet:
-    print("DIFF-CHECK: 0 mismatch")
-PYEOF
+python3 "$HERE/diff_check.py" "$SCRATCH" "${QUIET:-no}"

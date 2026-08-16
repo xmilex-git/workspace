@@ -86,6 +86,7 @@ else
         -e CONFIG_STORAGE_TOPIC=htap_connect_configs \
         -e OFFSET_STORAGE_TOPIC=htap_connect_offsets \
         -e STATUS_STORAGE_TOPIC=htap_connect_statuses \
+        ${OFFSET_FLUSH_INTERVAL_MS:+-e OFFSET_FLUSH_INTERVAL_MS="$OFFSET_FLUSH_INTERVAL_MS"} \
         "$CONNECT_IMAGE"
     echo "connect: started ($CONNECT_IMAGE)"
 fi
