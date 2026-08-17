@@ -84,4 +84,8 @@ _Avoid_: rollback(정상 경로와 혼동), drop(경보 없는 유실로 오해)
 
 **barrier LSA**:
 쓰기 정지 중 캡처한, 스냅샷과 스트리밍의 경계가 되는 로그 위치. 스냅샷이 담은 상태와 CDC가 이어받는 지점의 정합을 보장하는 유일한 기준점이며, 재시작 anchor의 초기값이 된다. 스냅샷 row는 모두 이 경계 "이하"의 version(이벤트 카운터 0)을 받는다.
-_Avoid_: 시작 LSA(스트리밍 관점만), 체크포인트(서버 내부 개념과 혼동)
+_Avoid_: 시작 LSA(스트리밍 관점만), 체크포인트(서버 내부 개념과 혼동), DDL halt(무관한 개념)
+
+**DDL halt (DDL 정지)**:
+커넥터가 captured 테이블의 스키마를 바꾸는 DDL(ALTER/DROP/RENAME/TRUNCATE)을 감지하면 재시작 anchor를 DDL 이전에 고정한 채 fail-fast로 정지하는 1.0 동작(ADR 0008). 조치 없는 재시작은 같은 DDL에서 결정론적으로 다시 멈추며, 복구는 resnapshot 단일 절차뿐이다. mid-stream CREATE TABLE은 halt 대상이 아니다(WARN+metric).
+_Avoid_: schema barrier(§7.8 구 용어 — 개명됨), barrier LSA(스냅샷 경계와 혼동), DDL 지원(자동 전파로 오해)
