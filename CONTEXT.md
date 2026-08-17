@@ -74,6 +74,14 @@ _Avoid_: full image 제공(엔진이 준다는 오해), lookback
 대상 테이블 쓰기를 멈추고 barrier LSA를 기록한 뒤 full scan을 적재하고, CDC를 barrier 이후부터 시작하는 POC용 초기 적재 방식. online snapshot은 제품 단계 과제다.
 _Avoid_: 온라인 스냅샷, 일관 스냅샷(MVCC token 기반과 혼동)
 
+**트랜잭션 버퍼 (transaction buffer)**:
+커넥터가 trid별로 DML을 COMMIT까지 in-memory로 모으는 버퍼 — CUBRID CDC가 log-order raw(미커밋 포함)를 주므로 커밋-순서 재조립은 커넥터 몫이다(ADR 0004, 정책 ADR 0007). 상한은 opt-in 이벤트 개수 threshold뿐이며 bytes 상한·spill은 없다.
+_Avoid_: Kafka producer buffer, 큐(순서 재조립 없이 흘리는 구조로 오해)
+
+**abandon (트랜잭션 abandon)**:
+threshold/retention 초과 트랜잭션을 버퍼에서 통째로 폐기하고 metric·WARN으로 알리는 동작(ADR 0007). 다운스트림 영구 유실이며 복구 수단은 재스냅샷뿐이다 — ABORT에 의한 정상 폐기와 다르다.
+_Avoid_: rollback(정상 경로와 혼동), drop(경보 없는 유실로 오해)
+
 **barrier LSA**:
 쓰기 정지 중 캡처한, 스냅샷과 스트리밍의 경계가 되는 로그 위치. 스냅샷이 담은 상태와 CDC가 이어받는 지점의 정합을 보장하는 유일한 기준점이며, 재시작 anchor의 초기값이 된다. 스냅샷 row는 모두 이 경계 "이하"의 version(이벤트 카운터 0)을 받는다.
 _Avoid_: 시작 LSA(스트리밍 관점만), 체크포인트(서버 내부 개념과 혼동)
