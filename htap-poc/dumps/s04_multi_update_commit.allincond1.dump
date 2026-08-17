@@ -1,43 +1,43 @@
-CONFIG db=htapdb host=localhost port=1523 user=dba start_ts=1786782112 all_in_cond=1 max_log_item=-1 idle_limit=5
+CONFIG db=htapdb host=localhost port=1523 user=dba start_ts=1786946448 all_in_cond=1 max_log_item=-1 idle_limit=5
 SET all_in_cond(1) rc=0
 CONNECT rc=0
-FIND_LSA rc=0 in_ts=1786782112 out_ts=1786782112 lsa=0x08c80000000000b1 (pageid?=177 offset?=2248)
-EXTRACT round=1 rc=0 n=1 in_lsa=0x08c80000000000b1 (pageid?=177 offset?=2248) -> out_lsa=0x08f80000000000b1 (pageid?=177 offset?=2296)
-ITEM #1 trid=0 user=(null) type=3(TIMER) timestamp=1786782112
-EXTRACT round=2 rc=0 n=7 in_lsa=0x08f80000000000b1 (pageid?=177 offset?=2296) -> out_lsa=0x0d400000000000b1 (pageid?=177 offset?=3392)
-ITEM #2 trid=0 user=(null) type=3(TIMER) timestamp=1786782113
-ITEM #3 trid=85 user=DBA type=1(DML) dml_type=1(UPDATE) classoid=21474836675 num_changed=1 num_cond=3
+FIND_LSA rc=0 in_ts=1786946448 out_ts=1786946448 lsa=0x39600000000000b0 (pageid?=176 offset?=14688)
+EXTRACT round=1 rc=0 n=9 in_lsa=0x39600000000000b0 (pageid?=176 offset?=14688) -> out_lsa=0x3e080000000000b0 (pageid?=176 offset?=15880)
+ITEM #1 trid=0 user=(null) type=3(TIMER) timestamp=1786946448
+ITEM #2 trid=0 user=(null) type=3(TIMER) timestamp=1786946449
+ITEM #3 trid=0 user=(null) type=3(TIMER) timestamp=1786946450
+ITEM #4 trid=79 user=DBA type=1(DML) dml_type=1(UPDATE) classoid=21474836675 num_changed=1 num_cond=3 rec_lsa=11549424 (pageid=176 offset=15088)
     changed[0] col_index=2 len=5 raw=32312e3030 as_str="21.00"
     cond[0] col_index=0 len=8 raw=534b552d30303031 as_bigint=3544385890217708371 as_double=9.16222e-72 as_str="SKU-0001"
     cond[1] col_index=1 len=4 raw=0a000000 as_int=10 as_float=1.4013e-44 as_str="\x0a\x00\x00\x00"
     cond[2] col_index=2 len=5 raw=32332e3030 as_str="23.00"
-ITEM #4 trid=85 user=DBA type=1(DML) dml_type=1(UPDATE) classoid=21474836675 num_changed=1 num_cond=3
+ITEM #5 trid=79 user=DBA type=1(DML) dml_type=1(UPDATE) classoid=21474836675 num_changed=1 num_cond=3 rec_lsa=11549696 (pageid=176 offset=15360)
     changed[0] col_index=2 len=5 raw=32322e3030 as_str="22.00"
     cond[0] col_index=0 len=8 raw=534b552d30303031 as_bigint=3544385890217708371 as_double=9.16222e-72 as_str="SKU-0001"
     cond[1] col_index=1 len=4 raw=0a000000 as_int=10 as_float=1.4013e-44 as_str="\x0a\x00\x00\x00"
     cond[2] col_index=2 len=5 raw=32312e3030 as_str="21.00"
-ITEM #5 trid=85 user=DBA type=1(DML) dml_type=1(UPDATE) classoid=21474836675 num_changed=1 num_cond=3
+ITEM #6 trid=79 user=DBA type=1(DML) dml_type=1(UPDATE) classoid=21474836675 num_changed=1 num_cond=3 rec_lsa=11549968 (pageid=176 offset=15632)
     changed[0] col_index=2 len=5 raw=32332e3030 as_str="23.00"
     cond[0] col_index=0 len=8 raw=534b552d30303031 as_bigint=3544385890217708371 as_double=9.16222e-72 as_str="SKU-0001"
     cond[1] col_index=1 len=4 raw=0a000000 as_int=10 as_float=1.4013e-44 as_str="\x0a\x00\x00\x00"
     cond[2] col_index=2 len=5 raw=32322e3030 as_str="22.00"
-ITEM #6 trid=85 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786782114(2026-08-15 17:21:54)
-ITEM #7 trid=0 user=(null) type=3(TIMER) timestamp=1786782114
-ITEM #8 trid=0 user=(null) type=3(TIMER) timestamp=1786782115
-EXTRACT round=3 rc=0 n=2 in_lsa=0x0d400000000000b1 (pageid?=177 offset?=3392) -> out_lsa=0x0da00000000000b1 (pageid?=177 offset?=3488)
-ITEM #9 trid=0 user=(null) type=3(TIMER) timestamp=1786782116
-ITEM #10 trid=0 user=(null) type=3(TIMER) timestamp=1786782117
-EXTRACT round=4 rc=0 n=2 in_lsa=0x0da00000000000b1 (pageid?=177 offset?=3488) -> out_lsa=0x0e000000000000b1 (pageid?=177 offset?=3584)
-ITEM #11 trid=0 user=(null) type=3(TIMER) timestamp=1786782118
-ITEM #12 trid=0 user=(null) type=3(TIMER) timestamp=1786782119
-EXTRACT round=5 rc=0 n=2 in_lsa=0x0e000000000000b1 (pageid?=177 offset?=3584) -> out_lsa=0x0e600000000000b1 (pageid?=177 offset?=3680)
-ITEM #13 trid=0 user=(null) type=3(TIMER) timestamp=1786782120
-ITEM #14 trid=0 user=(null) type=3(TIMER) timestamp=1786782121
-EXTRACT round=6 rc=0 n=2 in_lsa=0x0e600000000000b1 (pageid?=177 offset?=3680) -> out_lsa=0x0ec00000000000b1 (pageid?=177 offset?=3776)
-ITEM #15 trid=0 user=(null) type=3(TIMER) timestamp=1786782122
-ITEM #16 trid=0 user=(null) type=3(TIMER) timestamp=1786782123
-EXTRACT round=7 rc=0 n=2 in_lsa=0x0ec00000000000b1 (pageid?=177 offset?=3776) -> out_lsa=0x0f200000000000b1 (pageid?=177 offset?=3872)
-ITEM #17 trid=0 user=(null) type=3(TIMER) timestamp=1786782124
-ITEM #18 trid=0 user=(null) type=3(TIMER) timestamp=1786782125
-DONE total_items=18 rounds=7
+ITEM #7 trid=79 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786946450(2026-08-17 15:00:50)
+ITEM #8 trid=0 user=(null) type=3(TIMER) timestamp=1786946451
+ITEM #9 trid=0 user=(null) type=3(TIMER) timestamp=1786946452
+EXTRACT round=2 rc=0 n=2 in_lsa=0x3e080000000000b0 (pageid?=176 offset?=15880) -> out_lsa=0x3e680000000000b0 (pageid?=176 offset?=15976)
+ITEM #10 trid=0 user=(null) type=3(TIMER) timestamp=1786946453
+ITEM #11 trid=0 user=(null) type=3(TIMER) timestamp=1786946454
+EXTRACT round=3 rc=0 n=2 in_lsa=0x3e680000000000b0 (pageid?=176 offset?=15976) -> out_lsa=0x3ec80000000000b0 (pageid?=176 offset?=16072)
+ITEM #12 trid=0 user=(null) type=3(TIMER) timestamp=1786946455
+ITEM #13 trid=0 user=(null) type=3(TIMER) timestamp=1786946456
+EXTRACT round=4 rc=0 n=2 in_lsa=0x3ec80000000000b0 (pageid?=176 offset?=16072) -> out_lsa=0x3f280000000000b0 (pageid?=176 offset?=16168)
+ITEM #14 trid=0 user=(null) type=3(TIMER) timestamp=1786946457
+ITEM #15 trid=0 user=(null) type=3(TIMER) timestamp=1786946458
+EXTRACT round=5 rc=0 n=2 in_lsa=0x3f280000000000b0 (pageid?=176 offset?=16168) -> out_lsa=0x3f880000000000b0 (pageid?=176 offset?=16264)
+ITEM #16 trid=0 user=(null) type=3(TIMER) timestamp=1786946459
+ITEM #17 trid=0 user=(null) type=3(TIMER) timestamp=1786946460
+EXTRACT round=6 rc=0 n=2 in_lsa=0x3f880000000000b0 (pageid?=176 offset?=16264) -> out_lsa=0x00000000000000b1 (pageid?=177 offset?=0)
+ITEM #18 trid=0 user=(null) type=3(TIMER) timestamp=1786946461
+ITEM #19 trid=0 user=(null) type=3(TIMER) timestamp=1786946462
+DONE total_items=19 rounds=6
 FINALIZE rc=0

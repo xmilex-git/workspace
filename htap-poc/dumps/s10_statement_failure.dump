@@ -1,43 +1,45 @@
-CONFIG db=htapdb host=localhost port=1523 user=dba start_ts=1786857558 all_in_cond=1 max_log_item=-1 idle_limit=5
+CONFIG db=htapdb host=localhost port=1523 user=dba start_ts=1786946462 all_in_cond=1 max_log_item=-1 idle_limit=5
 SET all_in_cond(1) rc=0
 CONNECT rc=0
-FIND_LSA rc=0 in_ts=1786857558 out_ts=1786857558 lsa=0x311800000000043d (pageid?=1085 offset?=12568)
-EXTRACT round=1 rc=0 n=3 in_lsa=0x311800000000043d (pageid?=1085 offset?=12568) -> out_lsa=0x31a800000000043d (pageid?=1085 offset?=12712)
-ITEM #1 trid=0 user=(null) type=3(TIMER) timestamp=1786857558
-ITEM #2 trid=0 user=(null) type=3(TIMER) timestamp=1786857559
-ITEM #3 trid=0 user=(null) type=3(TIMER) timestamp=1786857560
-EXTRACT round=2 rc=0 n=7 in_lsa=0x31a800000000043d (pageid?=1085 offset?=12712) -> out_lsa=0x3b4800000000043d (pageid?=1085 offset?=15176)
-ITEM #4 trid=944 user=DBA type=1(DML) dml_type=0(INSERT) classoid=85899346129 num_changed=3 num_cond=0
+FIND_LSA rc=0 in_ts=1786946462 out_ts=1786946462 lsa=0x3fb80000000000b0 (pageid?=176 offset?=16312)
+EXTRACT round=1 rc=0 n=2 in_lsa=0x3fb80000000000b0 (pageid?=176 offset?=16312) -> out_lsa=0x00300000000000b1 (pageid?=177 offset?=48)
+ITEM #1 trid=0 user=(null) type=3(TIMER) timestamp=1786946462
+ITEM #2 trid=0 user=(null) type=3(TIMER) timestamp=1786946463
+EXTRACT round=2 rc=0 n=8 in_lsa=0x00300000000000b1 (pageid?=177 offset?=48) -> out_lsa=0x09200000000000b1 (pageid?=177 offset?=2336)
+ITEM #3 trid=87 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11600376 (pageid=177 offset=504)
     changed[0] col_index=0 len=9 raw=534b552d5354462d41 as_str="SKU-STF-A"
     changed[1] col_index=1 len=4 raw=01000000 as_int=1 as_float=1.4013e-45 as_str="\x01\x00\x00\x00"
     changed[2] col_index=2 len=5 raw=31302e3030 as_str="10.00"
-ITEM #5 trid=944 user=DBA type=1(DML) dml_type=0(INSERT) classoid=85899346129 num_changed=3 num_cond=0
+ITEM #4 trid=87 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11600792 (pageid=177 offset=920)
     changed[0] col_index=0 len=9 raw=534b552d5354462d42 as_str="SKU-STF-B"
     changed[1] col_index=1 len=4 raw=02000000 as_int=2 as_float=2.8026e-45 as_str="\x02\x00\x00\x00"
     changed[2] col_index=2 len=5 raw=32302e3030 as_str="20.00"
-ITEM #6 trid=944 user=DBA type=1(DML) dml_type=0(INSERT) classoid=85899346129 num_changed=3 num_cond=0
+ITEM #5 trid=87 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11601120 (pageid=177 offset=1248)
     changed[0] col_index=0 len=9 raw=534b552d5354462d41 as_str="SKU-STF-A"
     changed[1] col_index=1 len=4 raw=03000000 as_int=3 as_float=4.2039e-45 as_str="\x03\x00\x00\x00"
     changed[2] col_index=2 len=5 raw=33302e3030 as_str="30.00"
-ITEM #7 trid=944 user=DBA type=1(DML) dml_type=0(INSERT) classoid=85899346129 num_changed=3 num_cond=0
+ITEM #6 trid=87 user=DBA type=4(ROLLBACK_TO) rollback_to_lsa=11600520 (pageid=177 offset=648)
+ITEM #7 trid=87 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11601600 (pageid=177 offset=1728)
     changed[0] col_index=0 len=9 raw=534b552d5354462d43 as_str="SKU-STF-C"
     changed[1] col_index=1 len=4 raw=04000000 as_int=4 as_float=5.60519e-45 as_str="\x04\x00\x00\x00"
     changed[2] col_index=2 len=5 raw=34302e3030 as_str="40.00"
-ITEM #8 trid=944 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786857561(2026-08-16 14:19:21)
-ITEM #9 trid=0 user=(null) type=3(TIMER) timestamp=1786857561
-ITEM #10 trid=0 user=(null) type=3(TIMER) timestamp=1786857562
-EXTRACT round=3 rc=0 n=1 in_lsa=0x3b4800000000043d (pageid?=1085 offset?=15176) -> out_lsa=0x3b7800000000043d (pageid?=1085 offset?=15224)
-ITEM #11 trid=0 user=(null) type=3(TIMER) timestamp=1786857563
-EXTRACT round=4 rc=0 n=1 in_lsa=0x3b7800000000043d (pageid?=1085 offset?=15224) -> out_lsa=0x3ba800000000043d (pageid?=1085 offset?=15272)
-ITEM #12 trid=0 user=(null) type=3(TIMER) timestamp=1786857564
-EXTRACT round=5 rc=0 n=2 in_lsa=0x3ba800000000043d (pageid?=1085 offset?=15272) -> out_lsa=0x3c0800000000043d (pageid?=1085 offset?=15368)
-ITEM #13 trid=0 user=(null) type=3(TIMER) timestamp=1786857565
-ITEM #14 trid=0 user=(null) type=3(TIMER) timestamp=1786857566
-EXTRACT round=6 rc=0 n=2 in_lsa=0x3c0800000000043d (pageid?=1085 offset?=15368) -> out_lsa=0x3c6800000000043d (pageid?=1085 offset?=15464)
-ITEM #15 trid=0 user=(null) type=3(TIMER) timestamp=1786857567
-ITEM #16 trid=0 user=(null) type=3(TIMER) timestamp=1786857568
-EXTRACT round=7 rc=0 n=2 in_lsa=0x3c6800000000043d (pageid?=1085 offset?=15464) -> out_lsa=0x3cc800000000043d (pageid?=1085 offset?=15560)
-ITEM #17 trid=0 user=(null) type=3(TIMER) timestamp=1786857569
-ITEM #18 trid=0 user=(null) type=3(TIMER) timestamp=1786857570
-DONE total_items=18 rounds=7
+ITEM #8 trid=87 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786946464(2026-08-17 15:01:04)
+ITEM #9 trid=0 user=(null) type=3(TIMER) timestamp=1786946464
+ITEM #10 trid=0 user=(null) type=3(TIMER) timestamp=1786946465
+EXTRACT round=3 rc=0 n=2 in_lsa=0x09200000000000b1 (pageid?=177 offset?=2336) -> out_lsa=0x09800000000000b1 (pageid?=177 offset?=2432)
+ITEM #11 trid=0 user=(null) type=3(TIMER) timestamp=1786946466
+ITEM #12 trid=0 user=(null) type=3(TIMER) timestamp=1786946467
+EXTRACT round=4 rc=0 n=2 in_lsa=0x09800000000000b1 (pageid?=177 offset?=2432) -> out_lsa=0x09e00000000000b1 (pageid?=177 offset?=2528)
+ITEM #13 trid=0 user=(null) type=3(TIMER) timestamp=1786946468
+ITEM #14 trid=0 user=(null) type=3(TIMER) timestamp=1786946469
+EXTRACT round=5 rc=0 n=2 in_lsa=0x09e00000000000b1 (pageid?=177 offset?=2528) -> out_lsa=0x0a400000000000b1 (pageid?=177 offset?=2624)
+ITEM #15 trid=0 user=(null) type=3(TIMER) timestamp=1786946470
+ITEM #16 trid=0 user=(null) type=3(TIMER) timestamp=1786946471
+EXTRACT round=6 rc=0 n=2 in_lsa=0x0a400000000000b1 (pageid?=177 offset?=2624) -> out_lsa=0x0aa00000000000b1 (pageid?=177 offset?=2720)
+ITEM #17 trid=0 user=(null) type=3(TIMER) timestamp=1786946472
+ITEM #18 trid=0 user=(null) type=3(TIMER) timestamp=1786946473
+EXTRACT round=7 rc=0 n=2 in_lsa=0x0aa00000000000b1 (pageid?=177 offset?=2720) -> out_lsa=0x0b000000000000b1 (pageid?=177 offset?=2816)
+ITEM #19 trid=0 user=(null) type=3(TIMER) timestamp=1786946474
+ITEM #20 trid=0 user=(null) type=3(TIMER) timestamp=1786946475
+DONE total_items=20 rounds=7
 FINALIZE rc=0

@@ -38,6 +38,7 @@ data_item_type_name (int t)
     case 1: return "DML";
     case 2: return "DCL";
     case 3: return "TIMER";
+    case 4: return "ROLLBACK_TO";
     default: return "UNKNOWN";
     }
 }
@@ -196,14 +197,24 @@ print_column_value (const char *data, int len)
   print_escaped_string (data, len, 256);
 }
 
+/* orderable lsa key carried by DML items and ROLLBACK_TO markers:
+ * (pageid << 16) | offset — see CDC_LSA_TO_KEY in log_manager.c */
+static void
+print_lsa_key (const char *label, long long key)
+{
+  printf ("%s=%lld (pageid=%lld offset=%lld)", label, key, key >> 16, key & 0xFFFF);
+}
+
 static void
 print_dml (const DML * dml)
 {
   int i;
 
-  printf (" dml_type=%d(%s) classoid=%llu num_changed=%d num_cond=%d\n",
+  printf (" dml_type=%d(%s) classoid=%llu num_changed=%d num_cond=%d ",
 	  dml->dml_type, dml_type_name (dml->dml_type),
 	  (unsigned long long) dml->classoid, dml->num_changed_column, dml->num_cond_column);
+  print_lsa_key ("rec_lsa", (long long) dml->rec_lsa);
+  putchar ('\n');
 
   for (i = 0; i < dml->num_changed_column; i++)
     {
@@ -265,6 +276,13 @@ print_item (int seq, const CUBRID_LOG_ITEM * item)
 
     case 3:			/* TIMER */
       printf (" timestamp=%lld\n", (long long) item->data_item.timer.timestamp);
+      break;
+
+    case 4:			/* ROLLBACK_TO — partial rollback marker: buffered DML of this
+				 * trid with rec_lsa > this key was undone by the server */
+      putchar (' ');
+      print_lsa_key ("rollback_to_lsa", (long long) item->data_item.rollback_to.lsa);
+      putchar ('\n');
       break;
 
     default:

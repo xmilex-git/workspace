@@ -1,0 +1,40 @@
+# issue #47 verification evidence — 2026-08-17 15:12:39
+
+## engine build
+CUBRID 11.5.0 (11.5.0.2435-156ab0b) (64bit optdebug build for Linux) (Aug 13 2026 12:43:47)
+branch: htap/cdc-partial-rollback-visibility @ 56afad65a (base develop e6ed61e87)
+connector: cubrid-connector @ 4eaae64
+
+## s06 dump (user savepoint) — marker between pre-savepoint and undone DML
+ITEM #4 trid=55 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11543024 (pageid=176 offset=8688)
+ITEM #5 trid=55 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11543488 (pageid=176 offset=9152)
+ITEM #6 trid=55 user=DBA type=1(DML) dml_type=1(UPDATE) classoid=21474836675 num_changed=1 num_cond=1 rec_lsa=11543968 (pageid=176 offset=9632)
+ITEM #7 trid=55 user=DBA type=4(ROLLBACK_TO) rollback_to_lsa=11543304 (pageid=176 offset=8968)
+ITEM #8 trid=55 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786946411(2026-08-17 15:00:11)
+
+## s10 dump (statement failure) — marker after failed statement's partial rows
+ITEM #3 trid=87 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11600376 (pageid=177 offset=504)
+ITEM #4 trid=87 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11600792 (pageid=177 offset=920)
+ITEM #5 trid=87 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11601120 (pageid=177 offset=1248)
+ITEM #6 trid=87 user=DBA type=4(ROLLBACK_TO) rollback_to_lsa=11600520 (pageid=177 offset=648)
+ITEM #7 trid=87 user=DBA type=1(DML) dml_type=0(INSERT) classoid=21474836675 num_changed=3 num_cond=0 rec_lsa=11601600 (pageid=177 offset=1728)
+ITEM #8 trid=87 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1786946464(2026-08-17 15:01:04)
+
+## live pipeline: s06+s10 applied while streaming, then diff-check
+$ clickhouse t_item / cubrid t_item
+SKU-A	10	23
+SKU-B	77	0.5
+SKU-SP1	1	10
+SKU-STF-A	1	10
+SKU-STF-C	4	40
+--
+  'SKU-A'                        10  23.00               
+  'SKU-B'                        77  0.50                
+  'SKU-SP1'                       1  10.00               
+  'SKU-STF-A'                     1  10.00               
+  'SKU-STF-C'                     4  40.00               
+
+$ diff-check.sh
+t_order: cubrid=3 rows, clickhouse=3 rows, 8 buckets x keyed full-row digest
+t_item: cubrid=5 rows, clickhouse=5 rows, 8 buckets x keyed full-row digest
+DIFF-CHECK: 0 mismatch
