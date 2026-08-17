@@ -89,3 +89,7 @@ _Avoid_: 시작 LSA(스트리밍 관점만), 체크포인트(서버 내부 개�
 **DDL halt (DDL 정지)**:
 커넥터가 captured 테이블의 스키마를 바꾸는 DDL(ALTER/DROP/RENAME/TRUNCATE)을 감지하면 재시작 anchor를 DDL 이전에 고정한 채 fail-fast로 정지하는 1.0 동작(ADR 0008). 조치 없는 재시작은 같은 DDL에서 결정론적으로 다시 멈추며, 복구는 resnapshot 단일 절차뿐이다. mid-stream CREATE TABLE은 halt 대상이 아니다(WARN+metric).
 _Avoid_: schema barrier(§7.8 구 용어 — 개명됨), barrier LSA(스냅샷 경계와 혼동), DDL 지원(자동 전파로 오해)
+
+**HA halt (HA 정지)**:
+커넥터가 재접속 시 소스 노드가 바뀌었거나 접속 노드가 master 상태가 아님을 감지하면 fail-fast로 정지하는 1.0 동작(ADR 0010). 캡처 대상은 master 단일 노드이며, failover 후 이어읽기는 미지원 — 복구는 새 master 대상 resnapshot 단일 절차뿐이다.
+_Avoid_: HA 지원(무중단 이어읽기로 오해), failover 추적(자동 전환으로 오해), DDL halt(발동 조건이 다른 별개 가드)
