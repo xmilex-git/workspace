@@ -17,10 +17,14 @@ WORKSPACE=$HOME/dev/cubrid/.not_git_tracking/htap-cdc-wt \
   INSTALL_PREFIX=$HOME/htap-cdc/CUBRID-11.5-htapcdc just build release
 
 # 1) 하네스 환경 (이 셸에서만)
-export CUBRID=$HOME/htap-cdc/CUBRID-11.5-htapcdc
-# 셸 프로필의 CUBRID_DATABASES(=/home/cubrid/databases)를 물려받으면
-# "Database htapdb is unknown" 으로 기동 실패 — 격리 설치 것으로 반드시 덮는다
-export CUBRID_DATABASES=$CUBRID/databases
+# !! 2026-08-17 현재 유효 설치본은 -prv (#47 엔진 패치 빌드, Connect 컨테이너 마운트와 동일).
+# !! 구 경로($HOME/htap-cdc/CUBRID-11.5-htapcdc)는 pre-#47 빌드 — #47이 CDC API 구조체
+# !! 레이아웃을 바꿔(rec_lsa 등) 서버/클라이언트가 섞이면 SIGSEGV 난다 (#61에서 실증).
+# !! 어느 설치본이 유효한지 헷갈리면: readlink /proc/$(pgrep cub_master)/exe
+export CUBRID=$HOME/htap-cdc/CUBRID-11.5-htapcdc-prv
+# 셸 프로필의 CUBRID_DATABASES를 물려받으면 "Database htapdb is unknown" 으로
+# 기동 실패 — 실행 중인 cub_master의 환경과 반드시 일치시킨다 (SSOT #14)
+export CUBRID_DATABASES=/home/cubrid/CUBRID/databases
 export PATH=$CUBRID/bin:$PATH LD_LIBRARY_PATH=$CUBRID/lib:${LD_LIBRARY_PATH:-}
 
 # 2) DB 생성 + supplemental_log=1 + 서버 기동 (server-control 래퍼 경유)
