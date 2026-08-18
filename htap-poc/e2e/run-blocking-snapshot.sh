@@ -117,7 +117,7 @@ csql_c "UPDATE t_item SET qty = qty + 100 WHERE sku = 'SKU-A'; \
 wait_converged 60
 
 mark_logs
-send_signal '{"id":"bs1-'"$$"'","type":"execute-snapshot","data":{"type":"BLOCKING","data-collections":["htapdb.t_item"]}}'
+send_signal '{"id":"bs1-'"$$"'","type":"execute-snapshot","data":{"type":"BLOCKING","data-collections":["dba.t_item"]}}'
 wait_log "Requested 'BLOCKING' snapshot" 120
 wait_log "Streaming paused for an on-demand blocking snapshot" 60
 wait_log "Blocking snapshot reuses anchor .* snapshot rows carry seq 0" 60

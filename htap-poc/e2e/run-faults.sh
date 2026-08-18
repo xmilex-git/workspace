@@ -27,7 +27,7 @@ DB="${DB:-htapdb}"
 SOURCE_NAME=cubrid-source-poc
 SINK_NAME=clickhouse-sink-poc
 SINK_GROUP=connect-clickhouse-sink-poc
-TOPICS=(htapcdc.htapdb.t_order htapcdc.htapdb.t_item)
+TOPICS=(htapcdc.dba.t_order htapcdc.dba.t_item)
 
 SCRATCH="$HERE/../../.git_ignored_dir/scratch/faults.$$"
 mkdir -p "$SCRATCH"

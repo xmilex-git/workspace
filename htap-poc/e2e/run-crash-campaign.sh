@@ -41,7 +41,7 @@ CUBRID_DATABASES="${CUBRID_DATABASES:-$HOME/htap-cdc/db}"
 DB="${DB:-htapdb}"
 SOURCE_NAME=cubrid-source-poc
 SINK_NAME=clickhouse-sink-poc
-ORDER_TOPIC=htapcdc.htapdb.t_order
+ORDER_TOPIC=htapcdc.dba.t_order
 HB_TOPIC=__debezium-heartbeat.htapcdc
 OFFSETS_TOPIC=htap_connect_offsets
 

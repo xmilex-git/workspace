@@ -11,7 +11,7 @@
     "database.user": "dba",
     "database.password": "",
     "database.dbname": "htapdb",
-    "table.include.list": "htapdb.t_order,htapdb.t_item,htapdb.t_typecorpus",
+    "table.include.list": "dba.t_order,dba.t_item,dba.t_typecorpus",
 
     "snapshot.mode": "initial",
     "snapshot.max.threads": "1",

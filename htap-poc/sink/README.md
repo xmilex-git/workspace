@@ -47,7 +47,7 @@ ADR 0004(`_version` 규칙), ADR 0005(snapshot `_version=0`·truncate 정리).
 - **D1 — SMT는 소스측 유지**: #31 baseline대로 unwrap 체인은 (향후) 소스 커넥터
   config에 둔다. 따라서 토픽 계약 = post-SMT 평탄화 레코드이고, 이 티켓의 수동
   샘플도 그 형태다. SMT 자체의 실측(필드명 rename 조합 등)은 E2E 슬라이스에서.
-- **D2 — 토픽 이름 `htapcdc.htapdb.<table>`**: Debezium `topic.prefix` 관례 선취.
+- **D2 — 토픽 이름 `htapcdc.<owner>.<table>`**: Debezium `topic.prefix` 관례 선취. (workspace#69/ADR 0011 D8에서 가운데 자리를 DB명 → owner로 개정 — Debezium 표준 `prefix.schemaName.tableName` 정렬)
   소스 커넥터 config 티켓에서 바꾸면 `clickhouse-sink.json`의 `topics`/`topic2TableMap`만 수정.
 - **D3 — verify 대기는 consumer-group lag 기반**: RMT는 insert/merge 시점에 물리
   행수가 변하므로 raw count 대기는 신뢰 불가. offset commit 주기(60s) 때문에 4단계가

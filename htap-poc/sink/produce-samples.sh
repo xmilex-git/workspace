@@ -15,5 +15,5 @@ produce () { # $1=topic $2=file
     echo "produced: $2 -> $1"
 }
 
-produce htapcdc.htapdb.t_order t_order.jsonl
-produce htapcdc.htapdb.t_item  t_item.jsonl
+produce htapcdc.dba.t_order t_order.jsonl
+produce htapcdc.dba.t_item  t_item.jsonl

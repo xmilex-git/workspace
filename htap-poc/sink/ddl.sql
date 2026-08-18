@@ -14,7 +14,7 @@
 
 CREATE DATABASE IF NOT EXISTS htap;
 
--- source: htapdb.t_order (INT PK, VARCHAR, DECIMAL(15,4), DATETIME)
+-- source: dba.t_order (INT PK, VARCHAR, DECIMAL(15,4), DATETIME)
 -- DECIMAL arrives as string (decimal.handling.mode=string, #31);
 -- DATETIME arrives as ISO8601 UTC string (ZonedTimestamp, #31) — the sink
 -- connector sets date_time_input_format=best_effort.
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS htap.t_order_local (
 ) ENGINE = ReplacingMergeTree(_version, _is_deleted)
 ORDER BY id;
 
--- source: htapdb.t_item (VARCHAR PK, INT, DECIMAL(10,2))
+-- source: dba.t_item (VARCHAR PK, INT, DECIMAL(10,2))
 CREATE TABLE IF NOT EXISTS htap.t_item_local (
     sku         String,
     qty         Nullable(Int32),
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS htap.t_item_local (
 ) ENGINE = ReplacingMergeTree(_version, _is_deleted)
 ORDER BY sku;
 
--- source: htapdb.t_typecorpus (#58 type-mapping boundary corpus — supported
+-- source: dba.t_typecorpus (#58 type-mapping boundary corpus — supported
 -- types only, see connector docs/type-support.md).
 --   DATE  -> Int32 epoch days (io.debezium.time.Date; Date32 can't hold the
 --            full CUBRID range, raw days can)

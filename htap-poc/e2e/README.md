@@ -5,7 +5,7 @@ ADR 0004(카운터 position·트랜잭션 버퍼링)·ADR 0005(JDBC 스냅샷·�
 sink 체인 계약은 [`../sink/`](../sink/README.md)(#39).
 
 **경로**: CUBRID(htapdb) → `debezium-connector-cubrid`(standalone 저장소 `xmilex-git/debezium-connector-cubrid`, ADR 0012 D6) →
-Kafka `htapcdc.htapdb.<table>` → 공식 ClickHouse sink → RMT → canonical `FINAL` view.
+Kafka `htapcdc.<owner>.<table>` → 공식 ClickHouse sink → RMT → canonical `FINAL` view.
 
 ## 구성
 
@@ -87,8 +87,10 @@ Kafka `htapcdc.htapdb.<table>` → 공식 ClickHouse sink → RMT → canonical 
 ## 결정 (traceability)
 
 - **D1 — TableId schema = 논리 DB명(`htapdb`)**: CUBRID owner 스키마 대신 DB명을 쓰면
-  기본 topic naming이 그대로 `htapcdc.htapdb.<table>`(#39 D2)이 되고 include list도
-  `htapdb.t_order` 형태로 자연스럽다. JDBC 메타데이터는 catalog/schema 인자를 무시하므로
+  기본 topic naming이 `htapcdc.<owner>.<table>`(ADR 0011 D8 — TableId schema 슬롯 = owner,
+  workspace#69에서 개정; 구 #39 D2는 DB명이었다)이 되고 include list도
+  `dba.t_order`(owner.table) 형태다. 스키마 발견은 PUBLIC 카탈로그 뷰
+  `db_attribute`/`db_index` owner 필터 쿼리로 수행한다(ADR 0011 D9)
   (ADR 0005) 조회는 전부 bare 테이블명. POC는 dba 단독 소유 전제.
 - **D2 — offset anchor와 이벤트 카운터의 분리**: `CubridOffsetContext`가 영속하는 것은
   anchor(가장 오래된 in-flight 트랜잭션의 배치 경계 LSA + 그 시점 누적 카운터)이고,
