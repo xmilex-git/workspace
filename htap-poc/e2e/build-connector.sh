@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Build debezium-connector-cubrid from the fork worktree (branch cubrid-connector)
+# Build debezium-connector-cubrid from the standalone repository (ADR 0012 D6)
 # and land the self-contained plugin jar set into the Connect plugin mount.
 # After this: podman restart htap-connect
 set -euo pipefail
 
-DEBEZIUM_SRC="${DEBEZIUM_SRC:-$HOME/htap-cdc/debezium}"
+CONNECTOR_SRC="${CONNECTOR_SRC:-$HOME/htap-cdc/debezium-connector-cubrid}"
 TOOLS="$HOME/htap-cdc/tools"
 # always the pinned JDK 21 — an inherited JAVA_HOME (system JDK 8) breaks the build
 export JAVA_HOME="$TOOLS/jdk-21.0.12+8"
@@ -20,7 +20,7 @@ mvn -q install:install-file -Dfile="$JDBC_JAR" \
 
 # 3.7 split core into several modules — let Maven resolve the runtime jar set
 # instead of hardcoding it (slf4j excluded: the Connect runtime provides it)
-( cd "$DEBEZIUM_SRC/debezium-connector-cubrid" &&
+( cd "$CONNECTOR_SRC" &&
   mvn -q package dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/deps \
       -DskipTests -DskipITs -Dcheckstyle.skip -Dformat.skip -Drevapi.skip -Denforcer.skip )
 
@@ -28,10 +28,12 @@ mkdir -p "$PLUGIN_DIR" 2>/dev/null || true
 # the :U volume mount rootless-chowns the dir to the container UID — write
 # through the user namespace (same reason #34 needs `podman unshare rm`)
 podman unshare bash -c "rm -f '$PLUGIN_DIR'/*.jar"
-podman unshare cp \
-   "$DEBEZIUM_SRC"/debezium-connector-cubrid/target/debezium-connector-cubrid-*-SNAPSHOT.jar \
-   "$PLUGIN_DIR/"
-for jar in "$DEBEZIUM_SRC"/debezium-connector-cubrid/target/deps/*.jar; do
+# main artifact only — the parent build also attaches -sources/-tests jars
+for jar in "$CONNECTOR_SRC"/target/debezium-connector-cubrid-*.jar; do
+    case "$jar" in *-sources.jar|*-tests.jar|*-test-sources.jar) continue ;; esac
+    podman unshare cp "$jar" "$PLUGIN_DIR/"
+done
+for jar in "$CONNECTOR_SRC"/target/deps/*.jar; do
     case "$jar" in *slf4j*) continue ;; esac
     podman unshare cp "$jar" "$PLUGIN_DIR/"
 done

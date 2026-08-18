@@ -4,14 +4,14 @@
 ADR 0004(카운터 position·트랜잭션 버퍼링)·ADR 0005(JDBC 스냅샷·쓰기 정지 barrier),
 sink 체인 계약은 [`../sink/`](../sink/README.md)(#39).
 
-**경로**: CUBRID(htapdb) → `debezium-connector-cubrid`(fork 브랜치 `cubrid-connector`) →
+**경로**: CUBRID(htapdb) → `debezium-connector-cubrid`(standalone 저장소 `xmilex-git/debezium-connector-cubrid`, ADR 0012 D6) →
 Kafka `htapcdc.htapdb.<table>` → 공식 ClickHouse sink → RMT → canonical `FINAL` view.
 
 ## 구성
 
 | 파일 | 내용 |
 |---|---|
-| `build-connector.sh` | fork 모듈 빌드(JDK21/mvn 3.9 핀) → 플러그인 jar 5종을 Connect 마운트에 배치 (`podman unshare` — `:U` 마운트 소유권) |
+| `build-connector.sh` | standalone 저장소 빌드(JDK21/mvn 3.9 핀) → 플러그인 jar 5종을 Connect 마운트에 배치 (`podman unshare` — `:U` 마운트 소유권) |
 | `cubrid-source.json` | 소스 커넥터 config — SMT 체인 포함 (아래 실측) |
 | `register-source.sh` | Connect REST PUT (idempotent) |
 | `reset-pipeline.sh` | source stop→offset 삭제→삭제, 토픽 purge, CH truncate, sink 재시작 (ADR 0004: offset만 지우는 운영 금지 — 항상 스냅샷 재수행과 짝) |
