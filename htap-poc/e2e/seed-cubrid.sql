@@ -65,3 +65,10 @@ INSERT INTO t_typecorpus VALUES (3, 0, 0, 0, 0.0001, 0, 0,
   TIMESTAMP'2026-08-16 10:00:00', DATETIME'2026-08-16 10:00:00.001', 'green');
 INSERT INTO t_typecorpus VALUES (4, NULL, NULL, NULL, NULL, NULL, NULL,
   NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+-- #70 (ADR 0011 D1): the connector runs as the non-DBA account cdc_e2e with
+-- per-table SELECT only — created by run-e2e.sh; the grants live here because
+-- the DROP/CREATE above discards them on every reseed.
+GRANT SELECT ON t_order TO cdc_e2e;
+GRANT SELECT ON t_item TO cdc_e2e;
+GRANT SELECT ON t_typecorpus TO cdc_e2e;

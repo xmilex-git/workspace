@@ -40,6 +40,10 @@ echo "== 0. reset pipeline =="
 "$HERE/reset-pipeline.sh"
 
 echo "== 1. write stop + seed pre-snapshot state =="
+# #70 (ADR 0011 D1): the connector account is non-DBA with per-table SELECT only;
+# creation is idempotent (exists on reruns), the grants are re-issued by the seed
+env CUBRID="$CUBRID" CUBRID_DATABASES="$CUBRID_DATABASES" PATH="$CUBRID/bin:$PATH" \
+    csql -u dba "$DB" -c "CREATE USER cdc_e2e PASSWORD 'cdc_e2e'" >/dev/null 2>&1 || true
 csql_run "$HERE/seed-cubrid.sql"
 
 echo "== 2. register source connector (snapshot.mode=initial) =="

@@ -431,6 +431,19 @@ main (int argc, char **argv)
     }
 
   {
+    /* node facts from the START_SESSION reply (workspace#70) — cross-validation
+     * oracle for the Java client's HA halt guard inputs */
+    char ha_state[32] = { 0, };
+    int64_t db_creation = 0;
+
+    if (cubrid_log_get_node_facts (ha_state, (int) sizeof (ha_state), &db_creation) == CUBRID_LOG_SUCCESS)
+      {
+	printf ("NODE_FACTS ha_state=%s db_creation=%lld\n", ha_state[0] ? ha_state : "(none)",
+		(long long) db_creation);
+      }
+  }
+
+  {
     time_t ts = (time_t) start_ts;
     uint64_t lsa = 0;
 

@@ -1,0 +1,29 @@
+# #70 relation dictionary consumption + non-DBA pipeline — evidence log (2026-08-18)
+
+## D10 live proof — new Java client vs pre-#70 server (engine b8bb3d6ff, old START_SESSION reply)
+CubridLogException: cubrid_log_connect_server: the server accepted the session but its reply
+carries no node facts — this engine predates the CDC relation dictionary (ADR 0011 D4) and
+cannot serve this connector. Server and connector must ship from the same release (ADR 0011 D10);
+upgrade the engine. failed with rc=-10
+
+## Node facts parity — C oracle vs pure-Java client (engine with #70 commit, same server)
+cdclogdump:        NODE_FACTS ha_state=active db_creation=1786946327
+CubridLogWireSmoke: NODE_FACTS ha_state=active db_creation=1786946327
+
+## Identity-source migration halt (expected, path A) — offset stamped by pre-#70 build
+HaHaltException: HA halt (ADR 0010 D2-1): the stored offset belongs to source node
+'cubrid-host@1786978728000' (vol_creation-based, pre-#70) but the connector is now attached to
+'cubrid-host@1786946327000' (db_creation-based). Recovered with the standard resnapshot procedure.
+
+## Non-DBA end-to-end (database.user=cdc_e2e, grants = per-table SELECT only)
+run-e2e.sh (clean, no intervention): PASS — snapshot + streaming + convergence, counts 3/3, 2/2
+diff-check.sh: DIFF-CHECK: 0 mismatch (t_order, t_item, t_typecorpus keyed digests)
+(see issue70-*.log in tooling scratch for full transcripts; fault campaigns appended below)
+
+## Campaign results (all as non-DBA cdc_e2e)
+run-faults.sh:          PASS: all 4 fault scenarios converged with 0 mismatch
+  S4 key assertion:     raw RMT duplicate (pk,_version) groups t_order=11 t_item=4, divergent 0,
+                        canonical views byte-identical before/after redelivery  (#41 regression proof)
+run-snapshot-faults.sh: SN1 PASS / SN2 PASS / SN3 PASS / SN4 PASS
+run-owner-collision.sh: PASS (dba.t_order + app.t_order, per-owner routing via relation dictionary)
+unit tests:             86/86 PASS

@@ -85,3 +85,27 @@ D2의 두 축 모두 신뢰할 판별 수단이 확정되어 **escape hatch(문�
 - 검증: 단위 10건(경로 A/B·전이 상태·offset round-trip·legacy 스탬프) 포함 60/60
   PASS, e2e 정상 경로 PASS + offset `node` 키 실측, 라이브 경로 A 재현(재지향 후
   task FAILED·재시작 시 결정론적 재정지·원복 후 diff-check 0).
+
+## 추기 (2026-08-18, #70) — 노드 사실 출처를 CDC in-band로 전환
+
+가드의 판별 수단이 JDBC `SHOW LOG HEADER`(DBA 전용, 위 추기)에서 **CDC START_SESSION
+응답 in-band**로 바뀌었다 (workspace#70, ADR 0011의 DBA 의존 제거를 완성하는 마지막 조각).
+
+- **D-a — 서버가 START_SESSION 성공 응답에 `(ha_server_state, db_creation)`을 싣는다.**
+  근거: ① `SHOW LOG HEADER`는 클라이언트측 `only_for_dba` 하드 게이트라 비-DBA 경로가
+  없다(grant 불가) ② HA 상태는 원래 모든 클라이언트가 로그인 credential로 받는 값이라
+  (csql 프롬프트) 노출 확대가 아니다 ③ PG replication 연결의 `IDENTIFY_SYSTEM`
+  (systemid+timeline) parity ④ **정확성 개선**: 사실이 JDBC(broker 경유)가 아니라 로그
+  스트림이 실제로 나오는 그 서버에서 온다. 에러 응답은 기존 bare int 유지.
+- **식별자 재료 = `db_creation`(디스크 로그 헤더, epoch 초)×1000.** 종전 구현의
+  `Creation_time`(=`vol_creation`)과 값이 다르므로 **이 빌드 이전에 스탬프된 offset은
+  최초 재접속에서 경로 A halt가 난다** — 1.0 릴리스 전이라 설치 기반이 없고, 복구는
+  표준 resnapshot 절차 그대로 (e2e에서 실측·확인).
+- **상태 축 값 변화**: 비-HA 서버의 라이브 상태는 `active`(구 디스크 헤더는 `idle`).
+  허용 집합 {active, idle}은 두 출처 모두 포함하므로 판정 불변.
+- **blocking snapshot의 상태 축**: on-demand blocking snapshot은 barrier 세션을 열지
+  않으므로 자체 상태 검사가 없다 — 라이브 스트리밍 세션(연결 시 양 축 검증, 재연결마다
+  재검증)의 우산 아래에서만 실행된다는 것을 전제로 한다(세션 시작 1회 검사라는 D11
+  성격과 동일). 초기·중단 재개 스냅샷은 barrier 세션의 사실로 상태 축을 검사한다.
+- 구버전 서버(사실 없는 4바이트 응답)는 연결 단계에서 명시적 버전 에러로 정지
+  (ADR 0011 D10; #62 lockstep — 런타임 협상 없음).

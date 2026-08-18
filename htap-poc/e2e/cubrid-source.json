@@ -3,32 +3,26 @@
   "config": {
     "connector.class": "io.debezium.connector.cubrid.CubridConnector",
     "tasks.max": "1",
-
     "topic.prefix": "htapcdc",
     "database.hostname": "cubrid-host",
     "database.port": "33000",
     "cdc.port": "1523",
-    "database.user": "dba",
-    "database.password": "",
+    "database.user": "cdc_e2e",
+    "database.password": "cdc_e2e",
     "database.dbname": "htapdb",
     "table.include.list": "dba.t_order,dba.t_item,dba.t_typecorpus",
-
     "snapshot.mode": "initial",
     "snapshot.max.threads": "1",
-
     "signal.enabled.channels": "kafka",
     "signal.kafka.topic": "htapcdc-signals",
     "signal.kafka.bootstrap.servers": "kafka:19092",
     "signal.kafka.poll.timeout.ms": "1000",
-
     "decimal.handling.mode": "string",
     "heartbeat.interval.ms": "5000",
-
     "key.converter": "org.apache.kafka.connect.json.JsonConverter",
     "key.converter.schemas.enable": "false",
     "value.converter": "org.apache.kafka.connect.json.JsonConverter",
     "value.converter.schemas.enable": "false",
-
     "transforms": "unwrap,renameDeleted,castDeleted",
     "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
     "transforms.unwrap.delete.tombstone.handling.mode": "rewrite",

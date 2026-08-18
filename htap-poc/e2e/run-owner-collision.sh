@@ -39,6 +39,8 @@ csql_dba "DROP TABLE IF EXISTS app.t_order; DROP USER app;" >/dev/null 2>&1 || t
 csql_dba "CREATE USER app;"
 # deliberately a DIFFERENT column set from dba.t_order (id, customer, amount, created_at)
 csql_dba "CREATE TABLE app.t_order (id INT PRIMARY KEY, note VARCHAR(50), qty INT);"
+# #70 (ADR 0011 D1): the connector account cdc_e2e needs per-table SELECT on every capture target
+csql_dba "GRANT SELECT ON app.t_order TO cdc_e2e;"
 
 echo "== 1. seed both owners' tables (snapshot phase input) =="
 # pre-registration TRUNCATE: not yet captured (no connector), so no DDL halt

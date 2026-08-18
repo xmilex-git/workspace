@@ -193,3 +193,25 @@ relation 사전**과 **owner 전면 채택**으로 없앤다. 강제력은 CUBRI
 **D6는 정합성 계약과 직접 맞닿아 있다.** relation 사전을 카운터에 세는 실수 하나로
 #41이 증명한 RMT 수렴이 무효가 되고, 증상은 "재연결 후 중복 행이 안 합쳐진다"로만
 나타난다. in-band(D4)를 택한 대가이며, 회귀 검증을 필수 완료 조건으로 묶는다.
+
+## 추기 (2026-08-18, 구현 티켓 #70) — 커넥터측 구현 확정 사항
+
+- **D4/D6 구현**: 사전은 스트리밍 세션 상태(`StreamState.relationDictionary`)로만 존재
+  — 재연결마다 스트림에서 재구축, 영속 캐시 없음. 사전 아이템은 TIMER와 동일하게
+  카운터 제외·트랜잭션 버퍼 우회(ROLLBACK_TO는 위치 파생이라 세는 것과의 대조를 코드
+  주석에 명기). 빈 이름 announce(서버측 invalid_class)는 "알려졌으나 라우팅 불가"로
+  기록되어 해당 DML은 카운트만 되고 발행되지 않는다. **announce 없는 DML은 프로토콜
+  계약 위반으로 명시적 에러**(재시작 시 새 세션이 사전을 재전송해 일시 결함은 치유,
+  지속되면 버전 skew).
+- **D2 구현 — include list는 필수이며 literal**: 엔트리는 regex가 아니라 문자 그대로의
+  `owner.table`만 허용(기동 거부). 엔트리가 서버 extraction 대상·SELECT 검사 목록으로
+  그대로 전달되기 때문이다. **부수 효과(문서 제약)**: 서버측 이름 필터링이 켜지면서
+  비대상 테이블 아이템이 스트림에서 사라지므로, **include list 변경은 카운터 좌표를
+  바꾼다 → 변경 시 resnapshot 필수**(#59 명기). mid-stream CREATE 아이템도 필터에 걸려
+  도달하지 않으므로 ADR 0008 D3의 CREATE warn 경로는 실전에서 침묵한다(계약 불변).
+- **D10 구현 — 판별은 응답 형식으로**: 구버전 서버의 4바이트 START_SESSION 성공 응답을
+  받으면 연결 단계에서 "engine predates the relation dictionary" 명시적 에러(코드 0줄
+  협상 — #62 결정 그대로). 실측: 신 클라이언트 → 구 서버(b8bb3d6ff)에서 즉시 재현.
+- **HA 가드 사실 출처 전환(ADR 0010 추기 참조)**: `SHOW LOG HEADER` JDBC 조회 삭제 →
+  START_SESSION in-band. 이로써 커넥터의 DBA 의존은 코드 경로 어디에도 없다 — grant는
+  캡처 대상 per-table SELECT가 전부다(비-DBA 계정 `cdc_e2e`로 전 e2e 실측).
