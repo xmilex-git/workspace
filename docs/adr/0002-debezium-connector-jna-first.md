@@ -1,5 +1,11 @@
 # CUBRID Debezium 커넥터의 CDC 접근은 JNA-first
 
+> **개정 (2026-08-18, [ADR 0012](0012-pure-java-log-client-standalone-repo.md), #57)**:
+> 이 ADR이 "연기"로 남긴 escape hatch가 실행 확정됐다 — CDC 접근은 `cubrid_log` wire
+> protocol의 **순수 Java 재구현**으로 전환하고 JNA 경로는 파리티 검증 후 삭제한다.
+> 개발 거처도 fork 브랜치에서 standalone 저장소로 전환(0012 D6). 이 문서는 POC 시점
+> 기록으로 보존한다.
+
 CUBRID→ClickHouse HTAP POC(지도: xmilex-git/workspace#30)에서 CUBRID CDC를 읽는 주체를
 자체 C++ agent가 아닌 **정식 Debezium 소스 커넥터**(`debezium-connector-cubrid`,
 xmilex-git/debezium fork)로 정했고, 그 커넥터가 CUBRID CDC에 닿는 방법으로 **JNA로

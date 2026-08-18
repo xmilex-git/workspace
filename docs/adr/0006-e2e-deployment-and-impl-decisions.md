@@ -16,6 +16,9 @@ $CUBRID is not set"을 찍고 **프로세스를 종료시켜 워커가 통째로
 "segfault=워커 사망"의 exit 변종, 실측). `.so`는 plugin.path 밖(#32 규칙) — 마운트 지점이
 그 자체로 이행이다.
 - 롤백: 마운트 경로·env는 `up.sh`의 `CUBRID_INSTALL` 변수 하나로 오버라이드 가능.
+- **개정 예고 ([ADR 0012](0012-pure-java-log-client-standalone-repo.md))**: 순수 Java
+  포팅(#72) 완료 시 JNA가 사라져 이 마운트·env 2종 자체가 불요해진다 — D1은 포팅
+  전까지만 유효.
 
 **D2 — 컨테이너→호스트 CUBRID 접속은 호스트 LAN IP의 `--add-host cubrid-host`**:
 rootless podman(netavark)에서 ① `host.containers.internal`은 도달 불가 주소(이 호스트에선

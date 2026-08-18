@@ -19,8 +19,8 @@ HTAP 제품화(지도: xmilex-git/workspace#48, 결정 티켓: #53)에서 초기
 ## 확정 규칙
 
 **D1 — 1.0은 커넥터-only online snapshot (write-stop 제거)**: 엔진 확장(§8.3
-`BEGIN CONSISTENT CDC SNAPSHOT` token) 없이 기존 부품 — barrier LSA JNA 캡처(ADR
-0005 D3) + REPEATABLE READ 일관 뷰(D2) + snapshot `_version=0`(D4) + RMT 수렴 —
+`BEGIN CONSISTENT CDC SNAPSHOT` token) 없이 기존 부품 — barrier LSA 캡처(ADR
+0005 D3, ADR 0012 이후 순수 Java log client) + REPEATABLE READ 일관 뷰(D2) + snapshot `_version=0`(D4) + RMT 수렴 —
 만으로 쓰기 정지 없는 스냅샷을 1.0에 넣는다. barrier 이후 commit을 스냅샷이 봐도
 CDC(counter≥1)가 덮어서 수렴한다(§8.2 논리). write-stop 절차(ADR 0005 체크리스트)는
 보수적 fallback으로 운영 문서에 남긴다.

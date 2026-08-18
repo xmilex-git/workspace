@@ -44,7 +44,9 @@ mapping·envelope 생성이 두 코드패스로 이원화되어 기각.
 `prepare`에서 **REPEATABLE READ로 승격**한다 — 비용 0으로 다문장 일관 뷰와 스냅샷 중
 DDL 블록(실측 확인)을 이중 방어로 얻는다.
 
-**D3 — barrier LSA는 커넥터가 JNA로 직접 캡처**: `determineSnapshotOffset`에서
+**D3 — barrier LSA는 커넥터가 JNA로 직접 캡처**(기제는 [ADR 0012](0012-pure-java-log-client-standalone-repo.md)
+이후 순수 Java log client로 대체 — `CubridLogClient` facade 불변이라 결정 자체는 유지):
+`determineSnapshotOffset`에서
 `cubrid_log_connect` → `cubrid_log_find_lsa(현재시각)`. 운영자 수동 주입은 전사
 오류원이라 기각. 프레임워크 순서상 스냅샷 select 전에 호출되므로 §8.1의
 "정지→barrier 기록→scan" 순서와 자동 합치.

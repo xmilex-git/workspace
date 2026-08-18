@@ -51,7 +51,7 @@ CUBRID에 이미 존재하는 로그 변경 추출 층 — 서버측 `cdc_*`(log
 _Avoid_: CDC agent(소비자와 혼동), 복제 기능
 
 **CUBRID Debezium 커넥터 (debezium-connector-cubrid)**:
-CUBRID CDC 인프라를 JNA로 소비해 Debezium envelope로 Kafka에 내보내는 정식 Debezium 소스 커넥터. 이 프로젝트가 만드는 유일한 CDC 소비자다 (ADR 0002).
+CUBRID CDC 인프라를 소비해 Debezium envelope로 Kafka에 내보내는 정식 Debezium 소스 커넥터. 이 프로젝트가 만드는 유일한 CDC 소비자다. CDC 접근은 POC의 JNA 래핑(ADR 0002)에서 `cubrid_log` wire protocol의 순수 Java 재구현으로 전환 (ADR 0012).
 _Avoid_: cubrid-cdc-agent(자체 agent 안 — 기각됨), CDC 도구
 
 **이벤트 카운터 (event counter)**:
