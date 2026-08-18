@@ -39,6 +39,7 @@ data_item_type_name (int t)
     case 2: return "DCL";
     case 3: return "TIMER";
     case 4: return "ROLLBACK_TO";
+    case 5: return "RELATION";
     default: return "UNKNOWN";
     }
 }
@@ -285,6 +286,14 @@ print_item (int seq, const CUBRID_LOG_ITEM * item)
       putchar ('\n');
       break;
 
+    case 5:			/* RELATION — dictionary (classoid, owner, table); precedes the
+				 * classoid's first DML/DDL in a session (#67, ADR 0011 D4) */
+      printf (" classoid=%llu owner=%s table=%s\n",
+	      (unsigned long long) item->data_item.relation.classoid,
+	      item->data_item.relation.owner ? item->data_item.relation.owner : "(null)",
+	      item->data_item.relation.table ? item->data_item.relation.table : "(null)");
+      break;
+
     default:
       putchar ('\n');
       break;
@@ -303,6 +312,8 @@ usage (const char *prog)
 	   "  -w password   login password (default: empty)\n"
 	   "  -t epoch      start timestamp for find_lsa (default: now-600)\n"
 	   "  -a 0|1        cubrid_log_set_all_in_cond (default: not set)\n"
+	   "  -c owner.tbl  name-based extraction target, repeatable (#67 D3;\n"
+	   "                server resolves names, unknown names warn+skip)\n"
 	   "  -m N          max log items per extract (default: API default)\n"
 	   "  -i N          exit after N consecutive empty extracts (default: 5)\n"
 	   "  -T sec        extraction timeout seconds (default: API default)\n"
@@ -324,11 +335,20 @@ main (int argc, char **argv)
   int extraction_timeout = -1;
   int follow = 0;
   int opt, rc;
+#define MAX_EXTRACTION_NAMES 64
+  char *extraction_names[MAX_EXTRACTION_NAMES];
+  int num_extraction_names = 0;
 
-  while ((opt = getopt (argc, argv, "d:H:p:u:w:t:a:m:i:T:f")) != -1)
+  while ((opt = getopt (argc, argv, "d:H:p:u:w:t:a:m:i:T:fc:")) != -1)
     {
       switch (opt)
 	{
+	case 'c':
+	  if (num_extraction_names < MAX_EXTRACTION_NAMES)
+	    {
+	      extraction_names[num_extraction_names++] = optarg;
+	    }
+	  break;
 	case 'd': dbname = optarg; break;
 	case 'H': host = optarg; break;
 	case 'p': port = atoi (optarg); break;
@@ -380,6 +400,22 @@ main (int argc, char **argv)
     {
       rc = cubrid_log_set_extraction_timeout (extraction_timeout);
       printf ("SET extraction_timeout(%d) rc=%d\n", extraction_timeout, rc);
+      if (rc != CUBRID_LOG_SUCCESS)
+	{
+	  return 1;
+	}
+    }
+
+  if (num_extraction_names > 0)
+    {
+      int i;
+      rc = cubrid_log_set_extraction_table_names (extraction_names, num_extraction_names);
+      printf ("SET extraction_table_names(");
+      for (i = 0; i < num_extraction_names; i++)
+	{
+	  printf ("%s%s", i ? "," : "", extraction_names[i]);
+	}
+      printf (") rc=%d\n", rc);
       if (rc != CUBRID_LOG_SUCCESS)
 	{
 	  return 1;
