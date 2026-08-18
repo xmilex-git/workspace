@@ -16,6 +16,11 @@
     "snapshot.mode": "initial",
     "snapshot.max.threads": "1",
 
+    "signal.enabled.channels": "kafka",
+    "signal.kafka.topic": "htapcdc-signals",
+    "signal.kafka.bootstrap.servers": "kafka:19092",
+    "signal.kafka.poll.timeout.ms": "1000",
+
     "decimal.handling.mode": "string",
     "heartbeat.interval.ms": "5000",
 
