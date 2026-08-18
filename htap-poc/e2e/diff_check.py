@@ -18,6 +18,11 @@ NBUCKETS = 8
 TABLES = {
     "t_order": ["id:int", "customer:str", "amount:dec", "created_at:dt"],
     "t_item":  ["sku:str", "qty:int", "price:dec"],
+    # #58 type corpus — dates dump as epoch days, times as ms-of-day (both int)
+    "t_typecorpus": ["id:int", "v_short:int", "v_bigint:int", "v_num:dec",
+                     "v_num2:dec", "v_float:f32", "v_double:f64", "v_char:str",
+                     "v_varchar:str", "v_date:int", "v_time:int", "v_ts:dt",
+                     "v_dtm:dt", "v_enum:str"],
 }
 
 
@@ -27,6 +32,16 @@ def norm(v, t):
     if t == "dec":
         s = format(Decimal(v), "f")
         return s.rstrip("0").rstrip(".") if "." in s else s
+    # float canonicalization (#58): CUBRID prints FLOAT with 7 significant
+    # digits TRUNCATED and DOUBLE with 16 truncated, ClickHouse prints
+    # shortest-round-trip — compare TWO digits below the lossier side
+    # (truncation, unlike rounding, can push the reparsed value a full ulp
+    # off: 1.797693134862315|7 truncated reparses to ...3149, which rounds
+    # to ...31 at 15 significant digits while the true value rounds to ...32)
+    if t == "f32":
+        return f"{float(v):.5e}"
+    if t == "f64":
+        return f"{float(v):.13e}"
     return v
 
 

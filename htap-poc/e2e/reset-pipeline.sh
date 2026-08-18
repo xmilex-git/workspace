@@ -12,7 +12,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONNECT="${CONNECT_URL:-http://localhost:8083}"
 SOURCE_NAME=cubrid-source-poc
 SINK_NAME=clickhouse-sink-poc
-TOPICS=(htapcdc.htapdb.t_order htapcdc.htapdb.t_item __debezium-heartbeat.htapcdc)
+TOPICS=(htapcdc.htapdb.t_order htapcdc.htapdb.t_item htapcdc.htapdb.t_typecorpus __debezium-heartbeat.htapcdc)
 
 kafka () { podman exec htap-kafka /opt/kafka/bin/"$@"; }
 

@@ -50,9 +50,17 @@ CH_ORDER="SELECT concat(toString(id),'|~|',ifNull(customer,'\\\\N'),'|~|',ifNull
 CUB_ITEM="SELECT NVL(sku,'\\N') || '|~|' || NVL(CAST(qty AS VARCHAR),'\\N') || '|~|' || NVL(CAST(price AS VARCHAR),'\\N') FROM t_item"
 CH_ITEM="SELECT concat(sku,'|~|',ifNull(toString(qty),'\\\\N'),'|~|',ifNull(toString(price),'\\\\N')) FROM htap.t_item FORMAT TSVRaw"
 
+# #58 type corpus: DATE -> epoch days, TIME -> ns of day (int both sides);
+# TIMESTAMP has no fraction in CUBRID so '.000' is appended to match
+# DateTime64(3); floats are canonicalized host-side (f32/f64 in diff_check.py)
+CUB_CORPUS="SELECT NVL(CAST(id AS VARCHAR),'\\N') || '|~|' || NVL(CAST(v_short AS VARCHAR),'\\N') || '|~|' || NVL(CAST(v_bigint AS VARCHAR),'\\N') || '|~|' || NVL(CAST(v_num AS VARCHAR),'\\N') || '|~|' || NVL(CAST(v_num2 AS VARCHAR),'\\N') || '|~|' || NVL(CAST(v_float AS VARCHAR),'\\N') || '|~|' || NVL(CAST(v_double AS VARCHAR),'\\N') || '|~|' || NVL(v_char,'\\N') || '|~|' || NVL(v_varchar,'\\N') || '|~|' || NVL(CAST(v_date - DATE'1970-01-01' AS VARCHAR),'\\N') || '|~|' || NVL(CAST(CAST((HOUR(v_time)*3600+MINUTE(v_time)*60+SECOND(v_time)) AS BIGINT)*1000000000 AS VARCHAR),'\\N') || '|~|' || NVL(TO_CHAR(v_ts,'YYYY-MM-DD HH24:MI:SS') || '.000','\\N') || '|~|' || NVL(TO_CHAR(v_dtm,'YYYY-MM-DD HH24:MI:SS.FF'),'\\N') || '|~|' || NVL(v_enum,'\\N') FROM t_typecorpus"
+CH_CORPUS="SELECT concat(toString(id),'|~|',ifNull(toString(v_short),'\\\\N'),'|~|',ifNull(toString(v_bigint),'\\\\N'),'|~|',ifNull(toString(v_num),'\\\\N'),'|~|',ifNull(toString(v_num2),'\\\\N'),'|~|',ifNull(toString(v_float),'\\\\N'),'|~|',ifNull(toString(v_double),'\\\\N'),'|~|',ifNull(v_char,'\\\\N'),'|~|',ifNull(v_varchar,'\\\\N'),'|~|',ifNull(toString(v_date),'\\\\N'),'|~|',ifNull(toString(v_time),'\\\\N'),'|~|',ifNull(toString(v_ts),'\\\\N'),'|~|',ifNull(toString(v_dtm),'\\\\N'),'|~|',ifNull(v_enum,'\\\\N')) FROM htap.t_typecorpus FORMAT TSVRaw"
+
 cub_dump "$CUB_ORDER" > "$SCRATCH/t_order.cub"
 ch_dump  "$CH_ORDER"  > "$SCRATCH/t_order.ch"
 cub_dump "$CUB_ITEM"  > "$SCRATCH/t_item.cub"
 ch_dump  "$CH_ITEM"   > "$SCRATCH/t_item.ch"
+cub_dump "$CUB_CORPUS" > "$SCRATCH/t_typecorpus.cub"
+ch_dump  "$CH_CORPUS"  > "$SCRATCH/t_typecorpus.ch"
 
 python3 "$HERE/diff_check.py" "$SCRATCH" "${QUIET:-no}"

@@ -10,8 +10,8 @@
     "username": "htap_sink",
     "password": "htap-sink-poc",
 
-    "topics": "htapcdc.htapdb.t_order,htapcdc.htapdb.t_item",
-    "topic2TableMap": "htapcdc.htapdb.t_order=t_order_local,htapcdc.htapdb.t_item=t_item_local",
+    "topics": "htapcdc.htapdb.t_order,htapcdc.htapdb.t_item,htapcdc.htapdb.t_typecorpus",
+    "topic2TableMap": "htapcdc.htapdb.t_order=t_order_local,htapcdc.htapdb.t_item=t_item_local,htapcdc.htapdb.t_typecorpus=t_typecorpus_local",
 
     "value.converter": "org.apache.kafka.connect.json.JsonConverter",
     "value.converter.schemas.enable": "false",
