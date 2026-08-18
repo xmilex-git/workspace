@@ -56,3 +56,32 @@ failover·split-brain·old primary 재등장은 미검증이었다(후속 리뷰
   좌표계 문제로 엔진 보강 선행 필요 — 1.0 일정 초과.
 - **순수 문서 제약(코드 무변경)**: 경로 A·B의 조용한 오염이 "운영자 절차 준수"에만
   걸림. 고객 다수가 HA 구성이라 failover는 정상 운영 이벤트 — 기술지원 관점에서 부적격.
+
+## 추기 (2026-08-18, 구현 티켓 #66) — 판별 수단 실측 확정
+
+D2의 두 축 모두 신뢰할 판별 수단이 확정되어 **escape hatch(문서-only 격하)는 발동하지
+않았다**. 다만 식별자 축에 잔여 갭 1건을 문서 제약으로 남긴다.
+
+- **판별 수단 = JDBC `SHOW LOG HEADER` 단일 질의** (11.5 라이브 서버 실측):
+  `Ha_server_state`가 디스크 로그 헤더의 HA 상태(비-HA 서버는 `'idle'`,
+  HA 노드는 `'active'`/`'standby'`/`'to-be-*'`/`'maintenance'`/`'dead'` —
+  `boot.h`의 상태 문자열), `Creation_time`이 DB 생성 시각이다.
+  이 문은 엔진에서 **DBA 전용**(`show_meta.c` `only_for_dba`) — 커넥터 JDBC 유저는
+  DBA 그룹이어야 하며, 읽기 실패 시 가드는 조용히 건너뛰지 않고 fail-closed한다
+  (#68 권한 스펙과 조율 필요).
+- **노드 식별자 = `<설정 hostname>@<Creation_time millis>`**, offset의 5번째 키
+  `node`(문자열)로 저장(ADR 0004의 숫자 4키에 추가; `node` 없는 기존 offset은 최초
+  재접속 시 경고 없이 스탬프 — 업그레이드 경로). hostname 축이 표준 failover 절차
+  (운영자가 새 master로 재지향)를, creation time 축이 `createdb`로 독립 생성된
+  클러스터의 노드 전환을 잡는다.
+- **허용 상태 = {`active`, `idle`}** — 그 외 전부(전이 상태 포함) fail-fast.
+  스냅샷 측도 시작 전 상태 축을 검사한다(standby 데이터로 스냅샷 후 스트리밍이
+  섞이는 것을 차단).
+- **잔여 갭 (문서 제약)**: master를 따라가는 VIP/DNS(hostname 불변) + backup/restore로
+  구축한 slave(creation time 보존)의 조합에서는 노드 전환이 식별자에 나타나지 않는다
+  — 이때는 상태 축(새 master는 `active`)도 통과하므로 경로 A가 미검출될 수 있다.
+  세팅 가이드(#59)에 "failover 시 반드시 커넥터 정지 → resnapshot" 절차와 함께 이
+  갭을 명기한다.
+- 검증: 단위 10건(경로 A/B·전이 상태·offset round-trip·legacy 스탬프) 포함 60/60
+  PASS, e2e 정상 경로 PASS + offset `node` 키 실측, 라이브 경로 A 재현(재지향 후
+  task FAILED·재시작 시 결정론적 재정지·원복 후 diff-check 0).
