@@ -43,13 +43,25 @@ v3.0.0.Final 프레임워크는 `select_all` **SnapshotQuery SPI 구현이 커�
 SnapshotLock은 `getSnapshotLockingMode()=empty` → core의 `no_locking_support`로 충분
 (ADR 0005 D2와 합치).
 
-**D5 — TableId의 schema 자리 = 논리 DB명(`htapdb`), CUBRID owner 스키마가 아님**:
-JDBC 드라이버가 카탈로그/스키마 인자를 전면 무시하므로(ADR 0005) 메타데이터의
-`TABLE_SCHEM`(=owner, "DBA")은 식별자로 쓸 수 없고, owner를 쓰면 토픽이
-`htapcdc.DBA.t_order`가 되어 #39 sink 계약(D2: `htapcdc.htapdb.<table>`)이 깨진다.
-TableId를 `(null, <database.dbname>, <table>)`로 재귀속하면 include list(`htapdb.t_order`)와
-기본 topic naming이 모두 sink 무변경으로 성립한다. SQL은 전부 bare 테이블명 쿼트
-(`quotedTableIdString` 오버라이드). 전제: POC는 dba 단독 소유.
+**D5 — TableId의 schema 자리 = CUBRID owner** (2026-08-18 개정, ADR 0011 D8·D9):
+
+~~논리 DB명(`htapdb`)~~ → **owner**. 토픽은 `htapcdc.<owner>.<table>`, include list는
+`owner.table`(= CUBRID `unique_name` 문법), 스냅샷 SQL은 owner-qualified다. DB명은
+`topic.prefix`·`database.dbname`이 담당하고 토픽에서 빠진다.
+
+개정 근거: Debezium 표준 토픽 규칙 `topicPrefix.schemaName.tableName`은 PG·Oracle·DB2·
+SQL Server·Informix가 전부 동일하며 가운데 자리는 DB의 2단 네임스페이스(Oracle에서는
+소유자)다 — CUBRID의 2단 네임스페이스는 owner이므로 DB명을 넣은 원 결정이 규칙 이탈이었다.
+원 결정의 근거였던 "드라이버가 카탈로그/스키마 인자를 무시해 `TABLE_SCHEM`(=owner)을
+식별자로 쓸 수 없다"는 실사 결과 부정확하다: 컬럼 조회는 bare 테이블명만 쓰므로
+(`CubridConnection.java:114`) TableId의 schema 슬롯 값과 무관하다. 실제 이유는 당시
+sink 계약(#39)을 건드리지 않는 편의였다.
+
+원 결정의 전제였던 **"POC는 dba 단독 소유"는 폐기**한다 — `getColumns(null, null,
+<bare>, null)`은 owner가 다른 동명 테이블의 컬럼을 조용히 병합하는 실재 버그였고,
+ADR 0011 D9가 컬럼 조회를 PUBLIC 뷰 `db_attribute`(owner_name 필터)로 교체해
+동명 테이블을 완전 지원한다. 대가는 sink 설정 2줄(`htap-poc/sink/clickhouse-sink.json:13-14`)
+과 기존 토픽 폐기 + resnapshot이며, 1.0 릴리스 전이라 설치 기반이 없어 실비용이 없다.
 
 **D6 — offset의 anchor와 이벤트 카운터는 별도 상태**:
 `CubridOffsetContext`가 영속하는 4키(`page_id/lsa_offset/seq/epoch`)는 **anchor**(가장

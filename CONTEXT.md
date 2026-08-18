@@ -93,3 +93,11 @@ _Avoid_: schema barrier(§7.8 구 용어 — 개명됨), barrier LSA(스냅샷 �
 **HA halt (HA 정지)**:
 커넥터가 재접속 시 소스 노드가 바뀌었거나 접속 노드가 master 상태가 아님을 감지하면 fail-fast로 정지하는 1.0 동작(ADR 0010). 캡처 대상은 master 단일 노드이며, failover 후 이어읽기는 미지원 — 복구는 새 master 대상 resnapshot 단일 절차뿐이다.
 _Avoid_: HA 지원(무중단 이어읽기로 오해), failover 추적(자동 전환으로 오해), DDL halt(발동 조건이 다른 별개 가드)
+
+**CDC 대상 집합 (extraction set)**:
+커넥터 설정 `table.include.list`에서 나와 세션마다 서버에 선언되는 **휘발성** 캡처 대상 목록. 구별 기준은 이름이 아니라 classoid(OID)이며 서버가 이벤트마다 `cdc_is_filtered_class()`로 강제한다. DB에는 "이 테이블이 CDC 대상"이라는 영속 표식이 남지 않는다 — Oracle의 `ADD SUPPLEMENTAL LOG DATA`나 PG의 publication과 달리 유일한 출처는 커넥터 설정이다(ADR 0011 D12). 목록을 좁혀도 supplemental log는 전 테이블에 기록된다(전달만 줄고 기록은 안 줄어든다).
+_Avoid_: publication(영속 카탈로그 객체로 오해), CDC 활성 테이블(DB에 표식이 있다고 오해), supplemental log 대상(기록 범위와 혼동)
+
+**relation 사전 (relation dictionary)**:
+서버가 CDC 스트림 안에서 `(classoid, owner, table)`을 알려주는 in-band 아이템. 해당 classoid의 첫 사용 아이템보다 반드시 앞서며, 세션이 갈리면 다시 전송된다(커넥터는 영속 캐시하지 않는다). 이것이 있어 커넥터는 `_db_class`(DBA 전용)를 읽지 않고도 이벤트를 테이블로 라우팅한다(ADR 0011 D4). 범위는 extraction 대상으로 지정된 테이블뿐이며, 그래야 권한 경계와 일치한다(D5). **이벤트 카운터에서 제외된다** — 세면 재연결 시 같은 이벤트가 다른 `_version`을 받아 RMT 수렴이 깨진다(D6).
+_Avoid_: schema history topic(Kafka 토픽과 혼동), 스키마 사전(컬럼·타입은 별개 — JDBC 카탈로그 뷰에서 온다), 캐시(세션 간 보존으로 오해)
