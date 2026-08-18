@@ -93,6 +93,22 @@ build mode="debug" version=ver: _submodules
         echo "~/CUBRID -> $(readlink "$HOME/CUBRID")"
     fi
 
+# Incremental build + install into an already-configured preset tree — no reconfigure,
+# no locale copy, ~/CUBRID symlink untouched. The install prefix is whatever the tree
+# was configured with (check: grep CMAKE_INSTALL_PREFIX build_preset_<mode>/CMakeCache.txt).
+incr mode="release":
+    #!/usr/bin/env bash
+    set -eu
+    mode="{{mode}}"; if [ "$mode" = debug ]; then mode=optdebug; fi
+    ws="{{workspace}}"
+    [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir." >&2; exit 1; }
+    [ -f "$ws/build_preset_$mode/CMakeCache.txt" ] || { echo "ERROR: '$ws/build_preset_$mode' is not configured — run 'just configure $mode' (or 'just build') first." >&2; exit 1; }
+    dest=$(sed -n 's/^CMAKE_INSTALL_PREFIX:PATH=//p' "$ws/build_preset_$mode/CMakeCache.txt")
+    echo "incremental install dest: $dest"
+    ( cd "$ws" && cmake --build "build_preset_$mode" -j {{jobs}} --target install )
+    [ -x "$dest/bin/cubrid" ] || { echo "ERROR: install did not land in $dest (bin/cubrid missing)." >&2; exit 1; }
+    echo "installed (incremental) $mode ($ws) -> $dest"
+
 # Convenience aliases (default version).
 debug: (build "debug")
 release: (build "release")
