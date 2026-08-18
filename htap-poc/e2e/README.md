@@ -56,12 +56,11 @@ Kafka `htapcdc.<owner>.<table>` → 공식 ClickHouse sink → RMT → canonical
 - **barrier 중첩(알려진 동작)**: `cubrid_log_find_lsa`는 초 단위 timestamp 해상도라 barrier가
   스냅샷 직전 커밋 몇 건을 다시 포함할 수 있다 — 재생 이벤트는 스냅샷과 동일 값 + 더 높은
   `_version`이므로 RMT에서 무해하게 수렴 (at-least-once 의미론에 포함).
-- **인프라 전제** (`../infra/up.sh`에 반영): JNA `.so`는 `$CUBRID` **설치본 전체**를
-  `/opt/cubrid`로 ro 마운트 (`lib/libcascci.so.11.2 → ../cci/lib/` 심링크 때문에 lib만으로는
-  불가) + `LD_LIBRARY_PATH=/opt/cubrid/lib` + **`CUBRID=/opt/cubrid` env 필수**(없으면
-  libcubridcs가 프로세스를 종료시켜 워커 사망). 컨테이너→호스트 CUBRID 접속은
-  `cubrid-host`(호스트 LAN IP `--add-host`) — rootless netavark에서 게이트웨이/
-  host.containers.internal 경유 불가.
+- **인프라 전제** (`../infra/up.sh`에 반영, #72에서 개정): 커넥터의 log client가
+  순수 Java(ADR 0012)라 CUBRID 설치본 마운트·`LD_LIBRARY_PATH`·`CUBRID` env가
+  **모두 불요** — Connect 컨테이너는 플러그인 jar 세트만으로 완전 자립.
+  컨테이너→호스트 CUBRID 접속은 `cubrid-host`(호스트 LAN IP `--add-host`) —
+  rootless netavark에서 게이트웨이/host.containers.internal 경유 불가.
 
 ## 장애·재시작·중복 실측 (#41, 2026-08-16)
 

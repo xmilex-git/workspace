@@ -7,7 +7,7 @@
 #       delete->insert, PK change (old tombstone + new insert)
 #   (c) no gap between snapshot and streaming (barrier boundary rows)
 #
-# Prereqs: infra up (../infra/up.sh — with the CUBRID lib mount), sink chain
+# Prereqs: infra up (../infra/up.sh), sink chain
 # installed+registered (../sink/), connector plugin built (build-connector.sh
 # + podman restart htap-connect), htapdb server running (cubrid-server-control).
 set -euo pipefail

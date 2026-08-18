@@ -63,14 +63,10 @@ if running htap-connect; then
     echo "connect: already running"
 else
     podman rm -f htap-connect >/dev/null 2>&1 || true
-    # CUBRID native client libs for the source connector's JNA binding (#40):
-    # mounted OUTSIDE plugin.path (workspace#32 — JNA dlopen()s them itself) and
-    # exposed via LD_LIBRARY_PATH. cubrid-host resolves to the host's LAN IP:
-    # rootless netavark neither forwards the bridge gateway to host services nor
-    # resolves host.containers.internal to a reachable address here.
-    # the whole install, not just lib/: lib/libcascci.so.11.2 is a symlink
-    # into ../cci/lib/, which must resolve inside the container too
-    CUBRID_INSTALL="${CUBRID_INSTALL:-$HOME/htap-cdc/CUBRID-11.5-htapcdc}"
+    # cubrid-host resolves to the host's LAN IP: rootless netavark neither forwards
+    # the bridge gateway to host services nor resolves host.containers.internal to a
+    # reachable address here. No CUBRID install mount / LD_LIBRARY_PATH anymore —
+    # the connector's log client is pure Java (ADR 0012, workspace#72).
     CUBRID_HOST_IP="${CUBRID_HOST_IP:-$(ip route get 1.1.1.1 | awk '{for(i=1;i<NF;i++) if($i=="src") print $(i+1)}' | head -1)}"
     podman run -d --name htap-connect --network "$NET" --network-alias connect \
         --cgroupns=private \
@@ -78,9 +74,6 @@ else
         -p 8083:8083 \
         -v "$HTAP_DATA/connect-plugins/debezium-connector-cubrid":/kafka/connect/debezium-connector-cubrid:Z,U \
         -v "$HTAP_DATA/connect-plugins/clickhouse-kafka-connect":/kafka/connect/clickhouse-kafka-connect:Z,U \
-        -v "$CUBRID_INSTALL":/opt/cubrid:ro,Z \
-        -e LD_LIBRARY_PATH=/opt/cubrid/lib \
-        -e CUBRID=/opt/cubrid \
         -e BOOTSTRAP_SERVERS=kafka:19092 \
         -e GROUP_ID=htap-connect \
         -e CONFIG_STORAGE_TOPIC=htap_connect_configs \
