@@ -1,0 +1,39 @@
+== workspace#84 — temporal wire v2 (엔진) conformance 실측 ==
+engine: htap/cdc-select-privilege bdbeaf3f1 (base d2e106aff), install ~/htap-cdc/CUBRID-11.5-htapcdc-prv (2026-08-19 16:59 build)
+server: htapdb, dbtimezone='Asia/Seoul', sessiontimezone='Asia/Seoul', supplemental_log=1
+harness: htap-poc/harness/cdclogdump (기존 빌드 재사용 — CDC API 구조체 무변경)
+spec: docs/htap-cdc-wire-v2.md §3.2 (byte-exact)
+
+== 1. temporal 8종 INSERT (Asia/Seoul 세션) → CDC wire raw hex + 텍스트 ==
+입력: id=1
+  DATE'2026-01-02', TIME'15:04:05', TIMESTAMP'2026-01-02 03:04:05',
+  DATETIME'2026-01-02 03:04:05.600', TIMESTAMPTZ'2026-01-02 03:04:05 +09:00',
+  TIMESTAMPLTZ'2026-01-02 03:04:05', DATETIMETZ'2026-01-02 03:04:05.670 +09:00',
+  DATETIMELTZ'2026-01-02 03:04:05.670'
+관측 (cdclogdump changed[i], raw=payload hex):
+  DATE        raw=323032362d30312d3032                                          "2026-01-02"
+  TIME        raw=31353a30343a3035                                              "15:04:05"
+  TIMESTAMP   raw=323032362d30312d30312031383a30343a3035                        "2026-01-01 18:04:05"          <- UTC 렌더 (KST 03:04:05 = UTC 18:04:05 전일)
+  DATETIME    raw=323032362d30312d30322030333a30343a30352e363030              "2026-01-02 03:04:05.600"      <- zone-less 유지, ms 3자리
+  TIMESTAMPTZ raw=323032362d30312d30322030333a30343a3035202b30393a3030        "2026-01-02 03:04:05 +09:00"   <- 값 자신의 offset
+  TIMESTAMPLTZ raw=323032362d30312d30312031383a30343a3035202b30303a3030        "2026-01-01 18:04:05 +00:00"   <- UTC + TZH:TZM (TZR 아님)
+  DATETIMETZ  raw=323032362d30312d30322030333a30343a30352e363730202b30393a3030  "2026-01-02 03:04:05.670 +09:00"
+  DATETIMELTZ raw=323032362d30312d30312031383a30343a30352e363730202b30303a3030  "2026-01-01 18:04:05.670 +00:00"
+판정: 8종 전부 §3.2 표와 byte 일치 (자리수·ms 3자리·공백1+±TZH:TZM·zero-pad).
+
+== 2. TIMESTAMP epoch 경계 ==
+입력: id=2, c_ts = FROM_UNIXTIME(1)  (epoch=1; epoch=0은 CUBRID TIMESTAMP 하한 밖)
+관측: raw=313937302d30312d30312030303a30303a3031 = "1970-01-01 00:00:01"
+판정: UTC 렌더 확인 — v1의 KST "1970-01-01 09:00:01" 아님.
+
+== 3. UTC↔Asia/Seoul matrix — 세션 tz 불변성 ==
+입력: id=3, SET TIME ZONE 'UTC' 세션에서 동일 instant 입력
+  TIMESTAMP'2026-01-01 18:04:05', TIMESTAMPLTZ'2026-01-01 18:04:05', DATETIMELTZ'2026-01-01 18:04:05.670'
+관측: changed[3]/[6]/[8] raw hex가 id=1(Asia/Seoul 세션 입력)과 완전 동일
+  "2026-01-01 18:04:05" / "2026-01-01 18:04:05 +00:00" / "2026-01-01 18:04:05.670 +00:00"
+판정: wire 텍스트는 입력 세션 tz와 무관 — instant 보존.
+
+== 4. 비-temporal 무영향 ==
+INT(col 0) raw=01000000 pack code 0 경로 그대로. NUMERIC/CHAR/VARCHAR 경로는 db_to_char 미사용 — 코드상 무변경.
+
+PASS (엔진측 conformance. 커넥터 v1 디코더는 이 wire에서 fail — lockstep 계약대로 #85가 커넥터를 갱신)
