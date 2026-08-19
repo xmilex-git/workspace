@@ -78,3 +78,27 @@ human can fix the issue")과 같은 자세다.
 evolution이나 historized 모델을 얹어도 1.0 동작(halt)을 기본값으로 유지하면 호환이
 깨지지 않는다. DDL 문장 전문이 로그에 이미 오므로 향후 파서 기반 evolution의 재료도
 확보돼 있다.
+
+## 추기 (2026-08-19, workspace#82 / P0-1) — 도착한 TABLE DDL은 무조건 halt
+
+#48 전수 리뷰 P0-1(CONFIRMED): 종전 halt 판정은 "사전(announce)으로 라우팅되고
+스키마에 있는 captured 테이블"일 때만 발동해, 사전이 비었거나(드랍 lag) 라우팅이
+어긋난 DDL이 halt를 **조용히 우회**했다. 판정을 다음처럼 단순화·강화한다(#75 D3).
+
+- **판정 = 도착 사실.** 커넥터에 도착한 `object_type=TABLE` &
+  `ddl_type ∈ {ALTER, DROP, RENAME, TRUNCATE}`(및 미지의 future type — fail-safe)는
+  사전·captured 조회 **없이 무조건 halt**한다. 서버측 extraction 필터를 통과했다는
+  사실 자체가 캡처 대상임의 증명이다. NULL-classoid도 halt(판별 불가 → halt 기본값).
+  사전은 에러 라벨(테이블명)에만 참조하고, 미해석 시 classoid로 표기한다.
+  CREATE 경로(D3 warn)는 불변.
+- **halt 판정 기준(4축) 채택** — #75에서 확립, CONTEXT.md 등재: DDL이 로그 이벤트 없이
+  ① 행 인코딩 ② 테이블 identity ③ 이벤트 key identity ④ 테이블의 논리적 내용 중
+  하나를 바꿀 때만 halt. 인덱스·constraint-only ALTER의 면제는 커넥터 판정이 아니라
+  **엔진의 DDL 분류**(CDC_INDEX로 재분류, #75 D10 → 구현 workspace#83)로 실현한다 —
+  커넥터 규칙은 "도착한 TABLE DDL = halt"로 단순 유지. 파티션 DDL은 DROP/PROMOTE
+  PARTITION만 halt(#75 D11, 엔진 분류의 몫). PK 추가·삭제와 일반형
+  `DROP CONSTRAINT <이름>`은 halt 유지(#75 D13).
+- **에러 표면(D5) 보강**: 복구 처방을 "include list 정비 → resnapshot" 단일 공식으로
+  메시지에 명시(#75 D6/D7). JMX는 기존 counter 유지.
+- 검증: 단위 — 4종 DDL 무조건 halt(사전 미등재·NULL-classoid 포함), 4종 전부 재시작
+  결정론적 re-halt, CREATE·CDC_INDEX 통과 불변. 전체 107/107 PASS (커넥터 워크트리).

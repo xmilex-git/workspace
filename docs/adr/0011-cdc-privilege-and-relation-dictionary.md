@@ -215,3 +215,29 @@ relation 사전**과 **owner 전면 채택**으로 없앤다. 강제력은 CUBRI
 - **HA 가드 사실 출처 전환(ADR 0010 추기 참조)**: `SHOW LOG HEADER` JDBC 조회 삭제 →
   START_SESSION in-band. 이로써 커넥터의 DBA 의존은 코드 경로 어디에도 없다 — grant는
   캡처 대상 per-table SELECT가 전부다(비-DBA 계정 `cdc_e2e`로 전 e2e 실측).
+
+## 추기 (2026-08-19, workspace#82 / P0-1) — announce fail-fast·bootstrap fail-fast
+
+#48 전수 리뷰 P0-1(CONFIRMED): announce는 추출 시점에 이름을 재해석하므로, 세션 도중
+DROP/RENAME된 테이블의 밀린 로그가 (a) 빈 이름 announce → "라우팅 불가" null 마커 →
+커밋된 DML 무발행 skip, (b) 재시작 시 이름 재해석 실패 → 서버가 조용히 필터 →
+커넥터 무감지, 두 경로로 **silent divergence**를 만들었다. 다음으로 뒤집는다(#75 D2/D4/D5).
+
+- **D2 반전 — empty announce는 fail-fast.** owner·table 중 어느 한쪽이라도 빈
+  announce는 non-retriable 에러(무발행 skip 아님). "known, unroutable" null 마커 상태는
+  소멸 — 사전 값은 항상 유효한 TableId다. #70 추기의 "빈 이름 announce는 라우팅
+  불가로 기록" 문장은 이 추기로 대체된다.
+- **D5 신설 — announce↔include 불변식.** announce된 `owner.table`이 include list 멤버가
+  아니면 fail-fast — RENAME lag의 검출 지점(서버는 새 이름으로 announce한다).
+  이로써 사전 ⊆ include list가 불변식이 되고, DML 라우팅은 사전 경유 그대로가
+  literal include 매칭이다(#75 D4; 종전 스키마 존재 여부 predicate 폐지).
+- **D4 확장 — bootstrap fail-fast.** 기동 시 include 전 엔트리가 실재하고 스키마 로드에
+  성공해야 한다. 실패는 non-retriable 기동 실패 — 정지 중 DROP/RENAME의 유일한 관측
+  지점이다. **"미리 include에 넣고 나중에 CREATE" 워크플로 폐기**(D2/D3의 운영 함의
+  변경): 테이블 생성 후 목록 추가(= resnapshot 경로)만 지원.
+- **에러 표면**: 전부 3단 구성(진단 1줄 / 조치 inline / setup-guide §8.7 포인터),
+  처방은 "include list 정비 → resnapshot" 단일 공식(ADR 0008 D6 승계). 원인별 JMX
+  counter 추가(EmptyAnnounceHalt·AnnounceIncludeMismatchHalt).
+- 검증: 단위 — empty/half-empty announce fail-fast(+halt 이전 커밋분 발행 보존),
+  include 밖 announce fail-fast, bootstrap 누락 엔트리 기동 실패(비-SQLException 구분).
+  전체 107/107 PASS (커넥터 워크트리).
