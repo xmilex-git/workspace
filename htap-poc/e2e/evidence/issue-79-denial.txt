@@ -1,0 +1,10 @@
+### 필터/리스너 없음 (firewall DROP 대리) (127.0.0.1:1)
+CONFIG db=htapdb host=127.0.0.1 port=1 user=dba start_ts=1787117537 all_in_cond=-1 max_log_item=5 idle_limit=1
+CONNECT rc=-10
+connect failed (rc=-10)
+
+### 무경로 격리망 (전용 관리망 대리) (192.0.2.1:1523)
+CONFIG db=htapdb host=192.0.2.1 port=1523 user=dba start_ts=1787117537 all_in_cond=-1 max_log_item=5 idle_limit=1
+CONNECT rc=-10
+connect failed (rc=-10)
+
