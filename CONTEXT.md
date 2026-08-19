@@ -87,11 +87,15 @@ _Avoid_: rollback(정상 경로와 혼동), drop(경보 없는 유실로 오해)
 _Avoid_: 시작 LSA(스트리밍 관점만), 체크포인트(서버 내부 개념과 혼동), DDL halt(무관한 개념)
 
 **DDL halt (DDL 정지)**:
-커넥터가 captured 테이블의 스키마를 바꾸는 DDL(ALTER/DROP/RENAME/TRUNCATE)을 감지하면 재시작 anchor를 DDL 이전에 고정한 채 fail-fast로 정지하는 1.0 동작(ADR 0008). 조치 없는 재시작은 같은 DDL에서 결정론적으로 다시 멈추며, 복구는 resnapshot 단일 절차뿐이다. mid-stream CREATE TABLE은 halt 대상이 아니다(WARN+metric).
+커넥터가 captured 테이블의 DDL 중 **halt 판정 기준**에 걸리는 것을 감지하면 재시작 anchor를 DDL 이전에 고정한 채 fail-fast로 정지하는 1.0 동작(ADR 0008). 조치 없는 재시작은 같은 DDL에서 결정론적으로 다시 멈추며, 복구는 resnapshot 단일 절차뿐이다. mid-stream CREATE TABLE은 halt 대상이 아니다(WARN+metric).
 _Avoid_: schema barrier(§7.8 구 용어 — 개명됨), barrier LSA(스냅샷 경계와 혼동), DDL 지원(자동 전파로 오해)
 
+**halt 판정 기준 (halt criterion)**:
+DDL이 로그 이벤트 없이 다음 중 하나를 바꿀 때만 DDL halt가 발동한다는 4축 기준(#75) — ① 행 인코딩(컬럼 추가·삭제·변경) ② 테이블 identity(rename, owner 변경) ③ 이벤트 key identity(PK 추가·삭제) ④ 테이블의 논리적 내용(TRUNCATE, DROP/PROMOTE PARTITION). 인덱스·FK·UNIQUE 추가/삭제와 행이 파티션 사이에서만 움직이는 파티션 재편(ADD/REORG/COALESCE 등)은 네 축 어디에도 안 걸려 계속 진행한다. 판별 불가면 halt가 기본값(fail-safe).
+_Avoid_: "모든 ALTER는 halt"(면제 목록 무시), 스키마 변경(4축보다 넓은 말)
+
 **HA halt (HA 정지)**:
-커넥터가 재접속 시 소스 노드가 바뀌었거나 접속 노드가 master 상태가 아님을 감지하면 fail-fast로 정지하는 1.0 동작(ADR 0010). 캡처 대상은 master 단일 노드이며, failover 후 이어읽기는 미지원 — 복구는 새 master 대상 resnapshot 단일 절차뿐이다.
+커넥터가 재접속 시 소스 노드가 바뀌었거나 접속 노드가 master 상태가 아님을 감지하면 fail-fast로 정지하는 1.0 동작(ADR 0010). 캡처 대상은 master 단일 노드이며, failover 후 이어읽기는 미지원 — 복구는 새 master 대상 resnapshot 단일 절차뿐이다. 노드 identity는 snapshot barrier 캡처 시점부터 offset에 stamp되며(#78/P0-5), identity 없는 anchored offset은 fail-closed로 halt한다.
 _Avoid_: HA 지원(무중단 이어읽기로 오해), failover 추적(자동 전환으로 오해), DDL halt(발동 조건이 다른 별개 가드)
 
 **CDC 대상 집합 (extraction set)**:

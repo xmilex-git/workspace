@@ -109,3 +109,30 @@ D2의 두 축 모두 신뢰할 판별 수단이 확정되어 **escape hatch(문�
   성격과 동일). 초기·중단 재개 스냅샷은 barrier 세션의 사실로 상태 축을 검사한다.
 - 구버전 서버(사실 없는 4바이트 응답)는 연결 단계에서 명시적 버전 에러로 정지
   (ADR 0011 D10; #62 lockstep — 런타임 협상 없음).
+
+## 추기 (2026-08-19, workspace#78 / P0-5) — snapshot barrier node identity stamp
+
+#48 전수 리뷰 P0-5(CONFIRMED): offset `node` 키가 스트리밍 시작 시에만 stamp되어,
+barrier=노드A → VIP 전환 → streaming=노드B, 또는 interrupted snapshot을 다른 노드에서
+재개하는 경로가 미검출이었다. 이번 추기로 가드의 커버리지를 snapshot 경로까지 확장한다.
+
+- **D-b — barrier 캡처 시 즉시 stamp.** `determineSnapshotOffset`이 barrier 세션의
+  in-band node facts(#70)로 identity를 계산해 snapshot offset 생성 직후 stamp한다.
+  snapshot 축 offset(`snapshot=true` 분기)도 `node` 키를 영속한다. 이로써
+  barrier=A→streaming=B는 스트리밍의 기존 identity 축 검사에 걸린다.
+- **D-c — interrupted snapshot 재개는 양 축 검증 후 anchor 재사용.** 저장 identity와
+  barrier 세션 live identity가 다르면 anchor 미전진 상태에서 non-retriable halt.
+- **D-d — 업그레이드 경로(무경고 stamp) 폐지 → fail-closed.** #66 추기의 "`node` 없는
+  기존 offset은 경고 없이 스탬프"를 뒤집는다: **anchored offset(스트리밍 anchor 또는
+  snapshot barrier 보유)에 identity가 없으면 halt**한다. 이 빌드가 영속하는 모든 offset은
+  identity를 갖므로, node 없는 anchored offset은 pre-guard 빌드 산물 또는 변조뿐이다
+  (1.0 이전이라 설치 기반 없음 — #70 추기와 같은 논거). 순수 fresh start(영속 위치
+  없음)만 null identity 통과·stamp.
+- **잔여 갭 (문서 제약, 추가)**: 스냅샷 데이터 스캔(JDBC, broker 경유)과 barrier CDC
+  세션이 같은 실서버인지는 상호 검증 수단이 없다 — `db_root`는
+  charset/lang/timezone_checksum만 노출하고 `db_creation` 상당 값을 비-DBA JDBC로 읽을
+  경로가 없다(`SHOW LOG HEADER`는 DBA 전용). broker `databases.txt`가 다른 호스트의 DB를
+  가리키는 구성은 support-scope에서 금지 명기(§5-⑥).
+- 검증: 단위 13/13(신규: snapshot offset `node` round-trip, barrier=A→streaming=B halt,
+  interrupted 재개 노드 불일치 halt, legacy-pass 계약 반전 — anchored·node-less halt),
+  전체 97/97 PASS.
