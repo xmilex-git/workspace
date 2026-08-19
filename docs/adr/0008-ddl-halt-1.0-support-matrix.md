@@ -102,3 +102,36 @@ evolution이나 historized 모델을 얹어도 1.0 동작(halt)을 기본값으�
   메시지에 명시(#75 D6/D7). JMX는 기존 counter 유지.
 - 검증: 단위 — 4종 DDL 무조건 halt(사전 미등재·NULL-classoid 포함), 4종 전부 재시작
   결정론적 re-halt, CREATE·CDC_INDEX 통과 불변. 전체 107/107 PASS (커넥터 워크트리).
+
+## 추기 (2026-08-19, workspace#83 / P0-1 엔진) — encoding-safe DDL 재분류 + 파티션 DML root 라우팅
+
+커넥터 규칙은 "도착한 TABLE DDL = 무조건 halt"(위 추기)로 단순 유지하고, halt
+면제는 **엔진의 DDL 분류**가 담당한다: 4축 기준(행 인코딩·테이블 identity·이벤트
+key identity·논리적 내용)을 하나도 바꾸지 않는 ALTER를 `execute_statement.c`
+분류에서 `objtype=CDC_INDEX`로 실어 CDC가 무시하게 재분류했다(#75 D10/D11/D13).
+
+- **CDC_INDEX 재분류 (halt 비발동)**: `ADD/DROP INDEX` 절, `REBUILD INDEX`,
+  index comment/status, constraint-only `ADD CONSTRAINT`(attr 추가 없는
+  FK·UNIQUE — PK 포함 시 제외), `DROP FOREIGN KEY`. 파티션에서는
+  `ADD/ADD HASH/REORGANIZE/COALESCE/ANALYZE/APPLY/REMOVE PARTITION` —
+  파티션 간 행 이동은 의도적 무로그지만 root의 논리적 내용이 불변이기 때문
+  (`do_redistribute_partitions_data`의 `NO_SUPPLEMENTAL_LOG` 힌트 실측).
+- **TABLE 유지 (halt)**: `DROP/PROMOTE PARTITION`(무로그 행 삭제·이탈 =
+  TRUNCATE와 동류), PK 추가·삭제(이벤트 key identity), 일반형
+  `DROP CONSTRAINT <이름>`(supplement 시점 판별 불가), 그리고 **목록 외 전부**
+  (다중 절 ALTER는 전 절이 안전할 때만 재분류 — fail-safe).
+- **파티션 DML root 라우팅(#75 D12)**: DML supplement에는 파티션 classoid가
+  실리므로 `cdc_log_extract`가 filter/announce **전에** root를 해석해 include
+  list(root 이름) 세션에서도 파티션 테이블이 캡처된다. 단 **레코드 디코딩은
+  소유 클래스(파티션)의 repr 계보로** 수행한다 — root ALTER 이후 생성된
+  파티션은 repr id 계보가 root와 어긋나(파티션 repr 1 = 현행, root repr 1 =
+  과거) root repr로 디코딩하면 오디코딩·스트림 오염이 나기 때문
+  (`cdc_make_dml_loginfo`: decode=raw classoid, 발행 entry=root classoid).
+  해석 실패(드랍된 클래스의 밀린 로그)는 명시적 로그 후 filter로 처리 —
+  캡처 root는 기존 error loginfo 경로 유지.
+- 검증: csql 25종 DDL 분류 매트릭스 전건 일치(cdclogdump 실측), 파티션 e2e
+  `run-partition-ddl.sh` PASS — include list 캡처(root 토픽), mid-stream
+  ADD/REORG·인덱스 ALTER 무정지, root-ALTER-이력 후 신설 파티션 행 디코딩 정합,
+  DROP PARTITION halt + 결정론적 re-halt. 기존 `run-e2e.sh` 회귀 PASS.
+  CDC 세션은 단일 consumer(`cdc_Gl.conn` — 신규 START_SESSION이 기존 세션을
+  대체)이므로 e2e는 실행 중 타 커넥터를 정지시킨다.
