@@ -1,0 +1,43 @@
+== workspace#85 — P0-3 구현(커넥터) temporal wire v2 conformance 실측 ==
+connector: debezium-connector-cubrid (기준선 387df7a → 이 티켓 커밋), 배포 build-connector.sh + htap-connect 재시작
+engine pair: htap/cdc-select-privilege bdbeaf3f1 (workspace#84 wire v2), install ~/htap-cdc/CUBRID-11.5-htapcdc-prv
+server: htapdb, dbtimezone='Asia/Seoul' (비UTC 서버 그대로), supplemental_log=1
+date: 2026-08-20
+
+== 1. 단위 테스트: 114/114 PASS ==
+- CubridLogValueDecoderCorpusTest 20종: temporal fixture를 #84 실측 raw hex로 전면 교체
+  (DATE 323032362d30312d3032, TIMESTAMP 323032362d30312d30312031383a30343a3035 등 byte-exact),
+  v1 AM/PM·비3자리 fraction 텍스트 5종 거부(strict, lockstep 안전망) 테스트 추가.
+- CubridTemporalContractTest 6종: 전 테스트가 JVM default zone=Asia/Seoul로 실행(비UTC JVM matrix).
+  같은 표시값 차등("2026-01-02 03:04:05" → TIMESTAMP "2026-01-02T03:04:05Z" vs DATETIME
+  "2026-01-02T03:04:05.000"), epoch=1 instant 복원, snapshot(JDBC 파서)↔streaming(wire 파서) 동일값.
+- WireFixtureTest 7종: cdc-session.hexlog를 wire v2 엔진 대상 TCP proxy로 전면 재녹취
+  (2026-08-20, 동일 시나리오: INSERT 990022→UPDATE SKU-A→savepoint INSERT 990023→ROLLBACK_TO
+  →DELETE→COMMIT + idle timeout round + clean END_SESSION, 201 items). DATETIME payload가
+  "2026-08-20 12:34:56.789" ISO로 실림 확인. LSA codec 테스트는 C struct trailing padding
+  2바이트(비계약, 이번 캡처 실측 0x20)를 비교에서 제외하도록 교정.
+
+== 2. 라이브 e2e: run-e2e.sh PASS ==
+snapshot→barrier→streaming→Kafka→ClickHouse 수렴, committed-only·§7.7 전부 기존과 동일 PASS.
+DATETIME(t_order.created_at) 자릿수 불변(zone-less 계약) — EXPECTED 무수정 통과.
+
+== 3. diff-check.sh: 0 mismatch (t_order·t_item·t_typecorpus) ==
+CUBRID측 dump에 SET TIME ZONE 'UTC' 추가(TIMESTAMP가 instant가 되었으므로 UTC 렌더로 비교) 후
+keyed full-row digest 0 mismatch. t_typecorpus에는 snapshot 유입(id 1~4)과 streaming 유입(id 5~7)
+행이 섞여 있어 snapshot/streaming parity를 겸증한다.
+
+== 4. Kafka 실물 레코드 (htapcdc.dba.t_typecorpus) ==
+{"id": 1, "v_ts": "1970-01-01T00:00:01Z", "v_dtm": "1900-01-01T00:00:00.000"}
+{"id": 2, "v_ts": "2038-01-19T03:14:07Z", "v_dtm": "2299-12-31T23:59:59.999"}
+{"id": 3, "v_ts": "2026-08-16T01:00:00Z", "v_dtm": "2026-08-16T10:00:00.001"}
+- id=1: KST 세션 입력 TIMESTAMP'1970-01-01 09:00:01' → 진짜 instant Z(epoch=1).
+  v1 계약이었으면 "1970-01-01T09:00:01Z"(거짓 instant, P0-3 corruption) — 해소 실증.
+- id=3: 같은 wall-clock 입력의 차등 — TIMESTAMP는 instant로 이동(01:00:00Z), DATETIME은
+  자릿수 유지 + offset 없음(zone-less). ClickHouse DateTime64(3,'UTC')+best_effort 정상 수용.
+
+== 5. session tz 자가 고정 ==
+커넥터가 매 JDBC 접속 성립 직후 SET TIME ZONE 'UTC' 실행(실패 시 접속 폐기·fail-fast, 우회
+스위치 없음). 서버 tz Asia/Seoul 환경에서 snapshot 유입 행(id 1~4)의 instant가 0 mismatch —
+고정이 동작하지 않았다면 snapshot 행만 +09:00 어긋나 diff-check가 실패했다.
+
+PASS — #76-D3/D4/D5 커넥터측 전 항목 실증. TZ 4종 가드 해제는 #86.

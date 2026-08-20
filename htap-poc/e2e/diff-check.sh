@@ -38,8 +38,11 @@ mkdir -p "$SCRATCH"
 trap 'rm -rf "$SCRATCH"' EXIT
 
 cub_dump () { # $1 = concat select
+    # SET TIME ZONE 'UTC': wire v2 (#76/#85) makes TIMESTAMP a true instant, so the
+    # ClickHouse side displays UTC digits — TO_CHAR must render in UTC too, not in the
+    # server default (Asia/Seoul). DATETIME is zone-less and unaffected.
     env CUBRID="$CUBRID" CUBRID_DATABASES="$CUBRID_DATABASES" PATH="$CUBRID/bin:$PATH" \
-        csql -u dba "$DB" -c "$1" | sed -n "s/^  '\\(.*\\)'[[:space:]]*\$/\\1/p"
+        csql -u dba "$DB" -c "SET TIME ZONE 'UTC'; $1" | sed -n "s/^  '\\(.*\\)'[[:space:]]*\$/\\1/p"
 }
 ch_dump () { podman exec htap-clickhouse clickhouse-client --query "$1"; }
 

@@ -97,6 +97,17 @@ sink config 무변경.
 두 경로 값이 byte-identical이라 수렴 검증이 성립. 서버 tz↔UTC의 의미론적 매핑은 POC
 범위 밖(알려진 제약).
 
+> **[추기 2026-08-20, workspace#76/#85]** D8의 wall-clock passthrough 계약은 **폐기**
+> — 리뷰 #48 P0-3이 이 계약을 silent corruption으로 판정했다(instant 스키마
+> `ZonedTimestamp`에 wall-clock 페이로드). 대체 계약(#76-D3, 기준 문서
+> [wire v2 명세](../htap-cdc-wire-v2.md)): 엔진이 temporal 전종을 ISO 텍스트로
+> 송출하고(dead format 소생 + CDC 데몬 tz UTC — #84), 커넥터는 typeName으로 분기해
+> TIMESTAMP는 **진짜 instant**(`ZonedTimestamp`, UTC 자릿수→Instant 복원),
+> DATETIME은 **offset 없는 ISO 문자열**(zone-less 유지)로 낸다. v1 AM/PM 포맷
+> 파서·JDBC escape fallback은 삭제(strict 파서 + lockstep 안전망). 스냅샷 결정론은
+> 워커 JVM UTC 규율 대신 커넥터의 매 접속 `SET TIME ZONE 'UTC'` 자가 고정으로 강제.
+> 구현 workspace#85 (커넥터 `CubridTemporal`/`CubridValueConverters`/`CubridConnection`).
+
 **D9 — classoid→테이블 매핑은 `_db_class.class_of` 1회 조회**:
 DML 아이템의 classoid(uint64)는 엔진 OID 구조체의 8바이트 memcpy이고, JDBC
 `_db_class.class_of`의 OID 문자열 `@page|slot|vol`을 `vol<<48 | slot<<32 | page`로

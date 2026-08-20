@@ -28,7 +28,9 @@ CUBRID→ClickHouse HTAP POC(지도: xmilex-git/workspace#30, 결정 티켓: #38
   동일(키워드만 잔존).
 - TIMESTAMP·DATETIME이 둘 다 `java.sql.Types.TIMESTAMP`(93) — 구분은 vendor
   `TYPE_NAME` 문자열(+SIZE 19/0 vs 23/3)로만 가능. value converter에서 TYPE_NAME
-  기준 분기 필수.
+  기준 분기 필수. **[해소 2026-08-20, workspace#85]** `CubridValueConverters`가
+  typeName으로 분기한다: TIMESTAMP→`ZonedTimestamp`(instant), DATETIME→offset 없는
+  ISO 문자열 (#76-D3, ADR 0006 D8 추기).
 
 ## 확정 규칙
 
