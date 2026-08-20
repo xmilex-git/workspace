@@ -64,6 +64,12 @@ if curl -fsS "$CONNECT/connectors/$MAIN/status" 2>/dev/null \
         | python3 -c 'import json,sys;s=json.load(sys.stdin);exit(0 if s["connector"]["state"]=="RUNNING" else 1)' 2>/dev/null; then
     MAIN_WAS_RUNNING=yes
     curl -fsS -X PUT "$CONNECT/connectors/$MAIN/stop" >/dev/null
+    # wait for the CDC single-consumer session to actually release before we register
+    # our own source — a still-RUNNING MAIN holds cdc_Gl and starves our barrier capture
+    for _ in $(seq 1 15); do
+        [ "$(curl -fsS "$CONNECT/connectors/$MAIN/status" | python3 -c 'import json,sys;print(json.load(sys.stdin)["connector"]["state"])' 2>/dev/null || echo x)" = STOPPED ] && break
+        sleep 2
+    done
     echo "stopped $MAIN for the duration of this test"
 fi
 restore_main () {
@@ -99,8 +105,11 @@ csql_c "ALTER TABLE $TABLE ADD COLUMN extra INT DEFAULT 0" >/dev/null
 csql_c "GRANT SELECT ON $TABLE TO cdc_e2e" >/dev/null
 csql_c "INSERT INTO $TABLE VALUES (10, 1, 'p0-snap', 41), (110, 2, 'p1-snap', 42)" >/dev/null
 # the snapshot barrier resolves by second-resolution timestamp and may replay the last
-# couple of seconds (ADR 0006) — keep the seed DDL out of the replayed window
-sleep 3
+# couple of seconds (ADR 0006) — keep the seed root ALTER out of the replayed window, or
+# it arrives in the stream and (correctly) triggers a DDL halt. 3s is too tight under a
+# loaded back-to-back suite run (measured: intermittent halt on the seed ADD COLUMN);
+# 12s puts the pre-capture DDL safely outside any second-resolution replay window.
+sleep 12
 
 echo "== 2. register dedicated source connector (include=dba.$TABLE) =="
 python3 - "$HERE/cubrid-source.json" <<'EOF' | curl -fsS -X PUT -H 'Content-Type: application/json' -d @- "$CONNECT/connectors/cubrid-source-part83/config" >/dev/null
@@ -117,7 +126,7 @@ EOF
 
 echo "== 3. snapshot rows reach the ROOT-name topic =="
 wait_task RUNNING 30 || { echo "FAIL: task never RUNNING"; task_trace; exit 1; }
-wait_msg '"note":"p0-snap"' 30 || { echo "FAIL: p0 snapshot row missing on $TOPIC"; exit 1; }
+wait_msg '"note":"p0-snap"' 45 || { echo "FAIL: p0 snapshot row missing on $TOPIC"; echo "-- task status:"; curl -fsS "$CONNECT/connectors/$NAME/status"; echo; echo "-- trace:"; task_trace; echo "-- topic dump:"; consume | head; exit 1; }
 consume | grep -q '"note":"p1-snap"' || { echo "FAIL: p1 snapshot row missing"; exit 1; }
 echo "OK: both partitions' snapshot rows on $TOPIC"
 

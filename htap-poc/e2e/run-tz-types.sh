@@ -65,6 +65,11 @@ if curl -fsS "$CONNECT/connectors/$MAIN/status" 2>/dev/null \
         | python3 -c 'import json,sys;s=json.load(sys.stdin);exit(0 if s["connector"]["state"]=="RUNNING" else 1)' 2>/dev/null; then
     MAIN_WAS_RUNNING=yes
     curl -fsS -X PUT "$CONNECT/connectors/$MAIN/stop" >/dev/null
+    # wait for the CDC single-consumer session to actually release (see run-partition-ddl.sh)
+    for _ in $(seq 1 15); do
+        [ "$(curl -fsS "$CONNECT/connectors/$MAIN/status" | python3 -c 'import json,sys;print(json.load(sys.stdin)["connector"]["state"])' 2>/dev/null || echo x)" = STOPPED ] && break
+        sleep 2
+    done
     echo "stopped $MAIN for the duration of this test"
 fi
 restore_main () {

@@ -1,0 +1,85 @@
+== 0. reset pipeline ==
+== source connector: stop -> delete offsets -> delete ==
+cubrid-source-poc not registered
+== topics: delete (purge) ==
+Error while executing topic command : Topic 'Optional[__debezium-heartbeat.htapcdc]' does not exist as expected
+topics purged: htapcdc.dba.t_order htapcdc.dba.t_item htapcdc.dba.t_typecorpus __debezium-heartbeat.htapcdc
+== clickhouse: truncate ==
+ddl: applied
+ddl: truncated *_local tables
+== sink: restart ==
+{"name":"clickhouse-sink-poc","connector":{"state":"RESTARTING","worker_id":"10.89.0.24:8083"},"tasks":[{"id":0,"state":"RESTARTING","worker_id":"10.89.0.24:8083"}],"type":"sink"}
+RESET DONE
+== 1. write stop + seed pre-snapshot state ==
+Execute OK. (0.005000 sec) Committed. (0.000000 sec) 
+Execute OK. (0.004000 sec) Committed. (0.000000 sec) 
+Execute OK. (0.003000 sec) Committed. (0.000000 sec) 
+Execute OK. (0.003000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.001000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.000000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.001000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.000000 sec) Committed. (0.000000 sec) 
+Execute OK. (0.005000 sec) Committed. (0.000000 sec) 
+Execute OK. (0.004000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.001000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.001000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.001000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.000000 sec) Committed. (0.000000 sec) 
+Execute OK. (0.001000 sec) Committed. (0.000000 sec) 
+Execute OK. (0.000000 sec) Committed. (0.001000 sec) 
+Execute OK. (0.000000 sec) Committed. (0.000000 sec) 
+== 2. register source connector (snapshot.mode=initial) ==
+{"name":"cubrid-source-poc","connector":{"state":"RUNNING","worker_id":"10.89.0.24:8083"},"tasks":[{"id":0,"state":"RUNNING","worker_id":"10.89.0.24:8083"}],"type":"source"}
+== 3. wait for streaming phase (barrier handover) ==
+streaming entered — write stop may end
+== 4. write resume: streaming workload (I/U/D x COMMIT/ABORT, §7.7) ==
+AUTOCOMMIT IS OFF
+1 row affected. (0.001000 sec) 
+1 row affected. (0.001000 sec) 
+Execute OK. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+1 row affected. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+Execute OK. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+1 row affected. (0.000000 sec) 
+1 row affected. (0.000000 sec) 
+Execute OK. (0.001000 sec) 
+1 row affected. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+Execute OK. (0.000000 sec) 
+1 row affected. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+Execute OK. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+Execute OK. (0.000000 sec) 
+1 row affected. (0.000000 sec) 
+Execute OK. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+Execute OK. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+1 row affected. (0.000000 sec) 
+1 row affected. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+Execute OK. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+1 row affected. (0.001000 sec) 
+1 row affected. (0.001000 sec) 
+1 row affected. (0.001000 sec) 
+Execute OK. (0.000000 sec) 
+1 row affected. (0.001000 sec) 
+1 row affected. (0.001000 sec) 
+Execute OK. (0.000000 sec) 
+== 5. wait for convergence ==
+1	alice	100	2026-08-16 10:00:00.000
+2	bob-streamed	20.5	2026-08-16 10:01:00.000
+5	carol	7.77	2026-08-16 11:00:00.000
+--
+SKU-A	10	23
+SKU-B	77	0.5
+OK: committed-only + §7.7 convergence + no snapshot/streaming gap
+== 6. §7.7 PK-change physical check (old PK tombstone arrived) ==
+tombstone rows for old PK id=3: 1 (informational — background merges may collapse)
+== 7. differential-lite: CUBRID row counts match canonical views ==
+t_order: cubrid=3 clickhouse=3 / t_item: cubrid=2 clickhouse=2
+PASS

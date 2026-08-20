@@ -1,0 +1,6 @@
+==== BS1: blocking snapshot of t_item via Kafka signal ====
+Error while executing topic command : Topic 'htapcdc-signals' already exists.
+diff-check: 0 mismatch
+diff-check: 0 mismatch
+diff-check: 0 mismatch
+PASS: BS1

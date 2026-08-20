@@ -31,7 +31,20 @@ del_conn () { # $1 = name
     curl -fsS -X DELETE "$CONNECT/connectors/$1/offsets" >/dev/null 2>&1 || true
     curl -fsS -X DELETE "$CONNECT/connectors/$1" >/dev/null 2>&1 || true
 }
-scrub_scenarios () { for c in "${SCENARIO_CONNECTORS[@]}"; do del_conn "$c"; done; }
+scrub_scenarios () {
+    for c in "${SCENARIO_CONNECTORS[@]}"; do del_conn "$c"; done
+    # connector deletion is async: the task keeps its CDC single-consumer session
+    # (cdc_Gl) for a moment after DELETE returns. Wait until the registry shows only
+    # the long-lived connectors, then settle, so the next suite's barrier capture
+    # isn't starved by a still-closing session.
+    for _ in $(seq 1 15); do
+        local live
+        live="$(curl -fsS "$CONNECT/connectors" 2>/dev/null | python3 -c 'import json,sys; print(",".join(sorted(x for x in json.load(sys.stdin) if x not in ("clickhouse-sink-poc","cubrid-source-poc"))))' 2>/dev/null || echo x)"
+        [ -z "$live" ] && break
+        sleep 2
+    done
+    sleep 5
+}
 
 # --- provenance header ---------------------------------------------------------
 : > "$SUMMARY"

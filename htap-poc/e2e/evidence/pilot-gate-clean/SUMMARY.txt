@@ -1,0 +1,29 @@
+# Pilot-gate hermetic run — 2026-08-20T08:13:32Z
+connector: repo HEAD=7fbfd2baf51866878f5712429188a78583d068e4  describe=htap-pilot-20260820-1-g7fbfd2b
+engine:    running cub_server exe=/home/cubrid/htap-cdc/CUBRID-11.5-htapcdc-prv/bin/cub_server
+image:     htap-kafka = docker.io/apache/kafka:3.8.1@sha256:22c4bea38875408e8f9fe52aca8e3a6ee67f9aa0090db59af99a2f6647558db5
+image:     htap-clickhouse = docker.io/clickhouse/clickhouse-server:24.8@sha256:1ffa82edee000a42c09313bd9f1293d94c570aee74babc1b3ca9983a35fa597b
+image:     htap-connect = quay.io/debezium/connect:3.0.0.Final@sha256:f996f7cde660c0522b3505e4fb598a98e77b6f83e4bd31e75b6e1edea4ef9ac4
+
+== reset pipeline to clean baseline (reset-pipeline + run-e2e) ==
+  baseline: PASS -> 00-baseline-e2e.log
+== 01-diff-check ==
+  PASS (01-diff-check) -> 01-diff-check.log
+== 02-faults-S1-S4 ==
+  PASS (02-faults-S1-S4) -> 02-faults-S1-S4.log
+== 03-snapshot-faults ==
+  PASS (03-snapshot-faults) -> 03-snapshot-faults.log
+== 04-blocking-snapshot ==
+  PASS (04-blocking-snapshot) -> 04-blocking-snapshot.log
+== 05-owner-collision ==
+  PASS (05-owner-collision) -> 05-owner-collision.log
+== 06-partition-ddl ==
+  PASS (06-partition-ddl) -> 06-partition-ddl.log
+== 07-tz-types ==
+  PASS (07-tz-types) -> 07-tz-types.log
+== 08-relation-fault ==
+  PASS (08-relation-fault) -> 08-relation-fault.log
+== 09-port-isolation ==
+  PASS (09-port-isolation) -> 09-port-isolation.log
+
+=== RESULT: ALL PASS (single hermetic run, connector htap-pilot-20260820-1-g7fbfd2b) ===
