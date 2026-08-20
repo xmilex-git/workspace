@@ -1,0 +1,50 @@
+(CDC 단일 consumer: cubrid-source-poc 정지 — 종료 시 복원)
+== 사전 확인: cub_master가 어느 주소에 bind 되었나 (INADDR_ANY 기대) ==
+LISTEN 0      1000         0.0.0.0:1523       0.0.0.0:*    users:(("cub_master",pid=4181024,fd=6))      
+
+== 시드: 결정론적 고정 상태(매 실행 DROP 후 재생성 — 구 증거 오염 원인 제거) ==
+== RISK-ALL: DBA raw client가 범위 미지정으로 스트림 전체(before-image 포함)를 읽는다 ==
+  host=192.168.6.34:1523 user=dba(DBA) → 증거: /home/cubrid/dev/workspace/htap-poc/e2e/evidence/issue-79-raw-attach.txt
+  [OK] DBA raw client 연결됨 (서버측 transport 인증 없음)
+  [OK] RISK-ALL: UPDATE 후상 노출: leaked-secret
+  [OK] RISK-ALL: UPDATE 전상(before-image) 노출: before
+  [OK] RISK-ALL: DELETE 전상(before-image) 노출: pii-row
+  --- 읽힌 DML(발췌) ---
+    ITEM #22 trid=308722 user=DBA type=1(DML) dml_type=0(INSERT) classoid=167503724755 num_changed=2 num_cond=0 rec_lsa=20510485848 (pageid=312965 offset=11608)
+        changed[0] col_index=0 len=4 raw=01000000 as_int=1 as_float=1.4013e-45 as_str="\x01\x00\x00\x00"
+        changed[1] col_index=1 len=6 raw=6265666f7265 as_str="before"
+    ITEM #24 trid=308724 user=DBA type=1(DML) dml_type=1(UPDATE) classoid=167503724755 num_changed=1 num_cond=2 rec_lsa=20510486744 (pageid=312965 offset=12504)
+        changed[0] col_index=1 len=13 raw=6c65616b65642d736563726574 as_str="leaked-secret"
+        cond[0] col_index=0 len=4 raw=01000000 as_int=1 as_float=1.4013e-45 as_str="\x01\x00\x00\x00"
+        cond[1] col_index=1 len=6 raw=6265666f7265 as_str="before"
+    ITEM #26 trid=308725 user=DBA type=1(DML) dml_type=0(INSERT) classoid=167503724755 num_changed=2 num_cond=0 rec_lsa=20510487064 (pageid=312965 offset=12824)
+        changed[0] col_index=0 len=4 raw=02000000 as_int=2 as_float=2.8026e-45 as_str="\x02\x00\x00\x00"
+        changed[1] col_index=1 len=7 raw=7069692d726f77 as_str="pii-row"
+
+== RISK-SCOPED: 비-DBA(cdc_e2e, SELECT만) raw client가 -c로 그 테이블을 읽는다 ==
+  host=192.168.6.34:1523 user=cdc_e2e(비-DBA, SELECT) scope=dba.t_secret → 증거: /home/cubrid/dev/workspace/htap-poc/e2e/evidence/issue-79-nondba-scoped-read.txt
+  [OK] 비-DBA scoped raw client 연결됨 — SELECT만으로 CDC 스트림 접근
+  [OK] RISK-SCOPED: UPDATE 후상 노출: leaked-secret
+  [OK] RISK-SCOPED: UPDATE 전상(before-image) 노출: before
+  [OK] RISK-SCOPED: DELETE 전상(before-image) 노출: pii-row
+
+== NONDBA-ALL: 비-DBA 범위 미지정 전체 읽기는 거부된다 (부분 완화, 정직 기록) ==
+  [OK] 비-DBA 전체 스트림 거부됨(CONNECT rc=-37) — 전체 읽기는 DBA 필요(부분 완화)
+
+== DENIAL: 포트에 닿지 못하면 같은 client도 CONNECT 실패한다 ==
+  [OK] 리스너 없는 endpoint: raw client 붙지 못함
+  [OK] 무경로 endpoint: raw client 붙지 못함
+  증거: /home/cubrid/dev/workspace/htap-poc/e2e/evidence/issue-79-denial.txt
+
+== ALLOWLIST(실제 파일럿 gate): 실서버 포트에 대한 2-호스트 allowlist ==
+  [ATTENTION] ALLOW_HOST/DENY_HOST 미지정 — 이 자기완결 실행은 transport 사실만
+  증명한다. 실제 파일럿 방화벽 allowlist 검증(허용 호스트 성공 + 비허용 호스트
+  동일 포트 실패 + 규칙 스냅샷)은 파일럿 환경에서 반드시 별도 수행해야 하며,
+  support-scope §5-14 사내 파일럿 전제조건이 이를 필수로 규정한다.
+  예: ALLOW_HOST=<connect-worker-ip> DENY_HOST=<user-net-ip> ./run-port-isolation-denial.sh
+
+판정: PASS — DBA raw client는 전체 이력을(RISK-ALL), 비-DBA는 SELECT만으로 해당
+      테이블 before-image를(RISK-SCOPED) 읽는다. 전체 읽기는 DBA 필요(NONDBA-ALL,
+      부분 완화)지만 도달성만이 실 경계다 — 못 닿으면 붙지 못한다(DENIAL).
+      CDC 포트는 서버 경계가 아니므로 망 격리가 파일럿 필수 전제조건이다
+      (support-scope §5-13/§5-14, setup-guide §1·§2.3).

@@ -1,0 +1,22 @@
+== 0a. CDC session is single-consumer (cdc_Gl.conn) — stop other source connectors ==
+== 0. cleanup previous run (stop -> delete offsets -> delete, ADR 0004) ==
+== 1. seed: partitioned table WITH root ALTER history, rows in p0/p1 ==
+== 2. register dedicated source connector (include=dba.t_part83) ==
+== 3. snapshot rows reach the ROOT-name topic ==
+OK: both partitions' snapshot rows on htappart83.dba.t_part83
+== 4. streaming DML on existing partitions routes to root ==
+OK: streaming DML on root-name topic
+== 5. mid-stream ADD PARTITION passes; NEW partition rows decode correctly ==
+OK: ADD PARTITION no-halt + divergent-repr partition row decoded (extra=44)
+== 6. mid-stream REORGANIZE PARTITION passes ==
+OK: REORGANIZE PARTITION no-halt
+== 7. index/FK ALTERs pass (encoding-safe reclassification, D10) ==
+OK: ADD/DROP INDEX no-halt
+== 8. DROP PARTITION halts (fail-fast), restart re-halts deterministically ==
+-- halt trace head:
+org.apache.kafka.connect.errors.ConnectException: An exception occurred in the change event producer. This connector will be stopped.
+	at io.debezium.pipeline.ErrorHandler.setProducerThrowable(ErrorHandler.java:67)
+	at io.debezium.connector.cubrid.CubridStreamingChangeEventSource.execute(CubridStreamingChangeEventSource.java:278)
+OK: DROP PARTITION halt + deterministic re-halt
+== 9. cleanup ==
+PASS

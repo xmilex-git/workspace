@@ -1,0 +1,47 @@
+== S0. preconditions: connectors RUNNING, baseline diff-check ==
+t_order: cubrid=6 rows, clickhouse=6 rows, 8 buckets x keyed full-row digest
+t_item: cubrid=2 rows, clickhouse=2 rows, 8 buckets x keyed full-row digest
+t_typecorpus: cubrid=7 rows, clickhouse=7 rows, 8 buckets x keyed full-row digest
+DIFF-CHECK: 0 mismatch
+== S1. source task restart mid-stream ==
+
+In the command from line 2,
+
+ERROR: Operation would have caused one or more unique constraint violations. INDEX pk_t_order_id(B+tree: 0|24704|24705) ON CLASS dba.t_order(CLASS_OID: 0|214|50). key: 101(OID: 0|24769|11).
+
+  wrote workload s1 phase 1
+  wrote workload s1 phase 2
+converged: diff-check 0 mismatch
+== S2. Connect worker hard restart (JVM kill) ==
+
+In the command from line 2,
+
+ERROR: Operation would have caused one or more unique constraint violations. INDEX pk_t_order_id(B+tree: 0|24704|24705) ON CLASS dba.t_order(CLASS_OID: 0|214|50). key: 201(OID: 0|24769|12).
+
+  wrote workload s2 phase 1
+  wrote workload s2 phase 2
+converged: diff-check 0 mismatch
+== S3. ClickHouse outage during writes, then recovery ==
+
+In the command from line 2,
+
+ERROR: Operation would have caused one or more unique constraint violations. INDEX pk_t_order_id(B+tree: 0|24704|24705) ON CLASS dba.t_order(CLASS_OID: 0|214|50). key: 301(OID: 0|24769|13).
+
+  wrote workload s3 phase 1
+  wrote workload s3 phase 2
+converged: diff-check 0 mismatch
+== S4. duplicate delivery: sink offsets reset to earliest ==
+  before reset: committed=71 end=71
+
+GROUP                          TOPIC                          PARTITION  NEW-OFFSET     connect-clickhouse-sink-poc    htapcdc.dba.t_order            0          0              
+GROUP                          TOPIC                          PARTITION  NEW-OFFSET     connect-clickhouse-sink-poc    htapcdc.dba.t_item             0          0                after reset: committed=16 (must be rewound to earliest)
+  redelivery drained: lag=0 committed=71 end=71
+  raw RMT duplicate (pk,_version) groups: t_order=11 t_item=3
+converged: diff-check 0 mismatch
+  canonical views byte-identical before/after redelivery
+== final differential check ==
+t_order: cubrid=6 rows, clickhouse=6 rows, 8 buckets x keyed full-row digest
+t_item: cubrid=2 rows, clickhouse=2 rows, 8 buckets x keyed full-row digest
+t_typecorpus: cubrid=7 rows, clickhouse=7 rows, 8 buckets x keyed full-row digest
+DIFF-CHECK: 0 mismatch
+PASS: all 4 fault scenarios converged with 0 mismatch

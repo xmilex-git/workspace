@@ -1,0 +1,28 @@
+== 0a. CDC 단일 consumer — 기존 소스 정지 ==
+== S1 committed DML → lag → DROP → fail-closed halt ==
+  1. seed committed rows + converge snapshot/stream
+  [OK] S1 committed DML → lag → DROP → fail-closed halt: baseline converged (snapshot + live stream)
+  2. STOP connector (freeze read cursor = extractor lag)
+  3. committed DML (now lagging, strictly after freeze) + server-side DDL while stopped
+  4. RESUME → fresh session re-announces from anchor, resolves names live
+  [OK] S1 committed DML → lag → DROP → fail-closed halt: fail-closed halt with expected cause
+   -- halt trace head: io.debezium.DebeziumException: 'table.include.list' entry 'dba.t_relf_drop' does not exist in the database (or is not readable by this account) — a capture target must exist with a loadable schema at startup; a table dropped or renamed while the connector was stopped is caught here. Update 'table.include.list' to the current schema, then run the resnapshot procedure. See the CUBRID connector setup guide, section 'Relation identity halt recovery'.
+  5. deterministic re-halt on task restart
+  [OK] S1 committed DML → lag → DROP → fail-closed halt: deterministic re-halt
+  6. no silent divergence: lagged committed row never published to its topic
+  [OK] S1 committed DML → lag → DROP → fail-closed halt: lagged row not published (halt precedes publish) [topic 3→3 msgs]
+
+== S2 committed DML → lag → RENAME → fail-closed halt ==
+  1. seed committed rows + converge snapshot/stream
+  [OK] S2 committed DML → lag → RENAME → fail-closed halt: baseline converged (snapshot + live stream)
+  2. STOP connector (freeze read cursor = extractor lag)
+  3. committed DML (now lagging, strictly after freeze) + server-side DDL while stopped
+  4. RESUME → fresh session re-announces from anchor, resolves names live
+  [OK] S2 committed DML → lag → RENAME → fail-closed halt: fail-closed halt with expected cause
+   -- halt trace head: io.debezium.DebeziumException: 'table.include.list' entry 'dba.t_relf_ren' does not exist in the database (or is not readable by this account) — a capture target must exist with a loadable schema at startup; a table dropped or renamed while the connector was stopped is caught here. Update 'table.include.list' to the current schema, then run the resnapshot procedure. See the CUBRID connector setup guide, section 'Relation identity halt recovery'.
+  5. deterministic re-halt on task restart
+  [OK] S2 committed DML → lag → RENAME → fail-closed halt: deterministic re-halt
+  6. no silent divergence: lagged committed row never published to its topic
+  [OK] S2 committed DML → lag → RENAME → fail-closed halt: lagged row not published (halt precedes publish) [topic 3→3 msgs]
+
+PASS — 원 P0 장애 경로(DROP/RENAME under extractor lag)가 실 엔진 pair에서 fail-closed로 차단됨

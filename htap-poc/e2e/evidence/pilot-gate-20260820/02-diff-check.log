@@ -1,0 +1,4 @@
+t_order: cubrid=3 rows, clickhouse=3 rows, 8 buckets x keyed full-row digest
+t_item: cubrid=2 rows, clickhouse=2 rows, 8 buckets x keyed full-row digest
+t_typecorpus: cubrid=7 rows, clickhouse=7 rows, 8 buckets x keyed full-row digest
+DIFF-CHECK: 0 mismatch

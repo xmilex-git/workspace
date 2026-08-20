@@ -1,0 +1,14 @@
+== 0a. CDC session is single-consumer (cdc_Gl.conn) — stop other source connectors ==
+== 0. cleanup previous run (stop -> delete offsets -> delete, ADR 0004) ==
+== 1. seed: snapshot rows — numeric offsets, region zones (DST summer), epoch floor, NULLs ==
+== 2. register dedicated source connector (include=dba.t_tz86, prod SMT chain) ==
+== 3. snapshot values are wire-v2-shaped ISO instants ==
+OK: snapshot offsets preserved (TZ), UTC-rendered (LTZ), DST resolved, NULLs null
+== 4. streaming twins (ids +10, same source values) are byte-identical to snapshot ==
+OK: snapshot/streaming parity — identical JSON per column for all 4 value rows
+== 5. streaming UPDATE (NULL -> value) decodes ==
+OK: streaming UPDATE on TZ column
+== 6. ClickHouse sink: DateTime64(3,'UTC') + best_effort stores the true instant ==
+OK: ClickHouse instants exact — TZ/LTZ twins converge to one epoch, NULLs preserved
+== 7. cleanup ==
+PASS

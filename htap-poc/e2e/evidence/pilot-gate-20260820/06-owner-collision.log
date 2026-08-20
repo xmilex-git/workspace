@@ -1,0 +1,28 @@
+== 0. reset pipeline + create owner 'app' with a same-named t_order ==
+== source connector: stop -> delete offsets -> delete ==
+{"message":"The Connect framework-managed offsets for this connector have been reset successfully. However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."}
+deleted cubrid-source-poc
+== topics: delete (purge) ==
+topics purged: htapcdc.dba.t_order htapcdc.dba.t_item htapcdc.dba.t_typecorpus __debezium-heartbeat.htapcdc
+== clickhouse: truncate ==
+ddl: applied
+ddl: truncated *_local tables
+== sink: restart ==
+{"name":"clickhouse-sink-poc","connector":{"state":"RESTARTING","worker_id":"10.89.0.11:8083"},"tasks":[{"id":0,"state":"RESTARTING","worker_id":"10.89.0.11:8083"}],"type":"sink"}
+RESET DONE
+Error while executing topic command : Topic 'Optional[htapcdc.app.t_order]' does not exist as expected
+Execute OK. (0.001000 sec) Committed. (0.001000 sec) 
+Execute OK. (0.003000 sec) Committed. (0.001000 sec) 
+Execute OK. (0.001000 sec) Committed. (0.000000 sec) 
+== 1. seed both owners' tables (snapshot phase input) ==
+Execute OK. (0.004000 sec) Committed. (0.001000 sec) 
+1 row affected. (0.001000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.001000 sec) Committed. (0.000000 sec) 
+== 2. register source capturing BOTH owner.table ids ==
+== 3. stream one change into each owner's table ==
+1 row affected. (0.002000 sec) Committed. (0.000000 sec) 
+1 row affected. (0.001000 sec) Committed. (0.000000 sec) 
+== 4. assert: each topic carries its own owner's column set ==
+OK: dba.t_order 2 msgs cols=['amount', 'created_at', 'customer', 'id'] / app.t_order 2 msgs cols=['id', 'note', 'qty'] — no column merge, separate topics
+PASS
+== cleanup: back to the standard pipeline state ==

@@ -1,0 +1,6 @@
+== 0a. CDC session is single-consumer (cdc_Gl.conn) — stop other source connectors ==
+== 0. cleanup previous run (stop -> delete offsets -> delete, ADR 0004) ==
+== 1. seed: partitioned table WITH root ALTER history, rows in p0/p1 ==
+== 2. register dedicated source connector (include=dba.t_part83) ==
+== 3. snapshot rows reach the ROOT-name topic ==
+FAIL: p0 snapshot row missing on htappart83.dba.t_part83

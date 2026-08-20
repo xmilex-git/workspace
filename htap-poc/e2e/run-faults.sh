@@ -150,8 +150,15 @@ committed_sum () { group_describe | awk '$2 ~ /^htapcdc\./ {s+=$4} END {print s+
 end_sum ()       { group_describe | awk '$2 ~ /^htapcdc\./ {s+=$5} END {print s+0}'; }
 
 BEFORE="$(snapshot_views)"
-END_BEFORE="$(end_sum)"
-COMMITTED_BEFORE="$(committed_sum)"
+# the sink consumer catches up asynchronously after S3; sampling once races it
+# (committed can trail end by a few messages). Wait (bounded) for caught-up before
+# the reset — this is a precondition settle, not a change to what S4 verifies.
+END_BEFORE=""; COMMITTED_BEFORE=""
+for _ in $(seq 1 30); do
+    END_BEFORE="$(end_sum)"; COMMITTED_BEFORE="$(committed_sum)"
+    [ "$COMMITTED_BEFORE" = "$END_BEFORE" ] && break
+    sleep 2
+done
 echo "  before reset: committed=$COMMITTED_BEFORE end=$END_BEFORE"
 [ "$COMMITTED_BEFORE" = "$END_BEFORE" ] || { echo "FAIL: S4 precondition — sink not fully caught up before reset" >&2; exit 1; }
 curl -fsS -X PUT "$CONNECT/connectors/$SINK_NAME/stop"

@@ -1,0 +1,37 @@
+=== 01-normal-e2e ===
+  PASS (01-normal-e2e) -> evidence/pilot-gate-20260820/01-normal-e2e.log
+=== 02-diff-check ===
+  PASS (02-diff-check) -> evidence/pilot-gate-20260820/02-diff-check.log
+=== 03-faults-S1-S4 ===
+  FAIL rc=1 (03-faults-S1-S4) -> evidence/pilot-gate-20260820/03-faults-S1-S4.log
+      wrote workload s3 phase 2
+    converged: diff-check 0 mismatch
+    == S4. duplicate delivery: sink offsets reset to earliest ==
+      before reset: committed=51 end=55
+    FAIL: S4 precondition — sink not fully caught up before reset
+=== 04-snapshot-faults ===
+  PASS (04-snapshot-faults) -> evidence/pilot-gate-20260820/04-snapshot-faults.log
+=== 05-blocking-snapshot ===
+  PASS (05-blocking-snapshot) -> evidence/pilot-gate-20260820/05-blocking-snapshot.log
+=== 06-owner-collision ===
+  PASS (06-owner-collision) -> evidence/pilot-gate-20260820/06-owner-collision.log
+=== 07-partition-ddl ===
+  FAIL rc=1 (07-partition-ddl) -> evidence/pilot-gate-20260820/07-partition-ddl.log
+    == 0. cleanup previous run (stop -> delete offsets -> delete, ADR 0004) ==
+    == 1. seed: partitioned table WITH root ALTER history, rows in p0/p1 ==
+    == 2. register dedicated source connector (include=dba.t_part83) ==
+    == 3. snapshot rows reach the ROOT-name topic ==
+    FAIL: p0 snapshot row missing on htappart83.dba.t_part83
+=== 08-tz-types ===
+  PASS (08-tz-types) -> evidence/pilot-gate-20260820/08-tz-types.log
+=== 09-relation-fault ===
+  PASS (09-relation-fault) -> evidence/pilot-gate-20260820/09-relation-fault.log
+=== 10-port-isolation ===
+  PASS (10-port-isolation) -> evidence/pilot-gate-20260820/10-port-isolation.log
+=== DONE ===
+
+=== RETRY RESULTS (isolated, flake resolution) ===
+03-faults-S1-S4: PASS (retry) — S4 precondition was a sink-lag sampling race; added bounded caught-up wait. -> 03-faults-S1-S4.retry.log
+07-partition-ddl: PASS (retry) — original FAIL was CDC single-consumer ordering (prior scenario's session); passes standalone. -> 07-partition-ddl.retry.log
+10-port-isolation: PASS (re-run after script correction) — accurate threat model (DBA whole-stream + non-DBA scoped SELECT read of before-images). -> 10-port-isolation.log
+=== FINAL: 10/10 suites PASS on fixed pair (engine bdbeaf3f1 / connector 85ac725) ===

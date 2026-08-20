@@ -1,53 +1,75 @@
-CONFIG db=htapdb host=192.168.6.34 port=1523 user=dba start_ts=1787117507 all_in_cond=1 max_log_item=400 idle_limit=6
+CONFIG db=htapdb host=192.168.6.34 port=1523 user=dba start_ts=1787198752 all_in_cond=1 max_log_item=400 idle_limit=8
 SET all_in_cond(1) rc=0
 SET max_log_item(400) rc=0
 CONNECT rc=0
 NODE_FACTS ha_state=active db_creation=1786946327
-FIND_LSA rc=0 in_ts=1787117507 out_ts=1787117507 lsa=0x009000000004a9f3 (pageid?=305651 offset?=144)
-EXTRACT round=1 rc=0 n=27 in_lsa=0x009000000004a9f3 (pageid?=305651 offset?=144) -> out_lsa=0x08b000000004a9f3 (pageid?=305651 offset?=2224)
-ITEM #1 trid=0 user=(null) type=3(TIMER) timestamp=1787117507
-ITEM #2 trid=0 user=(null) type=3(TIMER) timestamp=1787117508
-ITEM #3 trid=0 user=(null) type=3(TIMER) timestamp=1787117509
-ITEM #4 trid=0 user=(null) type=3(TIMER) timestamp=1787117510
-ITEM #5 trid=0 user=(null) type=3(TIMER) timestamp=1787117511
-ITEM #6 trid=0 user=(null) type=3(TIMER) timestamp=1787117512
-ITEM #7 trid=0 user=(null) type=3(TIMER) timestamp=1787117513
-ITEM #8 trid=0 user=(null) type=3(TIMER) timestamp=1787117514
-ITEM #9 trid=0 user=(null) type=3(TIMER) timestamp=1787117515
-ITEM #10 trid=0 user=(null) type=3(TIMER) timestamp=1787117516
-ITEM #11 trid=0 user=(null) type=3(TIMER) timestamp=1787117517
-ITEM #12 trid=0 user=(null) type=3(TIMER) timestamp=1787117518
-ITEM #13 trid=0 user=(null) type=3(TIMER) timestamp=1787117519
-ITEM #14 trid=0 user=(null) type=3(TIMER) timestamp=1787117520
-ITEM #15 trid=0 user=(null) type=3(TIMER) timestamp=1787117521
-ITEM #16 trid=0 user=(null) type=3(TIMER) timestamp=1787117522
-ITEM #17 trid=0 user=(null) type=3(TIMER) timestamp=1787117523
-ITEM #18 trid=0 user=(null) type=3(TIMER) timestamp=1787117524
-ITEM #19 trid=0 user=(null) type=3(TIMER) timestamp=1787117525
-ITEM #20 trid=0 user=(null) type=3(TIMER) timestamp=1787117526
-ITEM #21 trid=300158 user=DBA type=5(RELATION) classoid=901943132368 owner=dba table=t_secret
-ITEM #22 trid=300158 user=DBA type=0(DDL) ddl_type=0(CREATE) obj_type=0(TABLE) oid=18446744073709551615 classoid=901943132368 stmt_len=72
-    stmt="CREATE TABLE IF NOT EXISTS t_secret(id INT PRIMARY KEY, val VARCHAR(50))"
-ITEM #23 trid=300158 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1787117527(2026-08-19 14:32:07)
-ITEM #24 trid=300159 user=DBA type=1(DML) dml_type=0(INSERT) classoid=901943132368 num_changed=2 num_cond=0 rec_lsa=20031145760 (pageid=305651 offset=1824)
+FIND_LSA rc=0 in_ts=1787198752 out_ts=1787198752 lsa=0x087000000004c684 (pageid?=312964 offset?=2160)
+EXTRACT round=1 rc=0 n=31 in_lsa=0x087000000004c684 (pageid?=312964 offset?=2160) -> out_lsa=0x373800000004c685 (pageid?=312965 offset?=14136)
+ITEM #1 trid=0 user=(null) type=3(TIMER) timestamp=1787198752
+ITEM #2 trid=0 user=(null) type=3(TIMER) timestamp=1787198753
+ITEM #3 trid=0 user=(null) type=3(TIMER) timestamp=1787198754
+ITEM #4 trid=0 user=(null) type=3(TIMER) timestamp=1787198755
+ITEM #5 trid=0 user=(null) type=3(TIMER) timestamp=1787198756
+ITEM #6 trid=0 user=(null) type=3(TIMER) timestamp=1787198757
+ITEM #7 trid=0 user=(null) type=3(TIMER) timestamp=1787198758
+ITEM #8 trid=0 user=(null) type=3(TIMER) timestamp=1787198759
+ITEM #9 trid=0 user=(null) type=3(TIMER) timestamp=1787198760
+ITEM #10 trid=0 user=(null) type=3(TIMER) timestamp=1787198761
+ITEM #11 trid=0 user=(null) type=3(TIMER) timestamp=1787198762
+ITEM #12 trid=0 user=(null) type=3(TIMER) timestamp=1787198763
+ITEM #13 trid=0 user=(null) type=3(TIMER) timestamp=1787198764
+ITEM #14 trid=0 user=(null) type=3(TIMER) timestamp=1787198765
+ITEM #15 trid=0 user=(null) type=3(TIMER) timestamp=1787198766
+ITEM #16 trid=308718 user=DBA type=5(RELATION) classoid=163208757459 owner= table=
+ITEM #17 trid=308718 user=DBA type=0(DDL) ddl_type=2(DROP) obj_type=0(TABLE) oid=163208757459 classoid=163208757459 stmt_len=33
+    stmt="drop table if exists dba.t_secret"
+ITEM #18 trid=308718 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1787198767(2026-08-20 13:06:07)
+ITEM #19 trid=308719 user=DBA type=5(RELATION) classoid=167503724755 owner=dba table=t_secret
+ITEM #20 trid=308719 user=DBA type=0(DDL) ddl_type=0(CREATE) obj_type=0(TABLE) oid=18446744073709551615 classoid=167503724755 stmt_len=58
+    stmt="CREATE TABLE t_secret(id INT PRIMARY KEY, val VARCHAR(50))"
+ITEM #21 trid=308719 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1787198767(2026-08-20 13:06:07)
+ITEM #22 trid=308722 user=DBA type=1(DML) dml_type=0(INSERT) classoid=167503724755 num_changed=2 num_cond=0 rec_lsa=20510485848 (pageid=312965 offset=11608)
     changed[0] col_index=0 len=4 raw=01000000 as_int=1 as_float=1.4013e-45 as_str="\x01\x00\x00\x00"
     changed[1] col_index=1 len=6 raw=6265666f7265 as_str="before"
-ITEM #25 trid=300159 user=DBA type=4(ROLLBACK_TO) rollback_to_lsa=-1 (pageid=-1 offset=65535)
-ITEM #26 trid=300159 user=DBA type=2(DCL) dcl_type=1(ABORT) timestamp=1787117527(2026-08-19 14:32:07)
-ITEM #27 trid=0 user=(null) type=3(TIMER) timestamp=1787117527
-EXTRACT round=2 rc=0 n=2 in_lsa=0x08b000000004a9f3 (pageid?=305651 offset?=2224) -> out_lsa=0x091000000004a9f3 (pageid?=305651 offset?=2320)
-ITEM #28 trid=0 user=(null) type=3(TIMER) timestamp=1787117528
-ITEM #29 trid=0 user=(null) type=3(TIMER) timestamp=1787117529
-EXTRACT round=3 rc=0 n=2 in_lsa=0x091000000004a9f3 (pageid?=305651 offset?=2320) -> out_lsa=0x097000000004a9f3 (pageid?=305651 offset?=2416)
-ITEM #30 trid=0 user=(null) type=3(TIMER) timestamp=1787117530
-ITEM #31 trid=0 user=(null) type=3(TIMER) timestamp=1787117531
-EXTRACT round=4 rc=0 n=2 in_lsa=0x097000000004a9f3 (pageid?=305651 offset?=2416) -> out_lsa=0x09d000000004a9f3 (pageid?=305651 offset?=2512)
-ITEM #32 trid=0 user=(null) type=3(TIMER) timestamp=1787117532
-ITEM #33 trid=0 user=(null) type=3(TIMER) timestamp=1787117533
-EXTRACT round=5 rc=0 n=2 in_lsa=0x09d000000004a9f3 (pageid?=305651 offset?=2512) -> out_lsa=0x0a3000000004a9f3 (pageid?=305651 offset?=2608)
-ITEM #34 trid=0 user=(null) type=3(TIMER) timestamp=1787117534
-ITEM #35 trid=0 user=(null) type=3(TIMER) timestamp=1787117535
-EXTRACT round=6 rc=-10 n=0 in_lsa=0x0a3000000004a9f3 (pageid?=305651 offset?=2608) -> out_lsa=0x0a3000000004a9f3 (pageid?=305651 offset?=2608)
-extract failed (rc=-10)
-DONE total_items=35 rounds=6
-FINALIZE rc=-3
+ITEM #23 trid=308722 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1787198767(2026-08-20 13:06:07)
+ITEM #24 trid=308724 user=DBA type=1(DML) dml_type=1(UPDATE) classoid=167503724755 num_changed=1 num_cond=2 rec_lsa=20510486744 (pageid=312965 offset=12504)
+    changed[0] col_index=1 len=13 raw=6c65616b65642d736563726574 as_str="leaked-secret"
+    cond[0] col_index=0 len=4 raw=01000000 as_int=1 as_float=1.4013e-45 as_str="\x01\x00\x00\x00"
+    cond[1] col_index=1 len=6 raw=6265666f7265 as_str="before"
+ITEM #25 trid=308724 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1787198767(2026-08-20 13:06:07)
+ITEM #26 trid=308725 user=DBA type=1(DML) dml_type=0(INSERT) classoid=167503724755 num_changed=2 num_cond=0 rec_lsa=20510487064 (pageid=312965 offset=12824)
+    changed[0] col_index=0 len=4 raw=02000000 as_int=2 as_float=2.8026e-45 as_str="\x02\x00\x00\x00"
+    changed[1] col_index=1 len=7 raw=7069692d726f77 as_str="pii-row"
+ITEM #27 trid=308725 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1787198767(2026-08-20 13:06:07)
+ITEM #28 trid=308726 user=DBA type=1(DML) dml_type=2(DELETE) classoid=167503724755 num_changed=0 num_cond=2 rec_lsa=20510487784 (pageid=312965 offset=13544)
+    cond[0] col_index=0 len=4 raw=02000000 as_int=2 as_float=2.8026e-45 as_str="\x02\x00\x00\x00"
+    cond[1] col_index=1 len=7 raw=7069692d726f77 as_str="pii-row"
+ITEM #29 trid=308726 user=DBA type=2(DCL) dcl_type=0(COMMIT) timestamp=1787198767(2026-08-20 13:06:07)
+ITEM #30 trid=0 user=(null) type=3(TIMER) timestamp=1787198767
+ITEM #31 trid=0 user=(null) type=3(TIMER) timestamp=1787198768
+EXTRACT round=2 rc=0 n=2 in_lsa=0x373800000004c685 (pageid?=312965 offset?=14136) -> out_lsa=0x379800000004c685 (pageid?=312965 offset?=14232)
+ITEM #32 trid=0 user=(null) type=3(TIMER) timestamp=1787198769
+ITEM #33 trid=0 user=(null) type=3(TIMER) timestamp=1787198770
+EXTRACT round=3 rc=0 n=2 in_lsa=0x379800000004c685 (pageid?=312965 offset?=14232) -> out_lsa=0x37f800000004c685 (pageid?=312965 offset?=14328)
+ITEM #34 trid=0 user=(null) type=3(TIMER) timestamp=1787198771
+ITEM #35 trid=0 user=(null) type=3(TIMER) timestamp=1787198772
+EXTRACT round=4 rc=0 n=2 in_lsa=0x37f800000004c685 (pageid?=312965 offset?=14328) -> out_lsa=0x385800000004c685 (pageid?=312965 offset?=14424)
+ITEM #36 trid=0 user=(null) type=3(TIMER) timestamp=1787198773
+ITEM #37 trid=0 user=(null) type=3(TIMER) timestamp=1787198774
+EXTRACT round=5 rc=0 n=2 in_lsa=0x385800000004c685 (pageid?=312965 offset?=14424) -> out_lsa=0x38b800000004c685 (pageid?=312965 offset?=14520)
+ITEM #38 trid=0 user=(null) type=3(TIMER) timestamp=1787198775
+ITEM #39 trid=0 user=(null) type=3(TIMER) timestamp=1787198776
+EXTRACT round=6 rc=0 n=2 in_lsa=0x38b800000004c685 (pageid?=312965 offset?=14520) -> out_lsa=0x391800000004c685 (pageid?=312965 offset?=14616)
+ITEM #40 trid=0 user=(null) type=3(TIMER) timestamp=1787198777
+ITEM #41 trid=0 user=(null) type=3(TIMER) timestamp=1787198778
+EXTRACT round=7 rc=0 n=2 in_lsa=0x391800000004c685 (pageid?=312965 offset?=14616) -> out_lsa=0x397800000004c685 (pageid?=312965 offset?=14712)
+ITEM #42 trid=0 user=(null) type=3(TIMER) timestamp=1787198779
+ITEM #43 trid=0 user=(null) type=3(TIMER) timestamp=1787198780
+EXTRACT round=8 rc=0 n=2 in_lsa=0x397800000004c685 (pageid?=312965 offset?=14712) -> out_lsa=0x39d800000004c685 (pageid?=312965 offset?=14808)
+ITEM #44 trid=0 user=(null) type=3(TIMER) timestamp=1787198781
+ITEM #45 trid=0 user=(null) type=3(TIMER) timestamp=1787198782
+EXTRACT round=9 rc=0 n=2 in_lsa=0x39d800000004c685 (pageid?=312965 offset?=14808) -> out_lsa=0x3a3800000004c685 (pageid?=312965 offset?=14904)
+ITEM #46 trid=0 user=(null) type=3(TIMER) timestamp=1787198783
+ITEM #47 trid=0 user=(null) type=3(TIMER) timestamp=1787198784
+DONE total_items=47 rounds=9
+FINALIZE rc=0

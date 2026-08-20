@@ -1,0 +1,19 @@
+==== SN1: snapshot under continuous DML (fault test ①) ====
+diff-check: 0 mismatch
+SN1 PASS
+==== SN2: commit injection barrier-window (fault test ②) ====
+injected marker 910001 into window A (pre-barrier)
+injected marker 910002 into window B (post-barrier, pre-view)
+both barrier-window markers present in ClickHouse
+diff-check: 0 mismatch
+SN2 PASS
+==== SN3: post-barrier DELETE finally erased (fault test ③) ====
+deleted t_order ids 1,132768 + t_item SKU-B during the scan
+deleted rows are absent from the canonical views
+diff-check: 0 mismatch
+SN3 PASS
+==== SN4: worker hard-kill mid-snapshot, rerun (fault test ④) ====
+killing htap-connect mid-snapshot (inside the after-barrier pause)
+diff-check: 0 mismatch
+SN4 PASS
+ALL SNAPSHOT FAULT SCENARIOS PASS

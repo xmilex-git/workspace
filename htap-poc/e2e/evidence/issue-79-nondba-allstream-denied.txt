@@ -1,0 +1,4 @@
+CONFIG db=htapdb host=192.168.6.34 port=1523 user=cdc_e2e start_ts=1787198803 all_in_cond=-1 max_log_item=5 idle_limit=1
+SET max_log_item(5) rc=0
+CONNECT rc=-37
+connect failed (rc=-37)
