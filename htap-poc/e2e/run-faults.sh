@@ -33,9 +33,23 @@ SCRATCH="$HERE/../../.git_ignored_dir/scratch/faults.$$"
 mkdir -p "$SCRATCH"
 trap 'rm -rf "$SCRATCH"' EXIT
 
-csql_file () { # $1 = sql file
-    env CUBRID="$CUBRID" CUBRID_DATABASES="$CUBRID_DATABASES" PATH="$CUBRID/bin:$PATH" \
-        csql -u dba "$DB" -i "$1" >/dev/null
+csql_file () { # $1 = sql file — fails the script on any SQL error (csql itself exits 0)
+    local out
+    out="$(env CUBRID="$CUBRID" CUBRID_DATABASES="$CUBRID_DATABASES" PATH="$CUBRID/bin:$PATH" \
+        csql -u dba "$DB" -i "$1" 2>&1)"
+    if echo "$out" | grep -qiE '^ERROR|ERROR:'; then
+        echo "FAIL: SQL error while running $1:" >&2
+        echo "$out" | grep -iE 'ERROR' | head -5 >&2
+        return 1
+    fi
+}
+csql_cmd () { # $1 = sql text — same error propagation
+    local out
+    out="$(env CUBRID="$CUBRID" CUBRID_DATABASES="$CUBRID_DATABASES" PATH="$CUBRID/bin:$PATH" \
+        csql -u dba "$DB" -c "$1" 2>&1)"
+    if echo "$out" | grep -qiE '^ERROR|ERROR:'; then
+        echo "FAIL: SQL error: $1" >&2; echo "$out" | grep -iE 'ERROR' | head -3 >&2; return 1
+    fi
 }
 ch () { podman exec htap-clickhouse clickhouse-client --query "$1"; }
 kafka () { podman exec htap-kafka /opt/kafka/bin/"$@"; }
@@ -115,6 +129,13 @@ echo "== S0. preconditions: connectors RUNNING, baseline diff-check =="
 ensure_running "$SOURCE_NAME"
 ensure_running "$SINK_NAME"
 "$HERE/diff-check.sh" || { echo "FAIL: baseline not converged — run run-e2e.sh first" >&2; exit 1; }
+# state-independence: this suite seeds fixed workload IDs (s{sid}01/02/99). A prior
+# run's rows would collide on re-run (duplicate PK). Clear this suite's own ID space
+# up front so the run is idempotent regardless of what preceded it; the source stays
+# in sync because these are committed deletes it will stream, and the baseline above
+# already proved convergence. (Fault IDs are >= 100; the e2e baseline uses id 1,2,5.)
+csql_cmd "DELETE FROM t_order WHERE id >= 100" || exit 1
+for _ in $(seq 1 15); do "$HERE/diff-check.sh" >/dev/null 2>&1 && break; sleep 2; done
 
 echo "== S1. source task restart mid-stream =="
 workload 1 1
