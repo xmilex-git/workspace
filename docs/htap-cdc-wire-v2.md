@@ -95,9 +95,11 @@ locale-default 텍스트(예: `03:04:05 AM 01/02/2026`)는 파싱 실패로 즉�
 
 ### 3.3 TZ 계열 지원 시점
 
-TZ 4종(TIMESTAMPTZ/LTZ, DATETIMETZ/LTZ)의 wire 포맷은 위와 같이 v2에서 함께 고정하지만,
-커넥터의 unsupported 가드 해제는 workspace#86(파일럿 게이트 비필수) 완료 시다. 그 전까지
-TZ 컬럼은 기동 fail-fast 대상이다(type-support.md 미지원 표).
+TZ 4종(TIMESTAMPTZ/LTZ, DATETIMETZ/LTZ)의 wire 포맷은 위와 같이 v2에서 함께 고정했고,
+커넥터의 unsupported 가드는 workspace#86에서 해제됐다(2026-08-20): 디코더가 `±TZH:TZM`
+접미를 파싱해 `OffsetDateTime`→`ZonedTimestamp`로 송출하고, snapshot은 SELECT가 TZ 컬럼을
+`TO_CHAR(col, <§3.2 포맷>)`으로 프로젝션해 wire와 동일 문법을 공유한다. 실증:
+`htap-poc/e2e/run-tz-types.sh`(snapshot/streaming byte-parity·ClickHouse epoch 일치).
 
 ## 4. 비-temporal 타입 (v2 변경 없음)
 
