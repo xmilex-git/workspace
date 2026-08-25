@@ -1,0 +1,96 @@
+# §18 Review Checklist
+
+## Mandatory (every performance-related change)
+- [ ] Is bottleneck measurement data attached (MEAS-01)
+- [ ] Is the improvement figure a median of repeated runs (MEAS-04)
+- [ ] Did functional regression tests pass (MEAS-05)
+- [ ] Are result-changing modifications (FP order, parallelism, SIMD) stated explicitly
+
+## Memory
+- [ ] Does no hot struct needlessly exceed 64B (MEM-02)
+- [ ] No false sharing on parallel counters (MEM-03)
+- [ ] Does layout (AoS/SoA) match the access pattern (MEM-04)
+- [ ] Are hot/cold fields separated (MEM-05)
+- [ ] No allocation inside loops (ALLOC-01)
+- [ ] Are containers pre-reserved (ALLOC-02)
+- [ ] Is memory that may be freed cross-thread on the global heap (ALLOC-08)
+
+## Compute & branches
+- [ ] Any unpredictable branch in a hot loop (BR-03)
+- [ ] Are loop-invariant conditions hoisted out (BR-04)
+- [ ] **No re-testing of compile-time-fixed values per row** (BR-04 / A59)
+- [ ] **Does the out-of-line function called unconditionally per row actually do work** (CC-05 / A60)
+- [ ] **Is dispatch (switch/virtual call) not re-decided inside the loop** (BR-06 / A61)
+- [ ] **No store writing the same value every iteration** (BR-04 / A62)
+- [ ] Was vectorization actually confirmed (CC-04)
+- [ ] No repeated division (FP-04, CLOW-06)
+- [ ] Are overflow checks done with builtins (CC-06)
+
+## Floating point
+- [ ] No `==` comparison (FP-01)
+- [ ] Was comparator symmetry verified with a probe (FP-02)
+- [ ] If the comparator is used for sorting, was transitivity checked (FP-02 warning)
+- [ ] No `-ffast-math` in correctness-sensitive code (FP-03)
+- [ ] In fixed-point bulk summation, is the carry deferred and every flush point exhaustively checked (FP-07)
+
+## Aliasing (C — first check on vectorization failure)
+- [ ] No bit reinterpretation via type casts (ALIAS-01)
+- [ ] No reliance on `-fno-strict-aliasing` (ALIAS-01)
+- [ ] Byte loops replaced by `mem*` functions (ALIAS-02)
+- [ ] `restrict` on non-overlapping pointer args (ALIAS-03)
+- [ ] Loop accumulation done in locals (ALIAS-04)
+- [ ] No alias mentions in vectorization-failure messages (ALIAS-07)
+
+## Cache coherency (multithreaded)
+- [ ] One writer per cache line (COH-01, COH-04) — **top-level protocol**
+- [ ] Were top HITM symbols checked in `perf c2c` (COH-02)
+- [ ] Is read-only data on different lines from written data (COH-04)
+- [ ] No cross-thread shared bitfields (COH-07)
+- [ ] Are atomics naturally aligned (COH-08)
+- [ ] Are ring-buffer head/tail separated (COH-06)
+- [ ] Validated on a weak memory model such as ARM (COH-10)
+- [ ] Can sharing be replaced by partitioning/transfer (COH-12)
+
+## C low-level
+- [ ] `static` on internal symbols (CLOW-01)
+- [ ] Error handling is `goto` single-exit (CLOW-04)
+- [ ] No runtime division inside loops (CLOW-06)
+- [ ] Index types unified (CLOW-07)
+- [ ] No VLA/`alloca` (CLOW-08)
+- [ ] Struct padding pinned with `_Static_assert` (CLOW-15)
+
+## Global & static state
+- [ ] Global accesses in loops moved into locals (GLOB-01)
+- [ ] Hot globals not on the same cache line (GLOB-02) — verify addresses with `nm`
+- [ ] Read-only globals are `const` (GLOB-03)
+- [ ] No `volatile` for synchronization (GLOB-04)
+- [ ] `thread_local` lookups moved out of loops (GLOB-05)
+- [ ] Global counters sharded (GLOB-09)
+- [ ] Can the hot loop be factored into a global-free pure function (GLOB-10)
+
+## C++ features
+- [ ] No `shared_ptr` copies on hot paths (CPP-01) — **multithread top priority**
+- [ ] Range-for uses `const auto&` (CPP-02)
+- [ ] No `return std::move(local)` (CPP-02)
+- [ ] Move operations marked `noexcept` (CPP-03)
+- [ ] No exceptions on the normal flow (CPP-03)
+- [ ] No `dynamic_cast` on hot paths (CPP-04)
+
+## Parallel
+- [ ] Atomics replaced with thread-local accumulation (PAR-01)
+- [ ] Memory orders not excessive (PAR-02)
+- [ ] Cancellation checked in batches (PAR-03)
+- [ ] Serial fallback condition present (PAR-06)
+- [ ] Worker errors propagated to the coordinator (PAR-07)
+- [ ] Thread-local state cleaned up (PAR-08)
+- [ ] First-touch placement considered on multi-socket (PAR-09)
+- [ ] No excessive synchronization on read-mostly data (PAR-10)
+- [ ] Allocator contention absent from the top of the profile (PAR-11)
+- [ ] `cpu_relax()` in spin loops (PAR-12)
+- [ ] **Serial-path improvements applied to parallel-only paths too** (PAR-14 / A63)
+
+## Data & serialization
+- [ ] Approximate-structure merge identical to single-pass processing (DS-05)
+- [ ] Hash functions unified across serial/parallel paths (DS-03)
+- [ ] External-format parsing validated (SER-02)
+- [ ] Reads free of alignment violations (SER-03)
