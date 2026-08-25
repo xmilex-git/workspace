@@ -17,12 +17,16 @@ CUBRID 엔진 PR 브랜치와 그 PR에 연결된 공개·비공개 TC 브랜치
 _Avoid_: TC 최신화, PR rebase
 
 **해시 포기 (hash abandonment, HS_REJECT_ALL)**:
-그룹바이 해시 집계 도중 선택도 휴리스틱(표본 튜플 대비 그룹 비율 초과)이 발동해 그 문장의 해시 전략을 영구히 버리고 정렬 폴백으로 전환하는 런타임 결정이다. 트레이스에는 `hash: partial`로 표시된다.
+그룹바이 해시 집계 도중 선택도 휴리스틱(표본 튜플 대비 그룹 비율 초과)이 발동해 그 문장의 해시 전략을 영구히 버리고 정렬 폴백으로 전환하는 런타임 결정이다. 그때까지 누적한 그룹은 버리지 않고 테이블 전체를 partial list로 보존한 뒤 전환한다. 트레이스에는 `hash: partial`로 표시된다.
 _Avoid_: 해시테이블 꽉 참, 메모리 초과, spill
 
 **해시 축출 (hash eviction)**:
 해시 메모리 예산을 초과했을 때 엔트리를 partial list로 덜어내고 해시 집계는 계속하는 동작이다. 해시 상태를 바꾸지 않으며 해시 포기와 무관하다.
 _Avoid_: 해시 포기, HS_REJECT_ALL
+
+**누산기 평탄화 (accumulator flattening)**:
+해시 축출 또는 해시 포기로 그룹이 partial list로 나갈 때, 워드 누산기를 `DB_VALUE`로 눕혀 스필 포맷에 합류시키는 동작이다. 이 지점에서 반올림이 1회 발생하며, 재로드 시 seed 경로로 재시딩된다.
+_Avoid_: 스필(축출·포기와 혼동), finalize(그룹 종료와 혼동)
 
 **리더 잔여 직렬 (leader-serial residue)**:
 병렬 폴백 정렬에서 워커 정렬이 끝난 뒤 리더 단독으로 남는 두 국면 — ② fan-in 병합(`sort_merge_worker_runs_to_one`)과 ③ 튜플당 put_fn drain(`sort_run_final_single`) — 의 시간 몫이다. IMP-032(구 IC-5)의 공략 대상.
@@ -105,3 +109,49 @@ _Avoid_: publication(영속 카탈로그 객체로 오해), CDC 활성 테이블
 **relation 사전 (relation dictionary)**:
 서버가 CDC 스트림 안에서 `(classoid, owner, table)`을 알려주는 in-band 아이템. 해당 classoid의 첫 사용 아이템보다 반드시 앞서며, 세션이 갈리면 다시 전송된다(커넥터는 영속 캐시하지 않는다). 이것이 있어 커넥터는 `_db_class`(DBA 전용)를 읽지 않고도 이벤트를 테이블로 라우팅한다(ADR 0011 D4). 범위는 extraction 대상으로 지정된 테이블뿐이며, 그래야 권한 경계와 일치한다(D5). **이벤트 카운터에서 제외된다** — 세면 재연결 시 같은 이벤트가 다른 `_version`을 받아 RMT 수렴이 깨진다(D6).
 _Avoid_: schema history topic(Kafka 토픽과 혼동), 스키마 사전(컬럼·타입은 별개 — JDBC 카탈로그 뷰에서 온다), 캐시(세션 간 보존으로 오해)
+
+### javasp 병렬 (지도: xmilex-git/workspace#87)
+
+**병렬 안전 선언 (parallel-safe declaration)**:
+SP가 병렬 워커에서 평가되어도 안전함(읽기 전용·세션 상태 비의존)을 사용자가 자기선언하는 신규 DDL 속성. 결정성과는 별개 축이며(deterministic ≠ parallel-safe — PG `PARALLEL SAFE`/Oracle `PARALLEL_ENABLE` 선례), 무검증 신뢰 + 매뉴얼 경고 책임 모델을 따른다. 기존 DETERMINISTIC 선언에 소급 적용하지 않는다.
+_Avoid_: DETERMINISTIC(서브쿼리 캐시용 별개 속성), READS SQL DATA(데이터 접근 특성 컬럼과 혼동)
+
+**중첩 직렬 강등 (nested serial demotion)**:
+병렬 문맥에서 평가 중인 SP가 콜백 SQL로 재귀 호출한 SP/질의를 병렬 플랜 없이 직렬로 실행하는 정책. 호출을 거부하는 게 아니라 강등하며, 중첩 깊이 제한(15)은 그대로다.
+_Avoid_: top-SP-only(거부 정책으로 오해), 중첩 금지
+
+**실행 체인 (execution chain)**:
+하나의 SP 호출에서 시작해 재귀 호출로 이어지는 논리 호출 사슬. PL 세션은 체인을 복수 보유할 수 있고(체인 포레스트), 체인 내부는 LIFO(중첩), 형제 체인끼리는 독립이다. 재귀 깊이 제한(15)과 직렬 강등 플래그는 물리 세션이 아니라 체인 기준이며, 세션 경계(helper)를 넘어 전파된다(ADR 0013).
+_Avoid_: 스택(세션 단일 LIFO 시절의 구조와 혼동), 워커(체인은 스레드가 아니라 논리 사슬 — 프레임마다 스레드가 다를 수 있다)
+
+**체인 서브컨텍스트 (chain sub-context)**:
+PL 서버 `Context`에서 체인별로 분리되는 실행 상태 — JDBC 연결·inBound 큐·tranId 검사. 클래스로더·TargetMethodCache·시스템 파라미터는 세션 Context에 남아 공유된다(Java static 상태의 세션 내 단일성 보존). 체인 첫 호출 시 지연 생성, 체인 종료 시 파기.
+_Avoid_: 복합 키 Context(클래스로더까지 갈라지는 폐기된 후보), 서브세션
+
+**병렬 적격 판정 (parallel eligibility judgment)**:
+"이 SP 포함 질의를 병렬로 실행해도 되는가"의 판정. SP별 검사는 병렬 안전 선언 비트 **단독**이고("비트 set ⇒ Java SP"는 선언 DDL이 강제), 질의당 1회의 환경 게이트(`pl_transaction_control==no`)가 공통 판정 유틸 진입부에서 함께 확인된다. 판정은 클라이언트측 XASL 생성 시점에 내려져 플랜 비트로 동결된다.
+_Avoid_: SP 성질 검증(선언은 무검증 신뢰), DETERMINISTIC/sql_data_access 검사(판정에 비관여)
+
+**런타임 one-way 강등 게이트 (runtime one-way demotion gate)**:
+실행 시점에 조건을 재검사해 캐시된 병렬 플랜을 **그 실행에 한해 직렬로 강등만** 할 수 있는(되살릴 수는 없는) 서버측 게이트 — 기존 `px_scan.cpp:391-403` 재검사 패턴과 동형. SP 포함 병렬 플랜이 `pl_transaction_control=yes` 세션에서 캐시 히트되는 구멍의 봉인과, 강등 체인(중첩 직렬 강등)에서 실행되는 질의의 px 경로 차단(#106 — 이 조건은 SP 플래그와 독립인 OR 분기)에 쓴다.
+_Avoid_: 런타임 백스톱(선언 진위 검증으로 오해 — 환경 전제 확인일 뿐), 정책 거부(에러가 아니라 강등)
+
+**싱글스레드 콜백 경로 (single-threaded callback path)**:
+병렬 워커들의 콜백 SQL을 기존 클라이언트 콜백 채널(리더 rid) 하나로 한 번에 하나씩(K=1) 통과시키는 1단계 경로. 와이어 변경이 없고 클라이언트 관점에선 오늘의 순차 콜백과 동일하다. 2단계에서도 helper 고갈 시 강등 목적지로 남는다(정확성 무영향, 속도만 손해). 구현체는 `pl_session`의 재진입 락(`acquire/release_px_single_thread_callback`)이다.
+_Avoid_: 콜백 funnel(구 용어 — #106에서 개명됨), 직렬 폴백(질의 전체를 직렬 플랜으로 되돌리는 것과 혼동 — 이 경로는 콜백 구간만 직렬), 다중화(태깅 멀티플렉싱은 폐기된 후보)
+
+**콜백 helper (callback helper)**:
+병렬 워커의 콜백 SQL을 실행하기 위해 cub_server가 fork+exec로 띄우는, 클라이언트 라이브러리를 링크한 브로커 비의존 경량 프로세스. 구현 바이너리는 PL 전용이 아닌 범용 `cub_compile_engine`(서버가 스폰하는 클라이언트측 SQL 컴파일·실행 엔진). cub_master 정상 경로로 서버에 접속·등록하고, 잡은 자신이 여는 전용 잡 소켓으로 px 워커가 직접 배달하는 2채널 구조다(#104 — 클라이언트 요청 채널 long-poll은 기각). helper 연결 하나가 곧 콜백 채널 하나. 질의당 helper ≤ DOP.
+_Avoid_: 미니 csql(초기 비유 — csql 바이너리 재사용은 기각됨), helper CAS(브로커 CAS 풀 차용은 폐기된 후보 — csql발 질의가 깨짐), 워커(서버 내부 px 워커 스레드와 혼동)
+
+**가시성 재현 (visibility reproduction / join-tran)**:
+콜백 helper가 별도 트랜잭션이면서 호출자의 스냅샷을 import하고 호출자 MVCCID를 가시 집합에 포함해, 동일 트랜잭션에서 실행한 것과 같은 읽기 결과를 재현하는 것(PG 병렬 워커 snapshot/XID import 선례). "동일 트랜잭션 요구"의 공식 완화형 — tran_index 공유가 아니다.
+_Avoid_: 같은 MVCCID 공유(helper가 쓰기 주체가 되는 것으로 오해 — helper는 읽기 전용, 가시 집합에만 포함), 스냅샷 격리 위반(직렬↔병렬 결과 동일성이 목적)
+
+**join-tran 핸드셰이크 (join-tran handshake)**:
+서버가 콜백 잡을 helper에 디스패치하는 시점에 원자적으로 수행하는 가시성 재현 절차 — vacuum pin을 먼저 publish한 뒤 스냅샷을 복제하고(pin-먼저-복사-나중, ADR 0014), 호출자 MVCCID를 helper의 가시 집합에 넣고, attach 레지스트리에 등록한다. 잡 완료 시 역순으로 purge하며, "잡 없이 join된 helper"라는 중간 상태는 존재하지 않는다.
+_Avoid_: 별도 join RPC(helper발 왕복으로 오해 — 서버측 디스패치 시점 수행이 맞다), 연결 수명 상태(잡 단위가 맞다)
+
+**attach 레지스트리 (attach registry)**:
+호출자 트랜잭션에 두는 "지금 join 중인 helper 트랜잭션 집합". 호출자 인터럽트의 helper 전파, 호출자 종료(커밋/어보트/연결단절) 시 helper 전원 인터럽트+detach 대기, 정리 훅 — 세 문제를 푸는 단일 매개체다. 락 매니저에는 "같은 편 트랜잭션" 개념이 없으므로 락 면제와는 무관하다.
+_Avoid_: 락 그룹(락 호환성 예외로 오해), 세션 레지스트리(트랜잭션 단위가 맞다)
