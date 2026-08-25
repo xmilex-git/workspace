@@ -1,3 +1,8 @@
+---
+name: cubrid-backport
+description: Backport a merged develop fix to CUBRID release branches — verify applicability per branch, cherry-pick, open one PR per branch, and optionally mark a Notion tracking page done. Use when the user says "backport"/"백포트" or a JIRA ticket's Planned Versions lists patch versions.
+---
+
 # CUBRID Backport
 
 Backport a merged develop fix to CUBRID release branches: verify applicability per branch, cherry-pick, open one PR per branch, and optionally mark a Notion tracking page done.
