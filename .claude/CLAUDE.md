@@ -1,3 +1,9 @@
+9. when develop/execute/review CUBRID, use CUBRID_SSOT.md and justfile.
+
+Whenever modifying CUBRID source code, ALWAYS consult the `cpp-perf-rules` skill (C/C++ performance rulebook) and apply its rules.
+
+Division of labor: the lead performs implementation and verification planning. The following tasks MUST be handed off to a sonnet subagent: build, server start & query execution, data loading, core analyze, gdb analyze, error reproduction, and callstack analysis from a core file.
+
 These guidelines intentionally bias toward caution, traceability, and minimal change over speed. For trivial tasks, use judgment.
 
 0. Default Stance: Distrust and Verify
@@ -132,9 +138,3 @@ assumptions and limitations stated.
 Code that merely runs is not necessarily done.
 
 These guidelines are working if diffs become smaller, unnecessary rewrites decrease, overcomplication decreases, and clarifying questions happen before implementation mistakes rather than after them.
-
-9. when develop/execute/review CUBRID, use CUBRID_SSOT.md and justfile.
-
-Whenever modifying CUBRID source code, ALWAYS consult the `cpp-perf-rules` skill (C/C++ performance rulebook) and apply its rules.
-
-Division of labor: the lead performs implementation and verification planning. The following tasks MUST be handed off to a sonnet subagent: build, server start & query execution, data loading, core analyze, gdb analyze, error reproduction, and callstack analysis from a core file.
