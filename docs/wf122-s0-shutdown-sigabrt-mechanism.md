@@ -74,6 +74,32 @@ conn을 해제하지 않으므로 기존 `css_free_conn` 정리와 충돌 없음
 775a31d93(conn/entry 위생)·160b65ab8(SUCCESS-last 순서)은 원인은
 아니었지만 올바른 위생으로 존치.
 
+## 2차 지뢰: exit-시 CS 클라이언트 atexit 셧다운 (수정으로 노출됨)
+
+tran-logout 수정(5f32dc648)으로 서버가 처음으로 정상 exit()에 도달하자,
+그동안 구 크래시에 가려져 있던 두 번째 선존 결함이 3/3 재현으로 드러났다:
+
+- in-process 부트의 `boot_client()`(boot_cl.c)가 CS 클라이언트용
+  `atexit (boot_shutdown_client_at_exit)`를 **cub_server 프로세스 안에**
+  등록한다.
+- exit 시 이 핸들러가 `boot_shutdown_client → boot_client_all_finalize →
+  db_private_free(boot_Db_full_name)`를 타는데, 이 시점엔 스레드 매니저
+  teardown이 끝나 `tl_Entry_p == NULL` →
+  `thread_get_thread_entry_info`의 assert(thread_manager.cpp:444)로
+  SIGABRT.
+
+수정(480e9bf10): SERVER_MODE에선 atexit 등록 자체를 스킵(핸들러 정의도
+가드) — 클라이언트 컨텍스트는 종료하지 않는 게 milestone-0 계약이고
+서버 프로세스의 exit는 `boot_shutdown_server_at_exit` 소유. 벨트로
+tracer가 로그아웃 후 `tm_Tran_index = NULL_TRAN_INDEX` 리셋.
+
+## 최종 검증
+
+HEAD 480e9bf10: smoke 3회 전체 실행(케이스 3종 × 3 = 종료 9회) 전부
+클린, 코어 0, OID 셀프조인 케이스 COUNT=74 일관, 무-tracer 대조
+정상. 두 크래시(체크포인트 TS_FREE assert, exit-시 tl_Entry_p assert)
+모두 소멸 확인.
+
 ## 구조적 후속 (B1로 이관, #138에 기록됨)
 
 근본 문제는 "종료 경로가 abort 태스크를 **공유 Main_entry_p 위에서
