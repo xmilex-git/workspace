@@ -7,5 +7,4 @@ porting_plan.md
 .envrc.local
 .not_git_tracking
 .gjc
-docs/agents
 .claude/scratch

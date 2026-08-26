@@ -76,7 +76,7 @@ own fix suggestions — it only prints them.
 
 ### Issue tracker
 
-Issues are tracked as GitHub issues in `xmilex-git/cubrid` (always `gh ... --repo xmilex-git/cubrid`). See `docs/agents/issue-tracker.md`.
+Issues are tracked as GitHub issues in `xmilex-git/workspace` (this repo's own remote; `gh` infers it). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

@@ -565,3 +565,79 @@ ctp-parallel *ARGS:
         --ctp        "${CTP_HOME:-$HOME/cubrid-testtools/CTP}" \
         --out        "$out" \
         "$@"
+
+# ---------------------------------------------------------------------------
+# CUBRID port registry — machine-local claims so concurrent Claude sessions
+# never start servers on colliding ports. Protocol: docs/agents/port-registry.md
+# Claims live in .git_ignored_dir/port-registry/claims.md (git-ignored).
+#   just ports                         show claims + live CUBRID listeners
+#   just port-claim <db> <effort>      auto-pick a free cubrid_port_id in 1700-1799,
+#                                      reserve a 100-block of broker ports, append the claim
+#   just port-release <db-or-port>     drop the matching claim line(s)
+# ---------------------------------------------------------------------------
+
+_ports_file := justfile_directory() / ".git_ignored_dir/port-registry/claims.md"
+
+# Show active port claims and live listeners.
+[doc("Show CUBRID port claims (port registry) + live listeners")]
+ports:
+    #!/usr/bin/env bash
+    set -eu
+    f="{{_ports_file}}"
+    if [ -f "$f" ]; then cat "$f"; else echo "(no claims file yet: $f)"; fi
+    echo
+    echo "-- live listeners (cub_*, 1500-1799, 30000+) --"
+    ss -ltnp 2>/dev/null | awk 'NR==1 || /cub_/ || /:1[5-7][0-9][0-9] / || /:3[0-9]{4} /' || true
+
+# Claim a free cubrid_port_id (1700-1799) + broker 100-block for <db>/<effort>.
+[doc("Claim a free cubrid_port_id + broker block in the port registry")]
+port-claim db effort:
+    #!/usr/bin/env bash
+    set -eu
+    f="{{_ports_file}}"
+    mkdir -p "$(dirname "$f")"
+    if [ ! -f "$f" ]; then
+        {
+            echo "# Active port claims — see docs/agents/port-registry.md for the protocol"
+            echo
+            echo "| cubrid_port_id | broker ports | db name | session/effort | date |"
+            echo "|---|---|---|---|---|"
+        } > "$f"
+    fi
+    if awk -F'|' 'NR>2 && $4 ~ /[^ ]/ {gsub(/ /,"",$4); print $4}' "$f" | grep -qx "{{db}}"; then
+        echo "ERROR: db '{{db}}' already has a claim — release it first (just port-release {{db}})." >&2
+        exit 1
+    fi
+    claimed=$(awk -F'|' 'NR>2 {gsub(/ /,"",$2); if ($2 ~ /^[0-9]+$/) print $2}' "$f")
+    listening=$(ss -ltn 2>/dev/null | awk 'NR>1 {n=split($4,a,":"); print a[n]}')
+    port=""
+    for p in $(seq 1700 1799); do
+        echo "$claimed"   | grep -qx "$p" && continue
+        echo "$listening" | grep -qx "$p" && continue
+        port=$p; break
+    done
+    [ -n "$port" ] || { echo "ERROR: no free port in 1700-1799." >&2; exit 1; }
+    idx=$((port - 1700))
+    blo=$((36000 + idx * 100)); bhi=$((blo + 99))
+    printf '| %s | %s-%s | %s | %s | %s |\n' "$port" "$blo" "$bhi" "{{db}}" "{{effort}}" "$(date +%F)" >> "$f"
+    echo "claimed: cubrid_port_id=$port broker=$blo-$bhi db={{db}} effort='{{effort}}'"
+    echo "server conf:  cubrid_port_id=$port   (set in \$CUBRID/conf/cubrid.conf or CUBRID_PORT_ID env)"
+    echo "registry: $f"
+
+# Release claim line(s) matching a db name or a cubrid_port_id.
+[doc("Release a port claim by db name or port number")]
+port-release key:
+    #!/usr/bin/env bash
+    set -eu
+    f="{{_ports_file}}"
+    [ -f "$f" ] || { echo "ERROR: no claims file: $f" >&2; exit 1; }
+    before=$(wc -l < "$f")
+    awk -F'|' -v key="{{key}}" '
+        NR<=4 {print; next}
+        { p=$2; d=$4; gsub(/ /,"",p); gsub(/ /,"",d);
+          if (p==key || d==key) next; print }
+    ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    after=$(wc -l < "$f")
+    removed=$((before - after))
+    [ "$removed" -gt 0 ] || { echo "WARNING: no claim matched '{{key}}'." >&2; exit 1; }
+    echo "released $removed claim(s) matching '{{key}}'"
