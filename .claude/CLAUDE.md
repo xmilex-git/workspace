@@ -4,6 +4,11 @@ Whenever modifying CUBRID source code, ALWAYS consult the `cpp-perf-rules` skill
 
 Division of labor: the lead performs implementation and verification planning. The following tasks MUST be handed off to a sonnet subagent: build, server start & query execution, data loading, core analyze, gdb analyze, error reproduction, and callstack analysis from a core file.
 
+Delegation execution contract (CUBRID_SSOT.md 환경·운영 16–17 — include VERBATIM in every delegation prompt; incidents recur whenever it is omitted):
+- Finite gate work (incremental build, unit, smoke — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
+- The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
+- Lead-side duty: never treat a worker's idle notification as progress; pull-verify artifact mtimes (installed binary vs HEAD commit time) and intervene immediately when outputs stall ~10 min.
+
 These guidelines intentionally bias toward caution, traceability, and minimal change over speed. For trivial tasks, use judgment.
 
 0. Default Stance: Distrust and Verify
