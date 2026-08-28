@@ -40,3 +40,13 @@ The recipes implement the protocol below — use them instead of hand-editing.
 ## Recommended free range for agent claims
 
 `1700-1799` for `cubrid_port_id`; `36000+` for brokers (one hundred-block per claim).
+
+## CTP SQL kills every cub_* of the user — ports do not protect you
+
+`~/cubrid-testtools/CTP/sql/bin/run.sh` `do_clean()` runs `pkill cub` (all of
+this user's cub_master/cub_server/cub_broker/cub_cas, any port) plus shared-memory
+removal at run start and cleanup. A CTP SQL run therefore takes down every other
+CUBRID server on the host regardless of registry claims (incident: 2026-08-28,
+a `_08_javasp` gate run killed the claimed mandb@1701). Before running CTP SQL
+while any other server is claimed: use podman isolation (`ctp-parallel` skill)
+or broadcast to live sessions and get an ack first.
