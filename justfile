@@ -566,6 +566,76 @@ ctp-parallel *ARGS:
         --out        "$out" \
         "$@"
 
+# Run a SUBSET of the CTP SQL suite inside ONE isolated podman container.
+#
+# WHY THIS EXISTS: host-side CTP SQL (`ctp.sh sql`, and therefore `just sql-debug*`)
+# runs `pkill cub` in its do_clean()/teardown — it kills EVERY cub_master/cub_server/
+# cub_broker of this user, on any port, defeating the port registry (incident
+# 2026-08-28: a gate run killed another session's claimed server). Inside podman the
+# pkill only sees the container's own processes, so concurrent agents can each run
+# their own TC subsets without stopping each other's servers.
+#
+# HOW: thin wrapper over the canonical ctp-parallel orchestrator (1 shard,
+# no webconsole merge). It synthesizes a private testcases root holding ONLY the
+# requested subtrees (host testcases checkout untouched), gives every invocation
+# its own run dir (UTC timestamp + PID) so concurrent runs never share paths, and
+# copies the build into the container workdir (host $CUBRID conf/processes untouched).
+#
+# ARG SHAPE: each TEST_DIR is a directory under a testcases checkout's sql/ tree
+# (leaf with cases/*.sql, or any ancestor bucket). A .sql file resolves to its test
+# dir. All arguments must live under the SAME sql/ root.
+# Build source: $BUILD, else $CUBRID, else ~/CUBRID (copied, never mutated).
+#
+# Usage:
+#   just ctp-sql-isolated ~/cubrid-testcases/sql/_08_javasp
+#   just ctp-sql-isolated ~/cubrid-testcases/sql/_13_issues/_23_1h ~/cubrid-testcases/sql/_35_fig_cake/cbrd_25382
+#   BUILD=~/optdebug/CUBRID-x just ctp-sql-isolated ~/cubrid-testcases/sql/_08_javasp
+[doc("Run selected CTP SQL dirs in one isolated podman container (no host cub_* touched)")]
+ctp-sql-isolated +TEST_DIRS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    orch="{{justfile_directory()}}/.agents/skills/ctp-parallel/scripts/ctp_parallel.sh"
+    [ -x "$orch" ] || { echo "ERROR: ctp-parallel orchestrator not found/executable: $orch" >&2; exit 1; }
+    command -v podman >/dev/null 2>&1 || { echo "ERROR: podman not found — the isolated runner requires it. (Never fall back to host ctp.sh: its teardown pkills every cub_* of this user.)" >&2; exit 1; }
+    build="${BUILD:-${CUBRID:-$HOME/CUBRID}}"
+    build="$(realpath "$build")"
+    [ -x "$build/bin/cubrid" ] || { echo "ERROR: '$build' is not a CUBRID install (bin/cubrid missing). Set BUILD= or CUBRID=." >&2; exit 1; }
+    # Resolve every TEST_DIR to (sql_root, relpath-under-sql_root); require one shared root.
+    sql_root=""
+    rels=()
+    for arg in {{TEST_DIRS}}; do
+        t="$arg"
+        [[ "$t" == *.sql ]] && t="$(dirname "$(dirname "$t")")"
+        t="$(realpath "$t")"
+        [ -d "$t" ] || { echo "ERROR: directory not found: $t" >&2; exit 1; }
+        r="$t"
+        while [ "$r" != "/" ] && [ "$(basename "$r")" != "sql" ]; do r="$(dirname "$r")"; done
+        [ "$r" != "/" ] || { echo "ERROR: '$t' is not under a testcases sql/ tree." >&2; exit 1; }
+        if [ -z "$sql_root" ]; then sql_root="$r"; fi
+        [ "$r" = "$sql_root" ] || { echo "ERROR: all TEST_DIRS must share one sql/ root ($sql_root vs $r)." >&2; exit 1; }
+        rels+=("${t#"$(dirname "$sql_root")"/}")   # e.g. sql/_08_javasp/foo
+    done
+    # Private per-invocation run dir: concurrent agents never share paths.
+    run="{{justfile_directory()}}/.git_ignored_dir/scratch/ctp-iso/$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    tcroot="$run/testcases"
+    mkdir -p "$tcroot"
+    src_parent="$(dirname "$sql_root")"
+    if command -v rsync >/dev/null 2>&1; then
+        ( cd "$src_parent" && rsync -aR --exclude='*.result' --exclude='*.log' "${rels[@]}" "$tcroot/" )
+    else
+        ( cd "$src_parent" && for r in "${rels[@]}"; do
+              find "$r" -type f ! -name '*.result' ! -name '*.log' -exec cp --parents -a {} "$tcroot/" \; ; done )
+    fi
+    echo "[ctp-sql-isolated] build=$build"
+    echo "[ctp-sql-isolated] subset=${rels[*]}"
+    echo "[ctp-sql-isolated] run dir=$run  (results: $run/out)"
+    exec "$orch" \
+        --build      "$build" \
+        --testcases  "$tcroot" \
+        --ctp        "${CTP_HOME:-$HOME/cubrid-testtools/CTP}" \
+        --out        "$run/out" \
+        --shards 1 --no-webconsole
+
 # ---------------------------------------------------------------------------
 # CUBRID port registry — machine-local claims so concurrent Claude sessions
 # never start servers on colliding ports. Protocol: docs/agents/port-registry.md

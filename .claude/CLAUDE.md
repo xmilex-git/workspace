@@ -9,6 +9,11 @@ Delegation execution contract (CUBRID_SSOT.md 환경·운영 16–17 — include
 - The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
 - Lead-side duty: never treat a worker's idle notification as progress; pull-verify artifact mtimes (installed binary vs HEAD commit time) and intervene immediately when outputs stall ~10 min.
 
+CTP SQL execution rule (2026-08-28 incident: host CTP's do_clean()/teardown runs `pkill cub`, killing EVERY cub_master/cub_server/cub_broker of this user on any port — the port registry cannot protect against it):
+- Any CTP SQL run — full suite or a subset, by the lead or by any delegated worker — MUST go through the podman-isolated just recipes: `just ctp-sql-isolated <TEST_DIRS...>` for subsets, `just ctp-parallel` for the full suite. Include this rule in delegation prompts whenever the task may run CTP.
+- NEVER run host-side `ctp.sh sql`, `just sql-debug`, or `just sql-debug-selected` while any other CUBRID server may be running on this host (check `just ports` first; if in doubt, use the isolated recipe).
+- CTP shell (`just shell-debug*`) has the same pkill hazard (shell init_path/init.sh) and no podman wrapper yet: before a shell run, broadcast to live sessions (ListAgents → SendMessage) and get an ack, or confirm `just ports` shows no other claims.
+
 These guidelines intentionally bias toward caution, traceability, and minimal change over speed. For trivial tasks, use judgment.
 
 0. Default Stance: Distrust and Verify
