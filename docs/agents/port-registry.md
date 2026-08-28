@@ -50,3 +50,24 @@ CUBRID server on the host regardless of registry claims (incident: 2026-08-28,
 a `_08_javasp` gate run killed the claimed mandb@1701). Before running CTP SQL
 while any other server is claimed: use podman isolation (`ctp-parallel` skill)
 or broadcast to live sessions and get an ack first.
+
+## A per-build $CUBRID cannot stop a server it started on a shared master
+
+`cub_master` puts its control socket at a path derived from the environment that
+started **the master**, not the one starting a later server: on this host that is
+`$HOME/CUBRID/var/CUBRID_SOCK`. So when several installs take turns on one port —
+building to `INSTALL_PREFIX=$HOME/optdebug/CUBRID-<x>` and pointing `$CUBRID` at
+each in turn, the usual pattern for an A/B — a stop issued with the per-build
+`$CUBRID` active fails with `could not connect to master server`, even though the
+server is plainly running. Export `CUBRID_TMP=$HOME/CUBRID/var/CUBRID_SOCK`
+before the stop and it shuts down through the normal protocol.
+
+Symptom to recognise: `cubrid server status` reports nothing while `ps` shows a
+live `cub_server` and `ss -tlnp` shows the master holding the port. That is an
+environment mismatch, not a hung or crashed server — do not reach for a kill.
+
+When a run leaves a `cub_master` with no server attached (visible as a listener on
+the claimed port with no matching `cub_server`), releasing the claim is not enough:
+the master keeps the port. Confirm no `cub_server` belongs to it, then stop that
+master by its exact pid. Never broaden this to `pkill cub` — that takes down every
+other session's servers (see the CTP section above).

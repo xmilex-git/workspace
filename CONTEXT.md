@@ -155,3 +155,15 @@ _Avoid_: 별도 join RPC(helper발 왕복으로 오해 — 서버측 디스패�
 **attach 레지스트리 (attach registry)**:
 호출자 트랜잭션에 두는 "지금 join 중인 helper 트랜잭션 집합". 호출자 인터럽트의 helper 전파, 호출자 종료(커밋/어보트/연결단절) 시 helper 전원 인터럽트+detach 대기, 정리 훅 — 세 문제를 푸는 단일 매개체다. 락 매니저에는 "같은 편 트랜잭션" 개념이 없으므로 락 면제와는 무관하다.
 _Avoid_: 락 그룹(락 호환성 예외로 오해), 세션 레지스트리(트랜잭션 단위가 맞다)
+
+**스캔 패스 (scan pass)**:
+병렬 스캔 manager가 `open()`부터 `read()`를 거쳐 `read_finalize()`까지 한 번 도는 단위다. 파티션 테이블은 파티션마다 한 패스를 돌며(`qexec_init_next_partition`이 스캔을 재오픈), 패스가 바뀌어도 원본 XASL의 `agg_list`는 동일한 누산기를 계속 가리킨다. "스캔 블록"이 물리적 분할 단위라면 패스는 manager 수명 단위다.
+_Avoid_: 스캔 블록(물리 분할과 혼동), 쿼리 실행 1회(패스는 여러 번)
+
+**누산기 재이주 (accumulator re-homing)**:
+`AGGREGATE_TYPE::accumulator.value`/`value2`의 버퍼를 한 힙에서 다른 힙으로 옮기는 동작 — 대상 힙에서 `pr_clone_value`로 복제하고 원래 힙에서 `pr_clear_value`로 해제한 뒤 대입한다. 병렬 BUILDVALUE 경로에서 워커 병합용 heap 0(malloc)과 코디네이터 private heap(lea) 사이를 오간다. 값 복사이지 소유권 표시 변경이 아니므로, 어느 쪽으로 옮겼는지를 코드가 따로 알아야 한다.
+_Avoid_: 힙 전환(`db_change_private_heap` 자체와 혼동), 얕은 대입
+
+**빌림·반납 브래킷 (borrow/return bracket)**:
+CBRD-27327의 채택 수정 형태 — 패스 **시작**(`manager::open()`의 handler 생성)에서 누산기를 코디네이터 heap → heap 0으로 빌리고, 패스 **안**(`read_node`)에서 heap 0 → 코디네이터 heap으로 반납하는 대칭 규약이다. 반납을 패스 끝(`read_finalize`)에 두면 안 되는 이유는 `read_finalize`가 `manager::end()`를 통해 쿼리 최종 종료 시에도 불리기 때문이다. ADR 0015 참조.
+_Avoid_: 파티션 게이트(증상 회피안 — 기각), `read_finalize` 반납(최종 teardown에서 재발)
