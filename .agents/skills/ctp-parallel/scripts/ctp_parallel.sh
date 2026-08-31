@@ -94,6 +94,11 @@ OPTIONS:
                        execs ctp.sh sql without clearing the environment) — use this for the
                        CUBRID_WM_SCAN_NEW/SORT_NEW/HASHJOIN_NEW work-mem gate env vars (server-process
                        scoped, csql client env has no effect) or any other passthrough need.
+  --abort-on-core      Watchdog: poll the shard working copies during the run and, as soon as a
+                       real core dump appears (file(1)-verified) OR free disk at --out drops
+                       below ${DISK_FLOOR_GB}GB, stop ALL shard containers immediately. Guards
+                       against crash-loop runs filling the disk with cores (2026-08-31 incident:
+                       1.1T of cores). Artifacts/cores of the aborted run are still collected.
   --no-webconsole      Do NOT merge per-shard results into \$CTP_HOME/sql/result. By default the
                        run is merged into one schedule dir viewable via 'ctp.sh webconsole start'.
   --merge-only <dir>   Merge an ALREADY-FINISHED run's --out <dir> into \$CTP_HOME/sql/result for
@@ -125,6 +130,7 @@ ARG_WEIGHTS="auto"   # "auto" = bundled baseline_weights.tsv (time-based) | <pat
 ARG_LOCALE_DIR=""
 ARG_WEBCONSOLE=1
 ARG_COLOCATE="auto"   # "auto" = bundled colocate.tsv if present; a path = that file; "" = disabled
+ARG_ABORT_ON_CORE=0   # --abort-on-core: stop every shard as soon as a core dump / disk-floor breach is seen
 ARG_MERGE_ONLY=""     # path to a finished --out dir to merge into webconsole, then exit
 ARG_LABEL=""          # human tag for the merged run (webconsole 'machine' field)
 ARG_DRYRUN=0
@@ -152,6 +158,7 @@ parse_args() {
       --locale-dir)  ARG_LOCALE_DIR="${2:-}"; shift 2 ;;
       --colocate)    ARG_COLOCATE="${2:-}"; shift 2 ;;
       --no-colocate) ARG_COLOCATE=""; shift ;;
+      --abort-on-core) ARG_ABORT_ON_CORE=1; shift ;;
       --no-webconsole) ARG_WEBCONSOLE=0; shift ;;
       --merge-only)  ARG_MERGE_ONLY="${2:-}"; shift 2 ;;
       --label)       ARG_LABEL="${2:-}"; shift 2 ;;
@@ -792,6 +799,51 @@ launch_shard() {
 }
 
 #####################################################################
+# --abort-on-core watchdog: while shards run, poll the shard working copies
+# (bind-mounted host dirs, so cores are visible live even in relative
+# core_pattern mode) and the free disk at --out. On the first REAL core dump
+# (file(1)-verified, not just a core.* name) or a disk-floor breach, stop ALL
+# shard containers so a crash-looping server cannot fill the disk with cores
+# (2026-08-31 incident: 1.1T of cores on /home). The abort reason is left in
+# $OUT/.abort_reason for aggregate() to report; collection still runs.
+#####################################################################
+CORE_POLL_SECS=30
+DISK_FLOOR_GB=30
+WATCHDOG_PID=""
+start_core_watchdog() {
+  rm -f "$OUT/.abort_reason"
+  (
+    while :; do
+      sleep "$CORE_POLL_SECS"
+      reason=""
+      avail_gb="$(df -BG --output=avail "$OUT" 2>/dev/null | tail -1 | tr -dc '0-9')"
+      if [ -n "$avail_gb" ] && [ "$avail_gb" -lt "$DISK_FLOOR_GB" ]; then
+        reason="disk floor breached: ${avail_gb}GB available < ${DISK_FLOOR_GB}GB"
+      else
+        # core_pattern names have no whitespace (core.%e.%p.%h.%t), so word
+        # splitting the find output is safe here.
+        for f in $(find "$OUT"/shard_*/CUBRID "$OUT"/shard_*/CUBRID_DB "$OUT"/shard_*/CTP "$OUT"/shard_*/cores \
+                     -type f -name 'core.*' 2>/dev/null); do
+          if file -b "$f" 2>/dev/null | grep -q 'core file'; then reason="core dump detected: $f"; break; fi
+        done
+      fi
+      if [ -n "$reason" ]; then
+        printf '%s\n' "$reason" > "$OUT/.abort_reason"
+        echo "[ctp-parallel] ABORT-ON-CORE: $reason — stopping all shard containers." >&2
+        for n in "${SHARD_NAMES[@]}"; do podman stop -t 10 "$n" >/dev/null 2>&1 || :; done
+        exit 0
+      fi
+    done
+  ) &
+  WATCHDOG_PID=$!
+  info "abort-on-core watchdog started (pid $WATCHDOG_PID, poll ${CORE_POLL_SECS}s, disk floor ${DISK_FLOOR_GB}GB)."
+}
+stop_core_watchdog() {
+  if [ -n "$WATCHDOG_PID" ]; then kill "$WATCHDOG_PID" 2>/dev/null || :; wait "$WATCHDOG_PID" 2>/dev/null || :; fi
+  WATCHDOG_PID=""
+}
+
+#####################################################################
 # Wait, collect, aggregate.
 #####################################################################
 declare -a SHARD_NAMES
@@ -887,6 +939,11 @@ aggregate() {
   fi
   if [ "$SURVIVING_SQL" -ne "$(( GLOBAL_SQL - BASE_EXCLUDED ))" ]; then
     err "INVARIANT VIOLATED: surviving=$SURVIVING_SQL != global-base=$(( GLOBAL_SQL - BASE_EXCLUDED ))"
+    fail=1
+  fi
+  if [ -s "$OUT/.abort_reason" ]; then
+    err "run ABORTED by --abort-on-core watchdog: $(cat "$OUT/.abort_reason")"
+    err "shard results below are PARTIAL (containers were stopped mid-run)."
     fail=1
   fi
   [ "$any_crash" -ne 0 ] && { err "one or more shards crashed."; fail=1; }
@@ -1021,7 +1078,10 @@ resolve_locale() {
 #####################################################################
 WORK=""
 OUT=""
-cleanup() { [ -n "${WORK:-}" ] && rm -rf "$WORK" 2>/dev/null || :; }
+cleanup() {
+  stop_core_watchdog 2>/dev/null || :
+  [ -n "${WORK:-}" ] && rm -rf "$WORK" 2>/dev/null || :
+}
 
 main() {
   parse_args "$@"
@@ -1082,7 +1142,9 @@ main() {
   local i
   for (( i=0; i<NSHARDS; i++ )); do build_shard_workdir "$i"; done
   for (( i=0; i<NSHARDS; i++ )); do launch_shard "$i"; done
+  [ "$ARG_ABORT_ON_CORE" -eq 1 ] && start_core_watchdog
   wait_shards
+  stop_core_watchdog
   collect_shards
   local agg_rc=0
   aggregate || agg_rc=$?
