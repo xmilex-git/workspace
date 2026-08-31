@@ -18,6 +18,8 @@ FROM ${BASE_IMAGE}
 #   java-1.8.0-openjdk-devel : Java stored procedure (java_stored_procedure=yes) + CTP (Java)
 #   gcc gcc-c++ make         : make_locale (need_make_locale=yes) compiles the locale .so
 #   glibc-langpack-en        : the en_US locale CTP runs under (LC_ALL=en_US)
+#   glibc-langpack-ko/-tr    : std::locale("ko_KR.utf8"/"tr_TR.utf8") in cubregex compile
+#                              (utf8_ko_cs / utf8_tr_cs collations) throws+asserts without them
 #   libstdc++                : C++17 runtime for the CUBRID engine
 #   ncurses-compat-libs      : libncurses.so.5 for csql
 #   diffutils                : CTP compares .answer vs .result with diff
@@ -27,6 +29,7 @@ RUN dnf -y install \
         java-1.8.0-openjdk-devel \
         gcc gcc-c++ make \
         glibc-langpack-en \
+        glibc-langpack-ko glibc-langpack-tr \
         libstdc++ \
         ncurses-compat-libs \
         diffutils findutils which procps-ng util-linux file \
