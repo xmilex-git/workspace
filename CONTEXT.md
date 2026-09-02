@@ -48,6 +48,28 @@ _Avoid_: 런타임 해시 상태, hash: true/partial
 온라인 FULL 백업 진입 시점에 capture한 append LSA(T) 이후에 완료되어 redo LSA(R) ≥ T를 만족하는 checkpoint다. 백업 진입 전부터 진행 중이던 checkpoint는 R이 T보다 앞설 수 있으므로 아무리 기다려도 fresh로 인정하지 않는다.
 _Avoid_: "진행 중 checkpoint 대기 완료"를 fresh로 간주, 최신 checkpoint
 
+### 임시 리스트 튜플 포맷 (지도: xmilex-git/workspace#179)
+
+**레이아웃 디스크립터 (tuple layout descriptor)**:
+리스트의 `type_list`에서 결정적으로 파생되는, 컬럼별 폭·정렬·캐시 오프셋과 리스트별 헤더 크기·비트맵 크기·상수 오프셋 접두 경계를 담은 스키마 상수 표다. 튜플 안에는 기록되지 않는다.
+_Avoid_: 튜플 디스크립터(`QFILE_TUPLE_DESCRIPTOR` — 쓰기용 값 묶음과 혼동), 스키마
+
+**상수 오프셋 접두 (constant-offset prefix)**:
+튜플 안에서 첫 가변 컬럼 또는 이 튜플의 첫 NULL 컬럼 이전까지, 컬럼 위치가 레이아웃 디스크립터만으로 결정되는 선두 구간이다. 그 뒤 컬럼은 접두 증분 deform으로 읽는다.
+_Avoid_: 고정 슬롯 구간, fixed-width 영역
+
+**접두 증분 deform (incremental prefix deform)**:
+컬럼 k를 읽을 때 마지막으로 푼 컬럼 다음부터 이어서 걷고 진행 오프셋을 deform 캐시에 남기는 읽기 방식이다. 임의 순서 접근을 O(1) 재접근으로 만든다.
+_Avoid_: 임의 접근 테이블, 오프셋 테이블
+
+**역방향 가능 리스트 (backward-capable list)**:
+생성 시점에 역방향 스캔이 허용된다고 선언된 리스트로, 튜플 헤더에 `prev_len`을 포함한다. 최종 결과 리스트와 merge join 입력이 해당하며, 그 외 리스트에서의 역방향 스캔은 계약 위반이다.
+_Avoid_: scrollable 리스트, 양방향 리스트
+
+**in-place 덮어쓰기 계약 (in-place overwrite contract)**:
+리스트 안의 값을 제자리에서 바꾸는 것은 이미 bound인 값을 같은 인코딩 크기의 값으로 바꿀 때만 허용된다는 규약이다. NULL을 값으로 바꾸는 것은 허용되지 않는다.
+_Avoid_: 튜플 갱신, 컬럼 업데이트
+
 ### HTAP POC (지도: xmilex-git/workspace#30)
 
 **CUBRID CDC 인프라**:
