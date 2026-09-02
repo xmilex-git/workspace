@@ -212,7 +212,7 @@ F: 00 00 00 10 | 04 | 03 61 62 63 | -- -- -- | 00 00 00 09        포맷 hdr 1B(
 
 ## 13. 이 티켓이 넘기는 것
 
-- 디스크립터 자료구조·pack/unpack·복제(#181): 여기서 요구하는 필드는 `hdr_size, bitmap_size, data_off[2], type_cnt, first_var_col`, 컬럼별 `{kind(fixed|var), var_access(direct|scratch), size, alignby, off}`. `or_pack_listid`는 변경 불필요(클라이언트가 `type_list`로 재계산, #184).
+- 디스크립터 자료구조·pack/unpack·복제(#181): 여기서 요구하는 필드는 `hdr_size, bitmap_size, data_off[2], type_cnt, first_var_col`, 컬럼별 `{kind(fixed|var), var_access(direct|scratch), size, alignby, off}`. `or_pack_listid`는 변경 불필요(클라이언트가 `type_list`로 재계산, #184). **[#181 정정] `hdr_size`는 도메인에서 파생 불가 → pack에 int 1개(layout flags) 추가(D-181-9). `first_var_col`은 `first_non_cached_col`로 개명(D-181-4).**
 - 접근자 API·deform 캐시·조립기 시그니처·정렬 레코드 함수 5개(#182). 조립기는 size→fill 2패스(#186).
 - 지도 fog 해소: "4B 헤더 뒤 BIGINT 패딩"(D-180-3/4: 8B 타입도 4B 정렬이라 패딩 자체가 없음), "가변 1B 헤더 판별 규칙"(D-180-5/6), "정렬 비교자의 헤더 스킵과 OR 접두 중복"(§6.1 이중 접두 인지, §10), "64+ 컬럼·오버플로 비트맵"(§2.1, §3), "`OR_GET_DOUBLE` UB memcpy 통일"(§5, PR-1 조건).
 - 새로 드러난 사항: `mr_data_cmpdisk_bit`의 `OR_GET_INT` 캐스트 → 가변 비교자는 `index_cmpdisk` 필수(D-180-8). 가변 타입은 단일 규칙(D-180-5)이며 정렬 요구 타입은 접근자 복사로 해결 — 지도 Notes의 "가변은 1B/4B 길이 헤더"와 일치.

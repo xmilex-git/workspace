@@ -3,7 +3,7 @@
  *
  * 명세: docs/research/cbrd27365-tuple-format-spec.md (지도 #179, 티켓 #180)
  * 실제 헤더는 src/query/qfile_tuple_layout.h 로 들어가며 서버·SA·클라이언트(cursor.c)가 공유한다.
- * 디스크립터 자료구조(#181)·접근자 API(#182)는 이 스텁이 고정한 상수·불변식 위에서 설계한다.
+ * 디스크립터 자료구조는 #181 (docs/research/cbrd27365-layout-descriptor.md) 로 확정, 접근자 API 는 #182.
  */
 #ifndef _QFILE_TUPLE_LAYOUT_H_
 #define _QFILE_TUPLE_LAYOUT_H_
@@ -76,28 +76,41 @@ typedef enum
   QFILE_VAR_SCRATCH		/* index_readval == NULL : 본문 L 바이트를 8B 정렬 스크래치로 memcpy 후 data_* */
 } QFILE_VAR_ACCESS;
 
-/* 컬럼 단위 레이아웃 (D-180-3: off 는 data_off 기준, 상수 접두 밖은 -1) */
+/* 컬럼 단위 레이아웃 — #181 D-181-3/4 로 8B 확정 (PG CompactAttribute 선례). hot 필드는 마스킹 없음.
+ * off 는 data_off 기준 상수 오프셋; 첫 가변 컬럼 이후 또는 off>INT16_MAX 이후는 -1 (캐시 종료). */
 typedef struct qfile_col_layout QFILE_COL_LAYOUT;
 struct qfile_col_layout
 {
-  QFILE_COL_KIND kind;
-  QFILE_VAR_ACCESS var_access;	/* VAR 만 유효 */
-  short size;			/* FIXED 만 유효 (disksize) */
-  unsigned char alignby;	/* FIXED: 2|4 (D-180-4). VAR: 1 */
-  int off;			/* 상수 오프셋 (data_off 기준) 또는 -1 */
+  int16_t off;			/* 상수 오프셋 또는 -1 */
+  int16_t size;			/* FIXED: disksize (최대 12). VAR: -1 */
+  uint8_t kind;			/* QFILE_COL_KIND */
+  uint8_t var_access;		/* QFILE_VAR_ACCESS, VAR 만 유효 */
+  uint8_t alignby;		/* FIXED: 2|4 (D-180-4). VAR: 1 */
+  uint8_t _pad;
 };
+/* sizeof (QFILE_COL_LAYOUT) == 8 을 static_assert 로 고정 */
 
-/* 리스트 단위 레이아웃 (type_list 확장, #181 이 최종 형태를 정한다) */
-typedef struct qfile_tuple_layout QFILE_TUPLE_LAYOUT;
-struct qfile_tuple_layout
+/* 리스트 단위 레이아웃 = QFILE_TUPLE_VALUE_TYPE_LIST 확장 (#181 D-181-1/5). 별도 구조체가 아니라 type_list 에 필드가 추가된다.
+ * domp[type_cnt] 와 col[type_cnt] 는 한 블록 (qfile_type_list_alloc), free(domp) 하나로 해제.
+ * 입력용 type_list (finalized=false) 는 domp/type_cnt 만 유효. 상세: docs/research/cbrd27365-layout-descriptor.md */
+struct qfile_tuple_value_type_list
 {
+  TP_DOMAIN **domp;		/* 합본 블록 선두 */
   int type_cnt;
-  unsigned char hdr_size;	/* 4 or 8 (backward_capable) */
-  unsigned char bitmap_size;	/* QFILE_NULL_BITMAP_SIZE(type_cnt) — 255B(2040 컬럼) 초과 시 int 로 승격 */
-  unsigned char data_off[2];	/* [0]=no-null, [1]=has-null : ALIGN4(hdr_size + bitmap) (D-180-3) */
-  int first_var_col;		/* 첫 가변 컬럼, 없으면 type_cnt */
-  QFILE_COL_LAYOUT *col;	/* [type_cnt] */
+  QFILE_COL_LAYOUT *col;	/* = (QFILE_COL_LAYOUT *) (domp + type_cnt), 별도 할당 아님 */
+  int first_non_cached_col;	/* min(첫 가변 컬럼, 첫 off>INT16_MAX 컬럼), 없으면 type_cnt (구 first_var_col) */
+  int16_t data_off[2];		/* [0]=no-null [1]=has-null : ALIGN4(hdr_size + bitmap) (D-180-3) */
+  int16_t bitmap_size;		/* QFILE_NULL_BITMAP_SIZE(type_cnt) */
+  uint8_t hdr_size;		/* 4 | 8 ; 8 <=> backward_capable — 유일한 진실 (D-181-8) */
+  bool finalized;
 };
+#define QFILE_LIST_IS_BACKWARD(list_id) ((list_id)->type_list.hdr_size == QFILE_TUPLE_HDR_SIZE_BACKWARD)
+
+/* finalize (D-181-6, mutator-owns-finalize): domp 를 바꾸는 4곳이 직후 호출 — qfile_open_list,
+ * qfile_update_domains_on_type_list, px update_domains_on_type_list_by_val_list, or_unpack_unbound_listid.
+ * 복제는 블록 memcpy 로 상속. 순수·멱등. 디버그: 접근자 진입 시 재계산 교차 assert (D-181-7). */
+extern int qfile_type_list_alloc (QFILE_TUPLE_VALUE_TYPE_LIST * tl, int type_cnt);
+extern void qfile_type_list_finalize (QFILE_TUPLE_VALUE_TYPE_LIST * tl, int hdr_size);
 
 /* ------------------------------------------------------------------ */
 /* D-180-6  가변 길이 헤더 : bit7=0 -> 1B (L<=127), bit7=1 -> 4B ntohl & 0x7FFFFFFF */
@@ -145,7 +158,7 @@ typedef struct qfile_deform_cache QFILE_DEFORM_CACHE;
 struct qfile_deform_cache
 {
   const char *tpl;		/* 캐시가 유효한 튜플 */
-  int fast_limit;		/* min(first_var_col, first_null) */
+  int fast_limit;		/* min(first_non_cached_col, first_null) */
   int next_col;			/* 증분 진행 위치 */
   int next_off;			/* 튜플 시작 기준 바이트 오프셋 */
 };

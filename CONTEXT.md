@@ -55,8 +55,20 @@ _Avoid_: "진행 중 checkpoint 대기 완료"를 fresh로 간주, 최신 checkp
 _Avoid_: 튜플 디스크립터(`QFILE_TUPLE_DESCRIPTOR` — 쓰기용 값 묶음과 혼동), 스키마
 
 **상수 오프셋 접두 (constant-offset prefix)**:
-튜플 안에서 첫 가변 컬럼 또는 이 튜플의 첫 NULL 컬럼 이전까지, 컬럼 위치가 레이아웃 디스크립터만으로 결정되는 선두 구간이다. 그 뒤 컬럼은 접두 증분 deform으로 읽는다.
+튜플 안에서 첫 비캐시 컬럼 또는 이 튜플의 첫 NULL 컬럼 이전까지, 컬럼 위치가 레이아웃 디스크립터만으로 결정되는 선두 구간이다. 그 뒤 컬럼은 접두 증분 deform으로 읽는다.
 _Avoid_: 고정 슬롯 구간, fixed-width 영역
+
+**첫 비캐시 컬럼 (first non-cached column)**:
+레이아웃 디스크립터가 상수 오프셋을 제공하지 않는 첫 컬럼. 첫 가변 컬럼과, 오프셋이 디스크립터 표현 상한을 넘는 첫 컬럼 중 앞선 것이다. 이후 컬럼은 모두 비캐시다.
+_Avoid_: 첫 가변 컬럼(오프셋 상한 사례를 놓침), slow 컬럼
+
+**도메인 확정 (domain resolve)**:
+`DB_TYPE_VARIABLE`로 열린 컬럼의 도메인이 첫 non-NULL 값을 보고 구체 타입으로 결정되는 사건이다. 확정 전 그 컬럼의 값은 반드시 NULL이다.
+_Avoid_: 레이아웃 확정과 혼용, 타입 추론
+
+**레이아웃 확정 (layout finalize)**:
+확정된 도메인 배열과 헤더 크기에서 레이아웃 디스크립터를 파생하는 순수하고 멱등한 계산이다. 도메인을 바꾼 코드가 같은 자리에서 다시 수행한다.
+_Avoid_: 도메인 확정과 혼용, 스키마 컴파일
 
 **접두 증분 deform (incremental prefix deform)**:
 컬럼 k를 읽을 때 마지막으로 푼 컬럼 다음부터 이어서 걷고 진행 오프셋을 deform 캐시에 남기는 읽기 방식이다. 임의 순서 접근을 O(1) 재접근으로 만든다.
@@ -177,6 +189,44 @@ _Avoid_: 별도 join RPC(helper발 왕복으로 오해 — 서버측 디스패�
 **attach 레지스트리 (attach registry)**:
 호출자 트랜잭션에 두는 "지금 join 중인 helper 트랜잭션 집합". 호출자 인터럽트의 helper 전파, 호출자 종료(커밋/어보트/연결단절) 시 helper 전원 인터럽트+detach 대기, 정리 훅 — 세 문제를 푸는 단일 매개체다. 락 매니저에는 "같은 편 트랜잭션" 개념이 없으므로 락 면제와는 무관하다.
 _Avoid_: 락 그룹(락 호환성 예외로 오해), 세션 레지스트리(트랜잭션 단위가 맞다)
+
+### CAS 통합 (지도: xmilex-git/workspace#112)
+
+**커넥션 프런트 (connection front)**:
+CAS 통합 아키텍처(#112)에서 브로커 마스터의 축소된 새 역할 — accept·접속 선별·IP ACL·admission control(잡큐)을 수행한 뒤 클라이언트 fd를 CAS 대신 로컬 cub_server에 핸드오프하고 데이터 경로에서 빠지는 접속 시점 전용 계층(#116 D1). 브로커 호스트 = DB 호스트가 강제되며(핸드오프는 로컬만), 질의당 왕복은 jdbc→server 1-hop이다.
+_Avoid_: 브로커 제거(폐기된 초기 목적지 — 마스터는 존치한다), 프록시/중계(Linux에서 바이트를 중계하지 않는다), CAS(프로토콜 처리·SQL 실행 주체가 아니다)
+
+**세션 객체 컨텍스트 (session object context)**:
+client workspace(MOP 테이블·MOBJ heap·AREA 할당자·SM_CLASS·트리거/템플릿 상태)가 서버 편입 후 서버 스레드 문맥에서 갖는 재규정된 역할(#123). 역할은 셋으로 분해된다 — ① 컴파일러·DDL 코드가 소비하는 스키마 표현, ② 트랜잭션 스테이징(DDL의 쓰기 경로 그 자체: SM_TEMPLATE·dirty MOP·flush), ③ 네트워크 왕복 회피 캐시. 서버 편입으로 존재 이유가 사라지는 것은 ③뿐이므로 구조는 존치하고(SA 모드가 산 증거), 표현 통합(서버 카탈로그와의 이중 표현 해소)은 이 맵 밖 후속 트랙이다. 불변식: **실행 핫패스는 세션 객체 컨텍스트를 참조하지 않는다**.
+_Avoid_: 카탈로그 캐시(역할 ③만 가리키는 옛 프레임 — 캐시가 아니라 표현이자 쓰기 경로), 워크스페이스 제거(폐기된 후보 — 컴파일러 재작성과 등가)
+
+**역접속 콜백 종단 (in-server callback termination)**:
+PL 실행 중 JVM(cub_pl)에서 돌아오는 `INTERNAL_JDBC` 콜백(SQL prepare/execute·OID·collection·트랜잭션 제어 등)과 PL/CSQL 컴파일 semantics 질의를 CAS로 중계하지 않고 cub_server가 자기 안에서 끝내는 구조(#120). SA_MODE의 in-process `method_dispatch()` 분기가 템플릿이며, invoke 루프에 블록된 그 서버 워커 스레드가 동기 처리한다(트랜잭션 조인 = 연결 동일성→스레드 동일성). cub_pl 프로세스·서버↔JVM 와이어는 무변경 — 재배선은 전적으로 cub_server 내부다. 핸들 캐시는 CAS 프로세스-전역 싱글턴(사실상 per-session이던 것)의 충실한 번역으로 `cubpl::session`이 소유한다.
+_Avoid_: JVM 편입/JNI 직결(기각 — 순방향은 이미 직결, 크래시 격리 상실), 역접속 제거를 cub_pl 제거로 오해(존치한다), 콜백 프로토콜 변경(Java측 무변경 계약)
+
+**reset-테이블 사전 적용 (connect-time reset-table pre-application)**:
+CAS 통합 후 HA 접속-시 판정의 원칙(#121 D2) — 서버가 세션 수립 시점에 `xtran_should_connection_reset`의 타입×HA상태 테이블을 미리 적용해, 받아봤자 즉시 reset될 조합(RW×standby, SO×active, 복제지연×standby, replica 불일치, maintenance×비허용)을 드라이버가 재시도 가능한(retryable) 형태로 거절하는 것. 현행 2-pass 능력 XOR(CAS내 클라이언트 라이브러리 검사)을 대체하는 서버측 단일 진실 소스이며, 트랜잭션 경계 reset은 백스톱+치유 트리거로 축자 생존한다. 테이블에 행이 없는 조합(RO×active 등)은 수용한다.
+_Avoid_: 관용 단일-pass(기각 — failover 후 구-active가 RW 세션을 받아버려 드라이버가 신-active로 못 가는 고착 회귀), 능력 XOR의 대칭 거절 승계(RO×active 거절은 미승계)
+
+**트랙 A / 트랙 B (track A / track B)**:
+CAS 통합 실행의 2대 작업 트랙(#122 D1) — **트랙 A** = 컴파일러·client 절반의 서버 편입(전역상태 세션-로컬화, RPC 접기, DDL, plcsql), **트랙 B** = 접속 프런트(핸드오프, CAS 프로토콜 화자화, HA 의미론, CAS 제거). A 선행이 원칙: 프런트가 먼저 서면 서버에 컴파일러가 없어 동작하는 중간 상태가 성립하지 않는다.
+_Avoid_: 티켓 원안의 "프런트 먼저" 순서(기각), 트랙 병행 착수(A3↔A4의 병렬은 트랙 A 내부 이야기다)
+
+**통합 브랜치 (integration branch, `cas-merge`)**:
+CAS 통합 산출물이 누적되는 fork(`xmilex-git/cubrid`)의 장수 브랜치(#122 D3) — upstream `CUBRID/cubrid` develop 기준으로 절단하고 주기적 머지(리베이스 아님)로 추종하며, 스테이지 PR(`wf122/<스테이지>-<슬러그>`)의 머지 대상. 중간 스테이지는 단독 upstream 반입이 불가하므로(1-hop 없이는 사용자 가치 없음) 여기에 모았다가 후반에 upstream PR 분할.
+_Avoid_: develop 직행 PR 스택(기각), 리베이스 추종(공개 브랜치 이력 파괴)
+
+**표준 smoke 스크립트 (standard smoke scripts)**:
+스테이지 게이트의 smoke를 정의하는 단 2개의 누적형 스크립트(#122 D5) — **트랙 A용**: unit 하네스 내 in-process 시나리오(연결→prepare→execute→fetch→커밋; A4 이후 다중-세션 변형 추가), **트랙 B용**: JDBC 실드라이버 스크립트(접속→DML/DDL→취소→재접속; B3부터 failover 1회). 스테이지마다 새로 발명하지 않고 케이스를 누적한다. 중간 CTP는 없으며(#122 D4) 최종 게이트에서만 CTP·YCSB가 돈다.
+_Avoid_: 스테이지별 일회성 테스트 스크립트, 중간 CTP sql/medium 게이트(#122 D4로 폐지된 옛 맵 문구)
+
+**유틸리티 채널 (utility channel)**:
+CAS 통합 후에도 존치하는 legacy client RPC(net_client_request 계열) 경로의 재규정된 이름(#126 D7/D8) — 관리 유틸리티(cub_admin 전부: unloaddb·compactdb·loaddb 포함)와 HA 데몬 4종만 도달할 수 있다. 격리는 코드 이동이 아니라 도달 게이트로 표현된다: 서버가 boot 등록 시 DB_CLIENT_TYPE 허용목록으로 일반/드라이버 타입을 거절하고, #118 D3의 핸드셰이크 패스워드 검증이 이 채널에도 동일 적용된다. 라이브러리 실체는 오늘의 libcubridcs 그대로(무이동·무개명).
+_Avoid_: 레거시 채널 전면 소멸(#118 D4의 문자적 독해 — 소멸은 드라이버·csql 도달 경로에 한한다), 유틸 라이브러리 물리 분할(기각 — 정리 트랙감)
+
+**thin csql (서버-렌더 텍스트 모델)**:
+CAS 통합 후 csql CS 모드의 형태(#126 D1/D2) — CCI 전송으로 CAS V12를 말하는 '또 하나의 드라이버 클라이언트'이며, 값 렌더링은 psql처럼 서버가 한다: additive function code로 서버가 편입된 기존 포매터(csql_result_format)를 세션 워크스페이스 위에서 실행해 완성 텍스트를 반환하고, csql은 정렬·페이징·터미널만 담당한다. 세션 커맨드(;schema 류)도 같은 방식. 로컬 접속은 서버 입양 UNIX 소켓 직결(브로커 무의존), csql -S는 libcubridsa dlopen 그대로 존치.
+_Avoid_: CCI 타입 위 포매터 재작성(기각 — ~1000줄+MONETARY 심볼 등 바이트 호환 불가 4점), csql 전용 경량 프로토콜(기각), 클라이언트측 DB_VALUE 재구성
 
 **스캔 패스 (scan pass)**:
 병렬 스캔 manager가 `open()`부터 `read()`를 거쳐 `read_finalize()`까지 한 번 도는 단위다. 파티션 테이블은 파티션마다 한 패스를 돌며(`qexec_init_next_partition`이 스캔을 재오픈), 패스가 바뀌어도 원본 XASL의 `agg_list`는 동일한 누산기를 계속 가리킨다. "스캔 블록"이 물리적 분할 단위라면 패스는 manager 수명 단위다.
