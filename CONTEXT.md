@@ -63,7 +63,7 @@ _Avoid_: 고정 슬롯 구간, fixed-width 영역
 _Avoid_: 임의 접근 테이블, 오프셋 테이블
 
 **역방향 가능 리스트 (backward-capable list)**:
-생성 시점에 역방향 스캔이 허용된다고 선언된 리스트로, 튜플 헤더에 `prev_len`을 포함한다. 최종 결과 리스트와 merge join 입력이 해당하며, 그 외 리스트에서의 역방향 스캔은 계약 위반이다.
+생성 시점에 역방향 스캔이 허용된다고 선언된 리스트로, 튜플 헤더에 `prev_len`을 포함한다. 최종 결과 리스트·merge join 입력·분석함수 group/value 리스트가 해당하며, 그 외 리스트에서의 역방향 스캔은 계약 위반이다.
 _Avoid_: scrollable 리스트, 양방향 리스트
 
 **in-place 덮어쓰기 계약 (in-place overwrite contract)**:
