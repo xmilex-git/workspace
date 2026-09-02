@@ -14,8 +14,8 @@
 |---|---|---|---|
 | D-180-1 | 튜플 헤더 = `len` 4B(네트워크 오더). **bit31 = has-null**, 하위 31비트 = 튜플 전체 길이(패딩 포함). 역방향 가능 리스트만 `prev_len` 4B 추가(플래그 없음, 순수 길이). | 길이는 `int`라 bit31이 오늘도 미사용(항상 양수) → 상한 손실 0. natts/hoff/infomask는 스키마 상수라 불필요(지도 확정). | 별도 1B 플래그 바이트: 정렬 낭비. |
 | D-180-2 | 널 비트맵 = has-null일 때만, 헤더 직후, `ceil(type_cnt/8)`B. **1 = bound, 0 = NULL**(PG 동일). 비트 i → `byte[i>>3] & (1<<(i&7))`. `type_cnt` 이후 후행 비트는 0. | PG `att_isnull`/`first_null_attr`를 그대로 옮길 수 있음. 0xFF 바이트 스캔으로 첫 NULL 탐색. | 0=bound 반전: PG 코드 이식 불가, 이점 없음. |
-| D-180-3 (**§15 선택 대기**) | `tuple_alignby ∈ {4, 8}` = max(4, 모든 컬럼 alignby) — **리스트 open 시 한 번 계산해 고정**. `DB_TYPE_VARIABLE`(미확정) 컬럼은 8로 계산. 값 영역 시작 `data_off = ALIGN(hdr_size + bitmap_size, tuple_alignby)`; 튜플 길이는 `tuple_alignby` 배수로 반올림. 오프셋 테이블은 **data_off 기준 하나**. | 늦은 도메인 확정(VARIABLE→BIGINT)이 기존 튜플의 `data_off`를 바꾸면 안 됨(§8). PG `t_hoff = MAXALIGN(...)`와 같은 구조. | 오프셋을 튜플 시작 기준으로 두고 data_off 정렬 생략: 헤더 4B 리스트에서 ≤4B 절약되나 has-null 여부별 오프셋 테이블 2개 필요. 성능 티켓에서 재검토 가능. |
-| D-180-4 (**§15 선택 대기**: BIGINT/DOUBLE 8 vs 4) | 고정폭 값은 `alignby`로 자연 정렬(#183 표: SHORT/ENUM 2, INT/FLOAT/DATE/TIME/TIMESTAMP(+LTZ)/TIMESTAMPTZ/DATETIME(+LTZ/TZ)/OID/OBJECT/MONETARY 4, **BIGINT/DOUBLE 8**). 인코딩은 기존 `data_writeval`(네트워크 오더) 그대로. NULL은 0바이트. | #183 결론. 접근자 assert 최대 4 → 무수정 재사용. | 전부 4(힙 관례): `OR_GET_DOUBLE` 캐스트 UB 잔존. alignby 표 한 줄 변경으로 롤백. |
+| D-180-3 | **`tuple_alignby = 4` 상수**(2026-09-02 사용자 결정, §15 C안). 값 영역 시작 `data_off = ALIGN4(hdr_size + bitmap_size)`; 튜플 길이는 4의 배수로 반올림. 오프셋 테이블은 **data_off 기준 하나**(PG `t_hoff` + `attcacheoff`와 같은 구조, §14.1). | 규칙 1개. 힙 관례(`DB_ATT_ALIGN`=4)와 일치. 늦은 도메인 확정이 `data_off`를 바꿀 수 없어 §8 특수 규칙 불필요. §15 압축표에서 전 항 최소. | A 항상 8(PG MAXALIGN): +4~12B/튜플. B 리스트별 `{4,8}`+open 고정: 규칙 3개, 8B 컬럼 없는 리스트에서만 A보다 유리. 상수 한 줄로 전환 가능. |
+| D-180-4 | 고정폭 값의 `alignby` = **min(자연 정렬, 4)**: SHORT/ENUM 2, 그 외 전부 4 (**BIGINT/DOUBLE/RESULTSET도 4** — #183 D-183-1의 "8" 권고는 롤백 경로대로 4로 조정). 인코딩은 기존 `data_writeval`(네트워크 오더) 그대로. **8B 값 읽기는 memcpy**(SER-03) — 접근자·비교자 모두. NULL은 0바이트. | #183 §1.2: CUBRID `or_*`가 assert하는 최대 정렬은 4, 힙도 BIGINT/DOUBLE을 4B에 저장. 8을 택한 유일한 이유였던 `OR_GET_DOUBLE` 캐스트 UB는 memcpy로 해소(§15.4). | 8로 되돌리기: alignby 표 + `tuple_alignby` 상수 변경. |
 | D-180-5 | 가변 값은 **단일 규칙**(예외 없음, 2026-09-02 사용자 결정으로 v0 초안의 두 부류 폐기): `is_size_computed()` 타입 전부 — 정렬 없음(직전 값 끝 = 헤더 시작), 포맷 길이 헤더 **1B(≤127) / 4B**, 본문 = 타입의 디스크 표현(패딩 없음). 정렬을 요구하는 타입(SET/JSON/BLOB/CLOB 등 `or_put_int` 계열로 패킹, `index_readval == NULL`)은 **접근자가 읽을 때 정렬 스크래치로 memcpy 후 기존 `data_*` 호출**(PG `detoast_attr`의 short-header 처리와 동일, §14.2). 문자열/BIT/NUMERIC은 복사 없이 `index_*` 직접. | 포맷에 타입 예외를 두지 않는다. 정렬은 리더 구현의 문제이며 PG도 그렇게 푼다. 복사 비용은 리스트에 드문 타입에만 발생. | v0 초안(SET 등만 4B 정렬 + 4B 고정 헤더): 복사 0회지만 포맷 규칙이 둘. 롤백은 접근자의 복사 분기를 정렬 저장으로 바꾸는 것(포맷 변경 필요). |
 | D-180-6 | 가변 길이 헤더 인코딩: 첫 바이트 bit7=0 → 1B, 길이 = byte; bit7=1 → 4B, 길이 = `ntohl(word) & 0x7FFFFFFF`, memcpy로 읽음. 길이는 **본문 바이트 수**(헤더 제외). 0 허용. | 자기 기술, 타입 디스패치 없이 O(1) 스킵. | — |
 | D-180-7 | 상수 오프셋 접두 = `min(first_var_col, first_null_attr)` 이전 컬럼. 그 이후는 접두 증분 deform + 튜플 단위 캐시 `(next_col, next_off)`. | 지도 확정. PG `slow` 플래그와 동일 의미. | — |
@@ -33,13 +33,13 @@ offset 0
 │ bit31=hasnull│ backward만   │ hasnull일 때만    │      │ 고정: ALIGN(alignby) 자연정렬  │     │
 │              │              │ ceil(type_cnt/8)B│      │ 가변: [1B|4B hdr][본문]        │     │
 └──────────────┴──────────────┴──────────────────┴──────┴──────────────────────────────┴─────┘
-                                                  ↑ data_off = ALIGN(hdr_size + bitmap_size, tuple_alignby)
-전체 길이 = ALIGN(값 끝, tuple_alignby) = len & 0x7FFFFFFF
+                                                  ↑ data_off = ALIGN4(hdr_size + bitmap_size)
+전체 길이 = ALIGN4(값 끝) = len & 0x7FFFFFFF
 ```
 
 - `hdr_size` = 4 (forward-only) 또는 8 (backward_capable) — 리스트 단위 상수(#184).
 - `bitmap_size` = has-null이면 `(type_cnt + 7) >> 3`, 아니면 0.
-- 튜플 시작은 항상 `tuple_alignby` 정렬: 페이지 헤더 32B(`QFILE_PAGE_HEADER_SIZE`) + 모든 튜플 길이가 `tuple_alignby` 배수. 오버플로 튜플은 `qfile_get_tuple`이 `malloc` 버퍼(≥8 정렬)로 조립한 뒤 읽는다.
+- 튜플 시작은 항상 4B 정렬: 페이지 헤더 32B(`QFILE_PAGE_HEADER_SIZE`) + 모든 튜플 길이가 4의 배수. 오버플로 튜플은 `qfile_get_tuple`이 `malloc` 버퍼(≥8 정렬)로 조립한 뒤 읽는다.
 
 ---
 
@@ -68,17 +68,17 @@ offset 0
 
 ## 4. 값 영역 시작과 튜플 길이
 
-- `tuple_alignby = max(4, max_i alignby[i])`, `DB_TYPE_VARIABLE` 컬럼은 8로 계산. **리스트 open 시 고정**(재finalize에서 변경 금지, §8).
-- `data_off(has_null) = ALIGN(hdr_size + bitmap_size(has_null), tuple_alignby)` — has-null 여부별 두 값만 존재(디스크립터에 둘 다 저장).
+- `tuple_alignby = 4` 상수(D-180-3). 컬럼 `alignby ≤ 4`이므로 튜플 시작 4B 정렬만으로 모든 고정 값의 정렬이 성립한다.
+- `data_off(has_null) = ALIGN4(hdr_size + bitmap_size(has_null))` — has-null 여부별 두 값만 존재(디스크립터에 둘 다 저장). 비트맵 ≤ 4B(≤32 컬럼)인 forward 리스트는 `data_off` = 8, backward는 12.
 - 컬럼 오프셋 테이블 `off[i]`는 `data_off` 기준, 상수 접두 구간만 유효: `off[0]=0`, `off[i] = ALIGN(off[i-1] + size[i-1], alignby[i])`, 첫 가변 컬럼(및 그 이후)은 `-1`.
-- 튜플 길이 = `ALIGN(마지막 값 끝, tuple_alignby)`. 반올림 패딩 ≤ 7B.
+- 튜플 길이 = `ALIGN4(마지막 값 끝)`. 반올림 패딩 ≤ 3B.
 
 ---
 
 ## 5. 고정폭 값
 
-- 판정: `pr_type::is_size_computed() == false`(#183 §3 표 18종). 크기 `disksize`, 정렬 `alignby`(D-180-4).
-- 인코딩: 기존 `data_writeval`/`data_readval`(네트워크 오더). 접근자는 INT 계열은 `OR_GET_INT`, 8B 타입(BIGINT/DOUBLE)은 **memcpy** 로 읽는다(`OR_GET_DOUBLE` 캐스트 UB 제거 기회, 지도 fog 항목 해소).
+- 판정: `pr_type::is_size_computed() == false`(#183 §3 표 18종). 크기 `disksize`, 정렬 `alignby ∈ {2,4}`(D-180-4).
+- 인코딩: 기존 `data_writeval`/`data_readval`(네트워크 오더). 접근자는 2B/4B 필드는 `OR_GET_SHORT/INT`, 8B 타입(BIGINT/DOUBLE, MONETARY amount)은 **memcpy**로 읽는다. 정렬 비교자 경로가 쓰는 `OR_GET_DOUBLE`/`OR_GET_FLOAT` 캐스트(`object_representation.h:164`)는 PR-1에서 memcpy로 수정(PUT은 이미 memcpy) — 힙의 4B DOUBLE 잠재 UB도 함께 정리.
 - NULL = 0바이트(비트맵에만 표시). 따라서 NULL 컬럼 뒤 오프셋은 상수가 아니다(§7).
 
 ---
@@ -129,7 +129,7 @@ else:                hdr=4, memcpy(&w, p, 4), L = ntohl(w) & 0x7FFFFFFF
 ## 8. `DB_TYPE_VARIABLE`과 늦은 도메인 확정
 
 - `qfile_update_domains_on_type_list`(`list_file.c:7063`)는 `DB_TYPE_VARIABLE` 컬럼의 도메인을 확정될 때까지 매 튜플 재시도하며, 확정 전 튜플의 그 컬럼은 반드시 NULL(#186).
-- NULL은 0바이트이므로 **컬럼 k의 타입은 k가 NULL인 튜플의 바이트 배치에 영향을 주지 않는다** — 단 `tuple_alignby`·`data_off`는 예외. 그래서 D-180-3: `tuple_alignby`는 open 시 VARIABLE을 8로 쳐서 고정하고 재finalize는 `size/alignby/off/first_var_col`만 갱신한다. 확정 후 기존 튜플을 다시 읽어도 `data_off`가 같으므로 정합.
+- NULL은 0바이트이므로 **컬럼 k의 타입은 k가 NULL인 튜플의 바이트 배치에 영향을 주지 않는다.** `tuple_alignby`가 상수 4(D-180-3)이고 `data_off`가 타입에 의존하지 않으므로, 확정 후 디스크립터를 재finalize(`kind/size/alignby/off/first_var_col` 갱신)해도 기존 튜플을 그대로 읽을 수 있다. 특수 규칙 없음.
 - 확정 전 VARIABLE 컬럼은 디스크립터에서 "가변"으로 두어 `first_var_col`을 앞당긴다(상수 접두가 짧아지는 비용은 확정 전까지만).
 - 조립기가 VARIABLE 컬럼에 non-NULL 값을 받으면 `assert` (기존 `qfile_unify_types` 계약과 동일).
 
@@ -144,8 +144,8 @@ else:                hdr=4, memcpy(&w, p, 4), L = ntohl(w) & 0x7FFFFFFF
 
 ## 10. 정렬 레코드 (`P_sort_key`)
 
-- 본문 = 키 컬럼만으로 구성한 **정방향 전용 미니 튜플**(hdr 4B, 비트맵·정렬·가변 규칙 동일, `tuple_alignby`는 키 컬럼 기준으로 별도 계산). `A_sort_key`의 `offset[]`·0=NULL 규약은 유지(#186).
-- 비교자 입력: 본문 포인터(고정: 정렬된 위치 → `data_cmpdisk`; 가변: 헤더 뒤 비정렬 → `index_cmpdisk`, 없으면 정렬 스크래치 복사 후 `data_cmpdisk`). `qfile_compare_partial_sort_record`의 `PTR_ALIGN(body, MAX_ALIGNMENT)` 는 미니 튜플 시작을 `tuple_alignby`(≤8) 로 맞추는 것으로 대체.
+- 본문 = 키 컬럼만으로 구성한 **정방향 전용 미니 튜플**(hdr 4B, 비트맵·정렬·가변 규칙 동일, ). `A_sort_key`의 `offset[]`·0=NULL 규약은 유지(#186).
+- 비교자 입력: 본문 포인터(고정: 정렬된 위치 → `data_cmpdisk`; 가변: 헤더 뒤 비정렬 → `index_cmpdisk`, 없으면 정렬 스크래치 복사 후 `data_cmpdisk`). `qfile_compare_partial_sort_record`의 `PTR_ALIGN(body, MAX_ALIGNMENT)` 는 미니 튜플 시작을 4B로 맞추는 것으로 대체.
 
 ---
 
@@ -153,21 +153,21 @@ else:                hdr=4, memcpy(&w, p, 4), L = ntohl(w) & 0x7FFFFFFF
 
 표기: `F` = forward-only(hdr 4), `B` = backward_capable(hdr 8). 현행 = `8 + Σ(8 + ALIGN8(size))`, NULL은 헤더 8B만(`list_file.c:1926`, `query_opfunc.c:397`).
 
-### (INT, INT) = (7, 9), NULL 없음 — `tuple_alignby 4`
+### (INT, INT) = (7, 9), NULL 없음
 ```
 F: 00 00 00 0C | 00 00 00 07 | 00 00 00 09            len=12
 B: 00 00 00 10 | pp pp pp pp | 00 00 00 07 | 00 00 00 09   len=16
 ```
 
-### (INT, NULL, BIGINT) = (7, NULL, 5) — `tuple_alignby 8`, has-null, bitmap 1B `0b101 = 0x05`
+### (INT, NULL, BIGINT) = (7, NULL, 5) — has-null, bitmap 1B `0b101 = 0x05`
 ```
-F: 80 00 00 18 | 05 | -- -- --  | 00 00 00 07 | -- -- -- -- | 00 00 00 00 00 00 00 05
-   len word(hasnull|24) bitmap  pad→data_off=8  INT@0        pad→ALIGN8     BIGINT@8      total 24
-B: 80 00 00 20 | pp pp pp pp | 05 | -- -- -- -- -- -- -- | INT | pad4 | BIGINT     data_off=16, total 32
+F: 80 00 00 14 | 05 -- -- -- | 00 00 00 07 | 00 00 00 00 00 00 00 05
+   len(hasnull|20) bitmap+pad→data_off=8   INT@0        BIGINT@4 (4B 정렬, memcpy 읽기)   total 20
+B: 80 00 00 18 | pp pp pp pp | 05 -- -- -- | INT | BIGINT        data_off=12, total 24
 ```
-같은 스키마 NULL 없음 (7, 3, 5): F `data_off=4`, INT@0, INT@4, BIGINT@8 → 4+16=20 → **24**; B `data_off=8` → 8+16 = **24**.
+같은 스키마 NULL 없음 (7, 3, 5): F `data_off=4`, INT@0, INT@4, BIGINT@8 → **20**; B `data_off=8` → **24**.
 
-### (VARCHAR 'abc', INT) = 본문 `03 61 62 63`(pr_type 접두 1B + 3B) — `tuple_alignby 4`
+### (VARCHAR 'abc', INT) = 본문 `03 61 62 63`(pr_type 접두 1B + 3B)
 ```
 F: 00 00 00 10 | 04 | 03 61 62 63 | -- -- -- | 00 00 00 09        포맷 hdr 1B(L=4), INT는 ALIGN4(5)=8, total 16
 ```
@@ -182,27 +182,29 @@ F: 00 00 00 10 | 04 | 03 61 62 63 | -- -- -- | 00 00 00 09        포맷 hdr 1B(
 |---|---|---|---|---|
 | (INT) | 24 | 8 | 12 | |
 | (INT, INT) | 40 | 12 | 16 | |
-| (BIGINT) | 24 | 16 | 16 | F는 data_off 8로 4B 패딩(D-180-3 비용) |
-| (INT, INT, BIGINT) | 56 | 24 | 24 | |
-| (INT, NULL, BIGINT) | 48 | 24 | 32 | 비트맵 1B + 정렬 패딩 |
+| (BIGINT) | 24 | 12 | 16 | |
+| (INT, BIGINT) — orderby_num/inst_num 히든 컬럼이 붙은 리스트의 최소형 | 40 | 16 | 20 | §15 A/B안이었으면 24 |
+| (INT, INT, BIGINT) | 56 | 20 | 24 | |
+| (INT, NULL, BIGINT) | 48 | 20 | 24 | 비트맵 1B + 패딩 3B |
+| (DOUBLE, DOUBLE) — SUM/AVG 결과 | 40 | 20 | 24 | |
 | (VARCHAR 'abc', INT) | 40 | 16 | 20 | 현행: 문자열 `ALIGN8(ALIGN4(3+2))=8`+헤더 8 |
 | (INT, VARCHAR 'abc') | 40 | 12 | 20 | |
 | (INT, SET 40B) | 72 | 52 | 56 | 1B 헤더, 읽기 시 스크래치 복사 |
 | 100×INT, NULL 없음 | 1608 | 404 | 408 | |
 | 100×INT, NULL 1개 | 1600 | 416 | 420 | 비트맵 13B → data_off 20(F)/24(B) |
-| TPC-H Q1 집계 키+측정 (CHAR(1)×2, DOUBLE×5, BIGINT) | 8+16×2+16×6=136 | 64 | 64 | `tuple_alignby 8` → data_off 8(F/B 동일); CHAR(1)은 가변 헤더 1B+본문 2B ×2 = 6B, DOUBLE은 ALIGN8(6)=8부터 40B, BIGINT 8B → 56+8 |
+| TPC-H Q1 집계 키+측정 (CHAR(1)×2, DOUBLE×5, BIGINT) | 136 | 60 | 64 | CHAR(1) 가변 헤더 1B+본문 2B ×2 = 6B, DOUBLE ALIGN4(6)=8부터 40B, BIGINT 8B → 56 + hdr |
 
 ---
 
 ## 12. 불변식 / assert 목록 (접근자·조립기가 지켜야 할 것)
 
-1. `len & 0x7FFFFFFF ≥ hdr_size`, `len % tuple_alignby == 0`.
+1. `len & 0x7FFFFFFF ≥ hdr_size`, `len % 4 == 0`.
 2. has-null ⇔ 비트맵에 0비트가 `type_cnt` 안에 존재.
 3. 후행 비트맵 비트 == 0.
 4. 상수 접두 컬럼 위치 == 증분 deform으로 계산한 위치(디버그에서 교차 검증, PG `first_null_attr`의 slow-path 검증과 같은 방식).
 5. 가변: 기록 바이트 수 == `L`(§6.3); `index_readval` 있는 타입은 `data_writeval` 호출 금지, 없는 타입은 스크래치 경유만.
 6. 고정: 위치 % alignby == 0.
-7. `qfile_connect_list`/`qfile_append_list`/`qfile_duplicate_list`: 두 리스트의 `hdr_size`·`tuple_alignby`·`type_cnt` 일치(#184).
+7. `qfile_connect_list`/`qfile_append_list`/`qfile_duplicate_list`: 두 리스트의 `hdr_size`·`type_cnt` 일치(#184).
 8. in-place: §9의 4개 assert.
 9. `DB_TYPE_VARIABLE` 컬럼에 non-NULL 조립 시 assert.
 
@@ -210,9 +212,9 @@ F: 00 00 00 10 | 04 | 03 61 62 63 | -- -- -- | 00 00 00 09        포맷 hdr 1B(
 
 ## 13. 이 티켓이 넘기는 것
 
-- 디스크립터 자료구조·pack/unpack·복제(#181): 여기서 요구하는 필드는 `hdr_size, tuple_alignby, bitmap_size, data_off[2], type_cnt, first_var_col`, 컬럼별 `{kind(fixed|var_a|var_b), size, alignby, off}`. `or_pack_listid`는 변경 불필요(클라이언트가 `type_list`로 재계산, #184).
+- 디스크립터 자료구조·pack/unpack·복제(#181): 여기서 요구하는 필드는 `hdr_size, bitmap_size, data_off[2], type_cnt, first_var_col`, 컬럼별 `{kind(fixed|var), var_access(direct|scratch), size, alignby, off}`. `or_pack_listid`는 변경 불필요(클라이언트가 `type_list`로 재계산, #184).
 - 접근자 API·deform 캐시·조립기 시그니처·정렬 레코드 함수 5개(#182). 조립기는 size→fill 2패스(#186).
-- 지도 fog 해소: "4B 헤더 뒤 BIGINT 패딩"(D-180-3), "가변 1B 헤더 판별 규칙"(D-180-5/6), "정렬 비교자의 헤더 스킵과 OR 접두 중복"(§6.1 이중 접두 인지, §10), "64+ 컬럼·오버플로 비트맵"(§2.1, §3), "`OR_GET_DOUBLE` UB memcpy 통일"(§5).
+- 지도 fog 해소: "4B 헤더 뒤 BIGINT 패딩"(D-180-3/4: 8B 타입도 4B 정렬이라 패딩 자체가 없음), "가변 1B 헤더 판별 규칙"(D-180-5/6), "정렬 비교자의 헤더 스킵과 OR 접두 중복"(§6.1 이중 접두 인지, §10), "64+ 컬럼·오버플로 비트맵"(§2.1, §3), "`OR_GET_DOUBLE` UB memcpy 통일"(§5, PR-1 조건).
 - 새로 드러난 사항: `mr_data_cmpdisk_bit`의 `OR_GET_INT` 캐스트 → 가변 비교자는 `index_cmpdisk` 필수(D-180-8). 가변 타입은 단일 규칙(D-180-5)이며 정렬 요구 타입은 접근자 복사로 해결 — 지도 Notes의 "가변은 1B/4B 길이 헤더"와 일치.
 
 ---
@@ -222,7 +224,7 @@ F: 00 00 00 10 | 04 | 03 61 62 63 | -- -- -- | 00 00 00 09        포맷 hdr 1B(
 ### 14.1 D-180-3 이 정말 PG 방식인가 → **예**
 - `heap_form_minimal_tuple` (`src/backend/access/common/heaptuple.c:1399-1457`): `if (hasnull) len += BITMAPLEN(natts); hoff = len = MAXALIGN(len); /* align user data safely */` → `t_hoff = hoff + MINIMAL_TUPLE_OFFSET`, 값은 `(char*)tuple + hoff`부터. `heap_form_tuple`(`:1033-1101`), `heap_expand_tuple`(`:849, :877`)도 동일 식. 즉 **비트맵 크기를 더한 뒤 한 번 MAXALIGN** — D-180-3의 `data_off = ALIGN(hdr + bitmap, tuple_alignby)`와 같은 구조.
 - 오프셋 테이블은 하나: `CompactAttribute.attcacheoff`(`tupdesc.h:70`, "fixed offset into tuple, if known, or -1")는 **`t_hoff` 기준** 상대 오프셋이며 `TupleDescFinalize`(`tupdesc.c:546-555`)가 첫 가변 컬럼 전까지만 채운다. deform은 `tp = tup + t_hoff` 후 `fetch_att(tp + attcacheoff)` (`execTuples.c:1157-1184`: "We can use attcacheoff up until the first NULL … `firstNonCacheOffsetAttr = Min(firstNonCacheOffsetAttr, firstNullAttr)`"). has-null 여부로 테이블을 나누지 않고 `t_hoff`가 흡수한다 — 우리 `data_off[2]`와 동일.
-- 차이 하나: PG는 항상 `MAXALIGN`(8). 우리는 `tuple_alignby ∈ {4,8}`로 INT 전용 리스트를 4에 둔다. 튜플 시작이 `tuple_alignby` 정렬(페이지 헤더 32B + 길이 반올림)이므로 상대 정렬 == 절대 정렬이 성립하고, 이 완화는 안전하다. VARIABLE 컬럼을 8로 세어 고정하는 규칙(§8)은 PG에 없는 우리 고유 조건(늦은 도메인 확정) 때문이다.
+- 차이 하나: PG는 항상 `MAXALIGN`(8). 우리는 상수 4(§15 C안). 튜플 시작이 4B 정렬(페이지 헤더 32B + 길이 반올림)이므로 상대 정렬 == 절대 정렬이 성립한다.
 
 ### 14.2 PG는 JSON을 어떻게 다루나 → **비정렬 저장 + 읽을 때 정렬 사본**
 - `jsonb`는 `typlen -1`(varlena), **`typalign 'i'`**, `typstorage 'x'` (`src/include/catalog/pg_type.dat:450-453`; `json`/`text`/`numeric`/`bytea`도 전부 `typalign 'i'`).
@@ -237,7 +239,7 @@ pr_type 테이블(`object_primitive.c:897-1763`, NCHAR/VARNCHAR는 `tp_Char`/`tp
 |---|---|---|---|---|
 | FIXED alignby 2 | SHORT, ENUMERATION | `data_*`, `data_cmpdisk` (`OR_GET_SHORT` 캐스트) | 2B 위치 보장 | ✓ |
 | FIXED alignby 4 | INT, FLOAT, TIME, TIMESTAMP(+LTZ/TZ), DATE, DATETIME(+LTZ/TZ), MONETARY, OBJECT, OID | `data_*`, `data_cmpdisk` (`OR_GET_INT`/`OR_GET_OID` 캐스트, MONETARY amount는 memcpy) | 4B 위치 보장 | ✓ |
-| FIXED alignby 8 | BIGINT, DOUBLE, RESULTSET | `data_*` (BIGINT memcpy, `OR_GET_DOUBLE` 캐스트, RESULTSET `or_put_bigint`) | 8B 위치 보장(힙 4보다 강함) | ✓ |
+| FIXED alignby 4 (8B 타입) | BIGINT, DOUBLE, RESULTSET | `data_*` (BIGINT memcpy, RESULTSET `or_put_bigint` assert 4); DOUBLE은 `OR_GET_DOUBLE` 캐스트 → **memcpy로 수정(PR-1)** | 4B 위치 = 힙과 동일 | ✓ (조건 4) |
 | VAR (index_* 직접) | CHAR/NCHAR, VARCHAR/VARNCHAR | `index_writeval/readval/cmpdisk` → `mr_*_string/char_internal(CHAR_ALIGNMENT)`: `or_put_byte`/`or_put_data`, `OR_GET_BYTE`, `or_get_data`; `size=L` 전달 시 `or_advance`/`or_skip_varchar_remainder(…, CHAR_ALIGNMENT)` 패딩 스킵 없음 (`:mr_readval_string_internal`) | 없음 | ✓ |
 | VAR (index_* 직접) | BIT(n) | `mr_index_cmpdisk_bit` → `mr_cmpdisk_bit_internal(CHAR_ALIGNMENT)` **memcpy 분기** (`:13375-13392`) | `data_cmpdisk_bit`(INT_ALIGNMENT)는 `OR_GET_INT(mem)` 캐스트 → **사용 금지** | ✓ (조건 1) |
 | VAR (index_* 직접) | VARBIT | `index_cmpdisk` → `data_cmpdisk_varbit`: `or_init` + `or_get_varbit_length`(byte + `or_get_data`) | 없음 | ✓ |
@@ -245,10 +247,12 @@ pr_type 테이블(`object_primitive.c:897-1763`, NCHAR/VARNCHAR는 `tp_Char`/`tp
 | VAR (스크래치 복사) | SET/MULTISET/SEQUENCE, JSON, ELO/BLOB/CLOB, VARIABLE, SUBSTRUCTURE, VOBJ, MIDXKEY(방어) | 정렬 스크래치 memcpy 후 `data_*` (`or_put_int`/`or_get_int`/`or_put_bigint` — 모두 `ASSERT_ALIGN 4`) | 스크래치가 8B 정렬이므로 충족 | ✓ |
 | 제외 | NULL, POINTER, ERROR | disksize 0, 리스트 값으로 출현 불가 | — | 조립기 assert |
 
-**조건 (접근자 API 티켓 #182·PR-2 #190에 넘김):**
+**조건 (접근자 API 티켓 #182·PR-1 #189·PR-2 #190에 넘김):**
 1. 정렬 비교자 선택(`list_file.c:4507-4538`의 `sort_f = domain->type->data_cmpdisk`)을 가변 타입은 `index_cmpdisk`(있으면), 없으면 스크래치 복사 + `data_cmpdisk`로. BIT(n)에서 이 조건을 놓치면 디버그가 아닌 **릴리스에서도** 비정렬 캐스트가 발생한다(x86은 동작, 표준상 UB).
 2. `index_readval`이 있는 가변 타입의 리더는 `index_readval(buf, val, dom, size=L, …)`로 호출하고 `data_readval`을 부르지 않는다(INT_ALIGNMENT 리더는 NUL+패딩을 건너뛰어 `L`을 넘어 읽음). 클라이언트 `cursor.c:441,489`도 동일 — `pr_type` 테이블은 공용이라 클라이언트 라이브러리에서도 `index_*` 사용 가능.
 3. pr_type을 거치지 않고 튜플 값을 직접 캐스트하는 현행 지점(`cursor_get_oid_from_tuple` `(OID*)(tpl+8)` `cursor.c:628`, in-place `OR_PUT_INT(tpl+8)` `list_file.c:1944,1949,2015`, 정렬 레코드 `PTR_ALIGN(…, MAX_ALIGNMENT)` `list_file.c:3538-4256`)은 전부 지도의 19파일 접점 조사에 포함돼 있으며 접근자로 교체된다. 새 포맷에서 남는 직접 캐스트는 접근자 내부 한 곳이어야 한다.
+
+4. `OR_GET_DOUBLE`/`OR_GET_FLOAT`(`object_representation.h:158-165`)를 memcpy 기반으로 수정(PR-1). 정렬 비교자 `mr_data_cmpdisk_double`·`mr_index_cmpdisk_double`(`COPYMEM`, x86 캐스트)이 4B 위치를 읽으므로 이 수정이 없으면 표준상 UB(x86은 동작).
 
 비트맵(D-180-2)과 길이 헤더(D-180-6)는 타입에 독립이다: 헤더 4B 길이 상한 `0x7FFFFFFF` > `DB_MAX_STRING_LENGTH(0x3FFFFFFF)` + pr_type 접두 9B.
 
@@ -295,5 +299,5 @@ pr_type 테이블(`object_primitive.c:897-1763`, NCHAR/VARNCHAR는 `tp_Char`/`tp
 ### 15.5 A의 오버헤드
 - 8B 타입이 없는 리스트에서도 +4B, 가변 컬럼이 섞이면 반올림 손실이 최대 +7B(위 표 (INT, VARCHAR) 12→24). 규칙은 가장 단순하고 PG와 글자 그대로 같다.
 
-### 15.6 권고
+### 15.6 권고 → **채택 (2026-09-02 사용자 결정: C)**
 **C (항상 4)**. 예외 없는 단일 규칙이면서 가장 압축되고, 힙 포맷과 정렬 관례가 같아지며, 늦은 도메인 특수 규칙이 사라진다. 채택 시 변경: D-180-3 → `tuple_alignby = 4` 상수, `data_off = ALIGN4(hdr + bitmap)`; D-180-4 → BIGINT/DOUBLE/RESULTSET alignby 4(#183 D-183-1 롤백 경로 그대로), 모든 8B 읽기는 memcpy; §8의 고정 규칙 삭제(VARIABLE은 단지 "가변" 컬럼); 조건으로 `OR_GET_DOUBLE`/`OR_GET_FLOAT` memcpy 전환을 PR-1 범위에 추가.

@@ -17,6 +17,7 @@
 #define QFILE_TUPLE_PREV_LEN_OFFSET       4	/* backward_capable 리스트만 존재 */
 #define QFILE_TUPLE_HDR_SIZE_FORWARD      4
 #define QFILE_TUPLE_HDR_SIZE_BACKWARD     8
+#define QFILE_TUPLE_ALIGN                 4	/* D-180-3: 상수. 튜플 시작·길이·data_off 모두 4의 배수 */
 
 #define QFILE_TUPLE_HASNULL_BIT           0x80000000
 #define QFILE_TUPLE_LENGTH_MASK           0x7FFFFFFF
@@ -64,7 +65,7 @@ qfile_bitmap_first_null (const unsigned char *bits, int type_cnt)
 /* ------------------------------------------------------------------ */
 typedef enum
 {
-  QFILE_COL_FIXED = 0,		/* is_size_computed()==false : size=disksize, alignby 2/4(/8, §15 선택), data_* */
+  QFILE_COL_FIXED = 0,		/* is_size_computed()==false : size=disksize, alignby 2|4 (8B 타입도 4, memcpy 읽기), data_* */
   QFILE_COL_VAR			/* is_size_computed()==true : 정렬 없음, 1B|4B 헤더, 단일 규칙 (D-180-5) */
 } QFILE_COL_KIND;
 
@@ -82,7 +83,7 @@ struct qfile_col_layout
   QFILE_COL_KIND kind;
   QFILE_VAR_ACCESS var_access;	/* VAR 만 유효 */
   short size;			/* FIXED 만 유효 (disksize) */
-  unsigned char alignby;	/* 1,2,4,8 */
+  unsigned char alignby;	/* FIXED: 2|4 (D-180-4). VAR: 1 */
   int off;			/* 상수 오프셋 (data_off 기준) 또는 -1 */
 };
 
@@ -92,9 +93,8 @@ struct qfile_tuple_layout
 {
   int type_cnt;
   unsigned char hdr_size;	/* 4 or 8 (backward_capable) */
-  unsigned char tuple_alignby;	/* §15 선택 대기: A 항상 8 / B {4,8} open 고정 / C 항상 4(권고) */
   unsigned char bitmap_size;	/* QFILE_NULL_BITMAP_SIZE(type_cnt) — 255B(2040 컬럼) 초과 시 int 로 승격 */
-  unsigned char data_off[2];	/* [0]=no-null, [1]=has-null : ALIGN(hdr_size + bitmap, tuple_alignby) */
+  unsigned char data_off[2];	/* [0]=no-null, [1]=has-null : ALIGN4(hdr_size + bitmap) (D-180-3) */
   int first_var_col;		/* 첫 가변 컬럼, 없으면 type_cnt */
   QFILE_COL_LAYOUT *col;	/* [type_cnt] */
 };
@@ -161,8 +161,8 @@ struct qfile_deform_cache
  *   int qfile_tuple_overwrite_fixed (layout, char *tpl, int col, const DB_VALUE *) — §9 in-place, assert 4개
  */
 
-/* 불변식 요약 (§12): len%tuple_alignby==0; has_null <=> 비트맵에 0비트; 후행 비트 0;
+/* 불변식 요약 (§12): len%QFILE_TUPLE_ALIGN==0; has_null <=> 비트맵에 0비트; 후행 비트 0;
  * FIXED 위치%alignby==0; VAR 기록==L (DIRECT: index_lengthval, data_writeval 금지 / SCRATCH: data_lengthval, 스크래치 경유);
- * connect/append/duplicate 시 hdr_size·tuple_alignby·type_cnt 일치. */
+ * connect/append/duplicate 시 hdr_size·type_cnt 일치. */
 
 #endif /* _QFILE_TUPLE_LAYOUT_H_ */
