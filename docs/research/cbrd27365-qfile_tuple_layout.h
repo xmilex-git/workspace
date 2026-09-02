@@ -64,16 +64,23 @@ qfile_bitmap_first_null (const unsigned char *bits, int type_cnt)
 /* ------------------------------------------------------------------ */
 typedef enum
 {
-  QFILE_COL_FIXED = 0,		/* is_size_computed()==false : size=disksize, alignby 2/4/8, data_writeval */
-  QFILE_COL_VAR_PACKED,		/* CHAR/VARCHAR/NCHAR/VARNCHAR/BIT/VARBIT/NUMERIC : alignby 1, 1B|4B 헤더, index_* */
-  QFILE_COL_VAR_ORBUF		/* SET/MULTISET/SEQUENCE/JSON/BLOB/CLOB/VARIABLE/기타 : alignby 4, 4B 헤더, data_* */
+  QFILE_COL_FIXED = 0,		/* is_size_computed()==false : size=disksize, alignby 2/4(/8, §15 선택), data_* */
+  QFILE_COL_VAR			/* is_size_computed()==true : 정렬 없음, 1B|4B 헤더, 단일 규칙 (D-180-5) */
 } QFILE_COL_KIND;
+
+/* 가변 컬럼의 접근 방식 — 포맷이 아닌 접근자 구현의 분기 (§6.2). finalize 시 pr_type 능력으로 결정 */
+typedef enum
+{
+  QFILE_VAR_DIRECT = 0,		/* index_readval != NULL : 비정렬 본문을 index_readval/index_cmpdisk 로 직접 */
+  QFILE_VAR_SCRATCH		/* index_readval == NULL : 본문 L 바이트를 8B 정렬 스크래치로 memcpy 후 data_* */
+} QFILE_VAR_ACCESS;
 
 /* 컬럼 단위 레이아웃 (D-180-3: off 는 data_off 기준, 상수 접두 밖은 -1) */
 typedef struct qfile_col_layout QFILE_COL_LAYOUT;
 struct qfile_col_layout
 {
   QFILE_COL_KIND kind;
+  QFILE_VAR_ACCESS var_access;	/* VAR 만 유효 */
   short size;			/* FIXED 만 유효 (disksize) */
   unsigned char alignby;	/* 1,2,4,8 */
   int off;			/* 상수 오프셋 (data_off 기준) 또는 -1 */
@@ -85,7 +92,7 @@ struct qfile_tuple_layout
 {
   int type_cnt;
   unsigned char hdr_size;	/* 4 or 8 (backward_capable) */
-  unsigned char tuple_alignby;	/* 4 or 8 — open 시 고정, 재finalize 에서 불변 (D-180-3, §8) */
+  unsigned char tuple_alignby;	/* §15 선택 대기: A 항상 8 / B {4,8} open 고정 / C 항상 4(권고) */
   unsigned char bitmap_size;	/* QFILE_NULL_BITMAP_SIZE(type_cnt) — 255B(2040 컬럼) 초과 시 int 로 승격 */
   unsigned char data_off[2];	/* [0]=no-null, [1]=has-null : ALIGN(hdr_size + bitmap, tuple_alignby) */
   int first_var_col;		/* 첫 가변 컬럼, 없으면 type_cnt */
@@ -99,9 +106,9 @@ struct qfile_tuple_layout
 #define QFILE_VARHDR_LONG_BIT             0x80000000
 
 static inline int
-qfile_varhdr_size_for (QFILE_COL_KIND kind, int body_len)
+qfile_varhdr_size_for (int body_len)
 {
-  return (kind == QFILE_COL_VAR_PACKED && body_len <= QFILE_VARHDR_SHORT_MAX) ? 1 : 4;
+  return body_len <= QFILE_VARHDR_SHORT_MAX ? 1 : 4;
 }
 
 /* 헤더 디코드: *hdr_len 에 1|4, 반환값은 본문 길이 */
@@ -146,16 +153,16 @@ struct qfile_deform_cache
 /* 접근자 시그니처 (구현·명명은 #182):
  *   const char *qfile_tuple_value_ptr (const QFILE_TUPLE_LAYOUT *, const char *tpl, int col,
  *                                      QFILE_DEFORM_CACHE *, int *body_len, bool *is_null);
- *     - FIXED: 정렬된 본문 포인터, body_len=size
- *     - VAR_PACKED: 헤더 뒤 비정렬 본문 (index_readval / index_cmpdisk 로만 소비)
- *     - VAR_ORBUF : 헤더 뒤 4B 정렬 본문 (data_readval / data_cmpdisk)
+ *     - FIXED: 정렬된 본문 포인터, body_len=size (8B 타입은 memcpy 로 읽는다, SER-03)
+ *     - VAR/DIRECT : 헤더 뒤 비정렬 본문 (index_readval(size=L) / index_cmpdisk 로만 소비)
+ *     - VAR/SCRATCH: 접근자가 본문을 스레드 로컬 8B 정렬 스크래치로 memcpy 한 뒤 그 포인터 반환 (data_*)
  *   int qfile_tuple_size (layout, inputs[])           — 조립 1패스
  *   int qfile_tuple_fill (layout, inputs[], char *out, int size) — 조립 2패스 (len 워드·비트맵·값·패딩)
  *   int qfile_tuple_overwrite_fixed (layout, char *tpl, int col, const DB_VALUE *) — §9 in-place, assert 4개
  */
 
 /* 불변식 요약 (§12): len%tuple_alignby==0; has_null <=> 비트맵에 0비트; 후행 비트 0;
- * FIXED 위치%alignby==0; VAR_PACKED 기록==index_lengthval, data_writeval 금지;
- * VAR_ORBUF 헤더 위치%4==0, 기록==data_lengthval; connect/append/duplicate 시 hdr_size·tuple_alignby·type_cnt 일치. */
+ * FIXED 위치%alignby==0; VAR 기록==L (DIRECT: index_lengthval, data_writeval 금지 / SCRATCH: data_lengthval, 스크래치 경유);
+ * connect/append/duplicate 시 hdr_size·tuple_alignby·type_cnt 일치. */
 
 #endif /* _QFILE_TUPLE_LAYOUT_H_ */
