@@ -220,3 +220,40 @@ F: 00 00 00 10 | 04 | 03 61 62 63 | -- -- -- | 00 00 00 09        포맷 hdr 1B(
 - 접근자 API·deform 캐시·조립기 시그니처·정렬 레코드 함수 5개(#182). 조립기는 size→fill 2패스(#186).
 - 지도 fog 해소: "4B 헤더 뒤 BIGINT 패딩"(D-180-3), "가변 1B 헤더 판별 규칙"(D-180-5/6), "정렬 비교자의 헤더 스킵과 OR 접두 중복"(§6.1 이중 접두 인지, §10), "64+ 컬럼·오버플로 비트맵"(§2.1, §3), "`OR_GET_DOUBLE` UB memcpy 통일"(§5).
 - 새로 드러난 사항: `mr_data_cmpdisk_bit`의 `OR_GET_INT` 캐스트 → 가변 (a) 비교자는 `index_cmpdisk` 필수(D-180-8). 가변 타입 두 부류 분리(D-180-5)는 지도 Notes의 "가변은 1B/4B 길이 헤더" 문구를 보정한다(or-buf 부류는 4B 고정).
+
+---
+
+## 14. 검증 추가 (2026-09-02, 사용자 반응에 대한 더블체크)
+
+### 14.1 D-180-3 이 정말 PG 방식인가 → **예**
+- `heap_form_minimal_tuple` (`src/backend/access/common/heaptuple.c:1399-1457`): `if (hasnull) len += BITMAPLEN(natts); hoff = len = MAXALIGN(len); /* align user data safely */` → `t_hoff = hoff + MINIMAL_TUPLE_OFFSET`, 값은 `(char*)tuple + hoff`부터. `heap_form_tuple`(`:1033-1101`), `heap_expand_tuple`(`:849, :877`)도 동일 식. 즉 **비트맵 크기를 더한 뒤 한 번 MAXALIGN** — D-180-3의 `data_off = ALIGN(hdr + bitmap, tuple_alignby)`와 같은 구조.
+- 오프셋 테이블은 하나: `CompactAttribute.attcacheoff`(`tupdesc.h:70`, "fixed offset into tuple, if known, or -1")는 **`t_hoff` 기준** 상대 오프셋이며 `TupleDescFinalize`(`tupdesc.c:546-555`)가 첫 가변 컬럼 전까지만 채운다. deform은 `tp = tup + t_hoff` 후 `fetch_att(tp + attcacheoff)` (`execTuples.c:1157-1184`: "We can use attcacheoff up until the first NULL … `firstNonCacheOffsetAttr = Min(firstNonCacheOffsetAttr, firstNullAttr)`"). has-null 여부로 테이블을 나누지 않고 `t_hoff`가 흡수한다 — 우리 `data_off[2]`와 동일.
+- 차이 하나: PG는 항상 `MAXALIGN`(8). 우리는 `tuple_alignby ∈ {4,8}`로 INT 전용 리스트를 4에 둔다. 튜플 시작이 `tuple_alignby` 정렬(페이지 헤더 32B + 길이 반올림)이므로 상대 정렬 == 절대 정렬이 성립하고, 이 완화는 안전하다. VARIABLE 컬럼을 8로 세어 고정하는 규칙(§8)은 PG에 없는 우리 고유 조건(늦은 도메인 확정) 때문이다.
+
+### 14.2 PG는 JSON을 어떻게 다루나 → **비정렬 저장 + 읽을 때 정렬 사본**
+- `jsonb`는 `typlen -1`(varlena), **`typalign 'i'`**, `typstorage 'x'` (`src/include/catalog/pg_type.dat:450-453`; `json`/`text`/`numeric`/`bytea`도 전부 `typalign 'i'`).
+- 저장: `heap_fill_tuple`/`fill_val` (`heaptuple.c:355-365`) — `attispackable && VARATT_CAN_MAKE_SHORT(val)`(본문 ≤126B)이면 `SET_VARSIZE_SHORT` 1B 헤더로 **정렬 없이** 기록, 아니면 `att_nominal_alignby(data, attalignby)`로 4B 정렬 후 4B 헤더. 즉 PG도 "같은 컬럼이 튜플마다 정렬/비정렬"이며 그래서 §4.1의 피크 트릭이 필요했다.
+- 읽기: `DatumGetJsonbP` = `PG_DETOAST_DATUM` (`src/include/utils/jsonb.h:401-403`) → `detoast_attr` (`src/backend/access/common/detoast.c:175-185`): `VARATT_IS_SHORT`면 **`palloc` + `memcpy`로 4B 헤더 정렬 사본을 만든 뒤** `JsonbContainer`의 `uint32` 필드를 읽는다. 즉 PG는 정렬을 **읽는 쪽에서 복사로 회복**한다.
+- CUBRID 대응: `mr_data_readval_json`/`mr_data_cmpdisk_json`은 `db_json_deserialize(buf)`가 `or_get_int` (`src/compat/db_json.cpp:4054-4120`, `ASSERT_ALIGN 4`)를 직접 버퍼에 건다. 선택지는 (i) **(b) 부류로 4B 정렬 위치에 두기(초안 유지)** — 복사 0회, 헤더 3B + 패딩 ≤3B 비용; (ii) PG식 비정렬 저장 + 접근자에서 정렬 스크래치로 memcpy 후 파싱 — JSON은 어차피 파싱으로 힙 문서를 만들므로 복사 1회 추가 비용은 작지만, 접근자에 "타입별 복사 분기"가 생기고 SET/ELO도 같은 처리를 해야 한다. **초안 (i) 유지**를 권고: JSON/SET/ELO는 리스트 파일에서 드물고, 정렬 계약이 오늘과 동일해 회귀 위험이 0이다. (ii)는 성능 티켓(#193)에서 JSON 리스트가 실측 병목일 때만 재검토.
+
+### 14.3 D-180-2/6/8 을 전 타입에 적용해도 현재 코드가 안전한가 → **예, 조건 3개**
+pr_type 테이블(`object_primitive.c:897-1763`, NCHAR/VARNCHAR는 `tp_Char`/`tp_String` 별칭 `:1696-1697`) 전수 점검:
+
+| 부류 | 타입 | 새 포맷에서 쓰는 함수 | 정렬 민감 연산 | 판정 |
+|---|---|---|---|---|
+| FIXED alignby 2 | SHORT, ENUMERATION | `data_*`, `data_cmpdisk` (`OR_GET_SHORT` 캐스트) | 2B 위치 보장 | ✓ |
+| FIXED alignby 4 | INT, FLOAT, TIME, TIMESTAMP(+LTZ/TZ), DATE, DATETIME(+LTZ/TZ), MONETARY, OBJECT, OID | `data_*`, `data_cmpdisk` (`OR_GET_INT`/`OR_GET_OID` 캐스트, MONETARY amount는 memcpy) | 4B 위치 보장 | ✓ |
+| FIXED alignby 8 | BIGINT, DOUBLE, RESULTSET | `data_*` (BIGINT memcpy, `OR_GET_DOUBLE` 캐스트, RESULTSET `or_put_bigint`) | 8B 위치 보장(힙 4보다 강함) | ✓ |
+| VAR (a) alignby 1 | CHAR/NCHAR, VARCHAR/VARNCHAR | `index_writeval/readval/cmpdisk` → `mr_*_string/char_internal(CHAR_ALIGNMENT)`: `or_put_byte`/`or_put_data`, `OR_GET_BYTE`, `or_get_data`; `size=L` 전달 시 `or_advance`/`or_skip_varchar_remainder(…, CHAR_ALIGNMENT)` 패딩 스킵 없음 (`:mr_readval_string_internal`) | 없음 | ✓ |
+| VAR (a) | BIT(n) | `mr_index_cmpdisk_bit` → `mr_cmpdisk_bit_internal(CHAR_ALIGNMENT)` **memcpy 분기** (`:13375-13392`) | `data_cmpdisk_bit`(INT_ALIGNMENT)는 `OR_GET_INT(mem)` 캐스트 → **사용 금지** | ✓ (조건 1) |
+| VAR (a) | VARBIT | `index_cmpdisk` → `data_cmpdisk_varbit`: `or_init` + `or_get_varbit_length`(byte + `or_get_data`) | 없음 | ✓ |
+| VAR (a) | NUMERIC | `index_*` → data 위임: `or_put_data`, `OR_GET_BYTE`, `or_init`→readval→`numeric_db_value_compare` | 없음 | ✓ |
+| VAR (b) alignby 4 | SET/MULTISET/SEQUENCE, JSON, ELO/BLOB/CLOB, VARIABLE, SUBSTRUCTURE, VOBJ, MIDXKEY(방어) | `data_*` (`or_put_int`/`or_get_int`/`or_put_bigint` — 모두 `ASSERT_ALIGN 4`) | 4B 위치 보장 — 오늘(8)보다 약하지만 `or_*`가 요구하는 최대는 4(#183 §1.2). `pr_type::alignment 8`(ELO/SUB/VOBJ)은 메모리 표현용이며 디스크 접근자와 무관 | ✓ |
+| 제외 | NULL, POINTER, ERROR | disksize 0, 리스트 값으로 출현 불가 | — | 조립기 assert |
+
+**조건 (접근자 API 티켓 #182·PR-2 #190에 넘김):**
+1. 정렬 비교자 선택(`list_file.c:4507-4538`의 `sort_f = domain->type->data_cmpdisk`)을 부류별로: (a) → `index_cmpdisk`, 그 외 → `data_cmpdisk`. BIT(n)에서 이 조건을 놓치면 디버그가 아닌 **릴리스에서도** 비정렬 캐스트가 발생한다(x86은 동작, 표준상 UB).
+2. (a) 부류의 리더는 `index_readval(buf, val, dom, size=L, …)`로 호출하고 `data_readval`을 부르지 않는다(INT_ALIGNMENT 리더는 NUL+패딩을 건너뛰어 `L`을 넘어 읽음). 클라이언트 `cursor.c:441,489`도 동일 — `pr_type` 테이블은 공용이라 클라이언트 라이브러리에서도 `index_*` 사용 가능.
+3. pr_type을 거치지 않고 튜플 값을 직접 캐스트하는 현행 지점(`cursor_get_oid_from_tuple` `(OID*)(tpl+8)` `cursor.c:628`, in-place `OR_PUT_INT(tpl+8)` `list_file.c:1944,1949,2015`, 정렬 레코드 `PTR_ALIGN(…, MAX_ALIGNMENT)` `list_file.c:3538-4256`)은 전부 지도의 19파일 접점 조사에 포함돼 있으며 접근자로 교체된다. 새 포맷에서 남는 직접 캐스트는 접근자 내부 한 곳이어야 한다.
+
+비트맵(D-180-2)과 길이 헤더(D-180-6)는 타입에 독립이다: 헤더 4B 길이 상한 `0x7FFFFFFF` > `DB_MAX_STRING_LENGTH(0x3FFFFFFF)` + pr_type 접두 9B.
