@@ -49,6 +49,10 @@ ports/SHM IDs; only each shard's `exclusions.txt` and output dirs differ.
      seconds) auto-loads; each bulk's weight = sum of its cases' seconds. Refresh via
      `scripts/harvest_weights.sh`; `--no-weights` reverts to case count.
 
+   The **`--abort-on-core` watchdog is ON by default** (since 2026-09-03): the first real core
+   dump, or free disk under the floor, stops every shard. A crash-looping build produced 600 GB
+   of cores in 15 minutes without it. `--no-abort-on-core` opts out.
+
    This default config ran the full suite **17,420 pass / 0 fail / 0 core**. Common
    overrides: `--shards <N>` (e.g. `10` for CircleCI parity),
    `--out <dir>`, `--image <ref>`, `--keep`, `--by-dir` (finer: outermost `cases/` dir —

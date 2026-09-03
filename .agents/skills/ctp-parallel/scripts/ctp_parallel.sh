@@ -100,11 +100,14 @@ OPTIONS:
                        execs ctp.sh sql without clearing the environment) — use this for the
                        CUBRID_WM_SCAN_NEW/SORT_NEW/HASHJOIN_NEW work-mem gate env vars (server-process
                        scoped, csql client env has no effect) or any other passthrough need.
-  --abort-on-core      Watchdog: poll the shard working copies during the run and, as soon as a
-                       real core dump appears (file(1)-verified) OR free disk at --out drops
-                       below ${DISK_FLOOR_GB}GB, stop ALL shard containers immediately. Guards
-                       against crash-loop runs filling the disk with cores (2026-08-31 incident:
-                       1.1T of cores). Artifacts/cores of the aborted run are still collected.
+  --abort-on-core      (DEFAULT since 2026-09-03) Watchdog: poll the shard working copies during the
+                       run and, as soon as a real core dump appears (file(1)-verified) OR free disk at
+                       --out drops below ${DISK_FLOOR_GB}GB, stop ALL shard containers immediately.
+                       Guards against crash-loop runs filling the disk with cores (2026-08-31: 1.1T of
+                       cores; 2026-09-03: 600GB in 15 min). Artifacts/cores of the aborted run are
+                       still collected.
+  --no-abort-on-core   Opt out of the watchdog (only for a run where cores are expected and disk
+                       headroom has been checked).
   --no-webconsole      Do NOT merge per-shard results into \$CTP_HOME/sql/result. By default the
                        run is merged into one schedule dir viewable via 'ctp.sh webconsole start'.
   --merge-only <dir>   Merge an ALREADY-FINISHED run's --out <dir> into \$CTP_HOME/sql/result for
@@ -137,7 +140,7 @@ ARG_WEIGHTS="auto"   # "auto" = bundled baseline_weights.tsv (time-based) | <pat
 ARG_LOCALE_DIR=""
 ARG_WEBCONSOLE=1
 ARG_COLOCATE="auto"   # "auto" = bundled colocate.tsv if present; a path = that file; "" = disabled
-ARG_ABORT_ON_CORE=0   # --abort-on-core: stop every shard as soon as a core dump / disk-floor breach is seen
+ARG_ABORT_ON_CORE=1   # default ON (2026-09-03): stop every shard as soon as a core dump / disk-floor breach is seen; --no-abort-on-core opts out
 ARG_MERGE_ONLY=""     # path to a finished --out dir to merge into webconsole, then exit
 ARG_LABEL=""          # human tag for the merged run (webconsole 'machine' field)
 ARG_DRYRUN=0
@@ -167,6 +170,7 @@ parse_args() {
       --colocate)    ARG_COLOCATE="${2:-}"; shift 2 ;;
       --no-colocate) ARG_COLOCATE=""; shift ;;
       --abort-on-core) ARG_ABORT_ON_CORE=1; shift ;;
+      --no-abort-on-core) ARG_ABORT_ON_CORE=0; shift ;;
       --no-webconsole) ARG_WEBCONSOLE=0; shift ;;
       --merge-only)  ARG_MERGE_ONLY="${2:-}"; shift 2 ;;
       --label)       ARG_LABEL="${2:-}"; shift 2 ;;
