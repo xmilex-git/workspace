@@ -1,0 +1,111 @@
+Execute OK. Committed. 
+Execute OK. Committed. 
+10 rows affected. Committed. 
+
+=== <Result of SELECT Command in Line 8> ===
+
+           id  grp                    char_length(k)           rn           rk
+==============================================================================
+            8  NULL                             NULL            1            1
+            7  NULL                                1            2            2
+            1  'g1'                                1            1            1
+            2  'g1'                              127            2            2
+            3  'g1'                              128            3            3
+            4  'g2'                             NULL            1            1
+            6  'g2'                                0            2            2
+            5  'g2'                                1            3            3
+            9  'g3'                                1            1            1
+           10  'g3'                              129            2            2
+
+10 rows selected. Committed. 
+
+In line 9, column 106,
+
+ERROR: In line 9, column 106 before ' BETWEEN 1 PRECEDING AND 1 FOLLOWING) a FROM t06 ORDER BY grp,...'
+Syntax error: unexpected 'ROWS', expecting ')'
+
+
+=== <Result of SELECT Command in Line 10> ===
+
+           id  grp                   lg                             ld
+======================================================================
+            7  NULL                  NULL                         NULL
+            8  NULL                  'g'                          NULL
+            1  'g1'                  NULL                          127
+            2  'g1'                  'a'                           128
+            3  'g1'                  'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'         NULL
+            4  'g2'                  NULL                            1
+            5  'g2'                  NULL                            0
+            6  'g2'                  'e'                          NULL
+            9  'g3'                  NULL                          129
+           10  'g3'                  'i'                          NULL
+
+10 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 11> ===
+
+           id  grp                   fv                             lv
+======================================================================
+            7  NULL                  NULL                            1
+            8  NULL                  NULL                         NULL
+            1  'g1'                  'a'                             1
+            2  'g1'                  'a'                           127
+            3  'g1'                  'a'                           128
+            4  'g2'                  NULL                         NULL
+            5  'g2'                  NULL                            1
+            6  'g2'                  NULL                            0
+            9  'g3'                  'i'                             1
+           10  'g3'                  'i'                           129
+
+10 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 12> ===
+
+           id  grp                            nt                        cd                        pr
+====================================================================================================
+            3  'g1'                            1     2.000000000000000e-01     0.000000000000000e+00
+            8  NULL                            1     2.000000000000000e-01     0.000000000000000e+00
+            1  'g1'                            1     3.000000000000000e-01     2.222222222222222e-01
+            2  'g1'                            1     4.000000000000000e-01     3.333333333333333e-01
+            4  'g2'                            2     5.000000000000000e-01     4.444444444444444e-01
+            5  'g2'                            2     6.000000000000000e-01     5.555555555555556e-01
+            6  'g2'                            2     7.000000000000000e-01     6.666666666666666e-01
+            7  NULL                            3     8.000000000000000e-01     7.777777777777778e-01
+            9  'g3'                            3     9.000000000000000e-01     8.888888888888888e-01
+           10  'g3'                            3     1.000000000000000e+00     1.000000000000000e+00
+
+10 rows selected. Committed. 
+
+In the command from line 13,
+
+ERROR: The argument of "PERCENTILE_DISC" can not be coerced to desired domain "DOUBLE, DATETIME or TIME".
+
+
+In the command from line 14,
+
+ERROR: Cannot coerce value of domain "character varying" to domain "double".
+
+
+=== <Result of SELECT Command in Line 15> ===
+
+           id  grp                            dr  nv                  
+======================================================================
+            7  NULL                            1  NULL                
+            8  NULL                            2  NULL                
+            3  'g1'                            3  'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+            2  'g1'                            4  'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+            1  'g1'                            5  NULL                
+            5  'g2'                            6  'e'                 
+            6  'g2'                            7  'e'                 
+            4  'g2'                            8  NULL                
+           10  'g3'                            9  'jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj'
+            9  'g3'                           10  NULL                
+
+10 rows selected. Committed. 
+
+In line 16, column 61,
+
+ERROR: In line 16, column 61 before 'PARTITION BY grp) gc FROM t06 ORDER BY id; '
+Syntax error: unexpected '(', expecting ';'
+
+Execute OK. Committed. 
