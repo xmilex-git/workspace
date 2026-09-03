@@ -77,7 +77,7 @@ offset 0
 
 ## 5. 고정폭 값
 
-- 판정: `pr_type::is_size_computed() == false`(#183 §3 표 18종). 크기 `disksize`, 정렬 `alignby ∈ {2,4}`(D-180-4).
+- 판정: `pr_type::has_computed_disk_size() == false`(#183 §3 표 18종에서 OBJECT 제외 — 구현 정정 D-196-11: OBJECT는 값 쪽 길이 함수만 있고 클라이언트에서 VOBJ 집합으로 직렬화될 수 있어 VAR). 크기 `disksize`, 정렬 `alignby ∈ {2,4}`(D-180-4).
 - 인코딩: 기존 `data_writeval`/`data_readval`(네트워크 오더). 접근자는 2B/4B 필드는 `OR_GET_SHORT/INT`, 8B 타입(BIGINT/DOUBLE, MONETARY amount)은 **memcpy**로 읽는다. 정렬 비교자 경로가 쓰는 `OR_GET_DOUBLE`/`OR_GET_FLOAT` 캐스트(`object_representation.h:164`)는 PR-1에서 memcpy로 수정(PUT은 이미 memcpy) — 힙의 4B DOUBLE 잠재 UB도 함께 정리.
 - NULL = 0바이트(비트맵에만 표시). 따라서 NULL 컬럼 뒤 오프셋은 상수가 아니다(§7).
 
@@ -85,7 +85,7 @@ offset 0
 
 ## 6. 가변 값 (단일 규칙)
 
-판정: `pr_type::is_size_computed() == true`. NUMERIC, CHAR(n), BIT(n)도 가변(지도 확정). **모든 가변 타입에 같은 저장 규칙**을 적용한다.
+판정: `pr_type::has_computed_disk_size() == true` 또는 미확정 `DB_TYPE_VARIABLE`(구현 정정 D-196-11: `is_size_computed()`는 두 길이 함수가 짝일 때만 참이라 OBJECT를 놓친다). NUMERIC, CHAR(n), BIT(n), OBJECT도 가변(지도 확정). **모든 가변 타입에 같은 저장 규칙**을 적용한다.
 
 ### 6.1 저장 규칙
 - 헤더는 직전 값 끝 바로 다음(정렬 없음). 본문 길이 `L` = 패딩 없는 디스크 길이(§6.3). `L ≤ 127` → 1B 헤더 `L`; 아니면 4B 헤더 `htonl(L | 0x80000000)`. 본문 = 타입의 디스크 표현 그대로, 뒤 패딩 없음.
@@ -98,7 +98,7 @@ offset 0
 | CHAR/NCHAR/VARCHAR/VARNCHAR | `index_writeval` (`mr_writeval_string_internal(CHAR_ALIGNMENT)`: `or_put_byte`+`or_put_data`, `object_primitive.c:14703-14814`) | `index_readval(size=L)` / `index_cmpdisk` — `OR_GET_BYTE`, `or_get_data`만 사용(`object_representation.h:2134-2170`, `object_primitive.c:11298+`) | 비정렬 직접 접근 안전 |
 | BIT(n)/VARBIT | `index_writeval` (`or_put_varbit_internal` byte+data, `object_representation.c:754-782`) | `index_readval` / **`index_cmpdisk`**(`mr_cmpdisk_bit_internal(CHAR_ALIGNMENT)` memcpy 분기 `:13375-13392`). `data_cmpdisk_bit`는 `OR_GET_INT` 캐스트 → 금지 | 〃 |
 | NUMERIC | `index_writeval`(= data, `or_put_data`×2 `:8688-8733`) | `index_readval` / `index_cmpdisk` (`OR_GET_BYTE`, `or_init`) | 〃 |
-| SET/MULTISET/SEQUENCE, JSON, BLOB/CLOB/ELO, VARIABLE, SUBSTRUCTURE, VOBJ, MIDXKEY(방어) — `index_readval == NULL` | `data_writeval`을 **정렬 스크래치**에 기록 후 튜플로 memcpy (`or_put_int` `ASSERT_ALIGN 4`, `object_representation.c:3968+`, `db_json.cpp:3511-3638`) | 본문 `L`바이트를 정렬 스크래치로 memcpy 후 `data_readval`/`data_cmpdisk` (PG `detoast_attr` `VARATT_IS_SHORT` 분기와 동일, `detoast.c:175-185`) | 기존 함수 무수정. 복사 1회(L바이트) — 이 타입들은 리스트에 드물고, JSON/SET readval은 어차피 힙 객체를 만든다 |
+| SET/MULTISET/SEQUENCE, JSON, BLOB/CLOB/ELO, VARIABLE, SUBSTRUCTURE, VOBJ, MIDXKEY(방어) — `index_readval == NULL`; **OBJECT/OID**(구현 정정 D-199-1: `index_readval`은 있지만 `mr_index_writeval_object`가 호스트 오더 raw 바이트라 `data_*`(네트워크 오더 `or_put_oid`)와 바이트가 다르고, 클라이언트에서는 VOBJ 집합이 될 수 있음 → SCRATCH) | `data_writeval`을 **정렬 스크래치**에 기록 후 튜플로 memcpy (`or_put_int` `ASSERT_ALIGN 4`, `object_representation.c:3968+`, `db_json.cpp:3511-3638`) | 본문 `L`바이트를 정렬 스크래치로 memcpy 후 `data_readval`/`data_cmpdisk` (PG `detoast_attr` `VARATT_IS_SHORT` 분기와 동일, `detoast.c:175-185`) | 기존 함수 무수정. 복사 1회(L바이트) — 이 타입들은 리스트에 드물고, JSON/SET readval은 어차피 힙 객체를 만든다 |
 
 분기 기준은 pr_type 능력(`index_readval != NULL`) 하나이며 화이트리스트가 아니다. 스크래치는 스레드 로컬 재사용 버퍼(ALLOC 규칙: 튜플마다 malloc 금지), `L`이 상한을 넘으면 1회 확장.
 
@@ -118,7 +118,7 @@ else:                hdr=4, memcpy(&w, p, 4), L = ntohl(w) & 0x7FFFFFFF
 
 ## 7. 상수 오프셋 접두와 deform 캐시
 
-- `first_var_col` = 디스크립터 상수(첫 `is_size_computed()` 컬럼, 없으면 `type_cnt`).
+- `first_var_col` = 디스크립터 상수(첫 `has_computed_disk_size()` 컬럼, 없으면 `type_cnt`; 구현에서는 `first_non_cached_col` — 상수 오프셋이 `INT16_MAX`를 넘는 컬럼도 포함, D-181-4).
 - 튜플별 `fast_limit = has_null ? min(first_var_col, first_null_attr(bitmap)) : first_var_col`.
 - `i < fast_limit`: 값 위치 `tpl + data_off(has_null) + off[i]`. O(1).
 - `i ≥ fast_limit`: 캐시 `(next_col, next_off)`에서 시작해 `next_col..i-1`을 순회. NULL이면 0B, 고정이면 `ALIGN(next_off, alignby)+size`, 가변이면 헤더 디코드 후 `hdr+L`. 순회 뒤 캐시 갱신. 캐시는 튜플(스캔 커서) 단위이며 튜플이 바뀌면 `fast_limit`로 리셋.
@@ -238,7 +238,7 @@ pr_type 테이블(`object_primitive.c:897-1763`, NCHAR/VARNCHAR는 `tp_Char`/`tp
 | 부류 | 타입 | 새 포맷에서 쓰는 함수 | 정렬 민감 연산 | 판정 |
 |---|---|---|---|---|
 | FIXED alignby 2 | SHORT, ENUMERATION | `data_*`, `data_cmpdisk` (`OR_GET_SHORT` 캐스트) | 2B 위치 보장 | ✓ |
-| FIXED alignby 4 | INT, FLOAT, TIME, TIMESTAMP(+LTZ/TZ), DATE, DATETIME(+LTZ/TZ), MONETARY, OBJECT, OID | `data_*`, `data_cmpdisk` (`OR_GET_INT`/`OR_GET_OID` 캐스트, MONETARY amount는 memcpy) | 4B 위치 보장 | ✓ |
+| FIXED alignby 4 | INT, FLOAT, TIME, TIMESTAMP(+LTZ/TZ), DATE, DATETIME(+LTZ/TZ), MONETARY, OID(리스트 도메인으로는 안 나옴; OBJECT 컬럼은 VAR/SCRATCH, D-196-11/D-199-1) | `data_*`, `data_cmpdisk` (`OR_GET_INT`/`OR_GET_OID` 캐스트, MONETARY amount는 memcpy) | 4B 위치 보장 | ✓ |
 | FIXED alignby 4 (8B 타입) | BIGINT, DOUBLE, RESULTSET | `data_*` (BIGINT memcpy, RESULTSET `or_put_bigint` assert 4); DOUBLE은 `OR_GET_DOUBLE` 캐스트 → **memcpy로 수정(PR-1)** | 4B 위치 = 힙과 동일 | ✓ (조건 4) |
 | VAR (index_* 직접) | CHAR/NCHAR, VARCHAR/VARNCHAR | `index_writeval/readval/cmpdisk` → `mr_*_string/char_internal(CHAR_ALIGNMENT)`: `or_put_byte`/`or_put_data`, `OR_GET_BYTE`, `or_get_data`; `size=L` 전달 시 `or_advance`/`or_skip_varchar_remainder(…, CHAR_ALIGNMENT)` 패딩 스킵 없음 (`:mr_readval_string_internal`) | 없음 | ✓ |
 | VAR (index_* 직접) | BIT(n) | `mr_index_cmpdisk_bit` → `mr_cmpdisk_bit_internal(CHAR_ALIGNMENT)` **memcpy 분기** (`:13375-13392`) | `data_cmpdisk_bit`(INT_ALIGNMENT)는 `OR_GET_INT(mem)` 캐스트 → **사용 금지** | ✓ (조건 1) |

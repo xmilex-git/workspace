@@ -147,6 +147,27 @@ CUBRID는 클라이언트/서버 lockstep 업그레이드만 지원한다. 혼�
   라이터(merge·정렬키 본문·해시조인 merge)는 접근자로 위치만 얻고 `qfile_legacy_put_value`로 구 헤더를
   다시 쓴다(assembler bridge). 조립기 API(D-182-11)와 정렬 레코드 본문 리더(D-182-14)는 PR-2.
 
+각주 (구현 중 조정, #199 PR-2b):
+
+- **D-199-1 OBJECT/OID 컬럼은 VAR/SCRATCH (§1.1 "정렬 요구 타입" 목록 보정)**: `has_index_readval()` 은 참이지만 OBJECT 의
+  index 인코딩은 호스트 오더 raw 바이트이고 data 인코딩(`or_put_oid`, 클라이언트에서는 VOBJ 집합)과 다르다. DIRECT 는
+  문자열·BIT·NUMERIC 에 한정된다.
+- **D-199-2 슬롯 소유 스크래치 폐기 (§1.4 D-182-10 조정)**: SCRATCH 본문은 읽을 때마다 일시 정렬 버퍼(스택 256B, 초과 힙
+  즉시 해제)로 복사해 `copy=true` 로 디코드한다. 스캔이 채우는 스택 레코드는 닫힐 때 clear 되지 않아 슬롯 소유 스크래치는
+  resource tracker 누수로 서버를 죽였다. PEEK 소비자는 읽기 전 값을 clear 하므로 소유권 의미 변화 없음.
+- **D-199-3 헤더 재작성 append (§1.1 역방향 플래그의 대가)**: forward 자식 리스트의 튜플이 backward 결과 리스트로 raw
+  복사되는 경로(UNION/CTE, 정렬 출력)는 `qfile_add_tuple_to_list_from()` 이 길이 워드만 다시 쓰고 나머지를 그대로 복사한다
+  (`data_off` 차이는 항상 4). 해시조인 파티션·`qfile_duplicate_list` 는 소스 헤더를 상속한다.
+- **D-199-13 "확정 전 튜플의 해당 컬럼은 NULL" 전제(§4 늦은 도메인 확정) 정정**: regu 도메인이 VARIABLE 인 동안 bound 값이
+  기록되므로 거짓이었다. 조립기 size pass 가 첫 bound 값의 도메인(`tp_domain_resolve_value`)으로 컬럼을 확정하고 재finalize
+  한다. 이제 "레이아웃은 첫 bound 값 전에 확정된다" 는 구성상 참이다.
+- **D-199-14 `data_cmpdisk` 를 덮어쓰는 특수 타입은 `index_cmpdisk` 도 덮어쓴다 (§1.1 정렬 레코드 규칙의 귀결)**: ORDER
+  SIBLINGS BY 의 계층 인덱스 문자열 타입이 유일한 예.
+- 크기 확증(§4): 같은 호스트 optdebug A/B, 100만 행 `(INT, BIGINT)` 정렬의 `Num_sort_data_pages` 19,047 → 14,041(−26%).
+  정렬 런 페이지가 섞인 카운터라 이론치(튜플 40→20B)보다 작게 나온다; 정량은 #193.
+- 플랜 텍스트 변화(§4 Consequences 추가): 리스트가 작아져 해시조인 BUILD `hybrid→memory`, `hash temp(h)→(m)`, 병렬
+  워커 판단(`parallel workers` 줄 소실)이 바뀐다 — CTP 답안 7건 갱신 대상(#194), 병렬도 감소는 #193 관찰 항목.
+
 ## 3. Considered Options (기각)
 
 - **JIRA 원안: all-fixed 리스트 전용 + hidden 파라미터.** 접근자마다 포맷 분기가 남고 테스트 매트릭스가
