@@ -1,0 +1,247 @@
+Execute OK. Committed. 
+Execute OK. Committed. 
+Execute OK. Committed. 
+Execute OK. Committed. 
+Execute OK. Committed. 
+Execute OK. Committed. 
+20 rows affected. Committed. 
+20 rows affected. Committed. 
+Execute OK. Committed. 
+7 rows affected. Committed. 
+Execute OK. Committed. 
+8 rows affected. Committed. 
+1 row affected. Committed. 
+
+=== <Result of SELECT Command in Line 63> ===
+
+           id      i2                    b8                        d8             f4  n                     c5                    v                     bt                    vb                    dt          dtm                          
+=============================================================================================================================================================================================================================================
+           20       0            4000000020     3.000000000000000e+01   5.000000e+00  24691.3560            'c20  '               'vvvvvvvvvvvvvvvvvvvv'  X'aaaa'               X'8'                  01/21/2026  12:00:00.020 AM 01/01/2026   
+           19       3            4000000019     2.850000000000000e+01   4.750000e+00  23456.7882            'c19  '               'vvvvvvvvvvvvvvvvvvv'  X'aaaa'               X'8'                  01/20/2026  12:00:00.019 AM 01/01/2026   
+           17       1            4000000017     2.550000000000000e+01   4.250000e+00  20987.6526            'c17  '               'vvvvvvvvvvvvvvvvv'   X'aaaa'               X'8'                  01/18/2026  12:00:00.017 AM 01/01/2026   
+           16       0            4000000016     2.400000000000000e+01   4.000000e+00  19753.0848            'c16  '               'vvvvvvvvvvvvvvvv'    X'aaaa'               X'8'                  01/17/2026  12:00:00.016 AM 01/01/2026   
+           13       1            4000000013     1.950000000000000e+01   3.250000e+00  16049.3814            'c13  '               'vvvvvvvvvvvvv'       X'aaaa'               X'8'                  01/14/2026  12:00:00.013 AM 01/01/2026   
+           11       3            4000000011     1.650000000000000e+01   2.750000e+00  13580.2458            'c11  '               'vvvvvvvvvvv'         X'aaaa'               X'8'                  01/12/2026  12:00:00.011 AM 01/01/2026   
+           10       2            4000000010     1.500000000000000e+01   2.500000e+00  12345.6780            'c10  '               'vvvvvvvvvv'          X'aaaa'               X'8'                  01/11/2026  12:00:00.010 AM 01/01/2026   
+            8       0            4000000008     1.200000000000000e+01   2.000000e+00  9876.5424             'c8   '               'vvvvvvvv'            X'aaaa'               X'8'                  01/09/2026  12:00:00.008 AM 01/01/2026   
+            5       1            4000000005     7.500000000000000e+00   1.250000e+00  6172.8390             'c5   '               'vvvvv'               X'aaaa'               X'8'                  01/06/2026  12:00:00.005 AM 01/01/2026   
+            4       0            4000000004     6.000000000000000e+00   1.000000e+00  4938.2712             'c4   '               'vvvv'                X'aaaa'               X'8'                  01/05/2026  12:00:00.004 AM 01/01/2026   
+            2       2            4000000002     3.000000000000000e+00   5.000000e-01  2469.1356             'c2   '               'vv'                  X'aaaa'               X'8'                  01/03/2026  12:00:00.002 AM 01/01/2026   
+            1       1            4000000001     1.500000000000000e+00   2.500000e-01  1234.5678             'c1   '               'v'                   X'aaaa'               X'8'                  01/02/2026  12:00:00.001 AM 01/01/2026   
+            3    NULL            4000000003                      NULL   7.500000e-01  3703.7034             NULL                  'vvv'                 X'aaaa'               NULL                  01/04/2026  NULL                         
+            6    NULL            4000000006                      NULL   1.500000e+00  7407.4068             NULL                  'vvvvvv'              X'aaaa'               NULL                  01/07/2026  NULL                         
+            7    NULL                  NULL                      NULL           NULL  NULL                  NULL                  NULL                  NULL                  NULL                  NULL        NULL                         
+            9    NULL            4000000009                      NULL   2.250000e+00  11111.1102            NULL                  'vvvvvvvvv'           X'aaaa'               NULL                  01/10/2026  NULL                         
+           12    NULL            4000000012                      NULL   3.000000e+00  14814.8136            NULL                  'vvvvvvvvvvvv'        X'aaaa'               NULL                  01/13/2026  NULL                         
+           14    NULL                  NULL                      NULL           NULL  NULL                  NULL                  NULL                  NULL                  NULL                  NULL        NULL                         
+           15    NULL            4000000015                      NULL   3.750000e+00  18518.5170            NULL                  'vvvvvvvvvvvvvvv'     X'aaaa'               NULL                  01/16/2026  NULL                         
+           18    NULL            4000000018                      NULL   4.500000e+00  22222.2204            NULL                  'vvvvvvvvvvvvvvvvvv'  X'aaaa'               NULL                  01/19/2026  NULL                         
+
+20 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 66> ===
+
+      i2              count(*)              count(v)               sum(b8)                   avg(d8)  min(v)                max(c5)               sum(n)              
+======================================================================================================================================================================
+    NULL                     8                     6           24000000063                      NULL  'vvv'                 NULL                  77777.7714          
+       0                     4                     4           16000000048     1.800000000000000e+01  'vvvv'                'c8   '               59259.2544          
+       1                     4                     4           16000000036     1.350000000000000e+01  'v'                   'c5   '               44444.4408          
+       2                     2                     2            8000000012     9.000000000000000e+00  'vv'                  'c2   '               14814.8136          
+       3                     2                     2            8000000030     2.250000000000000e+01  'vvvvvvvvvvv'         'c19  '               37037.0340          
+
+5 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 69> ===
+
+  x                      char_length(x)
+=======================================
+  NULL                             NULL
+  NULL                             NULL
+  NULL                             NULL
+  NULL                             NULL
+  'vvvv'                              4
+  'vvvvv'                             5
+  'vvvvvv'                            6
+  'vvvvvvvv'                          8
+  'vvvvvvvvv'                         9
+
+9 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 72> ===
+
+           id   char_length(big)   substr(big, 39995, 10)
+======================================================
+            3              40000  'xxxxx3'            
+            2              40000  'xxxxx2'            
+            1              40000  'xxxxx1'            
+
+3 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 75> ===
+
+        level           id          pid  name                  connect_by_isleaf  connect_by_iscycle  path                
+==========================================================================================================================
+            1            1         NULL  'root'                                0                   0  '/root'             
+            2            2            1  'a'                                   0                   0  '/root/a'           
+            3            4            2  'aa'                                  1                   0  '/root/a/aa'        
+            3            5            2  'ab'                                  1                   0  '/root/a/ab'        
+            2            3            1  'b'                                   0                   0  '/root/b'           
+            3            6            3  'ba'                                  1                   0  '/root/b/ba'        
+
+6 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 79> ===
+
+           id  v                     name                
+=========================================================
+            1  'v'                   'one'               
+            2  'vv'                  'two'               
+            2  'vv'                  'two-dup'           
+            5  'vvvvv'               'one'               
+           10  'vvvvvvvvvv'          'two'               
+           10  'vvvvvvvvvv'          'two-dup'           
+           11  'vvvvvvvvvvv'         'three'             
+           13  'vvvvvvvvvvvvv'       'one'               
+           17  'vvvvvvvvvvvvvvvvv'   'one'               
+           19  'vvvvvvvvvvvvvvvvvvv'  'three'             
+
+10 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 80> ===
+
+           id  name                
+===================================
+            1  'one'               
+            2  'two'               
+            2  'two-dup'           
+            3  NULL                
+            4  NULL                
+            5  'one'               
+            6  NULL                
+            7  NULL                
+            8  NULL                
+            9  NULL                
+           10  'two'               
+           10  'two-dup'           
+           11  'three'             
+           12  NULL                
+           13  'one'               
+           14  NULL                
+           15  NULL                
+           16  NULL                
+           17  'one'               
+           18  NULL                
+           19  'three'             
+           20  NULL                
+
+22 rows selected. Committed. 
+Execute OK. Committed. 
+
+=== <Result of SELECT Command in Line 84> ===
+
+           id  v                     name                
+=========================================================
+            1  'v'                   'one'               
+            2  'vv'                  'two'               
+            2  'vv'                  'two-dup'           
+            5  'vvvvv'               'one'               
+           10  'vvvvvvvvvv'          'two'               
+           10  'vvvvvvvvvv'          'two-dup'           
+           11  'vvvvvvvvvvv'         'three'             
+           13  'vvvvvvvvvvvvv'       'one'               
+           17  'vvvvvvvvvvvvvvvvv'   'one'               
+           19  'vvvvvvvvvvvvvvvvvvv'  'three'             
+
+10 rows selected. Committed. 
+Execute OK. Committed. 
+
+=== <Result of SELECT Command in Line 88> ===
+
+           id      i2                    rs           rn  prev_v                         nt
+===========================================================================================
+            1       1            4000000001           12  NULL                            1
+            2       2            4000000002           11  'v'                             1
+            3    NULL            4000000003           13  'vv'                            1
+            4       0            4000000004           10  'vvv'                           1
+            5       1            8000000006            9  'vvvv'                          1
+            6    NULL            8000000009           14  'vvvvv'                         1
+            7    NULL            8000000009           15  'vvvvvv'                        1
+            8       0            8000000012            8  NULL                            2
+            9    NULL           12000000018           16  'vvvvvvvv'                      2
+           10       2            8000000012            7  'vvvvvvvvv'                     2
+           11       3            4000000011            6  'vvvvvvvvvv'                    2
+           12    NULL           16000000030           17  'vvvvvvvvvvv'                   2
+           13       1           12000000019            5  'vvvvvvvvvvvv'                  2
+           14    NULL           16000000030           18  'vvvvvvvvvvvvv'                 2
+           15    NULL           20000000045           19  NULL                            3
+           16       0           12000000028            4  'vvvvvvvvvvvvvvv'               3
+           17       1           16000000036            3  'vvvvvvvvvvvvvvvv'              3
+           18    NULL           24000000063           20  'vvvvvvvvvvvvvvvvv'             3
+           19       3            8000000030            2  'vvvvvvvvvvvvvvvvvv'            3
+           20       0           16000000048            1  'vvvvvvvvvvvvvvvvvvv'            3
+
+20 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 95> ===
+
+           id  v                   
+===================================
+            3  'vvv'               
+            4  'vvvv'              
+            5  'vvvvv'             
+            6  'vvvvvv'            
+
+4 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 96> ===
+
+                    rn           id
+===================================
+                     1           20
+                     2           19
+                     3           18
+                     4           17
+
+4 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 99> ===
+
+           id  s                     j                   
+=========================================================
+            8  {8, 108}              {"k":8,"arr":[8,"x"]}
+            7  NULL                  NULL                
+            6  {6, 106}              NULL                
+            5  {5, 105}              {"k":5,"arr":[5,"x"]}
+            4  {4, 104}              {"k":4,"arr":[4,"x"]}
+            3  {3, 103}              NULL                
+            2  {2, 102}              {"k":2,"arr":[2,"x"]}
+            1  {1, 101}              {"k":1,"arr":[1,"x"]}
+
+8 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 102> ===
+
+      i2       c5null
+=====================
+    NULL            1
+       0            0
+       1            0
+       2            0
+       3            0
+
+5 rows selected. Committed. 
+
+=== <Result of SELECT Command in Line 105> ===
+
+           id     c01     c02     c03     c04     c05     c06     c07     c08     c09     c10  c11                   c12                   c13                   c14                   c15                   c16                   c17                   c18                   c19                   c20                                    c21                   c22                   c23                   c24                   c25                   c26                   c27                   c28                   c29                   c30                       c31                       c32                       c33                       c34                       c35                       c36                       c37                       c38                       c39                       c40  c41                   c42                   c43                   c44                   c45                   c46                   c47                   c48                   c49                   c50                   c51                   c52                   c53                   c54                   c55                   c56                   c57                   c58                   c59                   c60                   c61         c62         c63         c64         c65         c66         c67         c68         c69         c70       
+=========================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================
+           20       0       0       0       0       0       0       0       0       0       0  'vvvvvvvvvvvvvvvvvvvv'  'vvvvvvvvvvvvvvvvvvvv'  'vvvvvvvvvvvvvvvvvvvv'  'vvvvvvvvvvvvvvvvvvvv'  'vvvvvvvvvvvvvvvvvvvv'  'vvvvvvvvvvvvvvvvvvvv'  'vvvvvvvvvvvvvvvvvvvv'  'vvvvvvvvvvvvvvvvvvvv'  'vvvvvvvvvvvvvvvvvvvv'  'vvvvvvvvvvvvvvvvvvvv'            4000000020            4000000020            4000000020            4000000020            4000000020            4000000020            4000000020            4000000020            4000000020            4000000020     3.000000000000000e+01     3.000000000000000e+01     3.000000000000000e+01     3.000000000000000e+01     3.000000000000000e+01     3.000000000000000e+01     3.000000000000000e+01     3.000000000000000e+01     3.000000000000000e+01     3.000000000000000e+01  'c20  '               'c20  '               'c20  '               'c20  '               'c20  '               'c20  '               'c20  '               'c20  '               'c20  '               'c20  '               24691.3560            24691.3560            24691.3560            24691.3560            24691.3560            24691.3560            24691.3560            24691.3560            24691.3560            24691.3560            01/21/2026  01/21/2026  01/21/2026  01/21/2026  01/21/2026  01/21/2026  01/21/2026  01/21/2026  01/21/2026  01/21/2026
+            7    NULL    NULL    NULL    NULL    NULL    NULL    NULL    NULL    NULL    NULL  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL        NULL        NULL        NULL        NULL        NULL        NULL        NULL        NULL        NULL      
+            3    NULL    NULL    NULL    NULL    NULL    NULL    NULL    NULL    NULL    NULL  'vvv'                 'vvv'                 'vvv'                 'vvv'                 'vvv'                 'vvv'                 'vvv'                 'vvv'                 'vvv'                 'vvv'                           4000000003            4000000003            4000000003            4000000003            4000000003            4000000003            4000000003            4000000003            4000000003            4000000003                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL                      NULL  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  NULL                  3703.7034             3703.7034             3703.7034             3703.7034             3703.7034             3703.7034             3703.7034             3703.7034             3703.7034             3703.7034             01/04/2026  01/04/2026  01/04/2026  01/04/2026  01/04/2026  01/04/2026  01/04/2026  01/04/2026  01/04/2026  01/04/2026
+            1       1       1       1       1       1       1       1       1       1       1  'v'                   'v'                   'v'                   'v'                   'v'                   'v'                   'v'                   'v'                   'v'                   'v'                             4000000001            4000000001            4000000001            4000000001            4000000001            4000000001            4000000001            4000000001            4000000001            4000000001     1.500000000000000e+00     1.500000000000000e+00     1.500000000000000e+00     1.500000000000000e+00     1.500000000000000e+00     1.500000000000000e+00     1.500000000000000e+00     1.500000000000000e+00     1.500000000000000e+00     1.500000000000000e+00  'c1   '               'c1   '               'c1   '               'c1   '               'c1   '               'c1   '               'c1   '               'c1   '               'c1   '               'c1   '               1234.5678             1234.5678             1234.5678             1234.5678             1234.5678             1234.5678             1234.5678             1234.5678             1234.5678             1234.5678             01/02/2026  01/02/2026  01/02/2026  01/02/2026  01/02/2026  01/02/2026  01/02/2026  01/02/2026  01/02/2026  01/02/2026
+
+4 rows selected. Committed. 
+Execute OK. Committed. 
+Execute OK. Committed. 
+Execute OK. Committed. 
+Execute OK. Committed. 
