@@ -13,7 +13,7 @@ one pass/fail summary. Wall-clock time drops to ~1/N.
 |------|------|
 | `scripts/Containerfile` | **#1** Per-shard runtime image. `FROM rockylinux:8` + JDK 8 + gcc + en_US locale + `entrypoint.sh`. glibc matches a modern host build; the CI build image (CentOS 6 / glibc 2.12) is too old to run one. State is mounted at run time, not baked in. |
 | `scripts/ctp_parallel.sh` | **#2** Host-side orchestrator (main entry point): split → validate → launch → aggregate. |
-| `scripts/entrypoint.sh` | In-container runner: preflight (D5 relocation guard) + `exec ctp.sh sql`. |
+| `scripts/entrypoint.sh` | In-container runner: preflight (D5 relocation guard) + `exec ctp.sh $CTP_SUITE` (`sql` default, `medium` via `--suite medium`). Bind-mounted from this checkout over the image copy, so edits need no image rebuild. |
 | `scripts/harvest_weights.sh` | Derive a per-`.sql` time table from run logs (refreshes `baseline_weights.tsv`). |
 | `baseline_weights.tsv` | Bundled per-`.sql` times (real green-run seconds); auto-loaded for time balancing. |
 | `colocate.tsv` | Order-sensitivity registry (used by `--by-case`): dirs kept whole / co-located. |

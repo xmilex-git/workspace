@@ -562,6 +562,79 @@ ctp-sql-isolated +TEST_DIRS:
         --out        "$run/out" \
         --shards 1 --no-webconsole
 
+# Run the CTP MEDIUM suite (or a subset of it) inside ONE isolated podman container.
+#
+# Same hazard and same fix as ctp-sql-isolated: host `ctp.sh medium` pkills every
+# cub_* of this user, so medium may only ever run inside podman. This is the
+# orchestrator's `--suite medium` mode: scenario <root>/medium, template
+# conf/medium.conf, `exec ctp.sh medium`; the pre-built mdb tarball
+# (medium/files/mdb.tar.gz) is copied with the scenario and data_file is rewritten
+# to the container path (workspace#195).
+#
+# ARG SHAPE: zero or more directories under a testcases checkout's medium/ tree
+# (bucket like _01_fixed, or its cases/ dir; a .sql resolves to its test dir). No
+# argument = the whole medium suite. All arguments must share one medium/ root.
+# medium/files (data) and medium/config are always shipped.
+# Build source: $BUILD, else $CUBRID, else ~/CUBRID (copied, never mutated).
+#
+# Usage:
+#   just ctp-medium-isolated                                   whole medium suite
+#   just ctp-medium-isolated ~/cubrid-testcases/medium/_01_fixed
+#   BUILD=~/optdebug/CUBRID-x just ctp-medium-isolated ~/cubrid-testcases/medium/_01_fixed
+[doc("Run the CTP MEDIUM suite (or selected dirs) in one isolated podman container (no host cub_* touched)")]
+ctp-medium-isolated *TEST_DIRS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    orch="{{justfile_directory()}}/.agents/skills/ctp-parallel/scripts/ctp_parallel.sh"
+    [ -x "$orch" ] || { echo "ERROR: ctp-parallel orchestrator not found/executable: $orch" >&2; exit 1; }
+    command -v podman >/dev/null 2>&1 || { echo "ERROR: podman not found — the isolated runner requires it. (Never fall back to host ctp.sh: its teardown pkills every cub_* of this user.)" >&2; exit 1; }
+    build="${BUILD:-${CUBRID:-$HOME/CUBRID}}"
+    build="$(realpath "$build")"
+    [ -x "$build/bin/cubrid" ] || { echo "ERROR: '$build' is not a CUBRID install (bin/cubrid missing). Set BUILD= or CUBRID=." >&2; exit 1; }
+    med_root=""
+    rels=()
+    for arg in {{TEST_DIRS}}; do
+        t="$arg"
+        [[ "$t" == *.sql ]] && t="$(dirname "$(dirname "$t")")"
+        t="$(realpath "$t")"
+        [ -d "$t" ] || { echo "ERROR: directory not found: $t" >&2; exit 1; }
+        r="$t"
+        while [ "$r" != "/" ] && [ "$(basename "$r")" != "medium" ]; do r="$(dirname "$r")"; done
+        [ "$r" != "/" ] || { echo "ERROR: '$t' is not under a testcases medium/ tree." >&2; exit 1; }
+        if [ -z "$med_root" ]; then med_root="$r"; fi
+        [ "$r" = "$med_root" ] || { echo "ERROR: all TEST_DIRS must share one medium/ root ($med_root vs $r)." >&2; exit 1; }
+        [ "$t" != "$r" ] || { echo "ERROR: pass buckets under medium/ (or no argument for the whole suite), not medium/ itself." >&2; exit 1; }
+        rels+=("${t#"$(dirname "$med_root")"/}")   # e.g. medium/_01_fixed
+    done
+    if [ -z "$med_root" ]; then
+        med_root="$(realpath "${TESTCASES:-$HOME/cubrid-testcases}/medium")"
+        [ -d "$med_root" ] || { echo "ERROR: medium scenario not found: $med_root (set TESTCASES=)" >&2; exit 1; }
+        rels=("medium")
+    else
+        rels+=("medium/files" "medium/config")   # data tarball + jdbc/i18n config always ride along
+    fi
+    [ -r "$med_root/files/mdb.tar.gz" ] || { echo "ERROR: $med_root/files/mdb.tar.gz missing (medium data_file)." >&2; exit 1; }
+    run="{{justfile_directory()}}/.git_ignored_dir/scratch/ctp-iso/$(date -u +%Y%m%dT%H%M%SZ)-$$-medium"
+    tcroot="$run/testcases"
+    mkdir -p "$tcroot"
+    src_parent="$(dirname "$med_root")"
+    if command -v rsync >/dev/null 2>&1; then
+        ( cd "$src_parent" && rsync -aR --exclude='*.result' --exclude='*.log' "${rels[@]}" "$tcroot/" )
+    else
+        ( cd "$src_parent" && for r in "${rels[@]}"; do
+              find "$r" -type f ! -name '*.result' ! -name '*.log' -exec cp --parents -a {} "$tcroot/" \; ; done )
+    fi
+    echo "[ctp-medium-isolated] build=$build"
+    echo "[ctp-medium-isolated] subset=${rels[*]}"
+    echo "[ctp-medium-isolated] run dir=$run  (results: $run/out)"
+    exec "$orch" \
+        --suite      medium \
+        --build      "$build" \
+        --testcases  "$tcroot" \
+        --ctp        "${CTP_HOME:-$HOME/cubrid-testtools/CTP}" \
+        --out        "$run/out" \
+        --shards 1 --no-webconsole
+
 # ---------------------------------------------------------------------------
 # CUBRID port registry — machine-local claims so concurrent Claude sessions
 # never start servers on colliding ports. Protocol: docs/agents/port-registry.md

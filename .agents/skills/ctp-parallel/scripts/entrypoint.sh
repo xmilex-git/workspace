@@ -18,6 +18,15 @@ export CTP_HOME=/home/CTP
 export CUBRID_DATABASES=/home/CUBRID_DB
 export TZ=Asia/Seoul
 export LC_ALL=en_US
+# Suite selector set by the orchestrator (--suite): sql (default) or medium. It picks
+# the scenario mount, the CTP template conf, and the ctp.sh task — nothing else differs.
+CTP_SUITE="${CTP_SUITE:-sql}"
+case "$CTP_SUITE" in
+  sql|medium) : ;;
+  *) echo "PREFLIGHT: unsupported CTP_SUITE='$CTP_SUITE' (sql|medium)" >&2; exit 11 ;;
+esac
+SCENARIO="/home/cubrid-testcases/$CTP_SUITE"
+SUITE_CONF="$CTP_HOME/conf/$CTP_SUITE.conf"
 
 # JAVA_HOME is required by ctp.sh (F1); derive it from `java` if the image left it unset.
 if [ -z "${JAVA_HOME:-}" ]; then
@@ -56,9 +65,16 @@ esac
 [ -w "$CUBRID/conf" ]      || { echo "PREFLIGHT: $CUBRID/conf not writable" >&2; exit 14; }
 [ -w "$CUBRID_DATABASES" ] || { echo "PREFLIGHT: $CUBRID_DATABASES not writable" >&2; exit 14; }
 locale -a 2>/dev/null | grep -qi 'en_US' || { echo "PREFLIGHT: en_US locale missing in image" >&2; exit 15; }
-[ -d /home/cubrid-testcases/sql ] || { echo "PREFLIGHT: scenario /home/cubrid-testcases/sql missing" >&2; exit 16; }
-[ -r "$CTP_HOME/conf/sql.conf" ] && [ -r "$CTP_HOME/conf/exclusions.txt" ] \
-  || { echo "PREFLIGHT: $CTP_HOME/conf/{sql.conf,exclusions.txt} missing" >&2; exit 17; }
+[ -d "$SCENARIO" ] || { echo "PREFLIGHT: scenario $SCENARIO missing" >&2; exit 16; }
+[ -r "$SUITE_CONF" ] && [ -r "$CTP_HOME/conf/exclusions.txt" ] \
+  || { echo "PREFLIGHT: $SUITE_CONF or $CTP_HOME/conf/exclusions.txt missing" >&2; exit 17; }
+if [ "$CTP_SUITE" = "medium" ]; then
+  # medium loads a pre-built mdb from data_file (rewritten by the orchestrator to the
+  # scenario mount). A missing tarball makes CTP exit 1 after creating the db — fail early.
+  _df="$(sed -n 's/^[[:space:]]*data_file=//p' "$SUITE_CONF" | tail -1)"
+  [ -n "$_df" ] && [ -r "$_df" ] \
+    || { echo "PREFLIGHT: medium data_file '$_df' missing/unreadable (expected <scenario>/files/mdb.tar.gz)" >&2; exit 19; }
+fi
 # CTP compiles its JDBC helper classes with `javac -cp $CUBRID/jdbc/cubrid_jdbc.jar`
 # (sql/bin/run.sh). A build made without the cubrid-jdbc submodule (or with a
 # build-only target that skips JDBC packaging) ships no jdbc jar, so javac fails
@@ -69,5 +85,5 @@ locale -a 2>/dev/null | grep -qi 'en_US' || { echo "PREFLIGHT: en_US locale miss
 # Allow core dumps for crash diagnosis (best effort).
 ulimit -c unlimited 2>/dev/null || :
 
-echo "PREFLIGHT OK: CUBRID=$CUBRID CTP_HOME=$CTP_HOME JAVA_HOME=$JAVA_HOME shard scenario ready."
-exec ctp.sh sql -c "$CTP_HOME/conf/sql.conf"
+echo "PREFLIGHT OK: CUBRID=$CUBRID CTP_HOME=$CTP_HOME JAVA_HOME=$JAVA_HOME suite=$CTP_SUITE shard scenario ready."
+exec ctp.sh "$CTP_SUITE" -c "$SUITE_CONF"

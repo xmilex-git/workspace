@@ -23,6 +23,12 @@ ports/SHM IDs; only each shard's `exclusions.txt` and output dirs differ.
    - `--testcases <root>` — the testcases repo root (scenario is `<root>/sql`,
      normally `~/cubrid-testcases`).
    If the user has a built tree (e.g. `$CUBRID`) and `~/cubrid-testcases`, use those.
+   - `--suite medium` switches to the CTP **medium** suite (`<root>/medium`,
+     template `conf/medium.conf`, `ctp.sh medium`; the mdb tarball under
+     `medium/files/` rides along with the scenario). Host-side `ctp.sh medium`
+     is as forbidden as `ctp.sh sql` (same `pkill cub`), so medium goes through
+     `just ctp-medium-isolated [DIRS...]` (1 shard, no webconsole), the medium
+     twin of `just ctp-sql-isolated`.
 
 2. **Run the orchestrator** — no tuning needed; the defaults are the optimal setting:
 

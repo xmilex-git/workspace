@@ -25,7 +25,10 @@ set -euo pipefail
 readonly C_CUBRID="/home/CUBRID"
 readonly C_CTP="/home/CTP"
 readonly C_DB="/home/CUBRID_DB"
-readonly C_SCN="/home/cubrid-testcases/sql"
+# Scenario mount: /home/cubrid-testcases/<suite>. Derived in parse_args from --suite
+# (default sql -> the historical /home/cubrid-testcases/sql, byte-identical behaviour).
+readonly C_SCN_PARENT="/home/cubrid-testcases"
+C_SCN="${C_SCN_PARENT}/sql"
 # Default = a host-matched RUNTIME image built on demand from the bundled
 # Containerfile (Rocky 8 / glibc that matches a modern host build). The CI build
 # image (cubridci/cubridci:develop) is CentOS 6 / glibc 2.12 and canNOT run a
@@ -54,9 +57,12 @@ USAGE:
 
 REQUIRED (for a real run):
   --build <dir>        A built \$CUBRID directory (copied per shard; absorbs CTP's conf rewrites).
-  --testcases <root>   Testcases repo root; scenario is <root>/sql.
+  --testcases <root>   Testcases repo root; scenario is <root>/<suite> (see --suite).
 
 OPTIONS:
+  --suite <sql|medium> CTP suite to run. Default: sql. medium runs `ctp.sh medium` against
+                       <root>/medium with the template conf/medium.conf (data_file rewritten to
+                       the container scenario path; bundled sql weights/colocate are skipped).
   --shards <N>         Number of parallel shards. Default: 7 (workload-optimal for the bulk +
                        measured-time split; the heaviest bulk bounds the slowest shard, so >7
                        gains nothing). Capped down only if free RAM can't hold 7.
@@ -119,6 +125,7 @@ EOF
 #####################################################################
 ARG_BUILD=""
 ARG_TC=""
+ARG_SUITE="sql"        # CTP suite: sql (default) | medium
 ARG_SHARDS=""
 ARG_CTP="${HOME}/cubrid-testtools/CTP"
 ARG_IMAGE="$DEFAULT_IMAGE"
@@ -144,6 +151,7 @@ parse_args() {
     case "$1" in
       --build)       ARG_BUILD="${2:-}"; shift 2 ;;
       --testcases)   ARG_TC="${2:-}"; shift 2 ;;
+      --suite)       ARG_SUITE="${2:-}"; shift 2 ;;
       --shards)      ARG_SHARDS="${2:-}"; shift 2 ;;
       --ctp)         ARG_CTP="${2:-}"; shift 2 ;;
       --image)       ARG_IMAGE="${2:-}"; shift 2 ;;
@@ -191,12 +199,18 @@ parse_args() {
     return 0
   fi
 
+  case "$ARG_SUITE" in
+    sql|medium) : ;;
+    *) usage; die "--suite must be sql or medium (got: '$ARG_SUITE')" ;;
+  esac
+  C_SCN="${C_SCN_PARENT}/${ARG_SUITE}"
+  TEMPLATE_CONF="$ARG_CTP/conf/${ARG_SUITE}.conf"
   [ -n "$ARG_TC" ]  || { usage; die "--testcases is required"; }
   [ -d "$ARG_TC" ]  || die "--testcases dir does not exist: $ARG_TC"
-  SCN="$ARG_TC/sql"
-  [ -d "$SCN" ]     || die "scenario dir not found: $SCN (expected <testcases>/sql)"
+  SCN="$ARG_TC/$ARG_SUITE"
+  [ -d "$SCN" ]     || die "scenario dir not found: $SCN (expected <testcases>/$ARG_SUITE)"
   [ -d "$ARG_CTP" ] || die "--ctp dir does not exist: $ARG_CTP"
-  [ -r "$ARG_CTP/conf/sql.conf" ] || die "missing CTP template: $ARG_CTP/conf/sql.conf"
+  [ -r "$TEMPLATE_CONF" ] || die "missing CTP template: $TEMPLATE_CONF"
 
   if [ "$ARG_DRYRUN" -eq 0 ]; then
     [ -n "$ARG_BUILD" ] || { usage; die "--build is required for a real run (omit only with --dry-run)"; }
@@ -288,7 +302,9 @@ resolve_colocate() {
   local src=""
   case "$ARG_COLOCATE" in
     "")   info "colocate: disabled (--no-colocate)."; return 0 ;;
-    auto) local bundled="$SELF_DIR/../colocate.tsv"; [ -r "$bundled" ] && src="$bundled" ;;
+    auto) local bundled="$SELF_DIR/../colocate.tsv"
+          # bundled registry lists sql/ cases dirs only; meaningless for another suite
+          [ "$ARG_SUITE" = "sql" ] && [ -r "$bundled" ] && src="$bundled" ;;
     *)    [ -r "$ARG_COLOCATE" ] || die "--colocate file not readable: $ARG_COLOCATE"; src="$ARG_COLOCATE" ;;
   esac
   if [ -z "$src" ]; then
@@ -327,7 +343,9 @@ resolve_weights() {
     none|"") WEIGHTS_FILE=""; info "weights: count-based (--no-weights)." ;;
     auto)
       local bundled="$SELF_DIR/../baseline_weights.tsv"
-      if [ -r "$bundled" ]; then
+      if [ "$ARG_SUITE" != "sql" ]; then
+        WEIGHTS_FILE=""; info "weights: bundled table is sql-only; count-based for suite '$ARG_SUITE'."
+      elif [ -r "$bundled" ]; then
         WEIGHTS_FILE="$bundled"
         info "weights: time-based from bundled $(basename "$bundled") ($(awk -F'\t' '{s+=$2}END{printf "%.0f", s}' "$bundled" 2>/dev/null)s over $(wc -l < "$bundled") cases)."
       else
@@ -591,17 +609,27 @@ validate_split() {
 }
 
 #####################################################################
-# Generate a per-shard sql.conf from the real template:
+# Generate a per-shard <suite>.conf from the real template (conf/sql.conf or
+# conf/medium.conf):
 #   - scenario  -> the container scenario path (no host paths leak)
 #   - testcase_exclude_from_file -> ${CTP_HOME}/conf/exclusions.txt (container)
+#   - data_file (medium only; absent from sql.conf) -> <container scenario>/files/<basename>,
+#     i.e. the mdb.tar.gz that lives inside the scenario tree and is copied with it
 #   - ports / SHM IDs kept verbatim (namespace isolation handles conflicts)
 #####################################################################
 generate_sql_conf() {
   local out="$1"
+  local -a data_sed=()
+  local host_df
+  host_df="$(sed -nE 's#^[[:space:]]*data_file=(.*)$#\1#p' "$TEMPLATE_CONF" | tail -1)"
+  if [ -n "$host_df" ]; then
+    data_sed=( -e "s#^[[:space:]]*data_file=.*#data_file=${C_SCN}/files/$(basename "$host_df")#" )
+  fi
   sed -E \
     -e "s#^[[:space:]]*scenario=.*#scenario=${C_SCN}#" \
     -e "s#^[[:space:]]*testcase_exclude_from_file=.*#testcase_exclude_from_file=\${CTP_HOME}/conf/exclusions.txt#" \
-    "$ARG_CTP/conf/sql.conf" > "$out"
+    "${data_sed[@]}" \
+    "$TEMPLATE_CONF" > "$out"
 }
 
 #####################################################################
@@ -619,9 +647,9 @@ emit_plan() {
     mkdir -p "$OUT/shard_${i}"
     cp -f "$WORK/shard_${i}.exclusions.txt" "$OUT/shard_${i}/exclusions.txt"
     cp -f "$WORK/shard_${i}.sql.txt" "$OUT/shard_${i}/assigned_sql.txt" 2>/dev/null || :
-    generate_sql_conf "$OUT/shard_${i}/sql.conf"
+    generate_sql_conf "$OUT/shard_${i}/${ARG_SUITE}.conf"
   done
-  info "plan written to $OUT (assignment.tsv, units.tsv, plan.tsv, shard_*/{exclusions.txt,sql.conf})"
+  info "plan written to $OUT (assignment.tsv, units.tsv, plan.tsv, shard_*/{exclusions.txt,${ARG_SUITE}.conf})"
 }
 
 print_plan_summary() {
@@ -646,7 +674,7 @@ print_plan_summary() {
   [ -r "$COLO_GIDS" ] && grpn=$(awk -F'\t' '{c[$2]++} END{m=0; for(g in c) if(c[g]>1) m++; print m+0}' "$COLO_GIDS" 2>/dev/null)
   printf '  colocate:           %d dir(s), %d multi-dir group(s) pinned  (keep-whole active only with --by-case)\n' "${kwn:-0}" "${grpn:-0}"
   printf '  shards:             %d\n' "$NSHARDS"
-  printf '  env passthrough (fixed): CUBRID CTP_HOME CUBRID_DATABASES TZ LC_ALL\n'
+  printf '  env passthrough (fixed): CUBRID CTP_HOME CUBRID_DATABASES TZ LC_ALL CTP_SUITE\n'
   printf '  env passthrough (--env, %d): %s\n' "${#ARG_ENV[@]}" "${ARG_ENV[*]:-<none>}"
   printf '  %-7s %-10s %s\n' "shard" "sql" "weight$([ -n "$WEIGHTS_FILE" ] && echo '(s)')"
   local i
@@ -708,7 +736,7 @@ build_shard_workdir() {
     cp -a "$ARG_CTP/." "$d/CTP/"
     rm -rf "$d/CTP"/.output_*.log "$d/CTP"/.script_cont_* "$d/CTP"/sql/result/* "$d/CTP"/sql/log/* 2>/dev/null || :
   fi
-  generate_sql_conf "$d/CTP/conf/sql.conf"
+  generate_sql_conf "$d/CTP/conf/${ARG_SUITE}.conf"
   cp -f "$WORK/shard_${i}.exclusions.txt" "$d/CTP/conf/exclusions.txt"
 
   # fresh per-shard CUBRID_DATABASES
@@ -757,6 +785,10 @@ launch_shard() {
     -v "$d/CTP:${C_CTP}:rw"
     -v "$d/scenario:${C_SCN}:rw"
     -v "$d/CUBRID_DB:${C_DB}:rw"
+    # The image bakes a copy of entrypoint.sh (Containerfile COPY); bind the repo's
+    # current one over it so entrypoint changes (e.g. --suite) never require an image
+    # rebuild and a stale image can never run a different runner than this checkout.
+    -v "$SELF_DIR/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro"
   )
   if [ "$ARG_OVERLAY" -eq 1 ]; then
     mounts+=( -v "$ARG_BUILD:${C_CUBRID}:O" )
@@ -778,6 +810,7 @@ launch_shard() {
   local -a envs=(
     -e "CUBRID=${C_CUBRID}" -e "CTP_HOME=${C_CTP}" -e "CUBRID_DATABASES=${C_DB}"
     -e "TZ=Asia/Seoul" -e "LC_ALL=en_US"
+    -e "CTP_SUITE=${ARG_SUITE}"
   )
   # --env passthrough (#108): podman sets these in the container's PID 1 env: since
   # entrypoint.sh execs `ctp.sh sql` without clearing the environment, and every
@@ -995,7 +1028,7 @@ merge_results() {
   lbl="${ARG_LABEL:-$(basename "$OUT")}"
   lblsan="$(printf '%s' "$lbl" | tr -c 'A-Za-z0-9._-' '_')"
   y="y$(date +%Y)"; m="m$(date +%-m)"; stamp="$(date +%s)"
-  sched="schedule_${os}_sql_64bit_parallel_${stamp}_${lblsan}_${ver}"
+  sched="schedule_${os}_${ARG_SUITE}_64bit_parallel_${stamp}_${lblsan}_${ver}"
   local dest="$resroot/$y/$m/$sched"
   mkdir -p "$dest/sql"
 
@@ -1022,7 +1055,7 @@ merge_results() {
     printf 'build:%s\n' "$ver"
     printf 'version:64bit\n'
     printf 'os:%s\n' "$os"
-    printf 'category:sql\n'
+    printf 'category:%s\n' "$ARG_SUITE"
     printf 'elapse_time:%d\n' "$sum_time"
     printf 'success:%d\n' "$sum_succ"
     printf 'fail:%d\n' "$sum_fail"
