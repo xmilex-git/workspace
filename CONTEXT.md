@@ -44,6 +44,10 @@ _Avoid_: 텔레메트리 패스, A/B 블록
 XASL 생성 시 select 리스트와 HAVING절의 형태만으로 결정되는 정적 플래그로, 런타임에 해시가 실제로 유지됐는지와는 별개다. 런타임 해시 상태와 혼용하지 않는다.
 _Avoid_: 런타임 해시 상태, hash: true/partial
 
+**TPC-H 공용 자산 (tpch home, `~/databases/tpch/`)**:
+TPC-H SF10 작업에 쓰는 단일 위치 — DB `tpch_sf10_q1`(`CUBRID_DATABASES=~/databases`), 질의 22종(`queries/`), 스키마(`schema/`), 측정 conf(`conf/`), 재적재 스크립트(`load_tpch.sh`). 온디스크 포맷 커밋 뒤에는 측정 대상 빌드로 재적재한다(CUBRID_SSOT §3-18).
+_Avoid_: `tpch-sspq/queries`·`.vscode/TPC-H`·`.git_ignored_dir/tpch-sspq` 를 직접 참조(원본·이력 보관용일 뿐)
+
 **신선한 체크포인트 (fresh checkpoint)**:
 온라인 FULL 백업 진입 시점에 capture한 append LSA(T) 이후에 완료되어 redo LSA(R) ≥ T를 만족하는 checkpoint다. 백업 진입 전부터 진행 중이던 checkpoint는 R이 T보다 앞설 수 있으므로 아무리 기다려도 fresh로 인정하지 않는다.
 _Avoid_: "진행 중 checkpoint 대기 완료"를 fresh로 간주, 최신 checkpoint
