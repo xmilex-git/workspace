@@ -72,8 +72,12 @@ MinimalTuple과 같은 구조 — `[len(+prev_len)] [has-null 비트] [조건부
 - **스레드 계약: 디스크립터는 그 `QFILE_LIST_ID`를 소유한 스레드만 읽고 쓴다.** px XASL_SNAPSHOT 리더는
   디스크립터 대신 도메인 구동 순차 deform 원시 함수를 쓴다. 공유 가변 디스크립터라는 동기화 표면을
   만들지 않는다.
-- **mutator-owns-finalize**: `domp`를 바꾸는 코드가 같은 자리에서 `qfile_type_list_finalize`를 부른다(4곳).
-  복제는 memcpy 상속. 지연 finalize는 채택하지 않는다.
+- **mutator-owns-finalize**: `domp`를 바꾸는 코드가 같은 자리에서 `qfile_type_list_finalize`를 부른다.
+  복제는 memcpy 상속. 지연 finalize는 채택하지 않는다. (지점 수 정정, #196 D-196-7: 설계 시 4곳으로 셌으나
+  구현 조사에서 list_id의 `domp[]`를 직접 바꾸는 지점이 더 있었다 — `qfile_unify_types`, DISTINCT
+  집계/분석함수 리스트 도메인 확정 4곳, 해시 GROUP BY 부분 리스트 2곳, RETURN_GENERATED_KEYS 1곳. 규칙은
+  그대로이고 PR-1b가 전 지점에 finalize를 넣었으며, `qfile_open_list_scan`의 디버그 교차검증(D-181-7)이
+  누락을 잡는다.)
 
 ### 1.4 접근자 API — D-182-1/10 (`cbrd27365-accessor-api.md`)
 
@@ -126,6 +130,22 @@ CUBRID는 클라이언트/서버 lockstep 업그레이드만 지원한다. 혼�
 | `qfile_fast_intint/intval/val_tuple_to_list` (D-182-12) | 삭제, 조립기 `static inline` 상수 전파로 대체 | #193 마이크로벤치(고카디널리티 PARTITION BY) 회귀 시 래퍼 복원 |
 | `fetch_peek_dbval_pos` (D-182-8) | 삭제 | PR-1b CTP에서 pos 정렬 assert 의존 동작 발견 시 유지 |
 | PR 분할 (D-182-17) | PR-1a(슬롯 시그니처, 기계적) → PR-1b(접근자 치환, 포맷 불변) → PR-2(포맷 교체); 개인 fork 브랜치 간 | 1a/1b 합병 |
+
+각주 (구현 중 조정, #189 리뷰·#196):
+
+- **D-189-4 filler-owns-bind (D-182-6 조정)**: "bind는 open 시 1회"를 "레코드를 채우는 스캔이 채울 때마다
+  bind"로 바꿨다. `qfile_retrieve_tuple`이 채운 레코드를 `&scan_id->list_id.type_list`에 bind한다(포인터
+  스토어 1개). 호출자마다 새로 만드는 지역 레코드(`scan_next_list_scan` 등)에 bind를 맡기면 누락이
+  반복된다는 PR-1a 리뷰 지적이 근거. 스캔 밖에서 raw 튜플을 감싸는 스택 슬롯은 여전히 명시 bind.
+- **D-196-3 접근자는 디코딩 도메인을 인자로 받는다 (D-182-7 시그니처 조정)**:
+  `qfile_slot_read_value (rec, col, dom, v, copy, &is_null)`. 레이아웃은 bind된 디스크립터에서, 디코딩은
+  호출자 도메인으로 — 오늘도 fetch는 `pos_descr.dom`, 해시조인은 `fetch_info` 도메인으로 읽으며 리스트
+  `domp[col]`과 다를 수 있다(늦은 도메인 확정). NULL 처리도 호출자에게 남긴다(is_null이면 DB_VALUE 불변).
+- **D-196-10 일괄 접근자는 별도 API가 아니다 (D-182-7)**: 슬롯 캐시 덕에 순차 `read_value` 루프가 이미
+  O(n)이라 `qfile_slot_read_val_list`를 두지 않았다.
+- **D-196-5 PR-1b 범위 경계**: PR-1b는 리스트 튜플 *리더*와 in-place 라이터를 접근자로 바꾸고, 복사형
+  라이터(merge·정렬키 본문·해시조인 merge)는 접근자로 위치만 얻고 `qfile_legacy_put_value`로 구 헤더를
+  다시 쓴다(assembler bridge). 조립기 API(D-182-11)와 정렬 레코드 본문 리더(D-182-14)는 PR-2.
 
 ## 3. Considered Options (기각)
 
