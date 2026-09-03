@@ -844,7 +844,7 @@ launch_shard() {
 # (2026-08-31 incident: 1.1T of cores on /home). The abort reason is left in
 # $OUT/.abort_reason for aggregate() to report; collection still runs.
 #####################################################################
-CORE_POLL_SECS=30
+CORE_POLL_SECS=5   # 2026-09-03 #199: a crash-looping shard produced 13 cores (16GB) inside one 30s poll; 5s bounds it to ~2 per shard
 DISK_FLOOR_GB=30
 WATCHDOG_PID=""
 start_core_watchdog() {
@@ -867,7 +867,8 @@ start_core_watchdog() {
       if [ -n "$reason" ]; then
         printf '%s\n' "$reason" > "$OUT/.abort_reason"
         echo "[ctp-parallel] ABORT-ON-CORE: $reason — stopping all shard containers." >&2
-        for n in "${SHARD_NAMES[@]}"; do podman stop -t 10 "$n" >/dev/null 2>&1 || :; done
+        # kill, not stop: every second of a crash-looping server is another ~2.4GB core
+        for n in "${SHARD_NAMES[@]}"; do podman kill "$n" >/dev/null 2>&1 || podman stop -t 2 "$n" >/dev/null 2>&1 || :; done
         exit 0
       fi
     done
