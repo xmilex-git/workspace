@@ -16,3 +16,9 @@ test.md 첨부용 재료. 각 `.sql` 은 csql `-i` 로 단독 실행 가능하�
 | tc09_wide.sql | 64+ 컬럼 | 비트맵 9B·컬럼 65 NULL·접두 deform |
 | tc10_inplace.sql | in-place 5지점 | #185 계약(가변 컬럼 뒤 대상) |
 | (JDBC) 역방향 커서 | `../cbrd27365-smoke/ScrollSmoke.java` | backward_capable A·prev_len·hdr 8B — shell TC 후보 |
+
+## 배치 (#201, 2026-09-04)
+
+TC PR CUBRID/cubrid-testcases#3420(`tc/pr-7866`) `sql/_36_guava/cbrd_27365/cases/cbrd_27365_<n>.sql`(n = tc 번호, 1~10)로 배치했다. CTP 답안(`answers/`)은 PR 빌드의 CTP 출력이며 tc08 을 제외한 9건은 develop 빌드 출력과 바이트 동일(tc08 은 develop 이 `qfile_unify_types` assert 로 서버가 죽는다).
+tc04/tc06/tc07/tc09 의 `.sql` 은 CTP 반입 과정에서 문법 오류였던 문장을 고쳤다(여기 `.sql` 도 동기화; `.answer.*` 는 수정 전 csql 출력이라 해당 문장 자리에 ERROR 가 남아 있다 — 정합성 판정의 근거는 TC PR 의 CTP 답안).
+

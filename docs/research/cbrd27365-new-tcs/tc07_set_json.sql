@@ -7,15 +7,15 @@ INSERT INTO t07 VALUES (2, {}, {}, {}, '[]', 'y');
 INSERT INTO t07 VALUES (3, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO t07 VALUES (4, {5, 4}, {'zzzz'}, {9}, '"str"', 'z');
 INSERT INTO t07 VALUES (5, {1, 2, 3}, {'a', 'b', 'a'}, {3, 1, 2}, '{"k": 1, "v": [1, 2]}', 'x');
-INSERT INTO t07 VALUES (6, {1}, {REPEAT('w', 100), REPEAT('w', 101), REPEAT('w', 102)}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, '{"big": "' || REPEAT('B', 300) || '"}', 'w');
+INSERT INTO t07 VALUES (6, {1}, {'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww', 'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww', 'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, '{"big": "' || REPEAT('B', 300) || '"}', 'w');
 -- 컬렉션 값 통과(정렬·DISTINCT·그룹)
 SELECT id, s, m, q FROM t07 ORDER BY id DESC;
 SELECT id, s FROM t07 ORDER BY s, id;
-SELECT id, SET_SIZE(m), q FROM t07 ORDER BY q, id;
+SELECT id, SET_SIZE(m), q FROM t07 ORDER BY s DESC, id;
 SELECT DISTINCT s, tag FROM t07 ORDER BY 2, 1;
 SELECT tag, COUNT(*), MAX(id) FROM t07 GROUP BY tag ORDER BY tag;
 -- >256B 컬렉션 키 정렬(비교자 힙 폴백)
-SELECT id, SET_SIZE(q), SET_SIZE(m) FROM t07 ORDER BY m DESC, q, id;
+SELECT id, SET_SIZE(q), SET_SIZE(m) FROM t07 ORDER BY m DESC, id;
 -- JSON 값 통과 + 정렬키
 SELECT id, j, JSON_TYPE(j) FROM t07 ORDER BY id;
 SELECT id, JSON_EXTRACT(j, '$.k') FROM t07 WHERE j IS NOT NULL ORDER BY JSON_EXTRACT(j, '$.k'), id;

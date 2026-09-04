@@ -16,7 +16,7 @@ UPDATE t04 SET pid = NULL WHERE id = 2;
 -- 계층 + 가변 컬럼 앞의 in-place 값(ISLEAF 가 가변 name 뒤에 오도록 컬럼 순서 변경)
 SELECT name, CONNECT_BY_ISLEAF, LEVEL, id FROM t04 START WITH id = 1 CONNECT BY PRIOR id = pid ORDER SIBLINGS BY w DESC;
 -- CONNECT_BY_ROOT / PRIOR 표현식 + WHERE 필터
-SELECT id, CONNECT_BY_ROOT name AS root_name, PRIOR name AS parent_name, LEVEL FROM t04 START WITH pid IS NULL CONNECT BY PRIOR id = pid WHERE LEVEL >= 3 ORDER BY id;
+SELECT id, CONNECT_BY_ROOT name AS root_name, PRIOR name AS parent_name, LEVEL FROM t04 WHERE LEVEL >= 3 START WITH pid IS NULL CONNECT BY PRIOR id = pid ORDER BY id;
 -- DELETE ... IN (계층 서브쿼리) — 다중 루트 + 정렬 (D-191-1 회귀)
 DELETE FROM t04 WHERE id IN (SELECT id FROM t04 CONNECT BY PRIOR id = pid ORDER SIBLINGS BY name);
 SELECT COUNT(*) FROM t04;

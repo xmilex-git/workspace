@@ -25,6 +25,6 @@ SELECT c73, c01, c02, c64, c65, c66, c70, c71, LENGTH(c72) FROM t09 ORDER BY c73
 -- 뒤쪽 컬럼만 선택(접두 증분 deform 가 앞의 NULL 컬럼을 건너뜀)
 SELECT c73, c70, c69, c61, c51, c41, c31, c21, c11 FROM t09 ORDER BY c65, c73;
 -- 70개 컬럼 DISTINCT/GROUP
-SELECT COUNT(DISTINCT c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47, c48, c49, c50, c51, c52, c53, c54, c55, c56, c57, c58, c59, c60, c61, c62, c63, c64, c65, c66, c67, c68, c69, c70) FROM t09;
+SELECT COUNT(*) FROM (SELECT DISTINCT c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47, c48, c49, c50, c51, c52, c53, c54, c55, c56, c57, c58, c59, c60, c61, c62, c63, c64, c65, c66, c67, c68, c69, c70 FROM t09) d;
 SELECT c65, c01, COUNT(*), SUM(c73) FROM t09 GROUP BY c65, c01 ORDER BY c65, c01;
 DROP TABLE t09;
