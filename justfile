@@ -710,3 +710,32 @@ port-release key:
     removed=$((before - after))
     [ "$removed" -gt 0 ] || { echo "WARNING: no claim matched '{{key}}'." >&2; exit 1; }
     echo "released $removed claim(s) matching '{{key}}'"
+
+# ---------------------------------------------------------------------------
+# HA shell TCs in two podman containers (hamaster/haslave, image ctp-ha:local).
+# provision: tears down and recreates network+containers with per-node copies
+# of INSTALL (a built CUBRID install dir), patches the CTP copy's
+# setup_ha_environment (slave broker start — fold requirement, workspace#176),
+# and smoke-checks topology (DNS, CTP jsch ssh).  run: one HA/shell bucket
+# (e.g. _22_ha) via ctp.sh inside hamaster, foreground, 12h guard.
+# Requires: podman, image ctp-parallel:local (base), ~/cubrid-testtools/CTP,
+# ~/cubrid-testcases-private (HA/shell TCs).
+
+# just ha-provision ~/optdebug/CUBRID-xyz
+ha-provision INSTALL:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    HA="{{justfile_directory()}}/.agents/skills/ctp-parallel/scripts/ha"
+    [ -d "$HOME/cubrid-testcases-private/HA/shell" ] || { echo "ERROR: ~/cubrid-testcases-private (HA/shell) not cloned" >&2; exit 1; }
+    podman image exists localhost/ctp-parallel:local || { echo "ERROR: base image ctp-parallel:local missing (build it via the ctp-parallel skill)" >&2; exit 1; }
+    podman image exists localhost/ctp-ha:local || podman build --isolation=chroot -t ctp-ha:local -f "$HA/Containerfile.ha" "$HA"
+    bash "$HA/provision.sh" "{{INSTALL}}"
+
+# just ha-shell _22_ha    (after ha-provision; log tee'd under scratch)
+ha-shell BUCKET:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    podman container exists hamaster || { echo "ERROR: no hamaster container — run 'just ha-provision <INSTALL>' first" >&2; exit 1; }
+    LOGDIR="{{justfile_directory()}}/.git_ignored_dir/scratch/ha-shell"
+    mkdir -p "$LOGDIR"
+    bash "{{justfile_directory()}}/.agents/skills/ctp-parallel/scripts/ha/run_bucket.sh" "{{BUCKET}}" 2>&1 | tee "$LOGDIR/run_{{BUCKET}}.log"
