@@ -47,5 +47,5 @@ ending with `Summary: N OK / M MISS / K WARN`.
 
 1. Resolve every **MISS** first — a build cannot proceed without the core toolchain.
 2. Resolve the **WARN**s that matter for the skill you intend to run (e.g. CTP for
-   `cubrid-shell-run`, `podman` for `ctp-parallel`, the hard-gates for `md-to-presentation`).
+   `podman` + the pinned CI image for `ctp-run`, the hard-gates for `md-to-presentation`).
 3. Re-run to confirm. The report is safe to run as often as you like.

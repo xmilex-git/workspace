@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
 #
-# ctp_parallel.sh — one-click parallel CTP SQL regression runner.
+# ctp_run.sh — the CUBRID CTP runner: one suite, N isolated podman shards.
 #
-# Splits the CUBRID CTP SQL suite across N rootless-podman shards (one container
-# per shard), each running the real `ctp.sh sql` against a private, pristine copy
-# of the scenario tree / build / CTP-conf. The suite is partitioned via per-shard
-# exclusions.txt files (the same mechanism CTP itself uses), then results are
-# merged into one pass/fail summary.
+# Suites: sql | medium | shell | ha_shell. Each shard is one rootless-podman
+# container running the real `ctp.sh <category>` over a private, pristine copy of
+# the scenario tree / install / CTP conf. A shard's slice of the suite is
+# MATERIALIZED (only its own cases exist in its scenario copy), so CTP needs no
+# giant exclusion list; results are merged into one pass/fail summary.
 #
-# Isolation is by namespace, NOT by port/SHM reassignment: every shard reuses the
-# SAME ports/SHM IDs from sql.conf; podman's net + IPC + mount namespaces keep them
-# from colliding. The only things that differ per shard are its exclusions.txt and
-# its output directories.
+# The container image and its entrypoint are the CI ones: cubridci/cubridci at
+# tag test_rl8.10, with this skill's entrypoint.sh (a small fork, see its header)
+# bind-mounted over /entrypoint.sh. The image is never rebuilt locally.
+#
+# Isolation is the whole point: CTP's teardown runs `pkill cub` / kills every
+# process of the running user, so a host-side run destroys other sessions'
+# servers. Inside podman that kill only reaches the shard's own namespace.
+#
+# Port isolation is by namespace, NOT by reassignment: every shard reuses the SAME
+# ports/SHM IDs from the CTP conf; podman's net + IPC + mount namespaces keep them
+# from colliding.
 #
 # See README.md for the design rationale and the manual podman e2e QA steps.
 #
@@ -22,18 +29,31 @@ set -euo pipefail
 #####################################################################
 # Constants — container-internal mount targets (NOT host paths).
 #####################################################################
+# These are dictated by the cubridci entrypoint, not chosen by us: it runs CTP with
+# HOME=$WORKDIR and the stock confs resolve ${HOME}/<tc repo> and ${CTP_HOME}, so the
+# mounts must land exactly here for an unmodified CTP conf to be correct.
+readonly C_WORKDIR="/home"
 readonly C_CUBRID="/home/CUBRID"
-readonly C_CTP="/home/CTP"
+readonly C_CTP="/home/cubrid-testtools/CTP"
 readonly C_DB="/home/CUBRID_DB"
-# Scenario mount: /home/cubrid-testcases/<suite>. Derived in parse_args from --suite
-# (default sql -> the historical /home/cubrid-testcases/sql, byte-identical behaviour).
-readonly C_SCN_PARENT="/home/cubrid-testcases"
-C_SCN="${C_SCN_PARENT}/sql"
-# Default = a host-matched RUNTIME image built on demand from the bundled
-# Containerfile (Rocky 8 / glibc that matches a modern host build). The CI build
-# image (cubridci/cubridci:develop) is CentOS 6 / glibc 2.12 and canNOT run a
-# binary built on a modern host, so it is NOT the default; pass --image to override.
-readonly DEFAULT_IMAGE="ctp-parallel:local"
+readonly C_REPORT="/home/reports"
+C_SCN=""          # scenario root inside the container; set by resolve_suite
+C_TCREPO=""       # testcases repo mount point inside the container
+
+# The CI test image, pinned by digest. Rocky Linux 8.10 / glibc 2.28, so an install
+# built on this host runs unchanged when mounted in; it ships no toolchain (CUBRID is
+# injected, never built here). Pinned because the tag moves: an upgrade must be a
+# deliberate edit of this line, never a silent `podman pull`.
+readonly DEFAULT_IMAGE="docker.io/cubridci/cubridci:test_rl8.10"
+readonly DEFAULT_IMAGE_DIGEST="sha256:a005ff514cdeeb7d8734950dfa851ecd1e5d8d32bca07a76148894d27d583ad6"
+
+# One id per invocation: every container / network of this run carries it, so
+# concurrent runs (different sessions, different suites) never share a name and
+# cleanup can never take down someone else's container.
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+# CTP reaches the HA slave by password (jsch); it is a throwaway inside a private
+# network namespace that exists only for this run.
+HA_NODE_PASSWORD="${HA_NODE_PASSWORD:-ctprun}"
 
 SELF="$(basename "$0")"
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -42,84 +62,82 @@ readonly CGROUPNS="private"   # rootless on cgroup-v1 hosts fails with the defau
 #####################################################################
 # Tiny helpers
 #####################################################################
-info()  { printf '[ctp-parallel] %s\n' "$*"; }
-warn()  { printf '[ctp-parallel] WARN: %s\n' "$*" >&2; }
-err()   { printf '[ctp-parallel] ERROR: %s\n' "$*" >&2; }
+info()  { printf '[ctp-run] %s\n' "$*"; }
+warn()  { printf '[ctp-run] WARN: %s\n' "$*" >&2; }
+err()   { printf '[ctp-run] ERROR: %s\n' "$*" >&2; }
 die()   { err "$*"; exit 1; }
 
 usage() {
-  cat <<EOF
-$SELF — run the CTP SQL suite in N parallel podman shards.
+  cat <<'EOF'
+ctp_run.sh — run one CUBRID CTP suite in isolated podman containers.
 
-USAGE:
-  $SELF --build <CUBRID_dir> --testcases <repo_root> [options]
-  $SELF --dry-run --testcases <repo_root> [options]      # plan/validate only, no podman
+  ctp_run.sh --suite <sql|medium|shell|ha_shell> --build <install> \
+             --testcases <repo checkout> [--ctp <CTP_HOME>] [--out <dir>] [options]
 
-REQUIRED (for a real run):
-  --build <dir>        A built \$CUBRID directory (copied per shard; absorbs CTP's conf rewrites).
-  --testcases <root>   Testcases repo root; scenario is <root>/<suite> (see --suite).
+WHAT / WHY
+  Every CTP run happens inside a container because CTP's own teardown kills every
+  cub_* process of the running user (pkill cub / kill -9 by uid). On the host that
+  destroys other sessions' servers; in a namespace it reaches only the shard.
 
-OPTIONS:
-  --suite <sql|medium> CTP suite to run. Default: sql. medium runs `ctp.sh medium` against
-                       <root>/medium with the template conf/medium.conf (data_file rewritten to
-                       the container scenario path; bundled sql weights/colocate are skipped).
-  --shards <N>         Number of parallel shards. Default: 7 (workload-optimal for the bulk +
-                       measured-time split; the heaviest bulk bounds the slowest shard, so >7
-                       gains nothing). Capped down only if free RAM can't hold 7.
-  --ctp <dir>          CTP_HOME. Default: \$HOME/cubrid-testtools/CTP
-  --image <ref>        Container image. Default: $DEFAULT_IMAGE
-  --out <dir>          Output / work dir. Default: ./ctp-parallel-out
-  --overlay            Use a podman ':O' overlay mount for the build instead of cp -a (D1, experimental).
-  DEFAULT split unit = top-level _* directory ("bulk" = CircleCI's sql unit). Each bulk runs
-  WHOLE on one shard (never split across shards), so related tests stay co-located exactly as CI
-  groups them — this avoids the cross-test/shared-DB interference that finer splits expose. Pair
-  with --weights to balance bulks by measured time (each bulk's time = sum of its cases).
-  --by-category        Same as the default (explicit): top-level _* bulks.
-  --by-dir             Finer: by outermost cases/ dir (~1157 units -> better time balance, but
-                       co-locates fewer related tests, so may expose test-isolation failures the
-                       bulk grouping avoids).
-  --by-case            Finest: per-.sql. UNSAFE for order-sensitive suites; opt in only when the
-                       targeted cases are known independent.
-  --colocate <file>    Order-sensitivity registry (default: bundled colocate.tsv if present).
-                       Each line is a group of cases dirs kept WHOLE in every mode (incl.
-                       --by-case); 2+ dirs on a line are also pinned to the SAME shard. See
-                       colocate.tsv for the format.
-  --no-colocate        Ignore the registry (no keep-whole / co-locate constraints).
-  --keep               Do not 'podman rm' the shard containers after the run.
-  --weights <file>     Per-case cost table ("<sql-relpath><TAB><seconds>") to balance by measured
-                       TIME. DEFAULT: the bundled baseline_weights.tsv (real per-case times) is
-                       loaded automatically, so runs are time-balanced out of the box. Pass a file
-                       to override (e.g. a fresh harvest from scripts/harvest_weights.sh); cases
-                       absent from the table get weight 1.
-  --no-weights         Ignore the bundled table and balance by case COUNT instead.
-  --locale-dir <dir>   Dir with a prebuilt libcubrid_all_locales.so (+ optional early-exit
-                       make_locale.sh). Injected into every shard so CTP skips the slow per-shard
-                       locale compile. Falls back to compiling if a build tree already ships the .so.
-  --env NAME=VALUE     Extra env var passed to every shard container (repeatable). Reaches the
-                       in-container cub_server process via normal fork/exec inheritance (entrypoint.sh
-                       execs ctp.sh sql without clearing the environment) — use this for the
-                       CUBRID_WM_SCAN_NEW/SORT_NEW/HASHJOIN_NEW work-mem gate env vars (server-process
-                       scoped, csql client env has no effect) or any other passthrough need.
-  --abort-on-core      (DEFAULT since 2026-09-03) Watchdog: poll the shard working copies during the
-                       run and, as soon as a real core dump appears (file(1)-verified) OR free disk at
-                       --out drops below ${DISK_FLOOR_GB}GB, stop ALL shard containers immediately.
-                       Guards against crash-loop runs filling the disk with cores (2026-08-31: 1.1T of
-                       cores; 2026-09-03: 600GB in 15 min). Artifacts/cores of the aborted run are
-                       still collected.
-  --no-abort-on-core   Opt out of the watchdog (only for a run where cores are expected and disk
-                       headroom has been checked).
-  --no-webconsole      Do NOT merge per-shard results into \$CTP_HOME/sql/result. By default the
-                       run is merged into one schedule dir viewable via 'ctp.sh webconsole start'.
-  --merge-only <dir>   Merge an ALREADY-FINISHED run's --out <dir> into \$CTP_HOME/sql/result for
-                       webconsole, then exit (no podman/build/testcases needed). Use for runs done
-                       with --no-webconsole, or to re-merge an old run dir.
-  --label <str>        Tag the merged run (shown in webconsole's 'machine' field) so several runs
-                       are easy to tell apart. Default: the --out dir's basename.
-  --dry-run            Plan only: discover units, balance, write exclusions/sql.conf/assignment.tsv,
-                       run the offline split-validator. Does NOT need podman or --build.
-  -h, --help           This help.
+  The image is the CI one (cubridci/cubridci:test_rl8.10, digest-pinned) with this
+  skill's entrypoint fork bind-mounted over /entrypoint.sh. The CUBRID install is
+  mounted in, never built here.
 
-EXIT: non-zero if any shard fails, crashes, or a split invariant is violated.
+SUITES
+  sql        shardable, default 7 shards (bulk + measured-time split)
+  shell      shardable, default 7 shards (per test dir, count-balanced)
+  medium     always 1 shard  (one mdb dataset, mutated in place)
+  ha_shell   always 1 shard  (a shard is a master+slave container pair)
+
+WHOLE SUITE vs SUBSET
+  no --only        the whole suite, split across the suite's default shard count
+  --only <path>    a subset: scenario-relative dir (repeatable). Sharding still
+                   applies, so a big subset can be parallel too.
+
+TESTCASE REF (never silently 'develop')
+  --tc-ref <ref>   explicit branch/tag/sha        (wins over everything)
+  --pr <N>         engine PR -> tc/pr-<N>
+  --workspace <d>  infer the PR from that checkout's branch via gh
+  With none of the three this refuses to run. cubrid-testcases and
+  cubrid-testcases-private-ex carry tc/pr-<N>; a missing branch falls back to
+  develop and says so in the provenance line. cubrid-testcases-private has no
+  tc/pr-<N> convention and is always develop.
+  The ref is materialized as a git worktree, so the host checkout's branch and
+  its uncommitted edits are never touched.
+
+OPTIONS
+  --suite <s>            sql | medium | shell | ha_shell        (default sql)
+  --build <dir>          CUBRID install to test (required for a real run)
+  --testcases <dir>      testcases repo checkout for this suite (required)
+  --ctp <dir>            CTP_HOME to copy per shard      (default ~/cubrid-testtools/CTP)
+  --out <dir>            run/output directory
+  --only <relpath>       scenario-relative subset path (repeatable)
+  --shards <N>           override the shard count (refused for medium/ha_shell)
+  --tc-ref / --pr / --workspace   see TESTCASE REF
+  --testcases-as-is      use --testcases verbatim, skipping ref resolution
+  --worktree-root <dir>  where testcase worktrees live
+  --conf <file>          cubrid.conf whose [<suite>/cubrid.conf] section CTP applies
+  --image <ref>          container image override
+  --env K=V              extra env into every container (repeatable)
+  --by-category|--by-dir|--by-case   split unit (default: per suite)
+  --weights <f>|--no-weights         time-balance source
+  --colocate <f>|--no-colocate       order-sensitivity registry
+  --overlay              mount the install via overlay instead of copying it
+  --keep                 do not remove the containers afterwards
+  --abort-on-core        stop every shard on the first real core dump (default ON)
+  --no-abort-on-core     opt out
+  --no-webconsole        skip the sql/medium webconsole merge
+  --merge-only <dir>     merge a finished run's dir into the webconsole and exit
+  --label <text>         label for the merged run
+  --locale-dir <dir>     prebuilt libcubrid_all_locales.so to inject
+  --dry-run              plan + validate the split, launch nothing
+  -h, --help             this text
+
+OUTPUT
+  <out>/provenance.txt|tsv   install / image / CTP / testcases ref+sha of this run
+  <out>/plan.tsv, assignment.tsv, units.tsv
+  <out>/shard_N/{console.log,exclusions.txt,assigned_cases.txt,reports/,cores/}
+  <out>/failed.list          failing cases, in the shape --only takes
 EOF
 }
 
@@ -128,13 +146,20 @@ EOF
 #####################################################################
 ARG_BUILD=""
 ARG_TC=""
-ARG_SUITE="sql"        # CTP suite: sql (default) | medium
+ARG_SUITE="sql"        # CTP suite: sql | medium | shell | ha_shell
+ARG_TCREF=""           # explicit testcases ref (branch/tag/sha); "" = derive from --pr/--workspace
+ARG_PR=""              # engine PR number -> testcases ref tc/pr-<N>
+ARG_WS=""              # CUBRID source checkout, used to infer the PR when --pr/--tc-ref are absent
+ARG_CONF=""            # host cubrid.conf whose [suite/cubrid.conf] params CTP should apply
+ARG_TC_ASIS=0          # 1 = use --testcases verbatim, no ref resolution / worktree
+ARG_WT_ROOT=""         # where testcase worktrees live (default: <out>/../tc-worktrees)
 ARG_SHARDS=""
 ARG_CTP="${HOME}/cubrid-testtools/CTP"
 ARG_IMAGE="$DEFAULT_IMAGE"
-ARG_OUT="./ctp-parallel-out"
+ARG_OUT="./ctp-run-out"
 ARG_OVERLAY=0
-ARG_UNIT="category"   # split-unit mode: category (top-level _* "bulk", DEFAULT, = CI's sql unit) | dir | case
+ARG_UNIT="auto"       # split-unit mode: auto (per-suite default) | category (top-level _* "bulk") | dir | case
+declare -a ARG_ONLY=()   # scenario-relative subset prefixes ("" = whole suite)
 ARG_KEEP=0
 ARG_WEIGHTS="auto"   # "auto" = bundled baseline_weights.tsv (time-based) | <path> | "none" (count)
 ARG_LOCALE_DIR=""
@@ -155,11 +180,18 @@ parse_args() {
       --build)       ARG_BUILD="${2:-}"; shift 2 ;;
       --testcases)   ARG_TC="${2:-}"; shift 2 ;;
       --suite)       ARG_SUITE="${2:-}"; shift 2 ;;
+      --tc-ref)      ARG_TCREF="${2:-}"; shift 2 ;;
+      --pr)          ARG_PR="${2:-}"; shift 2 ;;
+      --workspace)   ARG_WS="${2:-}"; shift 2 ;;
+      --conf)        ARG_CONF="${2:-}"; shift 2 ;;
+      --testcases-as-is) ARG_TC_ASIS=1; shift ;;
+      --worktree-root)   ARG_WT_ROOT="${2:-}"; shift 2 ;;
       --shards)      ARG_SHARDS="${2:-}"; shift 2 ;;
       --ctp)         ARG_CTP="${2:-}"; shift 2 ;;
       --image)       ARG_IMAGE="${2:-}"; shift 2 ;;
       --out)         ARG_OUT="${2:-}"; shift 2 ;;
       --overlay)     ARG_OVERLAY=1; shift ;;
+      --only)        ARG_ONLY+=( "${2:-}" ); shift 2 ;;
       --by-category) ARG_UNIT="category"; shift ;;
       --by-dir)      ARG_UNIT="dir"; shift ;;
       --by-case)     ARG_UNIT="case"; shift ;;
@@ -203,18 +235,26 @@ parse_args() {
     return 0
   fi
 
-  case "$ARG_SUITE" in
-    sql|medium) : ;;
-    *) usage; die "--suite must be sql or medium (got: '$ARG_SUITE')" ;;
-  esac
-  C_SCN="${C_SCN_PARENT}/${ARG_SUITE}"
-  TEMPLATE_CONF="$ARG_CTP/conf/${ARG_SUITE}.conf"
+  resolve_suite
+  # Both MUST be absolute before anything uses them. `git worktree add` resolves a
+  # relative path against the REPOSITORY, not the invocation cwd, so a relative
+  # --out silently created the worktree inside the testcases checkout while every
+  # later check looked for it under the cwd. mkdir -p first: readlink -f of a
+  # not-yet-existing path is fine, but the out dir is created here anyway.
+  mkdir -p "$ARG_OUT" 2>/dev/null || die "cannot create --out dir: $ARG_OUT"
+  ARG_OUT="$(readlink -f "$ARG_OUT")"
+  [ -n "$ARG_WT_ROOT" ] || ARG_WT_ROOT="$(dirname "$ARG_OUT")/tc-worktrees"
+  mkdir -p "$ARG_WT_ROOT" 2>/dev/null || die "cannot create worktree root: $ARG_WT_ROOT"
+  ARG_WT_ROOT="$(readlink -f "$ARG_WT_ROOT")"
   [ -n "$ARG_TC" ]  || { usage; die "--testcases is required"; }
   [ -d "$ARG_TC" ]  || die "--testcases dir does not exist: $ARG_TC"
-  SCN="$ARG_TC/$ARG_SUITE"
-  [ -d "$SCN" ]     || die "scenario dir not found: $SCN (expected <testcases>/$ARG_SUITE)"
+  SCN="$ARG_TC/$SUITE_SUBPATH"
+  [ -d "$SCN" ]     || die "scenario dir not found: $SCN (expected <testcases>/$SUITE_SUBPATH)"
   [ -d "$ARG_CTP" ] || die "--ctp dir does not exist: $ARG_CTP"
-  [ -r "$TEMPLATE_CONF" ] || die "missing CTP template: $TEMPLATE_CONF"
+  if [ -n "$ARG_CONF" ]; then
+    [ -r "$ARG_CONF" ] || die "--conf file unreadable: $ARG_CONF"
+    ARG_CONF="$(readlink -f "$ARG_CONF")"
+  fi
 
   if [ "$ARG_DRYRUN" -eq 0 ]; then
     [ -n "$ARG_BUILD" ] || { usage; die "--build is required for a real run (omit only with --dry-run)"; }
@@ -229,6 +269,163 @@ parse_args() {
 }
 
 #####################################################################
+# Suite table. Each suite fixes: which testcases repo holds it, where under that
+# repo the scenario root is, which ctp.sh category runs it, what a "case" file
+# looks like, the default split unit, whether it may be sharded at all, and where
+# its base exclusion list lives.
+#
+# Sharding policy (decided 2026-09-04, workspace#157 grilling):
+#   sql      shardable, default 7 (bulk + measured-time split)
+#   shell    shardable, default 7 (per test-dir, count-balanced until timings exist)
+#   medium   NEVER sharded — one mdb is loaded from a single data_file tarball and
+#            the cases mutate it in place, so two shards would race one dataset.
+#   ha_shell NEVER sharded — a shard is a PAIR of containers (master+slave) and the
+#            suite is only ever run one bucket at a time.
+#####################################################################
+SUITE_TCREPO=""; SUITE_SUBPATH=""; SUITE_CAT=""; SUITE_EXT=""
+SUITE_UNIT_DEFAULT=""; SUITE_SHARDABLE=0; SUITE_STYLE=""; SUITE_HA=0
+SUITE_CONF=""     # the CTP conf the category resolves to (same table the entrypoint uses)
+resolve_suite() {
+  case "$ARG_SUITE" in
+    sql)
+      SUITE_TCREPO="cubrid-testcases";            SUITE_SUBPATH="sql"
+      SUITE_CAT="sql";      SUITE_EXT="sql";      SUITE_UNIT_DEFAULT="category"
+      SUITE_SHARDABLE=1;    SUITE_STYLE="sqlresult";  SUITE_CONF="conf/sql.conf" ;;
+    medium)
+      SUITE_TCREPO="cubrid-testcases";            SUITE_SUBPATH="medium"
+      SUITE_CAT="medium";   SUITE_EXT="sql";      SUITE_UNIT_DEFAULT="dir"
+      SUITE_SHARDABLE=0;    SUITE_STYLE="sqlresult";  SUITE_CONF="conf/medium_dev.conf" ;;
+    shell)
+      SUITE_TCREPO="cubrid-testcases-private-ex"; SUITE_SUBPATH="shell"
+      SUITE_CAT="shell";    SUITE_EXT="sh";       SUITE_UNIT_DEFAULT="dir"
+      SUITE_SHARDABLE=1;    SUITE_STYLE="status";     SUITE_CONF="conf/shell_ci.conf" ;;
+    ha_shell)
+      SUITE_TCREPO="cubrid-testcases-private";    SUITE_SUBPATH="HA/shell"
+      SUITE_CAT="ha_shell"; SUITE_EXT="sh";       SUITE_UNIT_DEFAULT="dir"
+      SUITE_SHARDABLE=0;    SUITE_STYLE="status";     SUITE_CONF="conf/ha_shell_ci.conf"; SUITE_HA=1 ;;
+    *) usage; die "--suite must be one of: sql medium shell ha_shell (got: '$ARG_SUITE')" ;;
+  esac
+  C_TCREPO="$C_WORKDIR/$SUITE_TCREPO"
+  C_SCN="$C_TCREPO/$SUITE_SUBPATH"
+  # NOT a one-line test: as the last statement of the function its exit status
+  # would become the function's, so an explicit --by-* (auto already replaced)
+  # would make resolve_suite return 1 and, under set -e, kill the run silently.
+  if [ "$ARG_UNIT" = "auto" ]; then
+    ARG_UNIT="$SUITE_UNIT_DEFAULT"
+  fi
+}
+
+#####################################################################
+# Which testcases ref this run verifies.
+#
+# The default must NEVER be "whatever the host checkout happens to have on
+# HEAD": that is how a PR gets validated against develop testcases and the
+# result is quietly meaningless (and how a second session's `git checkout`
+# changes another session's run mid-flight). So: explicit --tc-ref wins, else
+# --pr, else the PR inferred from --workspace's branch; with none of the three
+# this refuses to run.
+#
+# CI's own rule is mirrored here: cubrid-testcases and cubrid-testcases-private-ex
+# carry tc/pr-<N> branches, and a missing one falls back to develop (recorded in
+# the provenance line, never silent). cubrid-testcases-private has no tc/pr-<N>
+# convention at all, so it is always develop.
+#####################################################################
+TC_REF=""; TC_REF_SRC=""; TC_SHA=""; TC_WORKTREE=""
+resolve_tc_ref() {
+  local repo="$SUITE_TCREPO" want=""
+  if [ -n "$ARG_TCREF" ]; then
+    want="$ARG_TCREF"; TC_REF_SRC="--tc-ref"
+  elif [ "$repo" = "cubrid-testcases-private" ]; then
+    want="develop";    TC_REF_SRC="always-develop (repo has no tc/pr-N convention)"
+  else
+    local pr="$ARG_PR"
+    if [ -z "$pr" ] && [ -n "$ARG_WS" ]; then
+      pr="$(infer_pr_from_workspace "$ARG_WS")" || pr=""
+      [ -n "$pr" ] && TC_REF_SRC="inferred from --workspace branch (PR #$pr)"
+    else
+      [ -n "$pr" ] && TC_REF_SRC="--pr $pr"
+    fi
+    [ -n "$pr" ] || die "no testcases ref: pass --tc-ref <ref> or --pr <engine PR>, or --workspace <cubrid checkout> to infer it. Refusing to silently run develop testcases."
+    want="tc/pr-$pr"
+  fi
+  TC_REF="$want"
+}
+
+# Echo the engine PR number whose head is the workspace's current branch, or fail.
+infer_pr_from_workspace() {
+  local ws="$1" br
+  [ -d "$ws/.git" ] || return 1
+  br="$(git -C "$ws" rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+  [ -n "$br" ] && [ "$br" != "HEAD" ] || return 1
+  case "$br" in develop|master|main) return 1 ;; esac
+  command -v gh >/dev/null 2>&1 || return 1
+  gh pr list --repo CUBRID/cubrid --head "$br" --state all --limit 1 \
+     --json number --jq '.[0].number' 2>/dev/null | grep -E '^[0-9]+$'
+}
+
+# Materialize TC_REF as a worktree we own, so the host checkout's branch and its
+# uncommitted edits are never touched (and two sessions on different refs cannot
+# fight over one working tree). Reused across runs; refreshed to the remote tip.
+materialize_tc_worktree() {
+  local repo_dir="$1" ref="$2" wt_root="$3"
+  local safe; safe="$(printf '%s' "$ref" | tr -c 'A-Za-z0-9._-' '_')"
+  local wt="$wt_root/$(basename "$repo_dir")/$safe"
+  git -C "$repo_dir" rev-parse --git-dir >/dev/null 2>&1 \
+    || die "not a git checkout: $repo_dir"
+
+  if ! git -C "$repo_dir" fetch --quiet origin "$ref" 2>/dev/null; then
+    if [ "$ref" != "develop" ]; then
+      warn "$(basename "$repo_dir"): ref '$ref' not on origin -> falling back to develop."
+      TC_REF="develop"; TC_REF_SRC="$TC_REF_SRC + fallback (no $ref on origin)"
+      materialize_tc_worktree "$repo_dir" develop "$wt_root"
+      return
+    fi
+    die "$(basename "$repo_dir"): cannot fetch origin develop"
+  fi
+  TC_SHA="$(git -C "$repo_dir" rev-parse FETCH_HEAD)"
+
+  mkdir -p "$(dirname "$wt")"
+  if [ -d "$wt/.git" ] || [ -f "$wt/.git" ]; then
+    git -C "$wt" reset --quiet --hard "$TC_SHA"
+    git -C "$wt" clean -qfd
+  else
+    rm -rf "$wt"
+    git -C "$repo_dir" worktree add --quiet --detach "$wt" "$TC_SHA" \
+      || die "could not create worktree $wt at $TC_SHA"
+  fi
+  TC_WORKTREE="$wt"
+  info "testcases: $(basename "$repo_dir") @ $TC_REF ($(printf '%.12s' "$TC_SHA")) -> $wt"
+}
+
+PROVENANCE=""
+build_provenance() {
+  PROVENANCE="$(printf 'install=%s image=%s ctp=%s testcases=%s@%s(%.12s) suite=%s shards=%s ref-src=%s' \
+    "${ARG_BUILD:-<none>}" "$ARG_IMAGE" "$(ctp_revision)" \
+    "$SUITE_TCREPO" "$TC_REF" "${TC_SHA:-unknown}" "$ARG_SUITE" "$NSHARDS" "${TC_REF_SRC:-n/a}")"
+}
+ctp_revision() {
+  git -C "$ARG_CTP" rev-parse --short HEAD 2>/dev/null || echo "unknown"
+}
+write_provenance() {
+  printf '%s\n' "$PROVENANCE" > "$OUT/provenance.txt"
+  {
+    printf 'suite\t%s\n' "$ARG_SUITE"
+    printf 'install\t%s\n' "${ARG_BUILD:-}"
+    printf 'image\t%s\n' "$ARG_IMAGE"
+    printf 'image_digest\t%s\n' "$(podman image inspect "$ARG_IMAGE" --format '{{.Digest}}' 2>/dev/null || echo unknown)"
+    printf 'ctp\t%s\t%s\n' "$ARG_CTP" "$(ctp_revision)"
+    printf 'testcases_repo\t%s\n' "$SUITE_TCREPO"
+    printf 'testcases_ref\t%s\n' "$TC_REF"
+    printf 'testcases_sha\t%s\n' "${TC_SHA:-}"
+    printf 'testcases_ref_source\t%s\n' "${TC_REF_SRC:-}"
+    printf 'shards\t%s\n' "$NSHARDS"
+    printf 'conf\t%s\n' "${ARG_CONF:-<CTP default>}"
+    printf 'started\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  } > "$OUT/provenance.tsv"
+  info "provenance: $PROVENANCE"
+}
+
+#####################################################################
 # Host preflight — podman must exist for a real run. Runs BEFORE any
 # work dirs are created, so a missing podman leaves nothing behind.
 #####################################################################
@@ -240,13 +437,16 @@ host_preflight() {
     exit 3
   fi
   if ! podman image exists "$ARG_IMAGE" 2>/dev/null; then
-    if [ "$ARG_IMAGE" = "$DEFAULT_IMAGE" ] && [ -r "$SELF_DIR/Containerfile" ]; then
-      info "image '$ARG_IMAGE' not present; building from $SELF_DIR/Containerfile ..."
-      podman build --cgroupns="$CGROUPNS" -t "$ARG_IMAGE" -f "$SELF_DIR/Containerfile" "$SELF_DIR" \
-        || die "could not build image '$ARG_IMAGE' from Containerfile."
-    else
-      info "image '$ARG_IMAGE' not present locally; attempting 'podman pull'..."
-      podman pull "$ARG_IMAGE" || die "could not obtain image '$ARG_IMAGE' (pull failed)."
+    info "image '$ARG_IMAGE' not present locally; pulling ..."
+    podman pull "$ARG_IMAGE" || die "could not obtain image '$ARG_IMAGE' (pull failed)."
+  fi
+  # The tag moves upstream; warn (do not fail) when what we have is not the pinned
+  # digest, so a surprising result is never blamed on the wrong image silently.
+  if [ "$ARG_IMAGE" = "$DEFAULT_IMAGE" ]; then
+    local have; have="$(podman image inspect "$ARG_IMAGE" --format '{{.Digest}}' 2>/dev/null || echo "")"
+    if [ -n "$have" ] && [ "$have" != "$DEFAULT_IMAGE_DIGEST" ]; then
+      warn "image digest $have != pinned $DEFAULT_IMAGE_DIGEST — the upstream tag moved."
+      warn "re-pin DEFAULT_IMAGE_DIGEST in $SELF after verifying, or pass --image <ref>@<digest>."
     fi
   fi
   # Rough disk headroom check: N working copies of build+scenario+CTP.
@@ -268,12 +468,36 @@ host_preflight() {
 #####################################################################
 readonly DEFAULT_SHARDS=7
 PER_SHARD_GB=3
+shard_refusal_reason() {
+  case "$ARG_SUITE" in
+    medium)   printf 'one mdb dataset is loaded from a single data_file tarball and the cases mutate it in place' ;;
+    ha_shell) printf 'a shard is a master+slave container pair and the suite is run one bucket at a time' ;;
+    *)        printf 'suite policy' ;;
+  esac
+}
 choose_shards() {
+  if [ "$SUITE_SHARDABLE" -eq 0 ]; then
+    if [ -n "$ARG_SHARDS" ] && [ "$ARG_SHARDS" != "1" ]; then
+      die "suite '$ARG_SUITE' cannot be sharded (--shards $ARG_SHARDS refused): $(shard_refusal_reason)"
+    fi
+    NSHARDS=1
+    info "shard count: 1 (suite '$ARG_SUITE' is never sharded: $(shard_refusal_reason))"
+    return
+  fi
   if [ -n "$ARG_SHARDS" ]; then
     case "$ARG_SHARDS" in (*[!0-9]*|"") die "--shards must be a positive integer";; esac
     [ "$ARG_SHARDS" -ge 1 ] || die "--shards must be >= 1"
     NSHARDS="$ARG_SHARDS"
     info "shard count: $NSHARDS (from --shards)"
+    return
+  fi
+  # A subset defaults to ONE shard. Every shard costs a full copy of the install
+  # (~1GB) and a container, which is worth it for a 17k-case suite and absurd for
+  # the handful of dirs a subset usually is. Parallelism is still one flag away
+  # (--shards N) for a genuinely large subset.
+  if [ "${#ARG_ONLY[@]}" -gt 0 ]; then
+    NSHARDS=1
+    info "shard count: 1 (subset run; pass --shards N to split a large subset)"
     return
   fi
   NSHARDS=$DEFAULT_SHARDS
@@ -388,8 +612,19 @@ SQL_LIST=""        # tmp: surviving .sql relpaths (post base exclusion)
 SQL_ALL=""         # tmp: all .sql relpaths
 BASE_FILE=""       # the original CTP exclusions.txt (verbatim base list)
 
+# The base exclusion list CTP itself will apply. It must be the SAME file the
+# container's conf points at, or our surviving-case count (and therefore the
+# split invariant) disagrees with what CTP actually runs.
+suite_base_exclusion_file() {
+  case "$ARG_SUITE" in
+    sql|medium) printf '%s' "$ARG_CTP/conf/exclusions.txt" ;;
+    shell|ha_shell) printf '%s' "$SCN/config/daily_regression_test_excluded_list_linux.conf" ;;
+  esac
+}
+
 discover_units() {
-  BASE_FILE="$ARG_CTP/conf/exclusions.txt"
+  BASE_FILE="$(suite_base_exclusion_file)"
+  [ -r "$BASE_FILE" ] || { warn "base exclusion list not found: $BASE_FILE (treating as empty)"; BASE_FILE="/dev/null"; }
   SQL_ALL="$WORK/sql_all.txt"
   SQL_LIST="$WORK/sql_surviving.txt"
   UNITS_FILE="$WORK/units.tsv"
@@ -399,10 +634,30 @@ discover_units() {
   # caseRelativePath = caseFile.substring(rootLen), so the relative path it
   # matches against exclusions has NO leading slash. We must use the same
   # convention or the substring (containPath) match never fires.
-  find "$SCN" -type f -name '*.sql' -path '*/cases/*' \
+  find "$SCN" -type f -name "*.${SUITE_EXT}" -path '*/cases/*' \
     | sed "s#^${SCN}/##" | LC_ALL=C sort > "$SQL_ALL"
   local total; total=$(wc -l < "$SQL_ALL")
-  [ "$total" -gt 0 ] || die "no .sql found under $SCN"
+  [ "$total" -gt 0 ] || die "no .${SUITE_EXT} case found under $SCN"
+
+  # Subset (--only): keep only cases under the requested scenario-relative dirs.
+  # This is how a partial run is expressed — one shard over a filtered case pool —
+  # so the whole-suite path and the subset path share every downstream step.
+  if [ "${#ARG_ONLY[@]}" -gt 0 ]; then
+    local sel="$WORK/only.txt" pfx
+    : >"$sel"
+    for pfx in "${ARG_ONLY[@]}"; do
+      pfx="${pfx#/}"; pfx="${pfx%/}"
+      [ -n "$pfx" ] || continue
+      [ -e "$SCN/$pfx" ] || die "--only path not in the scenario: $pfx (under $SCN)"
+      awk -v p="$pfx/" 'index($0,p)==1' "$SQL_ALL" >> "$sel"
+      awk -v p="$pfx" '$0==p' "$SQL_ALL" >> "$sel"
+    done
+    LC_ALL=C sort -u "$sel" -o "$sel"
+    [ -s "$sel" ] || die "--only selected no cases (checked ${#ARG_ONLY[@]} path(s) under $SCN)"
+    info "subset: ${#ARG_ONLY[@]} path(s) -> $(wc -l < "$sel") of $total case(s)"
+    mv -f "$sel" "$SQL_ALL"
+    total=$(wc -l < "$SQL_ALL")
+  fi
 
   # Apply base exclusions (F4 containPath) to get the surviving pool.
   apply_base_exclusions "$SQL_ALL" "$SQL_LIST"
@@ -445,7 +700,24 @@ apply_base_exclusions() {
   # getLineList keeps every non-blank, trimmed line (comments included; they match nothing).
   awk 'NF{ gsub(/^[ \t]+|[ \t]+$/,""); if(length) print }' "$BASE_FILE" > "$WORK/base_entries.txt" 2>/dev/null || :
   [ -s "$WORK/base_entries.txt" ] || : >"$WORK/base_entries.txt"
-  contain_path_filter "$WORK/base_entries.txt" "$in" "$out"
+
+  # Which root the exclusion entries are relative to is NOT the same for every
+  # suite. sql/medium list cases relative to the scenario root (_13_issues/...),
+  # but the shell lists are written relative to the REPO root and so carry the
+  # scenario dir itself as their first segment (shell/_06_issues/...). Matching
+  # scenario-relative paths against those entries silently excludes nothing —
+  # every entry misses — so for those suites we prefix the paths, filter, then
+  # strip the prefix back off.
+  local pfx=""
+  [ "$SUITE_STYLE" = "status" ] && pfx="$SUITE_SUBPATH/"
+  if [ -z "$pfx" ]; then
+    contain_path_filter "$WORK/base_entries.txt" "$in" "$out"
+    return
+  fi
+  awk -v p="$pfx" '{print p $0}' "$in" > "$WORK/base_prefixed_in.txt"
+  contain_path_filter "$WORK/base_entries.txt" "$WORK/base_prefixed_in.txt" "$WORK/base_prefixed_out.txt"
+  awk -v p="$pfx" 'index($0,p)==1 { print substr($0, length(p)+1); next } { print }' \
+    "$WORK/base_prefixed_out.txt" > "$out"
 }
 
 # contain_path_filter <entries_file> <paths_file> <surviving_out>
@@ -621,19 +893,64 @@ validate_split() {
 #     i.e. the mdb.tar.gz that lives inside the scenario tree and is copied with it
 #   - ports / SHM IDs kept verbatim (namespace isolation handles conflicts)
 #####################################################################
-generate_sql_conf() {
-  local out="$1"
-  local -a data_sed=()
-  local host_df
-  host_df="$(sed -nE 's#^[[:space:]]*data_file=(.*)$#\1#p' "$TEMPLATE_CONF" | tail -1)"
-  if [ -n "$host_df" ]; then
-    data_sed=( -e "s#^[[:space:]]*data_file=.*#data_file=${C_SCN}/files/$(basename "$host_df")#" )
+# The per-shard CTP conf is NOT written here any more: the container's entrypoint
+# (this skill's cubridci fork) resolves the category's conf and applies our
+# CTP_SCENARIO / CTP_EXCLUDE overrides inside the container, where the paths are
+# the container's. The stock confs resolve ${HOME}/<tc repo> and ${CTP_HOME},
+# which is exactly where the orchestrator mounts things — including medium's
+# data_file tarball — so nothing needs rewriting on the host.
+#
+# Optional --conf: a cubrid.conf whose server parameters this run should use.
+# WHERE they have to go differs by suite, because who starts the server differs:
+#
+#   sql / medium : CTP starts the server and writes its conf from the
+#                  [<suite>/cubrid.conf] SECTION of its own suite conf. So the
+#                  parameters are merged into that section of the shard's CTP
+#                  copy (keys present there are replaced, new keys appended).
+#                  Dropping a cubrid.conf next to it would do nothing at all.
+#   shell / HA   : the cases start servers themselves (init.sh), from the
+#                  install's own $CUBRID/conf/cubrid.conf. So the file replaces
+#                  the one in the shard's install copy.
+install_suite_conf() {
+  local d="$1"
+  [ -n "$ARG_CONF" ] || return 0
+
+  if [ "$SUITE_STYLE" = "status" ]; then
+    if [ "$ARG_OVERLAY" -eq 1 ]; then
+      die "--conf with --overlay is not supported for suite '$ARG_SUITE': the install is not copied, so its conf cannot be replaced per shard."
+    fi
+    cp -f "$ARG_CONF" "$d/CUBRID/conf/cubrid.conf"
+    info "conf: $(basename "$ARG_CONF") -> shard install conf/cubrid.conf"
+    return
   fi
-  sed -E \
-    -e "s#^[[:space:]]*scenario=.*#scenario=${C_SCN}#" \
-    -e "s#^[[:space:]]*testcase_exclude_from_file=.*#testcase_exclude_from_file=\${CTP_HOME}/conf/exclusions.txt#" \
-    "${data_sed[@]}" \
-    "$TEMPLATE_CONF" > "$out"
+
+  local target="$d/CTP/$SUITE_CONF" section="[${SUITE_CAT}/cubrid.conf]"
+  [ -f "$target" ] || die "--conf: cannot find the shard's CTP conf to merge into: $target"
+  awk -v userconf="$ARG_CONF" -v section="$section" '
+    function flushnew() {
+      for (k in u) if (!(k in done)) { print k "=" u[k]; done[k]=1 }
+    }
+    BEGIN {
+      while ((getline l < userconf) > 0) {
+        if (l ~ /^[ \t]*[#;]/ || l ~ /^[ \t]*$/ || l ~ /^[ \t]*\[/) continue
+        if (match(l, /^[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*=/)) {
+          k = l; sub(/=.*/, "", k); gsub(/[ \t]/, "", k)
+          v = l; sub(/^[^=]*=/, "", v); gsub(/^[ \t]+|[ \t]+$/, "", v)
+          u[k] = v
+        }
+      }
+    }
+    $0 == section { insec = 1; print; next }
+    /^[ \t]*\[/ && insec { flushnew(); insec = 0; print; next }
+    insec && match($0, /^[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*=/) {
+      k = $0; sub(/=.*/, "", k); gsub(/[ \t]/, "", k)
+      if (k in u) { print k "=" u[k]; done[k] = 1; next }
+      print; next
+    }
+    { print }
+    END { if (insec) flushnew() }
+  ' "$target" > "$target.merged" && mv -f "$target.merged" "$target"
+  info "conf: merged $(basename "$ARG_CONF") into $SUITE_CONF ${section}"
 }
 
 #####################################################################
@@ -650,10 +967,9 @@ emit_plan() {
     printf '%d\t%d\t%d\n' "$i" "${SHARD_NSQL[i]:-0}" "${SHARD_LOAD[i]:-0}" >>"$OUT/plan.tsv"
     mkdir -p "$OUT/shard_${i}"
     cp -f "$WORK/shard_${i}.exclusions.txt" "$OUT/shard_${i}/exclusions.txt"
-    cp -f "$WORK/shard_${i}.sql.txt" "$OUT/shard_${i}/assigned_sql.txt" 2>/dev/null || :
-    generate_sql_conf "$OUT/shard_${i}/${ARG_SUITE}.conf"
+    cp -f "$WORK/shard_${i}.sql.txt" "$OUT/shard_${i}/assigned_cases.txt" 2>/dev/null || :
   done
-  info "plan written to $OUT (assignment.tsv, units.tsv, plan.tsv, shard_*/{exclusions.txt,${ARG_SUITE}.conf})"
+  info "plan written to $OUT (assignment.tsv, units.tsv, plan.tsv, shard_*/{exclusions.txt,assigned_cases.txt})"
 }
 
 print_plan_summary() {
@@ -678,7 +994,7 @@ print_plan_summary() {
   [ -r "$COLO_GIDS" ] && grpn=$(awk -F'\t' '{c[$2]++} END{m=0; for(g in c) if(c[g]>1) m++; print m+0}' "$COLO_GIDS" 2>/dev/null)
   printf '  colocate:           %d dir(s), %d multi-dir group(s) pinned  (keep-whole active only with --by-case)\n' "${kwn:-0}" "${grpn:-0}"
   printf '  shards:             %d\n' "$NSHARDS"
-  printf '  env passthrough (fixed): CUBRID CTP_HOME CUBRID_DATABASES TZ LC_ALL CTP_SUITE\n'
+  printf '  env passthrough (fixed): CUBRID CTP_HOME CUBRID_DATABASES WORKDIR TEST_REPORT TZ LC_ALL CTP_SCENARIO CTPRUN_PROVENANCE\n'
   printf '  env passthrough (--env, %d): %s\n' "${#ARG_ENV[@]}" "${ARG_ENV[*]:-<none>}"
   printf '  %-7s %-10s %s\n' "shard" "sql" "weight$([ -n "$WEIGHTS_FILE" ] && echo '(s)')"
   local i
@@ -712,41 +1028,90 @@ build_shard_workdir() {
     fi
   fi
 
-  # testcases -> private scenario copy that MATERIALIZES ONLY this shard's .sql.
-  # Pass A: dir structure + answers + everything EXCEPT test .sql / stale results.
-  # Pass B: copy in only the .sql assigned to this shard.
-  # Result: CTP finds exactly this shard's cases (no exclude filter needed), the
-  # host tree is untouched (F5), and there is no giant exclusions list / O(n^2) match.
-  mkdir -p "$d/scenario"
-  if command -v rsync >/dev/null 2>&1; then
-    rsync -a --delete --exclude='*.sql' --exclude='*.result' --exclude='*.log' "$SCN/" "$d/scenario/"
-    rsync -a --files-from="$WORK/shard_${i}.sql.txt" "$SCN/" "$d/scenario/"
+  # testcases -> private scenario copy holding ONLY this shard's slice.
+  #
+  # sql/medium: two passes over case FILES. Pass A takes the tree, answers and
+  # everything except the test .sql; pass B adds back exactly the .sql assigned
+  # here. CTP then finds precisely this shard's cases, with no giant exclusion
+  # list and no O(n^2) path matching.
+  #
+  # shell/ha_shell: whole test DIRECTORIES, because a shell case is not one file
+  # — its dir also carries .answer files, helper .sh, .c and .java sources the
+  # case compiles at run time. A file-level split would leave those behind.
+  #
+  # The copy is laid out repo-relative (scenario under <repo>/<subpath>) so the
+  # stock CTP confs, which resolve ${HOME}/<repo>/..., are correct unmodified.
+  # The host worktree is never written to.
+  local scn_dst="$d/testcases/$SUITE_SUBPATH"
+  mkdir -p "$scn_dst"
+  if [ "$SUITE_EXT" = "sh" ]; then
+    sed 's#/cases/[^/]*$##' "$WORK/shard_${i}.sql.txt" | LC_ALL=C sort -u > "$WORK/shard_${i}.dirs.txt"
+    # config/ holds the exclusion list CTP reads; ship every non-case top file too.
+    # -r is NOT redundant with -a here: --files-from turns recursion OFF, so
+    # without it rsync creates the listed DIRECTORIES and copies none of their
+    # contents — a shard that runs zero cases and reports a green empty pass.
+    ( cd "$SCN" && rsync -a -r --exclude='*.result' --exclude='*.log' \
+        --files-from="$WORK/shard_${i}.dirs.txt" ./ "$scn_dst/" )
+    [ -d "$SCN/config" ] && rsync -a "$SCN/config" "$scn_dst/" || :
+    find "$SCN" -maxdepth 1 -type f -exec cp -f {} "$scn_dst/" \; 2>/dev/null || :
+  elif command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete --exclude='*.sql' --exclude='*.result' --exclude='*.log' "$SCN/" "$scn_dst/"
+    # (a file list, so recursion is moot here — unlike the dir list above.)
+    rsync -a --files-from="$WORK/shard_${i}.sql.txt" "$SCN/" "$scn_dst/"
   else
-    cp -a "$SCN/." "$d/scenario/"
-    find "$d/scenario" -type f \( -name '*.result' -o -name '*.log' \) -delete
-    # prune .sql NOT assigned to this shard
-    ( cd "$d/scenario" && find . -type f -name '*.sql' -path '*/cases/*' | sed 's#^\./##' \
+    cp -a "$SCN/." "$scn_dst/"
+    find "$scn_dst" -type f \( -name '*.result' -o -name '*.log' \) -delete
+    ( cd "$scn_dst" && find . -type f -name '*.sql' -path '*/cases/*' | sed 's#^\./##' \
         | grep -vxF -f "$WORK/shard_${i}.sql.txt" | tr '\n' '\0' | xargs -0 -r rm -f )
   fi
+
+  # Materialization is the one step whose failure looks like success: a shard whose
+  # scenario copy came out empty runs zero cases and reports a clean pass. (It has
+  # happened: --files-from turns rsync's recursion off, so a directory list copied
+  # the dirs and none of their contents.) So count what actually landed and refuse
+  # to launch on a shortfall.
+  local want got
+  want="$(wc -l < "$WORK/shard_${i}.sql.txt")"
+  got="$(find "$scn_dst" -type f -name "*.${SUITE_EXT}" -path '*/cases/*' 2>/dev/null | wc -l)"
+  if [ "$got" -lt "$want" ]; then
+    die "shard $i: materialized $got of $want assigned case file(s) under $scn_dst — refusing to run a partially-copied scenario (a shard that silently runs nothing looks like a pass)."
+  fi
+  info "shard $i: $got case file(s) materialized (assigned $want)."
 
   # CTP -> per-shard copy (drop stale run artifacts), then wire conf + exclusions
   mkdir -p "$d/CTP"
   if command -v rsync >/dev/null 2>&1; then
+    # The host CTP_HOME accumulates every past run's results, for every suite.
+    # Copying them into the shard makes this run's own result scan pick up
+    # someone else's months-old failures (seen: a June shell failure surfacing in
+    # a September sql run's failed.list). Keep the DIRECTORIES (CTP writes into
+    # them) and drop their contents.
     rsync -a \
       --exclude='.output_*.log' --exclude='.script_cont_*' \
       --exclude='sql/result/*' --exclude='sql/log/*' \
+      --exclude='result/*' --exclude='log/*' \
       "$ARG_CTP/" "$d/CTP/"
   else
     cp -a "$ARG_CTP/." "$d/CTP/"
-    rm -rf "$d/CTP"/.output_*.log "$d/CTP"/.script_cont_* "$d/CTP"/sql/result/* "$d/CTP"/sql/log/* 2>/dev/null || :
+    rm -rf "$d/CTP"/.output_*.log "$d/CTP"/.script_cont_* "$d/CTP"/sql/result/* "$d/CTP"/sql/log/* \
+           "$d/CTP"/result/* "$d/CTP"/log/* 2>/dev/null || :
   fi
-  generate_sql_conf "$d/CTP/conf/${ARG_SUITE}.conf"
   cp -f "$WORK/shard_${i}.exclusions.txt" "$d/CTP/conf/exclusions.txt"
+  install_suite_conf "$d"
 
-  # fresh per-shard CUBRID_DATABASES
+  # fresh per-shard CUBRID_DATABASES + report dir
   mkdir -p "$d/CUBRID_DB"
   : >"$d/CUBRID_DB/databases.txt"
-  mkdir -p "$d/out"
+  mkdir -p "$d/out" "$d/reports"
+
+  # HA runs a second container (the slave node) which needs its OWN install and
+  # databases dir — see shard_mounts.
+  if [ "$SUITE_HA" -eq 1 ] && [ "$ARG_OVERLAY" -eq 0 ]; then
+    info "shard $i: copying a second install for the HA slave node ..."
+    cp -a "$d/CUBRID" "$d/CUBRID.slave"
+    mkdir -p "$d/CUBRID_DB.slave"
+    : >"$d/CUBRID_DB.slave/databases.txt"
+  fi
 }
 
 #####################################################################
@@ -781,58 +1146,116 @@ setup_core_capture() {
 # Launch one shard container (detached, NOT --rm).
 #####################################################################
 SHM_SIZE="2g"
-launch_shard() {
-  local i="$1" d="$OUT/shard_${i}" name="ctp_shard_$$_${i}"
-  SHARD_NAMES[i]="$name"
-  mkdir -p "$d/cores"
-  local -a mounts=(
+
+# Common podman arguments for any container of this run.
+#   no --network=host / no published ports : each shard's localhost is private, so
+#     every shard can reuse the conf's fixed ports without colliding.
+#   --ipc=private  : private SysV SHM space, same reason for the fixed SHM ids.
+#   --ulimit core=-1 : never truncate a real cub_server core.
+shard_common_args() {
+  printf '%s\n' --ipc=private --cgroupns="$CGROUPNS" --shm-size="$SHM_SIZE" --ulimit core=-1
+}
+
+# Mounts for one container of one shard. $1 = shard dir, $2 = node role
+# (master|slave). CTP and the testcases are shared between the pair (the slave
+# only needs to read the same cases), but the INSTALL and CUBRID_DATABASES must
+# NOT be: each node runs its own server, rewrites its own conf, and creates its
+# own database volumes there. Sharing them makes the pair overwrite each other's
+# conf and databases.txt — which is why the old two-container HA setup kept a
+# per-node copy of the install too.
+shard_mounts() {
+  local d="$1" role="${2:-master}"
+  local inst="$d/CUBRID" dbs="$d/CUBRID_DB"
+  if [ "$role" = "slave" ]; then inst="$d/CUBRID.slave"; dbs="$d/CUBRID_DB.slave"; fi
+  local -a m=(
     -v "$d/CTP:${C_CTP}:rw"
-    -v "$d/scenario:${C_SCN}:rw"
-    -v "$d/CUBRID_DB:${C_DB}:rw"
-    # The image bakes a copy of entrypoint.sh (Containerfile COPY); bind the repo's
-    # current one over it so entrypoint changes (e.g. --suite) never require an image
-    # rebuild and a stale image can never run a different runner than this checkout.
-    -v "$SELF_DIR/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro"
+    -v "$d/testcases:${C_TCREPO}:rw"
+    -v "$dbs:${C_DB}:rw"
+    -v "$d/reports:${C_REPORT}:rw"
+    # The image ships its own /entrypoint.sh; bind this skill's fork over it so the
+    # runner is always the one in this checkout and the image is never rebuilt.
+    -v "$SELF_DIR/entrypoint.sh:/entrypoint.sh:ro"
   )
   if [ "$ARG_OVERLAY" -eq 1 ]; then
-    mounts+=( -v "$ARG_BUILD:${C_CUBRID}:O" )
+    # An overlay mount is per-container copy-on-write, so the pair does not share
+    # writes even though both point at the same lower dir.
+    m+=( -v "$ARG_BUILD:${C_CUBRID}:O" )
   else
-    mounts+=( -v "$d/CUBRID:${C_CUBRID}:rw" )
+    m+=( -v "$inst:${C_CUBRID}:rw" )
   fi
-  # Core-dump capture: the kernel's core_pattern is global but is resolved inside
-  # the crashing process's mount-ns. If it is an absolute path, bind-mount the
-  # shard's cores/ dir over that directory so a cub_server core lands on the host
-  # automatically (and outside $CUBRID/$CTP_HOME, where CTP's clean_log_cores can't
-  # delete it). See setup_core_capture for the relative/pipe fallbacks.
-  if [ "$CORE_MODE" = "path" ]; then
-    mounts+=( -v "$d/cores:${CORE_DIR}:rw" )
-  fi
-  info "shard $i: launching container $name (image $ARG_IMAGE) ..."
-  # No --network=host, no published ports: each shard's localhost is private.
-  # --ipc=private: private SysV SHM space so the fixed SHM IDs never collide.
-  # --ulimit core=-1: unlimited core size so a real cub_server core is not truncated.
-  local -a envs=(
+  # Core capture: core_pattern is a global kernel knob but is resolved in the
+  # crashing process's mount-ns, so for an absolute pattern we bind the shard's
+  # cores/ over that directory and cores land on the host, outside $CUBRID and
+  # $CTP_HOME where CTP's clean_log_cores cannot delete them.
+  [ "$CORE_MODE" = "path" ] && m+=( -v "$d/cores:${CORE_DIR}:rw" )
+  printf '%s\n' "${m[@]}"
+}
+
+# Env shared by master and slave.
+shard_envs() {
+  local -a e=(
     -e "CUBRID=${C_CUBRID}" -e "CTP_HOME=${C_CTP}" -e "CUBRID_DATABASES=${C_DB}"
+    -e "WORKDIR=${C_WORKDIR}" -e "TEST_REPORT=${C_REPORT}"
     -e "TZ=Asia/Seoul" -e "LC_ALL=en_US"
-    -e "CTP_SUITE=${ARG_SUITE}"
+    # Our fork's knobs: pin the scenario explicitly rather than trusting whatever
+    # the stock conf defaults to (a wrong default would run the entire suite).
+    -e "CTP_SCENARIO=${C_SCN}"
+    -e "CTPRUN_PROVENANCE=${PROVENANCE}"
   )
-  # --env passthrough (#108): podman sets these in the container's PID 1 env: since
-  # entrypoint.sh execs `ctp.sh sql` without clearing the environment, and every
-  # descendant down to cub_server is a plain fork/exec, they reach the server process
-  # for free — no engine-side change needed.
+  local kv
   if [ "${#ARG_ENV[@]}" -gt 0 ]; then
-    for kv in "${ARG_ENV[@]}"; do
-      envs+=( -e "$kv" )
-    done
+    for kv in "${ARG_ENV[@]}"; do e+=( -e "$kv" ); done
   fi
+  printf '%s\n' "${e[@]}"
+}
+
+# HA needs two containers with DIFFERENT hostnames on one network: CTP derives
+# ha_node_list from `hostname` over ssh, so a shared UTS namespace cannot host a
+# pair. Names carry the run id, so concurrent sessions never collide and nothing
+# survives the run.
+HA_NET=""
+declare -a HA_SLAVE_NAMES
+launch_ha_slave() {
+  local i="$1" d="$OUT/shard_${i}"
+  local slave="ctprun_${RUN_ID}_${i}_slave"
+  HA_SLAVE_NAMES[i]="$slave"
+  HA_NET="ctprun_${RUN_ID}_${i}_net"
+  podman network exists "$HA_NET" 2>/dev/null || podman network create "$HA_NET" >/dev/null
+  info "shard $i: launching HA slave $slave on network $HA_NET ..."
+  local -a args=(); mapfile -t args < <(shard_common_args)
+  local -a mounts=(); mapfile -t mounts < <(shard_mounts "$d" slave)
+  local -a envs=(); mapfile -t envs < <(shard_envs)
+  podman run -d --name "$slave" --hostname haslave \
+    --network "$HA_NET" \
+    "${args[@]}" "${envs[@]}" \
+    -e "TEST_SUITE=${SUITE_CAT}" -e "HA_NODE_PASSWORD=${HA_NODE_PASSWORD}" \
+    "${mounts[@]}" \
+    "$ARG_IMAGE" node >/dev/null
+}
+
+launch_shard() {
+  local i="$1" d="$OUT/shard_${i}" name="ctprun_${RUN_ID}_${i}"
+  SHARD_NAMES[i]="$name"
+  mkdir -p "$d/cores"
+
+  local -a args=(); mapfile -t args < <(shard_common_args)
+  local -a mounts=(); mapfile -t mounts < <(shard_mounts "$d" master)
+  local -a envs=(); mapfile -t envs < <(shard_envs)
+  local -a net=()
+
+  if [ "$SUITE_HA" -eq 1 ]; then
+    launch_ha_slave "$i"
+    net=( --network "$HA_NET" --hostname hamaster )
+    envs+=( -e "HA_SLAVE_HOST=haslave" -e "HA_NODE_PASSWORD=${HA_NODE_PASSWORD}" )
+  fi
+
+  info "shard $i: launching container $name (image $ARG_IMAGE, ctp.sh ${SUITE_CAT}) ..."
   podman run -d --name "$name" \
-    --ipc=private \
-    --cgroupns="$CGROUPNS" \
-    --shm-size="$SHM_SIZE" \
-    --ulimit core=-1 \
+    "${net[@]}" \
+    "${args[@]}" \
     "${envs[@]}" \
     "${mounts[@]}" \
-    "$ARG_IMAGE" >/dev/null
+    "$ARG_IMAGE" test "$SUITE_CAT" >/dev/null
 }
 
 #####################################################################
@@ -866,7 +1289,7 @@ start_core_watchdog() {
       fi
       if [ -n "$reason" ]; then
         printf '%s\n' "$reason" > "$OUT/.abort_reason"
-        echo "[ctp-parallel] ABORT-ON-CORE: $reason — stopping all shard containers." >&2
+        echo "[ctp-run] ABORT-ON-CORE: $reason — stopping all shard containers." >&2
         # kill, not stop: every second of a crash-looping server is another ~2.4GB core
         for n in "${SHARD_NAMES[@]}"; do podman kill "$n" >/dev/null 2>&1 || podman stop -t 2 "$n" >/dev/null 2>&1 || :; done
         exit 0
@@ -893,6 +1316,10 @@ wait_shards() {
     info "waiting on shard $i ($name) ..."
     SHARD_RC[i]="$(podman wait "$name" 2>/dev/null || echo 255)"
     podman logs "$name" > "$d/console.log" 2>&1 || :
+    if [ "$SUITE_HA" -eq 1 ] && [ -n "${HA_SLAVE_NAMES[i]:-}" ]; then
+      podman logs "${HA_SLAVE_NAMES[i]}" > "$d/console.slave.log" 2>&1 || :
+      podman stop -t 5 "${HA_SLAVE_NAMES[i]}" >/dev/null 2>&1 || :
+    fi
     info "shard $i finished rc=${SHARD_RC[i]}"
   done
 }
@@ -904,9 +1331,11 @@ collect_shards() {
   for (( i=0; i<NSHARDS; i++ )); do
     local d="$OUT/shard_${i}"
     cp -f "$WORK/shard_${i}.exclusions.txt" "$d/exclusions.txt" 2>/dev/null || :
-    # CTP summary/logs already live in the per-shard CTP copy on the host.
+    # CTP summary/logs already live in the per-shard CTP copy on the host; which
+    # subtree holds them depends on the runner CTP used (sql/ vs result/<cat>/).
     [ -d "$d/CTP/sql/result" ] && cp -a "$d/CTP/sql/result" "$d/out/" 2>/dev/null || :
     [ -d "$d/CTP/sql/log" ]    && cp -a "$d/CTP/sql/log"    "$d/out/" 2>/dev/null || :
+    [ -d "$d/CTP/result" ]     && cp -a "$d/CTP/result"     "$d/out/" 2>/dev/null || :
     # Core dumps. path mode: already on the host in $d/cores via the bind-mount.
     # relative mode: cores landed in the server cwd inside the mounted CUBRID*/CTP
     # copies; sweep them into $d/cores before they are lost. (CTP only deletes cores
@@ -921,15 +1350,43 @@ collect_shards() {
   done
   cp -f "$ASSIGN_FILE" "$OUT/assignment.tsv" 2>/dev/null || :
   if [ "$ARG_KEEP" -eq 0 ]; then
-    for (( i=0; i<NSHARDS; i++ )); do podman rm "${SHARD_NAMES[i]}" >/dev/null 2>&1 || :; done
+    for (( i=0; i<NSHARDS; i++ )); do
+      podman rm -f "${SHARD_NAMES[i]}" >/dev/null 2>&1 || :
+      [ -n "${HA_SLAVE_NAMES[i]:-}" ] && podman rm -f "${HA_SLAVE_NAMES[i]}" >/dev/null 2>&1 || :
+    done
+    [ -n "$HA_NET" ] && podman network rm "$HA_NET" >/dev/null 2>&1 || :
   else
-    info "--keep set: leaving containers in place."
+    info "--keep set: leaving containers (and any HA network) in place."
   fi
 }
 
 # Parse "Fail/Success/Total" from a shard's CTP output. Echoes "fail success total".
+# status-style suites (shell, ha_shell) do not print a Fail/Success/Total block;
+# CTP writes test_status.data with the counters, exactly as the CI runner's
+# judge_status reads them. Echoes "fail success total".
+parse_shard_result_status() {
+  local d="$1" f="" t="" sd
+  sd="$(find "$d/CTP" "$d/out" -name test_status.data -type f 2>/dev/null | head -1)"
+  if [ -z "$sd" ]; then
+    # No counter file at all: fall back to the JUnit report the entrypoint collected.
+    local xml; xml="$(find "$d/reports" -name '*.xml' -type f 2>/dev/null | head -1)"
+    if [ -n "$xml" ]; then
+      t="$(grep -o 'tests="[0-9]*"' "$xml" | head -1 | tr -dc '0-9')"
+      f="$(grep -o 'failures="[0-9]*"' "$xml" | head -1 | tr -dc '0-9')"
+      printf '%d %d %d\n' "${f:-0}" "$(( ${t:-0} - ${f:-0} ))" "${t:-0}"
+      return
+    fi
+    echo "0 0 0"; return
+  fi
+  f="$(sed -nE 's/^[[:space:]]*total_fail_case_count[[:space:]]*[:=][[:space:]]*([0-9]+).*/\1/p' "$sd" | tail -1)"
+  t="$(sed -nE 's/^[[:space:]]*total_executed_case_count[[:space:]]*[:=][[:space:]]*([0-9]+).*/\1/p' "$sd" | tail -1)"
+  f="${f:-0}"; t="${t:-0}"
+  printf '%d %d %d\n' "$f" "$(( t - f ))" "$t"
+}
+
 parse_shard_result() {
   local d="$1" src=""
+  if [ "$SUITE_STYLE" = "status" ]; then parse_shard_result_status "$d"; return; fi
   # CTP writes a summary; search console + any result summary files.
   for cand in "$d/console.log" "$d"/CTP/sql/result/*summary* "$d"/out/result/*summary*; do
     [ -f "$cand" ] && src="$cand $src"
@@ -951,6 +1408,60 @@ parse_shard_result() {
   ' $src 2>/dev/null
 }
 
+# Write $OUT/failed.list — one scenario-relative case path per line, the exact
+# shape --only accepts, so a failed run can be re-run with:
+#   ctp_run.sh --suite <s> ... $(sed "s/^/--only /" failed.list)
+# CTP co-locates a failed case's artifacts in its result tree, which is what makes
+# the list recoverable without parsing console output.
+emit_failed_list() {
+  local i out="$OUT/failed.list"
+  : >"$out"
+  for (( i=0; i<NSHARDS; i++ )); do
+    local d="$OUT/shard_${i}"
+    if [ "$SUITE_STYLE" = "status" ]; then
+      # shell/HA: the entrypoint collects one JUnit report per shard, whose
+      # <testcase> entries name the cases and carry <failure> for the bad ones.
+      find "$d/reports" -name '*.xml' -type f 2>/dev/null | while read -r x; do
+        # The attribute is ` name="…"`, and it MUST be matched with its leading
+        # boundary: `classname="…"` contains `name="` as a substring, so a naive
+        # /name="[^"]*"/ picks up the classname instead — which for the shell
+        # runner is a GitHub blob URL, not a path anything local can use.
+        awk '
+          /<testcase/ {
+            pend=""
+            if (match($0, /[ \t]name="[^"]*"/))
+              pend=substr($0, RSTART+7, RLENGTH-8)
+          }
+          /<(failure|error)[ >]/ { if (pend!="") { print pend; pend="" } }
+        ' "$x"
+      done >> "$out"
+    else
+      # sql/medium: CTP writes NO per-case JUnit here (the entrypoint's collector
+      # finds nothing and says so). What it does write is the schedule dir's
+      # summary.xml, one <scenario> block per case with its <case> path and
+      # <result>. Read that from the shard's own CTP copy — this run's data only.
+      find "$d/CTP" -name 'summary.xml' -type f 2>/dev/null | while read -r x; do
+        awk '
+          match($0, /<case>[^<]*<\/case>/) { c=substr($0, RSTART+6, RLENGTH-13) }
+          /<result>[ \t]*fail[ \t]*<\/result>/ { if (c!="") { print c; c="" } }
+        ' "$x"
+      done >> "$out"
+    fi
+  done
+  # CTP names a case relative to the testcases REPO (sql/_13_issues/…,
+  # shell/_21_xa/…), while --only takes scenario-relative paths. Normalize so
+  # this file can be fed straight back in.
+  if [ -s "$out" ]; then
+    awk -v p="$SUITE_SUBPATH/" 'index($0,p)==1 { print substr($0, length(p)+1); next } { print }' \
+      "$out" > "$out.norm" && mv -f "$out.norm" "$out"
+  fi
+  LC_ALL=C sort -u "$out" -o "$out" 2>/dev/null || :
+  if [ -s "$out" ]; then
+    info "failed cases ($(wc -l < "$out")) listed in $out"
+  else
+    rm -f "$out"
+  fi
+}
 aggregate() {
   local i tot_fail=0 tot_succ=0 tot_total=0 tot_cores=0 any_crash=0
   info "==================== AGGREGATE ===================="
@@ -961,21 +1472,38 @@ aggregate() {
     exp="${SHARD_NSQL[i]:-0}"
     cores="${SHARD_CORES[i]:-0}"
     tot_fail=$((tot_fail+f)); tot_succ=$((tot_succ+s)); tot_total=$((tot_total+t)); tot_cores=$((tot_cores+cores))
+    # CTP exits non-zero merely because cases failed, so rc alone does not mean a
+    # crash. Only call it CRASHED when the shard produced no counters at all —
+    # that is the shape of a container/CTP startup failure, and it is the case
+    # that must not be mistaken for "0 failures".
     local note=""
-    [ "${SHARD_RC[i]}" != "0" ] && { note="CRASHED"; any_crash=1; }
+    if [ "${SHARD_RC[i]}" != "0" ] && [ "$t" -eq 0 ]; then
+      note="CRASHED"; any_crash=1
+    elif [ "${SHARD_RC[i]}" != "0" ] && [ "$f" -eq 0 ]; then
+      note="rc!=0,NO-FAILURES-PARSED"; any_crash=1
+    fi
     [ "$cores" -gt 0 ] && note="${note:+$note,}CORE"
     [ "$t" != "$exp" ] && note="${note:+$note,}TOTAL!=EXPECTED"
     printf '  %-7d %-8s %-8d %-8d %-8d %-8d %s %s\n' "$i" "${SHARD_RC[i]}" "$f" "$s" "$t" "$cores" "$exp" "$note"
   done
   printf '  %-7s %-8s %-8d %-8d %-8d %-8d %d\n' "ALL" "-" "$tot_fail" "$tot_succ" "$tot_total" "$tot_cores" "$SURVIVING_SQL"
 
-  # Split invariant: Sigma CTP Total == surviving == global - base_excluded
+  # Split invariant: Sigma CTP Total == surviving == global - base_excluded.
+  # Hard for sql/medium (a mismatch means the split lost or duplicated cases).
+  # Advisory for shell/ha_shell: CTP additionally drops cases by macro
+  # (testcase_exclude_by_macro=LINUX_NOT_SUPPORTED) and by its own skip rules, so
+  # executed < assigned is normal there and must not fail an otherwise-green run.
   local fail=0
   if [ "$tot_total" -ne "$SURVIVING_SQL" ]; then
-    err "INVARIANT VIOLATED: sum(CTP Total)=$tot_total != surviving=$SURVIVING_SQL"
-    fail=1
+    if [ "$SUITE_STYLE" = "status" ]; then
+      warn "executed=$tot_total != assigned=$SURVIVING_SQL (macro/skip exclusions; not a split error)"
+      [ "$tot_total" -eq 0 ] && { err "INVARIANT VIOLATED: nothing executed at all"; fail=1; }
+    else
+      err "INVARIANT VIOLATED: sum(CTP Total)=$tot_total != surviving=$SURVIVING_SQL"
+      fail=1
+    fi
   fi
-  if [ "$SURVIVING_SQL" -ne "$(( GLOBAL_SQL - BASE_EXCLUDED ))" ]; then
+  if [ "$SURVIVING_SQL" -ne "$(( GLOBAL_SQL - BASE_EXCLUDED ))" ] && [ "$SUITE_STYLE" != "status" ]; then
     err "INVARIANT VIOLATED: surviving=$SURVIVING_SQL != global-base=$(( GLOBAL_SQL - BASE_EXCLUDED ))"
     fail=1
   fi
@@ -988,6 +1516,7 @@ aggregate() {
   [ "$tot_cores" -ne 0 ] && { err "$tot_cores core dump(s) captured (see shard_*/cores/)."; fail=1; }
   [ "$tot_fail" -ne 0 ] && { err "$tot_fail test failure(s) across all shards."; fail=1; }
 
+  emit_failed_list
   if [ "$fail" -ne 0 ]; then
     err "RESULT: FAILED"
     return 1
@@ -1010,6 +1539,13 @@ aggregate() {
 #####################################################################
 merge_results() {
   [ "$ARG_WEBCONSOLE" -eq 1 ] || { info "webconsole merge skipped (--no-webconsole)."; return 0; }
+  # The webconsole model is the sql runner's schedule dir layout; the shell runner
+  # writes elsewhere and has no such view, so there is nothing to merge for it.
+  if [ "$SUITE_STYLE" = "status" ]; then
+    info "webconsole merge skipped (suite '$ARG_SUITE' has no sql/result schedule layout)."
+    return 0
+  fi
+  [ "$NSHARDS" -gt 0 ] || return 0
   local resroot="$ARG_CTP/sql/result"
   if [ ! -d "$ARG_CTP/sql" ]; then
     warn "webconsole merge: $ARG_CTP/sql not found; skipping."
@@ -1071,7 +1607,7 @@ merge_results() {
     printf 'result_path:%s\n' "$dest"
     printf '%s\n' "${rel:+cubrid_rel:$rel}"
     printf 'user:\n'
-    printf 'machine:ctp-parallel/%s(%d shards)\n' "$lbl" "$NSHARDS"
+    printf 'machine:ctp-run/%s(%d shards)\n' "$lbl" "$NSHARDS"
   } > "$dest/main.info"
 
   info "webconsole: merged $NSHARDS shards -> $dest (success=$sum_succ fail=$sum_fail total=$sum_total)"
@@ -1158,6 +1694,21 @@ main() {
   OUT="$(cd "$OUT" && pwd)"
   WORK="$(mktemp -d "${OUT}/.work.XXXXXX")"
   trap cleanup EXIT
+
+  # Which testcases ref, materialized as a worktree we own (host checkout untouched).
+  if [ "$ARG_TC_ASIS" -eq 1 ]; then
+    info "testcases: --testcases-as-is -> using $ARG_TC verbatim (ref resolution skipped)"
+    TC_REF="as-is:$ARG_TC"; TC_REF_SRC="--testcases-as-is"
+    TC_SHA="$(git -C "$ARG_TC" rev-parse HEAD 2>/dev/null || echo unknown)"
+  else
+    resolve_tc_ref
+    materialize_tc_worktree "$ARG_TC" "$TC_REF" "$ARG_WT_ROOT"
+    SCN="$TC_WORKTREE/$SUITE_SUBPATH"
+    [ -d "$SCN" ] || die "scenario dir missing in the worktree: $SCN"
+    SCN="$(cd "$SCN" && pwd)"
+  fi
+  build_provenance
+  write_provenance
 
   resolve_colocate
   resolve_weights

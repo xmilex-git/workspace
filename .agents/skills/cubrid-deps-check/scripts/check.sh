@@ -43,7 +43,7 @@ if [ -n "${CUBRID:-}" ] && [ -d "${CUBRID:-/nonexistent}" ]; then emit OK "runti
 elif [ -d "$HOME/CUBRID" ]; then emit OK "runtime install (~/CUBRID)"
 else emit WARN "runtime install not found (\$CUBRID / ~/CUBRID)" "build & install it: WORKSPACE=$WORKSPACE just build"; fi
 
-# --- CTP test platform (powers cubrid-shell-run / ctp-parallel) ---
+# --- CTP test platform (powers ctp-run) ---
 ctp="${CTP_HOME:-$HOME/cubrid-testtools/CTP}"
 if [ -x "$ctp/bin/ctp.sh" ]; then emit OK "CTP ($ctp/bin/ctp.sh)"
 else emit WARN "CTP not found at $ctp/bin/ctp.sh" "clone cubrid-testtools and set CTP_HOME"; fi
@@ -62,7 +62,16 @@ if [ -d "$man/en" ] && [ -d "$man/ko" ]; then emit OK "cubrid-manual ($man/{en,k
 else emit WARN "cubrid-manual en/ko not found ($man)" "clone cubrid-manual or set CUBRID_MANUAL"; fi
 
 # --- Per-skill tools (informational) ---
-have podman && emit OK "podman (ctp-parallel)" || emit WARN "podman not found (ctp-parallel)" "install rootless podman, or use ctp-parallel --dry-run"
+have podman && emit OK "podman (ctp-run)" || emit WARN "podman not found (ctp-run)" "install rootless podman — without it CTP cannot run at all (host-side CTP pkills every cub_* of this user); only ctp_run.sh --dry-run works"
+# The runner pulls this on first use, so a missing image is informational, not a
+# failure — but on an offline host it is the difference between working and not.
+if have podman; then
+  if podman image exists docker.io/cubridci/cubridci:test_rl8.10 2>/dev/null; then
+    emit OK "CTP runner image (cubridci/cubridci:test_rl8.10)"
+  else
+    emit WARN "CTP runner image not pulled (cubridci/cubridci:test_rl8.10)" "podman pull docker.io/cubridci/cubridci:test_rl8.10  (the runner does this on first use; pre-pull for offline hosts)"
+  fi
+fi
 have ssh   && emit OK "ssh (remote-claude/remote-codex)" || emit WARN "ssh not found" "install openssh client"
 have tmux  && emit OK "tmux (remote-claude/remote-codex)" || emit WARN "tmux not found" "install tmux"
 have node  && emit OK "node (remote-claude preseed.js)"   || emit WARN "node not found (remote-claude)" "install node"

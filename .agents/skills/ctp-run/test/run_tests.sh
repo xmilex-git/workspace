@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# run_tests.sh — static + logic self-tests for ctp-parallel. Runs WITHOUT podman.
+# run_tests.sh — static + logic self-tests for ctp-run. Runs WITHOUT podman.
 #
 # Drives the orchestrator's pure-logic paths (--dry-run / --validate-only) against
 # the REAL testtools + testcases trees on this machine and asserts every property
@@ -15,7 +15,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SKILL="$(cd "$HERE/.." && pwd)"
-ORCH="$SKILL/scripts/ctp_parallel.sh"
+ORCH="$SKILL/scripts/ctp_run.sh"
 ENTRY="$SKILL/scripts/entrypoint.sh"
 
 TC="${HOME}/cubrid-testcases"
@@ -48,7 +48,7 @@ require_files() {
 require_files
 
 echo "=================================================================="
-echo " ctp-parallel self-tests"
+echo " ctp-run self-tests"
 echo "   orchestrator : $ORCH"
 echo "   testcases    : $SCN"
 echo "   CTP_HOME     : $CTP"
@@ -58,7 +58,7 @@ echo "=================================================================="
 # (a) Static lint — bash -n on every script (+ shellcheck if available)
 #-------------------------------------------------------------------
 echo; echo "## (a) static lint"
-if bash -n "$ORCH"; then ok "bash -n clean: ctp_parallel.sh"; else bad "bash -n FAILED: ctp_parallel.sh"; fi
+if bash -n "$ORCH"; then ok "bash -n clean: ctp_run.sh"; else bad "bash -n FAILED: ctp_run.sh"; fi
 if bash -n "$ENTRY"; then ok "bash -n clean: entrypoint.sh"; else bad "bash -n FAILED: entrypoint.sh"; fi
 if command -v shellcheck >/dev/null 2>&1; then
   if shellcheck -S warning "$ORCH" "$ENTRY"; then ok "shellcheck clean"; else bad "shellcheck reported issues"; fi
@@ -74,7 +74,7 @@ dryrun() { # <N> <outdir>  -> writes log to <outdir>.log
   # independent of the bundled time table (auto-weights is covered separately in (j)).
   local n="$1" out="$2"
   rm -rf "$out"
-  bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards "$n" --no-weights --out "$out" >"$out.log" 2>&1
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards "$n" --no-weights --out "$out" >"$out.log" 2>&1
   return $?
 }
 
@@ -175,7 +175,7 @@ echo; echo "## (f) balance (--by-dir, N=10) + bulk atomicity (default)"
 # (a bulk is atomic, so the heaviest bulk bounds the slowest shard); fine units show the
 # greedy-LPT quality. Real bulk runs balance by TIME via --weights.
 OUTF="$SCRATCH/outf_bydir"
-bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards 10 --by-dir --no-weights --out "$OUTF" >"$OUTF.log" 2>&1
+bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 10 --by-dir --no-weights --out "$OUTF" >"$OUTF.log" 2>&1
 read -r mx mean ratio_ok < <(awk -F'\t' '
   NR>1 { c[n++]=$2; sum+=$2; if($2>mx) mx=$2 }
   END { mean=sum/n; printf "%d %.1f %d\n", mx, mean, (mx <= 1.5*mean) }
@@ -186,30 +186,123 @@ if [ "$ratio_ok" -eq 1 ]; then ok "balanced (--by-dir): max-shard $mx <= 1.5 x m
 splitn="$(awk 'FNR==1{ match(FILENAME,/shard_([0-9]+)/,m); sid=m[1] }
                { b=$0; sub(/\/.*/,"",b); seen[b"\t"sid]=1; bulks[b]=1 }
                END{ for(k in seen){split(k,a,"\t"); c[a[1]]++} s=0; for(b in bulks) if(c[b]>1) s++; print s+0 }' \
-             "$OUT10"/shard_*/assigned_sql.txt 2>/dev/null)"
+             "$OUT10"/shard_*/assigned_cases.txt 2>/dev/null)"
 if [ "${splitn:-1}" -eq 0 ]; then ok "bulk atomicity: no _* bulk split across shards"; else bad "bulk atomicity: $splitn bulk(s) split across shards"; fi
 
 #-------------------------------------------------------------------
-# (g) Config generation: scenario path, ports/SHM verbatim, no host paths
+# (g) Container contract. The per-shard CTP conf is no longer generated on the
+# host — the entrypoint fork composes it inside the container, where the paths
+# are the container's. So what has to hold is the fork's contract itself.
 #-------------------------------------------------------------------
-echo; echo "## (g) generated sql.conf"
-CONF="$OUT10/shard_0/sql.conf"
+echo; echo "## (g) container contract (entrypoint fork + mount layout)"
 cfg_ok=1
-grep -qx 'scenario=/home/cubrid-testcases/sql' "$CONF" || { cfg_ok=0; note "scenario line wrong"; }
-for kv in 'cubrid_port_id=1822' 'BROKER_PORT=33120' 'APPL_SERVER_SHM_ID=33120' 'MASTER_SHM_ID=33122' 'ha_port_id=59901' 'ha_mode=yes'; do
-  grep -qx "$kv" "$CONF" || { cfg_ok=0; note "missing/changed F2 line: $kv"; }
-done
-grep -qx 'testcase_exclude_from_file=${CTP_HOME}/conf/exclusions.txt' "$CONF" || { cfg_ok=0; note "exclude-file line wrong"; }
-# No HOST filesystem paths may leak. Host paths begin with "$HOME/" (e.g. the real
-# testcases/ctp/out dirs). The container target /home/cubrid-testcases (no slash
-# after 'cubrid') is NOT a host path and must NOT trip this.
-leak="$(grep -nF "$HOME/" "$CONF" || true)"
-leak2="$(grep -nF "$CTP" "$CONF" || true)"
-leak3="$(grep -nF "$OUT10" "$CONF" || true)"
-if [ "$cfg_ok" -eq 1 ] && [ -z "$leak$leak2$leak3" ]; then
-  ok "sql.conf: scenario=container path, F2 ports/SHM verbatim, no host paths leak"
+grep -q 'apply_ctprun_overrides' "$ENTRY" || { cfg_ok=0; note "entrypoint fork lost apply_ctprun_overrides"; }
+grep -q 'testcase_update_yn=false' "$ENTRY" || { cfg_ok=0; note "entrypoint fork no longer forces testcase_update_yn=false (CTP would git-pull the testcases and switch to develop)"; }
+grep -q 'the orchestrator must mount a testcases worktree copy' "$ENTRY" || { cfg_ok=0; note "entrypoint's test path still demands an in-container checkout"; }
+grep -q 'CTP_SCENARIO' "$ORCH" || { cfg_ok=0; note "orchestrator does not pin CTP_SCENARIO"; }
+# The scenario mount must be repo-relative, so the STOCK CTP confs (which resolve
+# ${HOME}/<repo>/...) are correct with no rewriting — including medium's data_file.
+grep -q 'C_SCN="$C_TCREPO/$SUITE_SUBPATH"' "$ORCH" || { cfg_ok=0; note "scenario mount is not repo-relative"; }
+grep -q 'readonly C_CTP="/home/cubrid-testtools/CTP"' "$ORCH" || { cfg_ok=0; note "CTP mount does not match the image's CTP_HOME"; }
+grep -qE 'DEFAULT_IMAGE_DIGEST="sha256:[0-9a-f]{64}"' "$ORCH" || { cfg_ok=0; note "image is not digest-pinned"; }
+if [ "$cfg_ok" -eq 1 ]; then
+  ok "container contract: overrides present, testcase auto-update forced off, mounts match the image, image digest-pinned"
 else
-  bad "sql.conf check failed (cfg_ok=$cfg_ok leaks: $leak $leak2 $leak3)"
+  bad "container contract check failed"
+fi
+
+# (g2) Suite policy: medium and ha_shell must refuse to shard.
+for s_ in medium ha_shell; do
+  case "$s_" in
+    medium)   tcdir="$TC" ;;
+    ha_shell) tcdir="$HOME/cubrid-testcases-private" ;;
+  esac
+  if [ ! -d "$tcdir" ]; then note "$s_: no testcases checkout, skipped"; continue; fi
+  if bash "$ORCH" --suite "$s_" --shards 3 --dry-run --testcases "$tcdir" --testcases-as-is \
+        --ctp "$CTP" --out "$SCRATCH/refuse_$s_" >"$SCRATCH/refuse_$s_.log" 2>&1; then
+    bad "$s_: --shards 3 was accepted; it must be refused"
+  else
+    grep -q 'cannot be sharded' "$SCRATCH/refuse_$s_.log" \
+      && ok "$s_: --shards 3 refused with the reason" \
+      || bad "$s_: failed, but not with the shard-refusal reason"
+  fi
+done
+
+# (g4) --conf must land where the suite's server actually reads it: merged into
+# the [<cat>/cubrid.conf] SECTION of CTP's own conf for sql/medium (CTP writes the
+# server conf from there), and over the install's conf for shell/HA (the cases
+# start their own servers). A file merely dropped beside CTP's conf does nothing.
+CM="$SCRATCH/confmerge"
+rm -rf "$CM"; mkdir -p "$CM/CTP/conf" "$CM/CUBRID/conf"
+if [ -r "$CTP/conf/sql.conf" ]; then
+  cp "$CTP/conf/sql.conf" "$CM/CTP/conf/"
+  printf 'cubrid_port_id=1755\nnew_param_xyz=42\n' > "$CM/user.conf"
+  ( set -e
+    info(){ :; }; die(){ echo "DIE: $*" >&2; exit 1; }
+    ARG_CONF="$CM/user.conf"; ARG_OVERLAY=0
+    SUITE_STYLE=sqlresult; SUITE_CONF=conf/sql.conf; SUITE_CAT=sql; ARG_SUITE=sql
+    eval "$(sed -n '/^install_suite_conf() {/,/^}/p' "$ORCH")"
+    install_suite_conf "$CM" ) >/dev/null 2>&1
+  sec="$(sed -n '/^\[sql\/cubrid.conf\]/,/^\[sql\/cubrid_ha/p' "$CM/CTP/conf/sql.conf")"
+  ok1=0; printf '%s' "$sec" | grep -qx 'cubrid_port_id=1755' && ok1=1
+  ok2=0; printf '%s' "$sec" | grep -qx 'new_param_xyz=42' && ok2=1
+  ok3=1; printf '%s' "$sec" | grep -qx 'cubrid_port_id=1822' && ok3=0
+  if [ "$ok1$ok2$ok3" = "111" ]; then
+    ok "--conf: existing key replaced in [sql/cubrid.conf], new key appended, stale value gone"
+  else
+    bad "--conf merge wrong (replaced=$ok1 appended=$ok2 stale-removed=$ok3)"
+  fi
+else
+  note "--conf test skipped: $CTP/conf/sql.conf not readable"
+fi
+
+# (g5) failed.list extraction, both result styles. This has been wrong twice:
+# once reading `classname="…"` (a GitHub blob URL) because it contains `name="`,
+# and once producing nothing at all for sql, whose CTP writes no per-case JUnit.
+FL="$SCRATCH/faillist"; rm -rf "$FL"; mkdir -p "$FL/shard_0/reports" "$FL/shard_0/CTP"
+cat > "$FL/shard_0/reports/test-shell.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="shell" tests="2" skipped="0">
+    <testcase classname="https://github.com/CUBRID/cubrid-testcases-private-ex/blob/develop/shell/_21_xa/_02_x/cases/_02_x.sh" name="shell/_21_xa/_02_x/cases/_02_x.sh" time="1.0">
+      <failure message="Test failed" type="TestFailure">boom</failure>
+    </testcase>
+    <testcase classname="https://github.com/x/blob/develop/shell/_21_xa/_03_ok/cases/_03_ok.sh" name="shell/_21_xa/_03_ok/cases/_03_ok.sh" time="1.0"/>
+  </testsuite>
+</testsuites>
+XML
+cat > "$FL/shard_0/CTP/summary.xml" <<'XML'
+<results>
+  <scenario><case>sql/_13_issues/_24_2h/cases/bad.sql</case><result>fail</result></scenario>
+  <scenario><case>sql/_13_issues/_24_2h/cases/good.sql</case><result>success</result></scenario>
+</results>
+XML
+run_fl() {   # $1 = style, $2 = subpath
+  ( set -e
+    info(){ :; }; OUT="$FL"; NSHARDS=1; SUITE_STYLE="$1"; SUITE_SUBPATH="$2"
+    eval "$(sed -n '/^emit_failed_list() {/,/^}/p' "$ORCH")"
+    emit_failed_list ) >/dev/null 2>&1
+  cat "$FL/failed.list" 2>/dev/null
+}
+got_sh="$(run_fl status shell)"; rm -f "$FL/failed.list"
+got_sql="$(run_fl sqlresult sql)"; rm -f "$FL/failed.list"
+fl_ok=1
+[ "$got_sh" = "_21_xa/_02_x/cases/_02_x.sh" ] || { fl_ok=0; note "shell style got: '$got_sh'"; }
+[ "$got_sql" = "_13_issues/_24_2h/cases/bad.sql" ] || { fl_ok=0; note "sql style got: '$got_sql'"; }
+if [ "$fl_ok" -eq 1 ]; then
+  ok "failed.list: only failing cases, scenario-relative, for both result styles (no classname URL, no empty sql list)"
+else
+  bad "failed.list extraction wrong"
+fi
+
+# (g3) A run with no testcase ref at all must refuse rather than default to develop.
+if bash "$ORCH" --suite sql --dry-run --testcases "$TC" --ctp "$CTP" \
+      --out "$SCRATCH/noref" >"$SCRATCH/noref.log" 2>&1; then
+  bad "no --tc-ref/--pr/--workspace was accepted; it must refuse"
+else
+  grep -q 'Refusing to silently run develop testcases' "$SCRATCH/noref.log" \
+    && ok "missing testcase ref refused (no silent develop)" \
+    || bad "failed without the missing-ref reason"
 fi
 
 #-------------------------------------------------------------------
@@ -224,7 +317,7 @@ else
   rm -rf "$PM_OUT"
   # Use an existing dir as a stand-in build so arg-validation passes and we reach
   # the podman preflight (which must fail fast, before any work dirs are made).
-  bash "$ORCH" --build "$CTP" --testcases "$TC" --ctp "$CTP" --out "$PM_OUT" >"$SCRATCH/pm.log" 2>&1
+  bash "$ORCH" --build "$CTP" --testcases "$TC" --testcases-as-is --ctp "$CTP" --out "$PM_OUT" >"$SCRATCH/pm.log" 2>&1
   rc=$?
   if [ "$rc" -ne 0 ] && grep -qi 'podman is not installed' "$SCRATCH/pm.log" && [ ! -e "$PM_OUT" ]; then
     ok "podman-missing: clear error, exit=$rc, no work dir left behind"
@@ -242,7 +335,7 @@ if [ -r "$COLO" ]; then
   # (i1) keep-whole: a registered dir stays ONE unit even under --by-case.
   reg_dir="$(awk '!/^[[:space:]]*#/ && NF {print $1; exit}' "$COLO")"
   OUTBC="$SCRATCH/outbc"; rm -rf "$OUTBC"
-  bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards 10 --by-case --out "$OUTBC" >"$OUTBC.log" 2>&1
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 10 --by-case --out "$OUTBC" >"$OUTBC.log" 2>&1
   asg="$OUTBC/assignment.tsv"
   asunit="$(awk -F'\t' -v d="$reg_dir" '$1==d' "$asg" | wc -l)"
   undersplit="$(awk -F'\t' -v d="$reg_dir/" 'index($1,d)==1' "$asg" | wc -l)"
@@ -256,7 +349,7 @@ if [ -r "$COLO" ]; then
   d2="$(awk -F'\t' 'NR==2{print $1}' "$OUT10/units.tsv")"
   GRP="$SCRATCH/grp.tsv"; printf '%s %s\n' "$d1" "$d2" > "$GRP"
   OUTG="$SCRATCH/outg"; rm -rf "$OUTG"
-  bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards 10 --colocate "$GRP" --out "$OUTG" >"$OUTG.log" 2>&1
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 10 --colocate "$GRP" --out "$OUTG" >"$OUTG.log" 2>&1
   s1="$(awk -F'\t' -v d="$d1" '$1==d{print $2}' "$OUTG/assignment.tsv")"
   s2="$(awk -F'\t' -v d="$d2" '$1==d{print $2}' "$OUTG/assignment.tsv")"
   if [ -n "$s1" ] && [ "$s1" = "$s2" ]; then
@@ -266,7 +359,7 @@ if [ -r "$COLO" ]; then
   fi
   # (i3) --no-colocate ignores the registry: --by-case is pure per-.sql again.
   OUTN="$SCRATCH/outn"; rm -rf "$OUTN"
-  bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards 10 --by-case --no-colocate --out "$OUTN" >"$OUTN.log" 2>&1; rcN=$?
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 10 --by-case --no-colocate --out "$OUTN" >"$OUTN.log" 2>&1; rcN=$?
   un="$(wc -l < "$OUTN/units.tsv" 2>/dev/null || echo -1)"
   if [ "$rcN" -eq 0 ] && [ "$un" -eq "$s" ]; then
     ok "--no-colocate: dry-run rc=0 and --by-case units == surviving .sql ($un, registry ignored)"
@@ -284,7 +377,7 @@ echo; echo "## (j) auto-weights (bundled time table, default)"
 BW="$SKILL/baseline_weights.tsv"
 if [ -r "$BW" ]; then
   OUTW="$SCRATCH/outw"; rm -rf "$OUTW"
-  bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards 10 --out "$OUTW" >"$OUTW.log" 2>&1; rcW=$?
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 10 --out "$OUTW" >"$OUTW.log" 2>&1; rcW=$?
   # default should report time-based from the bundled table, and unit weights should sum
   # to the measured seconds (~ table total), NOT the case count (17420).
   bw_total="$(awk -F'\t' '{s+=$2} END{print s+0}' "$BW")"
@@ -304,7 +397,7 @@ fi
 #-------------------------------------------------------------------
 echo; echo "## (k) default shard count"
 OUTK="$SCRATCH/outk"; rm -rf "$OUTK"
-bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --out "$OUTK" >"$OUTK.log" 2>&1
+bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --out "$OUTK" >"$OUTK.log" 2>&1
 def_n="$(awk -F'\t' 'NR>1{n++} END{print n+0}' "$OUTK/plan.tsv" 2>/dev/null)"
 if [ "$def_n" -eq 7 ]; then
   ok "default shard count = 7 (no --shards)"
@@ -320,7 +413,7 @@ fi
 #-------------------------------------------------------------------
 echo; echo "## (l) --env passthrough"
 OUTE="$SCRATCH/oute"; rm -rf "$OUTE"
-bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards 3 --no-weights \
+bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 3 --no-weights \
   --env CUBRID_WM_SORT_NEW=1 --env CUBRID_WM_SCAN_NEW=1 --out "$OUTE" >"$OUTE.log" 2>&1
 if grep -qF 'env passthrough (--env, 2): CUBRID_WM_SORT_NEW=1 CUBRID_WM_SCAN_NEW=1' "$OUTE.log"; then
   ok "--env: both values reach the launch-plan summary verbatim, in order"
@@ -329,7 +422,7 @@ else
 fi
 # default (no --env) must still report the fixed 5 and an explicit empty list.
 OUTE0="$SCRATCH/oute0"; rm -rf "$OUTE0"
-bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --shards 3 --no-weights --out "$OUTE0" >"$OUTE0.log" 2>&1
+bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 3 --no-weights --out "$OUTE0" >"$OUTE0.log" 2>&1
 if grep -qF 'env passthrough (--env, 0): <none>' "$OUTE0.log"; then
   ok "--env: default (no flag) reports an explicit empty list (no regression)"
 else
@@ -337,7 +430,7 @@ else
 fi
 # malformed NAME=VALUE must be rejected before any work dir is created.
 OUTEBAD="$SCRATCH/outebad_should_not_exist"; rm -rf "$OUTEBAD"
-if bash "$ORCH" --dry-run --testcases "$TC" --ctp "$CTP" --env NOEQUALSSIGN --out "$OUTEBAD" >"$SCRATCH/outebad.log" 2>&1; then
+if bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --env NOEQUALSSIGN --out "$OUTEBAD" >"$SCRATCH/outebad.log" 2>&1; then
   bad "--env: malformed NAME=VALUE was NOT rejected"
 else
   if grep -qi 'expects NAME=VALUE' "$SCRATCH/outebad.log" && [ ! -e "$OUTEBAD" ]; then

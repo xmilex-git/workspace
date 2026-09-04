@@ -1,4 +1,15 @@
-# ctp-parallel
+# ctp-run — design notes
+> **Status (2026-09-04).** This file is the design record of the split/merge
+> engine, which is unchanged. What changed around it: the image is now upstream's
+> CI image `cubridci/cubridci:test_rl8.10` (digest-pinned, never built locally)
+> with `scripts/entrypoint.sh` — a fork of cubridci's — bind-mounted over
+> `/entrypoint.sh`; the runner covers sql, medium, shell and ha_shell rather than
+> sql alone; a subset is expressed with `--only` instead of a synthesized
+> testcase tree; and the testcases ref is mandatory and materialized as a git
+> worktree. The user-facing contract is `SKILL.md`; the rationale is
+> `docs/adr/0017-ctp-runner-on-cubridci-image.md`. Where this file and those two
+> disagree, they win.
+
 
 One-click tool to run the CUBRID **CTP SQL regression suite in N parallel shards**
 on a single host, mirroring CircleCI's `test_sql` job (`parallelism: 10`). Each
@@ -12,7 +23,7 @@ one pass/fail summary. Wall-clock time drops to ~1/N.
 | File | Role |
 |------|------|
 | `scripts/Containerfile` | **#1** Per-shard runtime image. `FROM rockylinux:8` + JDK 8 + gcc + en_US locale + `entrypoint.sh`. glibc matches a modern host build; the CI build image (CentOS 6 / glibc 2.12) is too old to run one. State is mounted at run time, not baked in. |
-| `scripts/ctp_parallel.sh` | **#2** Host-side orchestrator (main entry point): split → validate → launch → aggregate. |
+| `scripts/ctp_run.sh` | **#2** Host-side orchestrator (main entry point): split → validate → launch → aggregate. |
 | `scripts/entrypoint.sh` | In-container runner: preflight (D5 relocation guard) + `exec ctp.sh $CTP_SUITE` (`sql` default, `medium` via `--suite medium`). Bind-mounted from this checkout over the image copy, so edits need no image rebuild. |
 | `scripts/harvest_weights.sh` | Derive a per-`.sql` time table from run logs (refreshes `baseline_weights.tsv`). |
 | `baseline_weights.tsv` | Bundled per-`.sql` times (real green-run seconds); auto-loaded for time balancing. |
@@ -86,13 +97,13 @@ per-shard differences are its `exclusions.txt` and its output directories.
 # A bare run uses the fixed optimal config: 7 shards, bulk(_*) split, auto time-weights.
 ```bash
 # Real parallel run (needs podman) — no flags needed beyond build + testcases:
-scripts/ctp_parallel.sh --build "$CUBRID" --testcases ~/cubrid-testcases   # = 7 shards, bulk, time-balanced
+scripts/ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases   # = 7 shards, bulk, time-balanced
 
 # Plan + validate only, no podman, no --build needed:
-scripts/ctp_parallel.sh --dry-run --testcases ~/cubrid-testcases --out ./plan
+scripts/ctp_run.sh --dry-run --testcases ~/cubrid-testcases --out ./plan
 ```
 
-Run `scripts/ctp_parallel.sh --help` for all flags (`--ctp`, `--image`, `--out`,
+Run `scripts/ctp_run.sh --help` for all flags (`--ctp`, `--image`, `--out`,
 `--overlay`, `--by-category`, `--by-dir`, `--by-case`, `--weights`, `--no-weights`,
 `--colocate`, `--no-colocate`, `--keep`, `--env NAME=VALUE`).
 
@@ -100,7 +111,7 @@ Run `scripts/ctp_parallel.sh --help` for all flags (`--ctp`, `--image`, `--out`,
 to run a gates-ON sharded suite:
 
 ```bash
-scripts/ctp_parallel.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
+scripts/ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
   --env CUBRID_WM_SCAN_NEW=1 --env CUBRID_WM_SORT_NEW=1 --env CUBRID_WM_HASHJOIN_NEW=1
 ```
 
@@ -117,12 +128,12 @@ pass `--weights`); use `--no-weights` to fall back to case-count balancing:
 
 ```bash
 # refresh the bundled time table from a prior run's per-shard logs:
-scripts/harvest_weights.sh --out baseline_weights.tsv ./ctp-parallel-out/shard_*/console.log
+scripts/harvest_weights.sh --out baseline_weights.tsv ./ctp-run-out/shard_*/console.log
 # (or use a one-off table for a single run:)
-scripts/ctp_parallel.sh --build "$CUBRID" --testcases ~/cubrid-testcases --weights my.tsv
+scripts/ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases --weights my.tsv
 ```
 
-Output lands in `--out` (default `./ctp-parallel-out`): `assignment.tsv`,
+Output lands in `--out` (default `./ctp-run-out`): `assignment.tsv`,
 `units.tsv`, `plan.tsv`, and `shard_<i>/{exclusions.txt,sql.conf,console.log,out/}`.
 The orchestrator exits non-zero if any shard fails, crashes, or an invariant breaks.
 
@@ -130,9 +141,9 @@ The orchestrator exits non-zero if any shard fails, crashes, or an invariant bre
 
 ```bash
 cd ~/dev/cubrid
-bash -n .claude/skills/ctp-parallel/scripts/ctp_parallel.sh
-bash -n .claude/skills/ctp-parallel/scripts/entrypoint.sh
-bash    .claude/skills/ctp-parallel/test/run_tests.sh
+bash -n .claude/skills/ctp-run/scripts/ctp_run.sh
+bash -n .claude/skills/ctp-run/scripts/entrypoint.sh
+bash    .claude/skills/ctp-run/test/run_tests.sh
 ```
 
 `run_tests.sh` asserts (against the real trees): unit discovery vs direct `find`,
@@ -149,20 +160,18 @@ them on a podman-capable host. They are the real acceptance checks for the
 container path.
 
 ```bash
-cd ~/dev/cubrid/.claude/skills/ctp-parallel/scripts
+cd ~/dev/cubrid/.claude/skills/ctp-run/scripts
 
-# 0. Build the per-shard image (or just use the base image directly).
-podman build -t ctp-parallel:local -f Containerfile .
-#    Override the base if needed:
-#    podman build --build-arg BASE_IMAGE=<ref> -t ctp-parallel:local -f Containerfile .
+# 0. Nothing to build: the runner pulls the pinned CI image on first use.
+podman build -t cubridci/cubridci:test_rl8.10 -f Containerfile .
 
 # 1. Real 4-shard run against a built engine + testcases.
-./ctp_parallel.sh \
+./ctp_run.sh \
   --build "$CUBRID" \
   --testcases ~/cubrid-testcases \
-  --image ctp-parallel:local \
+  --image cubridci/cubridci:test_rl8.10 \
   --shards 4 \
-  --out ./ctp-parallel-out \
+  --out ./ctp-run-out \
   --keep
 
 # 2. Confirm port/SHM NON-collision with 2+ live shards: while the run is in
@@ -176,24 +185,24 @@ done
 # 3. Aggregate equivalence: a sharded run's combined pass/fail must equal a single
 #    full CTP run. Compare totals:
 #    a) single run (one shard == whole suite):
-./ctp_parallel.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
-   --image ctp-parallel:local --shards 1 --out ./ctp-1shard
+./ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
+   --image cubridci/cubridci:test_rl8.10 --shards 1 --out ./ctp-1shard
 #    b) parallel run (e.g. 10 shards):
-./ctp_parallel.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
-   --image ctp-parallel:local --shards 10 --out ./ctp-10shard
+./ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
+   --image cubridci/cubridci:test_rl8.10 --shards 10 --out ./ctp-10shard
 #    Then diff the AGGREGATE 'ALL' rows: total and fail counts must match, and the
 #    set of failing cases must be identical (modulo shard grouping).
 
 # 4. Inspect a shard's artifacts:
-ls ./ctp-parallel-out/shard_0/           # console.log, exclusions.txt, sql.conf, out/
-cat ./ctp-parallel-out/shard_0/console.log
+ls ./ctp-run-out/shard_0/           # console.log, exclusions.txt, sql.conf, out/
+cat ./ctp-run-out/shard_0/console.log
 
 # 5. --env passthrough (#108): prove a gate env var set on the HOST invocation is
 #    visible in the environ of the actual cub_server PROCESS inside a shard, not
 #    just at the container's PID 1. Run one shard with a marker var, find the
 #    server pid inside it, and grep its /proc/<pid>/environ:
-./ctp_parallel.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
-  --image ctp-parallel:local --shards 1 --keep --out ./ctp-env-check \
+./ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
+  --image cubridci/cubridci:test_rl8.10 --shards 1 --keep --out ./ctp-env-check \
   --env CUBRID_WM_SORT_NEW=1
 c="$(podman ps -q --filter 'name=ctp_shard_' | head -1)"
 pid="$(podman exec "$c" pgrep -f cub_server | head -1)"
