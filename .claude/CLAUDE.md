@@ -8,10 +8,10 @@ Delegation execution contract (CUBRID_SSOT.md 환경·운영 16–17 — include
 - Finite gate work (incremental build, unit, smoke — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
 - The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
 
-CTP SQL execution rule (2026-08-28 incident: host CTP's do_clean()/teardown runs `pkill cub`, killing EVERY cub_master/cub_server/cub_broker of this user on any port — the port registry cannot protect against it):
-- Any CTP SQL run — full suite or a subset, by the lead or by any delegated worker — MUST go through the podman-isolated just recipes: `just ctp-sql-isolated <TEST_DIRS...>` for subsets, `just ctp-parallel` for the full suite. Include this rule in delegation prompts whenever the task may run CTP.
-- Host-side CTP SQL is removed at the source: `just sql-debug` / `just sql-debug-selected` are refusal stubs. NEVER bypass them by invoking `ctp.sh sql` directly on the host, and NEVER resurrect the old recipe bodies from git history. Custom server params go through the `[sql/cubrid.conf]` section of a CTP-copy's sql.conf (point CTP_HOME at the copy).
-- CTP shell (`just shell-debug*`) has the same pkill hazard (shell init_path/init.sh) and no podman wrapper yet: before a shell run, broadcast to live sessions (ListAgents → SendMessage) and get an ack, or confirm `just ports` shows no other claims.
+CTP execution rule (every suite; 2026-08-28 incident: CTP's teardown runs `pkill cub` and `kill -9` over `ps -u $USER`, killing EVERY cub_* of this user on any port — the port registry cannot protect against it):
+- Every CTP run, whole or subset, by the lead or any delegated worker, goes through `just ctp <sql|medium|shell|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe. Include this rule in delegation prompts whenever the task may run CTP.
+- The testcase ref is never implicit: pass `PR=<n>` or `TC_REF=<ref>`, or let it infer the PR from `WORKSPACE`. A run with none of the three refuses rather than validate a PR against develop testcases.
+- `medium` and `ha_shell` are never sharded (`SHARDS>1` is refused). Details: the `ctp-run` skill; rationale: `docs/adr/0017-ctp-runner-on-cubridci-image.md`.
 
 These guidelines intentionally bias toward caution, traceability, and minimal change over speed. For trivial tasks, use judgment.
 

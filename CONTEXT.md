@@ -255,3 +255,25 @@ _Avoid_: 힙 전환(`db_change_private_heap` 자체와 혼동), 얕은 대입
 **빌림·반납 브래킷 (borrow/return bracket)**:
 CBRD-27327의 채택 수정 형태 — 패스 **시작**(`manager::open()`의 handler 생성)에서 누산기를 코디네이터 heap → heap 0으로 빌리고, 패스 **안**(`read_node`)에서 heap 0 → 코디네이터 heap으로 반납하는 대칭 규약이다. 반납을 패스 끝(`read_finalize`)에 두면 안 되는 이유는 `read_finalize`가 `manager::end()`를 통해 쿼리 최종 종료 시에도 불리기 때문이다. ADR 0015 참조.
 _Avoid_: 파티션 게이트(증상 회피안 — 기각), `read_finalize` 반납(최종 teardown에서 재발)
+
+### CTP 실행 도구 (컨테이너 격리 러너)
+
+**설치본 (install)**:
+`just build`가 만든 실행 가능한 CUBRID 디렉토리(`~/<mode>/CUBRID-<ver>`)다. 러너는 항상 설치본을 컨테이너에 마운트하며, 빌드 트리나 소스 체크아웃을 가리키지 않는다.
+_Avoid_: 빌드(build — 빌드 트리·행위와 혼동), `--build` 옵션 이름을 개념명으로 쓰기
+
+**시나리오 부분집합 (scenario subset)**:
+사용자가 지정한 테스트케이스 하위트리들의 집합으로, "부분 실행"의 입력이다. 스위트(sql·medium·shell·ha_shell)마다 트리 루트가 다르며 한 실행의 부분집합은 한 루트 아래에 있어야 한다.
+_Avoid_: 버킷(bucket — shell 카테고리 디렉토리 `_22_ha`처럼 트리의 한 계층을 가리킬 때만 쓴다), 케이스 리스트
+
+**샤드 (shard)**:
+오케스트레이터가 전체 스위트를 시간 균형으로 나눈 실행 단위로, 컨테이너 한 개와 1:1이다. 부분 실행은 샤드 1개짜리 실행이다.
+_Avoid_: 노드(CircleCI 용어), 버킷, bulk(분할 입력 단위 — 샤드는 그 출력)
+
+**캠페인 conf (campaign conf)**:
+이 리포 루트의 `cubrid.conf`로, 호스트 설치본 conf의 유일한 원본이다. 호스트 `$CUBRID/conf/cubrid.conf`는 캠페인 conf와 포트 클레임의 파생물이며 직접 편집 대상이 아니다. 컨테이너 안 실행은 CTP가 자기 conf 섹션으로 덮으므로 캠페인 conf와 무관하다.
+_Avoid_: 설치된 conf(파생물)를 원본처럼 부르기, 테스트 conf(CTP의 `[sql/cubrid.conf]` 섹션과 혼동)
+
+**출처 (provenance)**:
+한 CTP 실행이 정확히 무엇을 검증했는지를 사후에 판별하게 하는 기록 — 설치본, 러너 이미지, CTP 리비전, 테스트케이스 리포별 ref와 커밋. 실행 요약 첫머리와 실행 디렉토리에 항상 남긴다.
+_Avoid_: 로그(실행 과정 기록과 혼동), 메타데이터

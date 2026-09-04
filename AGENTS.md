@@ -52,8 +52,9 @@ on an unattended remote run. The skills that hard-require `$WORKSPACE` are exact
 - **obsidian-vault** — operates on `"$WORKSPACE"/.claude/vault/`.
 - **cubrid-server-control** — starts/stops the CUBRID server living in `$WORKSPACE`.
 
-`cubrid-shell-run` stores throwaway CTP conf and exclusion files in this tooling repository's
-`.git_ignored_dir/scratch/`; it requires `WORKSPACE` only for source builds such as `just optdebug`.
+`ctp-run` keeps every run's working copies, per-shard CTP confs and results under this tooling
+repository's `.git_ignored_dir/scratch/ctp-run-out/`; it takes the install to test via `BUILD=`
+(default `$CUBRID`) and needs `WORKSPACE` only to infer the testcase ref from the engine branch.
 `cubrid-deps-check` also takes the workspace as its first argument (it diagnoses a checkout's
 build/test dependencies). The other skills are workspace-agnostic or operate on fixed
 infrastructure and take no `$WORKSPACE`.

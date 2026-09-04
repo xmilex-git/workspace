@@ -48,7 +48,7 @@ this user's cub_master/cub_server/cub_broker/cub_cas, any port) plus shared-memo
 removal at run start and cleanup. A CTP SQL run therefore takes down every other
 CUBRID server on the host regardless of registry claims (incident: 2026-08-28,
 a `_08_javasp` gate run killed the claimed mandb@1701). Before running CTP SQL
-while any other server is claimed: use podman isolation (`ctp-parallel` skill)
+while any other server is claimed: use podman isolation (`just ctp`, the `ctp-run` skill)
 or broadcast to live sessions and get an ack first.
 
 ## A per-build $CUBRID cannot stop a server it started on a shared master
