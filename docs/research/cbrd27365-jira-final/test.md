@@ -12,11 +12,13 @@
 - SET/MULTISET/SEQUENCE/JSON 컬럼(256B 초과 컬렉션 포함)이 정렬 키·DISTINCT·UNION 에서 정확하다.
 - 64컬럼을 넘는 리스트(널 비트맵 9B 이상)에서 65번째 이후 컬럼의 NULL 판정과 값이 정확하다.
 - JDBC scrollable 커서(TYPE_SCROLL_INSENSITIVE)의 previous()/absolute()/last() 가 전 행을 정확히 돌려준다(역방향 가능 리스트의 prev_len).
+- 컴파일러가 도메인을 확정하지 않은 리스트 컬럼(파생 테이블의 숨은 ORDER BY 키)을 읽는 경로가 서버를 죽이지 않고 develop 과 같은 결과를 낸다: `percentile_cont(...) over(partition by ...)` 를 `order by ... limit 1` 서브쿼리로 감싼 비교, `group_concat(distinct <식> order by 1)` 을 `(select * from t order by 1, <식>)` 파생 테이블 위에서 GROUP BY 하는 질의(CTP `p_cont_subquery.sql` 70행, `group_concat_001.sql` 52~53행 형태).
+- SET/JSON 컬럼을 담은 파생 테이블(NO_MERGE) 위의 GROUP BY, SET 정렬키 정렬, JSON 분석함수 물질화가 develop 보다 느려지지 않는다(같은 호스트 release A/B, 명령어 수 기준 ±5%).
 - 임시 리스트 페이지 수가 변경 전보다 감소한다(SHOW TRACE 의 임시 리스트 SCAN `page:` 값, 또는 100만 행 (INT, BIGINT) 정렬의 정렬 데이터 페이지 -26%).
 
 ## TC 배치
 
-- csql 스크립트 + answer 로 판정되는 10건은 `cubrid-testcases`(sql): 첨부 `cbrd27365-tcs.zip` 의 `tc01_null_mix.sql` ~ `tc10_inplace.sql`. 각 파일은 CTP sql 케이스 형식(문장마다 `;`, 마지막 DROP)이며 동봉된 `*.answer.develop`(변경 전 develop 빌드 출력) 이 기대 답안이다(tc08 만 예외, 주의사항 참조). 배치 위치는 TC PR CUBRID/cubrid-testcases#3420(`tc/pr-7866`)의 `sql/_36_guava/cbrd_27365/cases/cbrd_27365_1.sql` ~ `cbrd_27365_10.sql`(CTP 답안 `answers/*.answer` 는 PR 빌드 출력으로 생성, tc08 외 9건은 develop 빌드 출력과 바이트 동일). zip 의 tc04/tc06/tc07/tc09 는 CTP 반입 시 문법 오류 문장(CONNECT BY 의 WHERE 위치, 윈도 프레임, 분석함수형 GROUP_CONCAT, SEQUENCE 정렬, 집합 리터럴 안의 함수 호출, 다중 인자 COUNT(DISTINCT))을 유효 문장으로 고쳤다(#201).
+- csql 스크립트 + answer 로 판정되는 10건은 `cubrid-testcases`(sql) 에 **QA 가 배치**해 주시기를 요청한다(엔진 PR 의 TC PR CUBRID/cubrid-testcases#3420 에는 기존 답안 조정만 있고 신규 TC 는 넣지 않았다). 재료는 첨부 `cbrd27365-tcs.zip`: `cases/cbrd_27365_1.sql` ~ `cbrd_27365_10.sql`(CTP sql 케이스 형식, 문장마다 `;`, 마지막 DROP; 본문의 tc01~tc10 이 순서대로 `_1`~`_10` 에 대응) 과 `answers/cbrd_27365_N.answer`(PR 빌드의 CTP 출력; `_8` 을 제외한 9건은 변경 전 develop 빌드 출력과 바이트 동일, `_8` 은 주의사항 참조). 위치 제안 `sql/_36_guava/cbrd_27365/{cases,answers}/`(이슈별 하위 디렉터리 관례), 최종 위치·이름은 QA 판단. zip 의 케이스는 원 재료의 문법 오류 문장 6종(CONNECT BY 의 WHERE 위치, 윈도 프레임, 분석함수형 GROUP_CONCAT, SEQUENCE 정렬, 집합 리터럴 안의 함수 호출, 다중 인자 COUNT(DISTINCT))을 유효 문장으로 고친 판이다.
 - JDBC 역방향 커서(첨부 `ScrollSmoke.java`, 인자 `<jdbc-url> <user> <password>`, 표준출력을 `expected_scroll.out` 과 비교)와 임시 페이지 수 감소 확인(SHOW TRACE 판독)은 `cubrid-testcases-private-ex`(shell).
 - 플랜 텍스트 유지가 목적인 기존 케이스(cbrd_23665, cbrd_24148, cbrd_25382_1/_5, cbrd_25447, cbrd_25519, join_orderby_skip)는 새 TC 가 아니라 기존 TC 의 입력 확대·데이터 재설계 대상이다(주의사항 참조).
 
@@ -108,23 +110,23 @@ SHOW TRACE;
 
 | ID | 시나리오 | 파라미터/데이터 조건 | 판정 기준 |
 | --- | --- | --- | --- |
-| T1 | NULL 혼합(첫 고정 컬럼 NULL, 전 컬럼 NULL, 빈 문자열) | tc01_null_mix.sql | 출력이 tc01_null_mix.answer.develop 과 바이트 동일 |
-| T2 | 고정 전 타입 + 가변 127/128/129B 경계 + 4KB 가변 | tc02_fixed_var_mix.sql | tc02 answer.develop 과 동일 |
-| T3 | 오버플로 튜플(20~30KB 값) 정렬·집계·UNION·재스캔 | tc03_overflow.sql | tc03 answer.develop 과 동일 (RIGHT(v1,3) 등 끝 바이트 일치) |
-| T4 | CONNECT BY: ORDER SIBLINGS BY 문자열, 다중 루트 DELETE IN, ISLEAF/ISCYCLE | tc04_connect_by.sql | tc04 answer.develop 과 동일, DELETE 가 에러 없이 성공 |
-| T5 | 해시 조인 키 INT/VARCHAR/NUMERIC/복합, 외부 조인 NULL 확장 | tc05_hash_join.sql (3,000행 x 2) | tc05 answer.develop 과 동일 |
-| T6 | 분석 함수 정렬키(가변·NULL), PERCENTILE/MEDIAN, GROUP_CONCAT OVER | tc06_analytic.sql | tc06 answer.develop 과 동일 |
-| T7 | SET/MULTISET/SEQUENCE/JSON 컬럼, 256B 초과 컬렉션 정렬키 | tc07_set_json.sql | tc07 answer.develop 과 동일 |
-| T8 | 늦은 도메인: 호스트 변수 NULL 시작 컬럼, 재귀 CTE 공용 리스트 | tc08_late_domain.sql | 출력이 tc08_late_domain.answer.pr2b-fix 와 동일, 서버 생존(err 로그에 assert/abort 없음) |
-| T9 | 73컬럼 리스트, 컬럼 1/65/72 NULL, 70컬럼 DISTINCT | tc09_wide.sql | tc09 answer.develop 과 동일 |
-| T10 | ORDERBY_NUM/ROWNUM/ISLEAF/ISCYCLE 이 가변 컬럼 뒤 | tc10_inplace.sql | tc10 answer.develop 과 동일 |
+| T1 | NULL 혼합(첫 고정 컬럼 NULL, 전 컬럼 NULL, 빈 문자열) | cbrd_27365_1.sql | 출력이 cbrd_27365_1.answer 와 바이트 동일 |
+| T2 | 고정 전 타입 + 가변 127/128/129B 경계 + 4KB 가변 | cbrd_27365_2.sql | cbrd_27365_2.answer 와 동일 |
+| T3 | 오버플로 튜플(20~30KB 값) 정렬·집계·UNION·재스캔 | cbrd_27365_3.sql | cbrd_27365_3.answer 와 동일 (RIGHT(v1,3) 등 끝 바이트 일치) |
+| T4 | CONNECT BY: ORDER SIBLINGS BY 문자열, 다중 루트 DELETE IN, ISLEAF/ISCYCLE | cbrd_27365_4.sql | cbrd_27365_4.answer 와 동일, DELETE 가 에러 없이 성공 |
+| T5 | 해시 조인 키 INT/VARCHAR/NUMERIC/복합, 외부 조인 NULL 확장 | cbrd_27365_5.sql (3,000행 x 2) | cbrd_27365_5.answer 와 동일 |
+| T6 | 분석 함수 정렬키(가변·NULL), PERCENTILE/MEDIAN, GROUP_CONCAT OVER | cbrd_27365_6.sql | cbrd_27365_6.answer 와 동일 |
+| T7 | SET/MULTISET/SEQUENCE/JSON 컬럼, 256B 초과 컬렉션 정렬키 | cbrd_27365_7.sql | cbrd_27365_7.answer 와 동일 |
+| T8 | 늦은 도메인: 호스트 변수 NULL 시작 컬럼, 재귀 CTE 공용 리스트 | cbrd_27365_8.sql | 출력이 cbrd_27365_8.answer 와 동일, 서버 생존(err 로그에 assert/abort 없음) |
+| T9 | 73컬럼 리스트, 컬럼 1/65/72 NULL, 70컬럼 DISTINCT | cbrd_27365_9.sql | cbrd_27365_9.answer 와 동일 |
+| T10 | ORDERBY_NUM/ROWNUM/ISLEAF/ISCYCLE 이 가변 컬럼 뒤 | cbrd_27365_10.sql | cbrd_27365_10.answer 와 동일 |
 | T11 | JDBC scrollable 커서 previous/absolute/last | ScrollSmoke.java, 임의 100행 테이블 | 표준출력이 expected_scroll.out 과 동일 |
 | T12 | 임시 페이지 수 감소 | t_sz 100만 행 ORDER BY b DESC, sort_buffer_size=2M | SHOW TRACE 임시 리스트 SCAN 의 page: 가 변경 전 빌드 대비 20% 이상 감소 (참고: 정렬 데이터 페이지 19,047 → 14,041) |
 | T13 | 기존 플랜 텍스트 케이스 유지 | cbrd_23665, cbrd_24148, cbrd_25382_1/_5, cbrd_25447, cbrd_25519, join_orderby_skip | 입력 확대 뒤 변경 전/후 빌드 모두 기존 answer 통과 |
 
 ## 주의사항
 
-- tc08 (6)(7) 재귀 CTE 문장은 변경 전 develop 빌드에서 서버가 abort 하므로(`qfile_unify_types` assert_release) `.answer.develop` 은 그 지점에서 끊긴다. tc08 의 기대 답안은 `tc08_late_domain.answer.pr2b-fix` 를 쓴다. 나머지 9건은 두 빌드 출력이 바이트 동일하다.
+- tc08(`cbrd_27365_8`) (6)(7) 재귀 CTE 문장은 변경 전 develop 빌드에서 서버가 abort 하므로(`qfile_unify_types` assert_release) 변경 전 출력과의 비교는 불가하며 첨부 `cbrd_27365_8.answer`(PR 빌드 출력)가 기대 답안이다. 나머지 9건의 `.answer` 는 변경 전 develop 빌드 출력과 바이트 동일하다.
 - 플랜 텍스트(SET TRACE ON / SHOW TRACE 의 `parallel workers`, `BUILD method: hybrid|memory`, `hash temp(h)|(m)`) 는 리스트 페이지 수로 결정되며 이 변경으로 같은 데이터에서 달라질 수 있다. 결과 집합이 아닌 플랜 텍스트를 판정에 쓰는 TC 는 리스트 페이지 수가 임계(병렬 임계 기본 2048 페이지, 해시 조인 in-memory 는 `page_cnt*16KB <= 메모리 한도`)를 확실히 넘거나 넘지 않도록 행 수를 잡는다. T13 의 7 케이스는 입력 확대(6건)와 빌드/프로브 데이터 재설계(cbrd_25382_1: t_bigint 쪽 행 수를 더 적게) 로 원래 플랜을 복원한다.
 - 해시 조인·병렬 실행 결과의 행 순서는 비결정적이므로 모든 판정 SQL 에 ORDER BY 를 둔다(첨부 TC 는 전부 포함).
 - 준비 문장의 BIT_AND/BIT_OR/BIT_XOR 결과 타입이 BIGINT 로 통일되어 기존 `agg_group_by` 답안이 갱신된다. 이는 의도된 정정이다.

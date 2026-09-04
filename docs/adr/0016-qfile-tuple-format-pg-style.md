@@ -172,6 +172,15 @@ CUBRID는 클라이언트/서버 lockstep 업그레이드만 지원한다. 혼�
   튜플 안에서 4B 정렬한다. 리더·라이터·비교자·`cursor.c` 가 모두 제자리에서 (역)직렬화하며 `QFILE_SCRATCH_ACQUIRE/RELEASE` 는
   삭제된다. 비용은 SCRATCH 값당 패딩 0~3B + 짧은 값(≤127B)의 헤더 +3B; DIRECT(문자열·BIT·NUMERIC) 규칙은 그대로다. 정렬키
   미니 튜플의 SCRATCH 키도 같은 규칙이라 비교자의 스택/힙 복사(그 OOM 경로 누수, 리뷰 P2)가 코드와 함께 사라진다.
+- **D-203-1 DIRECT 본문은 저장 분류로 읽는다 (D-201-1 후속, CTP 코어 2건)**: `qfile_col_read_body` 의 DIRECT 분기가 디코딩
+  도메인의 `index_readval` 유무까지 조건으로 걸어, 컴파일러가 미확정으로 남긴 `DB_TYPE_NULL` 도메인(percentile_cont 서브쿼리,
+  group_concat DISTINCT + 파생 테이블)이 오면 비정렬 문자열 본문이 SCRATCH 분기의 4B 정렬 assert 에 걸렸다. 분기는 컬럼의
+  저장 분류(`var_access`)로 먼저 나누고, `index_readval` 없는 디코딩 도메인(NULL/VARIABLE)은 구 포맷·develop 과 같이 그
+  도메인의 `data_readval` 을 적용한다(NULL 타입은 아무것도 읽지 않고 NULL).
+- **D-203-2 SCRATCH 읽기도 호출자의 copy 플래그를 따른다 (D-199-2 잔재 제거, PR #7866 리뷰 P1 후속)**: 일시 정렬 버퍼 시절
+  값이 그 버퍼를 참조하면 안 돼 `copy=true` 를 강제했다. 제자리 디코드(D-201-1)에서는 튜플 바이트가 다른 컬럼과 같은 수명이라
+  강제 근거가 없고, 강제 상태에서는 SET 이 매 행 원소 단위로 구성돼(`or_get_set`→`col_add`) GROUP BY 의 SET 컬럼 읽기가
+  develop 의 3.15배 명령어를 썼다(#203 프로파일 S5). copy=false 면 develop 처럼 디스크 SET 참조(`set_make_reference`)로 읽는다.
 - 플랜 텍스트 변화(§4 Consequences 추가): 리스트가 작아져 해시조인 BUILD `hybrid→memory`, `hash temp(h)→(m)`, 병렬
   워커 판단(`parallel workers` 줄 소실)이 바뀐다 — CTP 답안 7건 갱신 대상(#194), 병렬도 감소는 #193 관찰 항목.
 
