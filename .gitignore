@@ -8,3 +8,15 @@ porting_plan.md
 .not_git_tracking
 .gjc
 .claude/scratch
+
+# Java stored-procedure test artifacts: CTP/javasp cases compile these into the
+# cwd of whatever ran them. Build output, never source.
+java/*.class
+
+# csql/server error logs dropped into the cwd by a stray csql or server run.
+csql.err
+csql.access
+*_lginf
+*_lgat
+*_lgar_t
+*_vinf
