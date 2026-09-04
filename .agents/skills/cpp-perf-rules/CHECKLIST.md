@@ -3,6 +3,8 @@
 ## Mandatory (every performance-related change)
 - [ ] Is bottleneck measurement data attached (MEAS-01)
 - [ ] Is the improvement figure a median of repeated runs (MEAS-04)
+- [ ] **Were absolute counts recorded alongside rates** (MEAS-06)
+- [ ] **Is dispersion (MAD/stddev) reported next to the median** (MEAS-07)
 - [ ] Did functional regression tests pass (MEAS-05)
 - [ ] Are result-changing modifications (FP order, parallelism, SIMD) stated explicitly
 
@@ -14,6 +16,7 @@
 - [ ] No allocation inside loops (ALLOC-01)
 - [ ] Are containers pre-reserved (ALLOC-02)
 - [ ] Is memory that may be freed cross-thread on the global heap (ALLOC-08)
+- [ ] No float/double mixed expressions in hot loops (FP-08)
 
 ## Compute & branches
 - [ ] Any unpredictable branch in a hot loop (BR-03)
@@ -21,10 +24,34 @@
 - [ ] **No re-testing of compile-time-fixed values per row** (BR-04 / A59)
 - [ ] **Does the out-of-line function called unconditionally per row actually do work** (CC-05 / A60)
 - [ ] **Is dispatch (switch/virtual call) not re-decided inside the loop** (BR-06 / A61)
+- [ ] **In per-row conditions, is the cheap, most-rejecting test first** (BR-07)
+- [ ] **No error-check chain strung along the hot path** (BR-08)
+- [ ] **Is the error handler `noinline`** (BR-08)
 - [ ] **No store writing the same value every iteration** (BR-04 / A62)
 - [ ] Was vectorization actually confirmed (CC-04)
 - [ ] No repeated division (FP-04, CLOW-06)
 - [ ] Are overflow checks done with builtins (CC-06)
+
+## Parallel & system
+- [ ] Does the producer–consumer queue's synchronization match the producer count — lock/CAS on a single producer is overkill (PAR-15)
+- [ ] Is the CPU cost of the wait strategy (spin/yield/sleep) stated (PAR-16)
+- [ ] On a newly opened request–response socket, is TCP_NODELAY presence/absence intentional (SYS-05)
+
+## Physical design (refactoring / module-split reviews only)
+- [ ] Does every `#include` added to a header fall under the 5 cases (Is-A/Has-A/Inline/Enum/Typedef) (PHYS-01)
+- [ ] Was a header included where a forward declaration suffices (PHYS-01)
+- [ ] Any reliance on a transitive include (PHYS-01)
+- [ ] No new cyclic dependency introduced (PHYS-02)
+- [ ] Was the cycle removed by escalation/demotion rather than papered over (PHYS-03)
+- [ ] Does a new type own or delete sibling objects instead of a manager (PHYS-03)
+- [ ] No abstract interface inserted on a hot path that creates virtual calls (PHYS-05 ⚠ collides with CPP-09)
+- [ ] Was CCD / cycle count measured before and after (PHYS-06)
+- [ ] Does the implementation file include its own header first (PHYS-07)
+- [ ] Do the test driver's dependencies stay within the component's (PHYS-07)
+- [ ] If two public types share a component, which of the 4 colocation reasons applies (PHYS-08)
+- [ ] Was a non-primitive operation added to the type instead of a higher utility (PHYS-09)
+- [ ] Is the insulating wrapper/protocol placed high enough that its runtime price is acceptable (PHYS-10)
+- [ ] No runtime-initialized file-scope static, no local `extern`, no `using` at header scope in new code (PHYS-11)
 
 ## Floating point
 - [ ] No `==` comparison (FP-01)
@@ -87,6 +114,7 @@
 - [ ] No excessive synchronization on read-mostly data (PAR-10)
 - [ ] Allocator contention absent from the top of the profile (PAR-11)
 - [ ] `cpu_relax()` in spin loops (PAR-12)
+- [ ] Was an existing verified lock-free queue reused rather than hand-written (PAR-15)
 - [ ] **Serial-path improvements applied to parallel-only paths too** (PAR-14 / A63)
 
 ## Data & serialization

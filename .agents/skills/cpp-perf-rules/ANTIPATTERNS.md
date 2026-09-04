@@ -1,6 +1,7 @@
 # §17 Anti-pattern Catalog
 
 Flag on sight. When found, cite the rule ID and present the alternative.
+A01–A66 match the upstream 성능규칙집 note; **A67–A79 are skill-local extensions** for the rules added later (MEAS-06/07, BR-07/08, FP-08, PAR-15/16, SYS-05, PHYS).
 
 | # | Anti-pattern | Violates | Alternative |
 |---|---|---|---|
@@ -70,3 +71,16 @@ Flag on sight. When found, cite the rule ID and present the alternative.
 | A64 | **thread-local heap allocation freed by another thread** | ALLOC-08 | use the global heap |
 | A65 | per-row rounding/packing in fixed-point bulk summation | FP-07 | deferred carry + one materialization at finish |
 | A66 | overflow detection via `volatile` + post-hoc check | CC-06 | `__builtin_*_overflow` |
+| A67 | float and double mixed in one hot-loop expression (`b * 1.23` on a float) | FP-08 | unify the type; `f` suffix on literals |
+| A68 | `if/else if` error-check chain inlined on the hot path | BR-08 | single `error_flags` test + `noinline` cold handler |
+| A69 | expensive condition ahead of a cheap, highly-selective one in a per-row predicate | BR-07 | reorder (no side effects; comment the selectivity assumption) |
+| A70 | lock- or CAS-based queue with exactly one producer | PAR-15 | pre-allocated ring + sequence + barriers (reuse the verified implementation) |
+| A71 | busy-spin wait with no stated CPU budget | PAR-16 | choose spin / spin-then-yield / block explicitly and document it |
+| A72 | new request–response socket with no TCP_NODELAY decision | SYS-05 | set it, or comment why Nagle is wanted |
+| A73 | perf verdict from a rate alone (miss rate up/down) without counts or wall-clock | MEAS-06 | record `cache-references`, `instructions`, and the wall-clock median |
+| A74 | mean-only improvement report | MEAS-07 | median + MAD/stddev |
+| A75 | header `#include` for a type used only by pointer/reference | PHYS-01 | forward declaration; include in the `.cpp` |
+| A76 | relying on a transitive include | PHYS-01 | include directly |
+| A77 | cyclic include patched with `#ifdef` / forward-declaration soup | PHYS-02, PHYS-03 | escalate or demote the contact point |
+| A78 | recursive destructor freeing sibling nodes (`~Link() { delete next; }`) | PHYS-03 | manager class owns lifetime; stack-overflow hazard |
+| A79 | abstract interface (virtual) inserted on the row loop for insulation/mocking | PHYS-05, CPP-09 | template binding on the hot path; protocol on the cold path |

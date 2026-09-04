@@ -106,6 +106,15 @@ Millions of destructor-bearing objects cost O(n) just to destroy. Trivially dest
 static_assert(std::is_trivially_destructible_v<sample_t>);   /* state the guarantee */
 ```
 
+## CPP-09 — A repeatedly-called virtual function can become compile-time dispatch
+
+The vtable lookup + indirect call costs less than the fact that it **blocks inlining and constant propagation**. If the call target is known at compile time, move to templates/CRTP/overloading. Measured 2.60ns → 1.92ns (~26%, paper note §2.2).
+
+- **Precondition**: only when runtime polymorphism is genuinely not needed. If the type is decided at runtime, this does not apply.
+- ⚠ **Never propose this in `.c` files** (usage protocol). Much of CUBRID's hot path is C — there, BR-06 (hoist the function-pointer table out of the loop) is the counterpart.
+- Templating causes **code bloat → I-cache pressure**. It pays only with a small number of instantiations (same trade-off as CPP-03 and CC-02).
+- ⚠ Conflicts with PHYS-05 (insulation via abstract interfaces). On a hot path the performance rule wins; keep protocols for cold/init paths.
+
 ---
 
 # §11 C Low-Level Techniques (CLOW)

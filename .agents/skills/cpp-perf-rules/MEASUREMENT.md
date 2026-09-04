@@ -38,3 +38,28 @@ Stage 3: Explain — which instruction in that function
 
 ## MEAS-05 — Verify correctness after the improvement
 Performance changes must pass functional regression tests. FP reordering, parallelization, and SIMD substitution can change results — verify explicitly.
+
+## MEAS-06 — Never judge from a single metric (usage protocol for the MEAS-03 table)
+
+The MEAS-03 thresholds are **suspicion signals, not verdicts**. Read one metric alone and you will read it backwards. Two measured cases (low-latency paper note §2.1, §3.5):
+
+| Case | Miss rate | Instructions | Wall time |
+|---|---|---|---|
+| Cache cold → warm | 73.96% → 71.56% (≈ unchanged) | 4.93B → 12.01B (**up**) | 267.7ms → **25.6ms** |
+| Combined optimizations | 16.0% → 33.9% (**2× worse**) | 6.01B → **3.27B** | **fastest** |
+
+- The first case got faster because the **number of cache references** dropped, not the miss *rate*. Rate alone reads as "no improvement".
+- The second has double the miss rate and is the fastest — total instruction count halved.
+- So **record rate and absolute count together**: both `cache-misses` and `cache-references` from `perf stat`, plus `instructions`.
+- The final verdict is always the **wall-clock median**. Hardware counters explain *why*; they never decide.
+
+> Same failure shape outside the engine: a histogram was judged "full-scan statistics" from `buckets:300` alone when it was actually sampled (2026-08-28). **A secondary indicator looking normal is not evidence that the primary thing is normal.**
+
+## MEAS-07 — Variance (the tail) is a metric, not just the mean
+
+What a DB user feels is not the mean but the **slow tail**. Same mean with high variance means timeouts and SLA violations.
+
+- When reporting an optimization, **write the dispersion (MAD or stddev) next to the median.**
+  Measured: pair-trading stddev 4,233ns → 400ns — not just faster but **predictable** (paper note §3.4).
+- Pre-allocation and fixed-size buffers contribute more to **reducing variance** than to the mean. Runtime allocation is not slow; it is **occasionally very slow** (same reason as ALLOC-01).
+- If the mean improved while variance stayed high, do not call it an improvement.

@@ -182,3 +182,26 @@ if (workers < 2) return scan_serial(...);        /* PAR-06 */
 If parallel execution uses a **separate dedicated loop**, it's easy to improve only the serial path and miss the parallel one.
 Symptoms: "the same query loses the improvement when run in parallel", "only certain query shapes are neutral."
 For each improvement, **enumerate both serial and parallel consumption sites**, verify both, and record the list in the commit message or comments.
+
+## PAR-15 — A single-producer queue needs neither locks nor CAS (pre-allocated ring buffer)
+
+In a producer–consumer structure (WAL append, log buffer, statistics pipeline) with **one producer**, a pre-allocated ring buffer + sequence number + **memory barriers alone** guarantee visibility (the LMAX Disruptor principle). Measured 38–55% over a lock-based queue, widening as event count grows (paper note ch. 4).
+
+- The real cost of a lock is not the lock instruction (~25ns) but that **contention is arbitrated via context switches, invalidating and refilling caches.**
+- **Batching comes for free**: when the consumer observes the cursor several slots ahead, it drains up to that point without further synchronization — bursts are absorbed naturally.
+- With multiple producers, use CAS only to claim a slot. A bounded queue that shares head/tail/size variables concentrates write contention on them (worst when combined with MEM-03 false sharing).
+- Latency variance also shrinks (MEAS-07): measured σ 453,766ns → 53,600ns.
+- ⚠ This falls under the "reuse verified low-level code" rule — **do not hand-write one**; look first for an existing verified implementation (e.g. the engine's lock-free queue). This rule is a review criterion, not a build order.
+
+## PAR-16 — A wait strategy is a latency↔CPU trade-off. Choose it explicitly
+
+How the consumer waits when there is no event is a design decision:
+
+| Strategy | Latency | CPU | Fits |
+|---|---|---|---|
+| busy-spin | lowest | burns a core | extremely hot path with a dedicated core |
+| spin N times → yield | low | medium | ordinary hot path (hybrid) |
+| condvar/sleep | high (wake-up latency) | minimal | cold / background |
+
+- A design that demands "fast" without stating the CPU cost is incomplete. busy-spin **buys latency with CPU** — stealing another worker's core can be a net loss for the system.
+- DB equivalents: log-flush wait, worker-pool job wait, latch spin limits. CUBRID's spin-then-block parameters live on this axis.

@@ -135,6 +135,15 @@ _mm_sfence();                               // if ordering is needed afterwards
 
 **But if you will read that data again soon, this backfires.**
 
+## MEM-10 — Keep rarely-run but latency-critical paths warm (cache warming)
+
+A path that runs seldom but must be fast when it runs is always slow the first time — code (I-cache) and data (D-cache) are both cold. **Exercise the path during idle time so it stays cached.** Measured ~90% (cold 267.7ms → warm 25.6ms, paper note §2.1).
+
+- HFT original: run the execution engine to completion on every tick, but only emit the order when a signal exists.
+- DB equivalents: the first query after server restart, the recovery path after a long idle, rare slow-path transitions (spill, etc.). **Buffer-pool pre-warming and statistics preloading are the macro version of the same principle.**
+- ⚠ The warm-up run must have **no side effects**. If the path mutates state, split out a dry-run first.
+- ⚠ Relation to measurement: benchmark warm-up (MEAS-04) exists to **remove** this effect; this rule **exploits** it in production. Do not confuse the two.
+
 ---
 
 # §3 Cache Coherency & Memory Sharing Protocol (COH)

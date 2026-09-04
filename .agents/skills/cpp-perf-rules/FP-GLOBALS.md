@@ -98,6 +98,19 @@ Decimal fixed-point addition drags along precision/scale lookup, digit scans, ro
 For bulk summation, **accumulate into integer word buckets with ample headroom** and perform digit normalization/rounding/packing **once at finalization**. Separate sign-specific buckets even remove the per-row overflow check.
 Introducing an accumulator state means **every consumption point (reading intermediate results, merging partial sums, spill store/load, free, re-init) must be preceded by materialization (flush)** — pin the list of those points in a code comment and verify it exhaustively in review.
 
+## FP-08 — Never mix float and double in one expression
+
+Mixing inserts implicit promotion (float→double) and demotion (double→float) instructions. In a per-row loop that is not negligible. Measured 21.6ns → 14.2ns (~52%, paper note §2.11).
+
+```c
+float a, b;
+a = b * 1.23;    /* 1.23 is a double literal → promote + demote */
+a = b * 1.23f;   /* float literal → no conversion */
+```
+
+- Decide the required precision first, then unify the type. double→float demotion loses precision.
+- DB check: are statistics/selectivity computations uniformly double, with no stray `f` literals mixed in?
+
 ---
 
 # §8 Global / Static / TLS State (GLOB)

@@ -112,3 +112,16 @@ echo, printf, read, cd, kill, exec, [[ ]], while, for
 # need fork (fail under exhaustion)
 ls, cat, ps, grep, awk, sed
 ```
+
+## SYS-05 — Disable Nagle on small request–response sockets (TCP_NODELAY)
+
+Nagle's algorithm **waits for an ACK** to coalesce small packets — in a request–response (RPC) pattern that wait is added straight onto round-trip latency. One socket option removes it:
+
+```c
+int yes = 1;
+setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof (yes));
+```
+
+- DB relevance: **client↔broker↔CAS↔server are all request–response sockets.** In a many-small-queries workload, a missing NODELAY anywhere on the connection path can add tens of ms per query.
+- Bulk streaming (result-set bulk transfer) may benefit from Nagle instead — decide per pattern.
+- Review point: in code that opens a new socket, confirm whether the presence/absence of this option is **intent or omission**.

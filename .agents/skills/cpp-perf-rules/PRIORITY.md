@@ -2,6 +2,8 @@
 
 When handed a performance problem, proceed in this order. If a level solves it, do not descend further.
 
+**Step 0 — is it actually a runtime problem?** If the complaint is build time, "one header change rebuilds everything", or "can't test this module alone", it is a **physical-design** problem: go to [PHYSICAL-DESIGN.md](PHYSICAL-DESIGN.md) and measure with the include graph / CCD (PHYS-06) instead of `perf`. The two axes share MEAS-01 (measure first) and nothing else.
+
 ```
 1. Can algorithmic complexity be lowered?
    → Turning O(n²) into O(n log n) beats the sum of all other optimizations.

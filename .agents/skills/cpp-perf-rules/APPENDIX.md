@@ -136,6 +136,11 @@ perf stat -e uncore_imc/data_reads/,uncore_imc/data_writes/ ./bench
 | Degrades only as sockets grow | NUMA remote access | PAR-09 |
 | Fast only with 1 thread | serial-section dominance | rethink the algorithm |
 | Improvement vanishes only in parallel | parallel-only loop missed | PAR-14 |
+| Mean is fine, p99/timeouts are not | allocation or wait-strategy jitter | MEAS-07, ALLOC-01, PAR-16 |
+| Producer–consumer queue tops the lock profile | single producer paying for locks/CAS | PAR-15 |
+| Counters "improved" but wall-clock did not | rate read without count | MEAS-06 |
+| First query after restart / after idle is slow | cold I-/D-cache on a rare path | MEM-10 |
+| Many tiny queries each cost tens of ms over the wire | Nagle on a request–response socket | SYS-05 |
 
 ---
 
@@ -154,9 +159,80 @@ The body is written to be sufficient on its own; consult these only for deeper d
 | *Performance Analysis and Tuning on Modern CPUs* (Bakhvalov) | free PDF | practical perf/VTune |
 | *Data-Oriented Design* (Richard Fabian) | free online | background for MEM-04 |
 | Blogs | `easyperf.net`, `godbolt.org`, `quick-bench.com` | assembly & microbenchmarks |
+| *Large-Scale C++ Vol. I: Process and Architecture* (Lakos, 2019) | Addison-Wesley | source of §20 PHYS — levelization, insulation, CCD. Digest: `notes/대규모Cpp-물리설계-Lakos.md` |
+| Low-latency pattern measurements (HFT paper digest) | `notes/저지연패턴-HFT논문.md` | the ns/ms figures cited in MEAS-06/07, MEM-10, BR-07/08, FP-08, PAR-15, CPP-09 |
 
 **Tools:** `perf` (stat/record/annotate/c2c/lock), Intel VTune (Top-Down), Valgrind (cachegrind/callgrind),
 `pahole` (struct layout), `numastat`/`numactl` (NUMA), Compiler Explorer (assembly).
 
 > Installed in this container: `~/tools` has perf 4.18 + FlameGraph, heaptrack 1.2, bpftrace,
 > VTune **2025.0** (the 2026 version doesn't support Cascade Lake). Usage: `dev/profiling-guide.md`.
+
+---
+
+# Appendix D: Physical-Design Measurement (PHYS-06)
+
+Parses only `#include` directives — no C++ parsing — and reports component count, edges, **CCD**, and the strongly-connected components (cycles). Component = files sharing a root name (`foo.c`/`foo.h` → `foo`), the Lakos convention CUBRID mostly follows. Run it before and after a refactoring and put both numbers in the PR.
+
+```python
+#!/usr/bin/env python3
+"""include-graph metrics: cycles (PHYS-02), CCD (PHYS-06).  usage: incgraph.py <src-root>"""
+import os, re, sys
+from collections import defaultdict
+
+ROOT = sys.argv[1]
+INC = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]')
+EXT = ('.c', '.cpp', '.cc', '.h', '.hpp')
+comp = lambda path: os.path.splitext(os.path.basename(path))[0]
+
+deps = defaultdict(set)
+for dp, _, fs in os.walk(ROOT):
+    for f in fs:
+        if not f.endswith(EXT): continue
+        c = comp(f); deps.setdefault(c, set())
+        with open(os.path.join(dp, f), errors='replace') as fh:
+            for line in fh:
+                m = INC.match(line)
+                if m and comp(m.group(1)) != c: deps[c].add(comp(m.group(1)))
+local = set(deps)                         # system headers = level 0 → dropped
+for c in deps: deps[c] &= local
+
+# Tarjan SCC — any SCC larger than 1 is a cycle
+sys.setrecursionlimit(1 << 20)
+idx, low, on, st, sccs, n = {}, {}, set(), [], [], [0]
+def strong(v):
+    idx[v] = low[v] = n[0]; n[0] += 1; st.append(v); on.add(v)
+    for w in deps[v]:
+        if w not in idx: strong(w); low[v] = min(low[v], low[w])
+        elif w in on:    low[v] = min(low[v], idx[w])
+    if low[v] == idx[v]:
+        s = []
+        while True:
+            w = st.pop(); on.discard(w); s.append(w)
+            if w == v: break
+        sccs.append(s)
+for v in list(deps):
+    if v not in idx: strong(v)
+cycles = sorted((s for s in sccs if len(s) > 1), key=len, reverse=True)
+
+# CCD = Σ |transitive link set incl. self|
+def reach(v):
+    seen, todo = {v}, [v]
+    while todo:
+        for w in deps[todo.pop()]:
+            if w not in seen: seen.add(w); todo.append(w)
+    return seen
+link = {v: len(reach(v)) for v in deps}
+ccd = sum(link.values())
+
+print(f"components={len(deps)} edges={sum(map(len, deps.values()))} "
+      f"CCD={ccd} avg_link_set={ccd / max(len(deps), 1):.1f} cycles={len(cycles)}")
+for s in cycles[:5]:
+    print(f"CYCLE size={len(s)}: {' '.join(sorted(s)[:12])}{' ...' if len(s) > 12 else ''}")
+print("heaviest link sets:", sorted(link.items(), key=lambda kv: -kv[1])[:10])
+```
+
+Reading the output in CUBRID:
+- Expect **one very large SCC** at first — a legacy engine is usually a single knot. The metric that matters is that knot **shrinking** and CCD **dropping** between two commits, not the absolute value.
+- Level numbers (leaf = 1) can only be assigned once a component is outside every cycle; components inside the big SCC have no level.
+- Components with the heaviest link sets are the insulation targets (PHYS-01, PHYS-10): every client of them recompiles on every change beneath.

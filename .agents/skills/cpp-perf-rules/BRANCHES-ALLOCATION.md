@@ -77,6 +77,42 @@ template<typename Proc> void run(Proc& p, span<row> rows) {
 
 > **Trade-off note:** function-pointer dispatch is not always bad. Calling a once-resolved function pointer is far cheaper than walking a several-hundred-case switch tree recursively per row. What's bad is **re-deciding the dispatch inside the loop every time.** Especially when nested like `switch(kind)` → `switch(type)` → `switch(operator)`, pre-resolve the (kind×type×operator) leaf.
 
+## BR-07 — Condition order is cost (exploit short-circuit evaluation)
+
+`&&`/`||` short-circuit. Put the **cheap, frequently-filtering condition first** and the expensive one is often never executed. Measured ~50% across the board (paper note §2.6).
+
+```c
+/* BAD — expensive check first */
+if (expensive_type_check (v) && flag_is_set (v)) ...
+/* GOOD — cheap flag rejects most rows, then the expensive check */
+if (flag_is_set (v) && expensive_type_check (v)) ...
+```
+
+- Biggest effect on **per-row conditions** such as predicate evaluation and scan filters. Move the low-selectivity (= most rejecting) condition to the front.
+- **Never reorder conditions with side effects.** If short-circuiting removes a call, semantics change.
+- When you reorder, **leave the selectivity assumption in a comment.** Data changes can invert it.
+
+## BR-08 — Fold error checks into one flag; move handling to a cold function
+
+An `if/else if` chain of error checks on the hot path (1) burns branch-predictor slots and (2) inlines handling code that **pollutes the I-cache**. Remove both at once.
+
+```c
+/* BAD — a branch per check + handling code inlined on the hot path */
+if (check_a (p)) { handle_a (p); return; }
+else if (check_b (p)) { handle_b (p); return; }
+else do_work (p);
+
+/* GOOD — one branch, handling out of line */
+if (LIKELY (!p->error_flags)) do_work (p);
+else handle_error (p);          /* __attribute__((noinline)), cold */
+```
+
+Measured: if-else chain 7.35ns → flag 4.68ns (fewer branches, ~36%); slow-path split ~12% (paper note §2.7, §2.8). Use the two together — one is the branch-prediction view, the other the I-cache view.
+
+- Mark the error handler `__attribute__((noinline))` explicitly; otherwise the compiler inlines it and the point is lost.
+- **Do not apply to cold paths.** Rewriting init/shutdown/error paths this way is pointless (usage protocol: hot/cold split).
+- MEAS-03's `stalled-cycles-frontend > 20%` is the signal for this problem.
+
 ---
 
 # §6 Allocation (ALLOC)
