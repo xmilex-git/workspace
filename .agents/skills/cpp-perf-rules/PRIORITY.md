@@ -4,6 +4,8 @@ When handed a performance problem, proceed in this order. If a level solves it, 
 
 **Step 0 — is it actually a runtime problem?** If the complaint is build time, "one header change rebuilds everything", or "can't test this module alone", it is a **physical-design** problem: go to [PHYSICAL-DESIGN.md](PHYSICAL-DESIGN.md) and measure with the include graph / CCD (PHYS-06) instead of `perf`. The two axes share MEAS-01 (measure first) and nothing else.
 
+**Step 0.5 — is the delta even caused by the source semantics?** Two builds are two ELFs. If a benchmark moved after an edit whose direct cost cannot explain it (cold path, header-only, `noexcept`/template/`std::function` churn), run the hot-symbol phase gate (MEAS-08, Appendix E) and a padding control **before** descending into steps 1–9. Optimizing the algorithm to compensate for a 16-byte link-phase shift is wasted work; the mitigation ladder is CC-09.
+
 ```
 1. Can algorithmic complexity be lowered?
    → Turning O(n²) into O(n log n) beats the sum of all other optimizations.

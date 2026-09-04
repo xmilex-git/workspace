@@ -63,3 +63,32 @@ What a DB user feels is not the mean but the **slow tail**. Same mean with high 
   Measured: pair-trading stddev 4,233ns → 400ns — not just faster but **predictable** (paper note §3.4).
 - Pre-allocation and fixed-size buffers contribute more to **reducing variance** than to the mean. Runtime allocation is not slow; it is **occasionally very slow** (same reason as ALLOC-01).
 - If the mean improved while variance stayed high, do not call it an improvement.
+
+## MEAS-08 — Exclude the code-layout confound before attributing a delta to source semantics
+
+Any A/B on hot-loop code that lands in the same DSO compares **two different binaries**, not two versions of
+one function (CC-08). Before saying "change X made the executor N % slower/faster", run the ELF gate:
+
+```
+1. Hot-symbol phase diff (Appendix E):  nm -n -S on A and B for the workload's top perf symbols
+     → addr, size, addr % 32, addr % 64, raw-byte hash for each; count of symbols shifted
+   No shift and identical bytes  → layout excluded, attribute to semantics.
+   Shift (typically a uniform ±16 / ±32 across a long run of symbols) → continue.
+2. Locate the first divergence: walk the sorted symbol list, find the first symbol whose size differs
+   (in CBRD-26382 a 7-byte cold fragment 3 MB upstream of the executor).
+3. Padding control: rebuild B with N non-executable bytes appended to that object's section so that the
+   hot addresses return to A's phase, keeping B's logic. Same toolchain, same day, same flags.
+   If timing follows the phase, the delta is layout, not the source change — say so in the PR/report.
+4. Extend to phases 0/8/16/24/32 with independent rebuilds if the finding will drive a product decision
+   (removes periodicity and build-date confounds).
+```
+
+Reporting rules:
+- Give **paired** B/A ratios with a bootstrap CI from ≥ 20 runs per variant; publish the direction *and*
+  whether the magnitude reproduced (stable host +1.46 % vs QA +10.56 % is a real, CPU-dependent spread).
+- Read the **full Top-down L1/L2** for both variants. "DSB miss +52 %" alone is not a cause; in the
+  measured case front-end bound went *down* while core bound went up. Say which slot moved.
+- Restart protocol matters for reproduction (server/master restart per sample vs fresh `createdb`); state it.
+  Confirm `read_bytes`/major-faults are 0 before ruling out I/O — don't argue disk from hardware specs.
+- A control that changes hot bytes for a *different* reason (e.g. forced `noexcept`) is a **separate**
+  variant, not evidence about layout: compare its hot-symbol hashes to B before interpreting its timing.

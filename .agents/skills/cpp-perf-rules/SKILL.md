@@ -25,6 +25,7 @@ they can be cited across both.
 9. **Read rate and count together; report median and dispersion together.** A miss *rate* that moves says nothing without `cache-references`/`instructions` (MEAS-06); a mean that improves with a fat tail is not an improvement (MEAS-07). Wall-clock median decides; counters only explain.
 10. **Choose the chapter by the complaint.** Runtime (slow query, no scaling) → §0–§19. Build time, "one header rebuilds everything", "can't test this module alone", cyclic includes → §20 PHYS. When the two collide on a **hot path, performance wins** (PHYS-05 / CPP-09); on cold/init paths PHYS wins.
 11. **Reuse verified low-level code before writing it.** Lock-free queues, ring buffers, spin/backoff loops (PAR-15/16): find the engine's existing implementation first; the rules are review criteria, not a build order.
+12. **Two builds are two ELFs.** Before attributing any hot-loop timing delta to a source change, run the hot-symbol layout gate (MEAS-08, Appendix E). A cold-path edit that shrinks a function by 7 bytes can shift 8,000 symbols by 16 bytes and cost 1.5–10 % on an executor loop (CC-08). Mitigate by the CC-09 ladder — never blanket `-falign-functions`.
 
 ## Recurring failure axes in this repository (CUBRID)
 
@@ -45,6 +46,7 @@ When writing or reviewing perf-path code, **skim [CHECKLIST.md](CHECKLIST.md) fi
 | **Perf verdict from a single run** | MEAS-04 | One pass on a polluted baseline misjudged as "regression" → median-of-3 + cross-validation required |
 | **Verdict from a secondary indicator alone** | MEAS-06 | Histogram judged "full-scan statistics" from `buckets:300` when it was sampled (2026-08-28) — rate/aux metric looked normal, primary was not |
 | **Build-dir move treated as free** | PHYS-06 | `CMakeCache` bakes paths into compile lines → one full rebuild is a fixed cost (2026-08-27 `.50` 1358 targets, 08-28 `.52`) |
+| **Cold-path edit moved the hot path (link-phase regression)** | CC-08/09, MEAS-08, A80–A83 | CBRD-26382: `std::function`→lambda in `scope_exit` (recovery only) shrank a GCC 8 cold fragment 7 B → 8,287 symbols −16 B → executor `%32` phase flipped → +1.5 % (stable PC) / +10.56 % (QA) on `COUNT(*)`; 7-byte NOP padding control restored addresses and timing |
 | **Header change rebuilds the world / module untestable alone** | PHYS-01/05 | Insulation missing, heavy layering — measure CCD (Appendix D) before refactoring |
 
 ## Priority decision procedure (when handed a perf problem)
@@ -52,6 +54,7 @@ When writing or reviewing perf-path code, **skim [CHECKLIST.md](CHECKLIST.md) fi
 Condensed — full text in [PRIORITY.md](PRIORITY.md). Work top-down; stop at the level that solves it. Step 3 matters most: one DRAM access ≈ 200–400 integer ops.
 
 0. **Is it a runtime problem at all?** Build time / "everything recompiles" / "can't test alone" → [PHYSICAL-DESIGN.md](PHYSICAL-DESIGN.md), measure with the include graph and CCD (PHYS-06, Appendix D), not `perf`.
+0.5 **Is the delta caused by the source at all?** Direct cost can't explain it (cold path, header/template/EH churn) → hot-symbol layout gate + padding control (MEAS-08, Appendix E) before touching the algorithm.
 1. **Lower algorithmic complexity?** O(n²)→O(n log n) beats everything else combined. Remove work entirely (early exit, caching, dedup).
 2. **Reduce the data touched?** Column pruning, compression, approximate structures (DS-05), read only needed fields.
 3. **Improve memory access patterns?** MEM-01..07 — most real-world gains live here.
@@ -68,7 +71,7 @@ Condensed — full text in [PRIORITY.md](PRIORITY.md). Work top-down; stop at th
 | File | Sections |
 |---|---|
 | [COSTS.md](COSTS.md) | §0 Cost baselines (cycles) + hardware constants — memorize the orders of magnitude |
-| [MEASUREMENT.md](MEASUREMENT.md) | §1 MEAS — measurement procedure, verdict baselines, benchmark hygiene, rate-vs-count (MEAS-06), tail/dispersion (MEAS-07) |
+| [MEASUREMENT.md](MEASUREMENT.md) | §1 MEAS — measurement procedure, verdict baselines, benchmark hygiene, rate-vs-count (MEAS-06), tail/dispersion (MEAS-07), code-layout confound gate + padding control (MEAS-08) |
 | [MEMORY-COHERENCY.md](MEMORY-COHERENCY.md) | §2 MEM (memory access — top category, incl. cache warming MEM-10), §3 COH (cache coherency, MESI, false sharing) |
 | [ALIASING.md](ALIASING.md) | §4 ALIAS — strict aliasing, restrict, the biggest C optimization lever |
 | [BRANCHES-ALLOCATION.md](BRANCHES-ALLOCATION.md) | §5 BR (branches, dispatch, condition order BR-07, error-flag + cold handler BR-08), §6 ALLOC (allocation, arenas) |
@@ -76,9 +79,9 @@ Condensed — full text in [PRIORITY.md](PRIORITY.md). Work top-down; stop at th
 | [PARALLEL.md](PARALLEL.md) | §9 PAR — atomics, memory order, NUMA, sync selection, single-producer ring (PAR-15), wait strategy (PAR-16) |
 | [CPP-CLOW.md](CPP-CLOW.md) | §10 CPP (C++ feature costs, compile-time dispatch CPP-09), §11 CLOW (C low-level techniques) |
 | [DATA-STRINGS-SERIAL.md](DATA-STRINGS-SERIAL.md) | §12 DS (data structures), §13 STR (strings), §14 SER (serialization) |
-| [COMPILER-SYSTEM.md](COMPILER-SYSTEM.md) | §15 CC (compiler flags, PGO, vectorization), §16 SYS (I/O & system, TCP_NODELAY SYS-05) |
-| [ANTIPATTERNS.md](ANTIPATTERNS.md) | §17 Anti-pattern catalog A01–A79 — flag on sight with rule ID + alternative (A67+ are skill-local) |
+| [COMPILER-SYSTEM.md](COMPILER-SYSTEM.md) | §15 CC (compiler flags, PGO, vectorization, code-layout sensitivity CC-08, alignment/ordering mitigation ladder CC-09), §16 SYS (I/O & system, TCP_NODELAY SYS-05) |
+| [ANTIPATTERNS.md](ANTIPATTERNS.md) | §17 Anti-pattern catalog A01–A83 — flag on sight with rule ID + alternative (A67+ are skill-local) |
 | [PRIORITY.md](PRIORITY.md) | §19 Priority decision procedure — full text |
-| [CHECKLIST.md](CHECKLIST.md) | §18 Review checklist — run for every performance-related change; PHYS section for refactoring reviews |
+| [CHECKLIST.md](CHECKLIST.md) | §18 Review checklist — run for every performance-related change; Code-layout section for header/template/EH/cold-path edits; PHYS section for refactoring reviews |
 | [PHYSICAL-DESIGN.md](PHYSICAL-DESIGN.md) | §20 PHYS — insulation, acyclic dependencies, 9 levelization techniques, layered→lateral, CCD, colocation, primitiveness, insulation techniques & their runtime price, symptom→prescription map |
-| [APPENDIX.md](APPENDIX.md) | A: common macros/utilities, B: multithread scalability diagnosis procedure, C: external references & installed tools, D: include-graph / CCD measurement script (PHYS-06) |
+| [APPENDIX.md](APPENDIX.md) | A: common macros/utilities, B: multithread scalability diagnosis procedure, C: external references & installed tools, D: include-graph / CCD measurement script (PHYS-06), E: hot-symbol layout gate script (CC-08 / MEAS-08) |

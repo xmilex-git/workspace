@@ -236,3 +236,76 @@ Reading the output in CUBRID:
 - Expect **one very large SCC** at first — a legacy engine is usually a single knot. The metric that matters is that knot **shrinking** and CCD **dropping** between two commits, not the absolute value.
 - Level numbers (leaf = 1) can only be assigned once a component is outside every cycle; components inside the big SCC have no level.
 - Components with the heaviest link sets are the insulation targets (PHYS-01, PHYS-10): every client of them recompiles on every change beneath.
+
+---
+
+# Appendix E: Hot-Symbol Layout Gate (CC-08 / MEAS-08)
+
+Compares two builds of the same DSO **before** a perf verdict is attributed to a source change. Reports, for
+each hot symbol, address / size / `% 32` / `% 64` / raw-byte hash in A and B, then the **first symbol whose
+size diverges** (the origin of the shift) and how many symbols moved. Needs only `nm`, `objdump`, `python3`.
+Pass the perf top-N symbol names of the gated workload; without a list it uses the CUBRID executor set from
+CBRD-26382.
+
+```python
+#!/usr/bin/env python3
+"""layout-gate.py A.so B.so [sym ...]  — hot-symbol address-phase diff (CC-08, MEAS-08)"""
+import hashlib, subprocess, sys
+
+DEFAULT_HOT = ["qexec_execute_scan", "fetch_val_list", "qdata_evaluate_aggregate_list",
+               "qexec_execute_mainblock", "scan_next_scan"]
+
+def symtab(path):
+    """name -> (addr, size), sorted by addr; C++ names demangled, only defined text symbols."""
+    out = subprocess.run(["nm", "-n", "-S", "-C", "--defined-only", path],
+                         capture_output=True, text=True, check=True).stdout
+    tab = {}
+    for line in out.splitlines():
+        f = line.split(None, 3)
+        if len(f) == 4 and f[2] in "tTwW":
+            name = f[3].split("(")[0]          # strip C++ signature
+            if "[clone " in f[3]:               # GCC hot/cold split: keep ".cold.N" fragments distinct
+                name += f[3][f[3].index("[clone ") + 7:].rstrip("]")
+            tab.setdefault(name, (int(f[0], 16), int(f[1], 16)))
+    return tab
+
+def body_hash(path, addr, size):
+    raw = subprocess.run(["objdump", "-s", f"--start-address={addr:#x}", f"--stop-address={addr+size:#x}", path],
+                         capture_output=True, text=True).stdout
+    data = "".join("".join(l.split()[1:5]) for l in raw.splitlines() if l.startswith(" "))
+    return hashlib.sha1(data.encode()).hexdigest()[:10]
+
+a_path, b_path = sys.argv[1], sys.argv[2]
+hot = sys.argv[3:] or DEFAULT_HOT
+A, B = symtab(a_path), symtab(b_path)
+
+print(f"{'symbol':40} {'A addr':>10} {'B addr':>10} {'Δ':>5} {'A%32':>4} {'B%32':>4} {'A%64':>4} {'B%64':>4} {'sizeA':>6} {'sizeB':>6} bytes")
+moved = 0
+for s in hot:
+    if s not in A or s not in B:
+        print(f"{s:40} MISSING in {'A' if s not in A else 'B'}"); continue
+    (aa, asz), (ba, bsz) = A[s], B[s]
+    same = "same" if body_hash(a_path, aa, asz) == body_hash(b_path, ba, bsz) else "DIFF"
+    moved += aa != ba
+    print(f"{s:40} {aa:#10x} {ba:#10x} {ba-aa:>+5} {aa%32:>4} {ba%32:>4} {aa%64:>4} {ba%64:>4} {asz:>6} {bsz:>6} {same}")
+
+# origin of the shift: first common symbol (in A address order) whose size differs, and shift statistics
+common = sorted(set(A) & set(B), key=lambda n: A[n][0])
+shifted = sum(1 for n in common if A[n][0] != B[n][0])
+first = next(((n, A[n][1], B[n][1]) for n in common if A[n][1] != B[n][1]), None)
+print(f"\ncommon symbols={len(common)} shifted={shifted} hot moved={moved}/{len(hot)}")
+print("first size divergence:", f"{first[0]}  size {first[1]:#x} -> {first[2]:#x} ({first[2]-first[1]:+d} B)" if first else "none")
+print("VERDICT:", "LAYOUT CONFOUND — run the padding control (MEAS-08 step 3) before attributing timing to the source change"
+      if moved else "hot symbols stationary — layout excluded for this hot set")
+```
+
+Reading it:
+- `hot moved > 0` with `bytes=DIFF` but no source change to that function is the CBRD-26382 signature: PC-relative
+  displacements re-encoded because the function moved. `same` + stationary means the two DSOs are equivalent for
+  that function and the delta is somewhere else.
+- The "first size divergence" is where to append the padding control (`.text.unlikely` of that object) — the
+  number of bytes to restore is `−Δsize`, rounded to whatever brings the hot symbols' `% 32` back to A.
+- A shift that is uniform (e.g. every hot symbol `−16`) is one cascade; mixed shifts mean several independent
+  size changes, each of which needs its own control.
+- Run this as a PR gate on the release toolchain (the CentOS 6 / devtoolset-8 build), not on the developer
+  compiler: a different compiler produces a different layout and a different verdict (CC-08 §6).

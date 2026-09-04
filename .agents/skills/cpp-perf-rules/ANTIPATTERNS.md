@@ -1,7 +1,7 @@
 # §17 Anti-pattern Catalog
 
 Flag on sight. When found, cite the rule ID and present the alternative.
-A01–A66 match the upstream 성능규칙집 note; **A67–A79 are skill-local extensions** for the rules added later (MEAS-06/07, BR-07/08, FP-08, PAR-15/16, SYS-05, PHYS).
+A01–A66 match the upstream 성능규칙집 note; **A67–A83 are skill-local extensions** for the rules added later (MEAS-06/07/08, BR-07/08, FP-08, PAR-15/16, SYS-05, PHYS, CC-08/09).
 
 | # | Anti-pattern | Violates | Alternative |
 |---|---|---|---|
@@ -84,3 +84,7 @@ A01–A66 match the upstream 성능규칙집 note; **A67–A79 are skill-local e
 | A77 | cyclic include patched with `#ifdef` / forward-declaration soup | PHYS-02, PHYS-03 | escalate or demote the contact point |
 | A78 | recursive destructor freeing sibling nodes (`~Link() { delete next; }`) | PHYS-03 | manager class owns lifetime; stack-overflow hazard |
 | A79 | abstract interface (virtual) inserted on the row loop for insulation/mocking | PHYS-05, CPP-09 | template binding on the hot path; protocol on the cold path |
+| A80 | **perf delta attributed to the source change with no hot-symbol address/phase diff** (two DSOs compared as if one function changed) | MEAS-08, CC-08 | Appendix E gate; padding control before the verdict |
+| A81 | **"not on the call path, so it cannot affect performance"** used to wave through a size-changing edit (template/EH/`noexcept`/`std::function` in cold or shared-header code) | CC-08 | direct cost ≠ layout cost; run the ELF gate on the perf-gated workload |
+| A82 | **blanket `-falign-functions=32` / `aligned(32)` on every function** as the product fix | CC-09 | narrow `aligned(32)` on proven hot functions → PGO; global alignment is a diagnosis flag |
+| A83 | **layout verdict from one PMU counter** ("DSB miss +50 % is the cause") or from a compiler-upgrade "it went away" | MEAS-08, CC-08 | full Top-down L1/L2 both variants; padding control; a new compiler is a different ELF, not a fix |

@@ -7,6 +7,15 @@
 - [ ] **Is dispersion (MAD/stddev) reported next to the median** (MEAS-07)
 - [ ] Did functional regression tests pass (MEAS-05)
 - [ ] Are result-changing modifications (FP order, parallelism, SIMD) stated explicitly
+- [ ] **If a hot-loop benchmark moved, was the hot-symbol address/phase diff (`nm -n -S`, Appendix E) run on A vs B before attributing the delta to the source change** (MEAS-08 / A80)
+
+## Code layout (any edit to a header shared by many TUs, to template/EH/`noexcept`/`std::function`/lambda code, or to `.text.unlikely` cold paths in the same DSO as an executor loop)
+- [ ] Did the top perf symbols of the gated workload keep address phase (`% 32`, `% 64`) and raw bytes (CC-08)
+- [ ] If they shifted: was the first size-diverging symbol located and a padding control (same toolchain) built to separate layout from semantics (MEAS-08)
+- [ ] Was the verdict read from the full Top-down L1/L2 of both variants, not from one DSB/MITE counter (MEAS-08 / A83)
+- [ ] Was the "not executed by this query" argument used only for direct cost, never to skip the ELF gate (A81)
+- [ ] Is any alignment fix narrowed to proven hot functions or PGO, not global `-falign-functions` (CC-09 / A82)
+- [ ] Was the magnitude confirmed on the CPU generation that reported it, not only on the developer host (CC-08 §5)
 
 ## Memory
 - [ ] Does no hot struct needlessly exceed 64B (MEM-02)
