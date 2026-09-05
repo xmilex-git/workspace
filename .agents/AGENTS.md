@@ -2,7 +2,9 @@
 
 Whenever modifying CUBRID source code, ALWAYS consult the `cpp-perf-rules` skill (C/C++ performance rulebook) and apply its rules.
 
-Division of labor: the lead performs implementation and verification planning. The following tasks MUST be handed off to a sonnet subagent: build, server start & query execution, data loading, core analyze, gdb analyze, error reproduction, and callstack analysis from a core file.
+Division of labor: the lead performs implementation and verification planning. The following tasks MUST be handed off to a subagent: build, server start & query execution, data loading, core analysis, gdb analysis, error reproduction, and callstack analysis from a core file.
+
+Delegation model: choose by the lead's model family — **GPT/Codex → Sol (`gpt-5.6-sol`); Claude → Sonnet** — using the current harness's subagent facility. Apply this routing to research subagents and execution workers, including existing map Notes or tickets that say "Sonnet"; preserve their task boundaries and execution contracts. An explicit user instruction about the worker model or direct lead execution takes precedence.
 
 Delegation execution contract (CUBRID_SSOT.md 환경·운영 16–17 — include VERBATIM in every delegation prompt; incidents recur whenever it is omitted):
 - Finite gate work (incremental build, unit, smoke — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
