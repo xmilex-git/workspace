@@ -1,3 +1,5 @@
+If the current environment is not Rocky Linux 8, connect with `ssh cubrid@192.168.6.34` and work in `~/dev/workspace` on that host. If SSH connection fails, follow the [forticlient-reconnect skill](/Users/song-ilhanmacmini/.codex/skills/forticlient-reconnect/SKILL.md) to restore the VPN, then retry SSH and continue there.
+
 # AGENTS.md — CUBRID Tooling Repo
 
 This repository is a **portable, standalone bundle of the CUBRID development tooling** —
