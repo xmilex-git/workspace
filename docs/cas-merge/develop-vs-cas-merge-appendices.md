@@ -2,7 +2,7 @@
 
 [본문으로 돌아가기](develop-vs-cas-merge-briefing.md) · [코드 해설](develop-vs-cas-merge-code-walkthrough.md)
 
-이 부록은 2026-09-05 작성 당시의 기록이다. 열린 정책을 제품 약속으로 확정하지 않으며, 검증 수치는 커밋별 기존 결과다.
+코드 비교와 기존 측정은 2026-09-05 작성 당시의 기록이다. HA 검증 범위는 2026-09-06 사용자 합의로 갱신했다. 열린 정책을 제품 약속으로 확정하지 않으며, 검증 수치는 커밋별 기존 결과다.
 
 ## 1. 코드 비교 기준과 읽는 방법
 
@@ -56,7 +56,15 @@ query replace는 develop 머지로 새로 들어온 중요한 예다. `query_rep
 
 shell 집계 3,105와 미실행 105의 합이 3,222보다 12 작다고 숫자를 임의 보정하면 안 된다. 원 분석은 timeout 노드의 별도 실행·업로드 누락을 설명하며 배정량과 집계량의 집합 정의가 다르다. 이 자료는 원 기록의 집계를 그대로 싣는다. 전체 결과를 단순 합산해 새로운 통과율을 만들지 않는다.
 
-근거: [머지 게이트 기록](https://github.com/xmilex-git/workspace/issues/208), [medium/sql CTP 재실행 + 잔존 NOK 최종 분류](https://github.com/xmilex-git/workspace/issues/169), [CI 실패 전수 분석](../research/cas-merge-ci-test-shell-7837.md), [HA/shell 잔여 14버킷 통과](https://github.com/xmilex-git/workspace/issues/219).
+근거: [머지 게이트 기록](https://github.com/xmilex-git/workspace/issues/208), [medium/sql CTP 재실행 + 잔존 NOK 최종 분류](https://github.com/xmilex-git/workspace/issues/169), [CI 실패 전수 분석](../research/cas-merge-ci-test-shell-7837.md), [HA 논의용 검증 — 발견 결함 해소와 미검증 범위 기록](https://github.com/xmilex-git/workspace/issues/219).
+
+### HA 검증의 종료 범위 — 2026-09-06 합의
+
+사용자는 이번 HA 티켓의 목적을 **개발자 논의에 필요한 검증 근거 확보**로 한정하고, 현재 실행 결과를 수거한 뒤 조기 종료하기로 확정했다. 핵심 HA 동작과 발견 결함의 수정·재검증 근거를 제시하며, 미실행 범위는 향후 병합 전 검증 목록으로 남긴다. 이 합의는 HA 전수 통과나 병합·배포 승인이 아니다.
+
+HA 하네스 권한·복제 로그 정리 문제를 수정했고, 600개 연결 테스트의 호환 설정을 [비공개 TC 초안 PR](https://github.com/CUBRID/cubrid-testcases-private/pull/1644)에 반영했다. 부하 검증에서 검출한 드라이버 엔트리의 private LRU 상태 초기화 누락은 [수정 커밋](https://github.com/xmilex-git/cubrid/commit/cd6ab1b085300df69c28105f918075d6ffce1612)으로 cas-merge에 통합했다. 이 커밋은 본문 코드 비교점 이후의 수정이다.
+
+최종 수거 결과, 출처, 미검증 목록과 결정 D1·D2는 [HA 논의용 검증 기록](ha-discussion-validation.md)에 둔다.
 
 ### 성능: 처리량 개선과 꼬리 지연을 함께 제시
 
@@ -75,7 +83,7 @@ release·100 connections·10M rows·20M operations·C/A 각 1회 기준이다. �
 
 ## 4. 미결과 추가 최적화의 경계
 
-현재 가장 큰 완료 조건은 CI shell·HA 잔여 검증과 운영 정책이다. shell 분석의 PRODUCT 표시는 로그 기반 1차 분류인 경우가 많다. 코어·PL isolation 대기·CDC 접속 실패를 'TC만 바꾸면 됨'으로 묶지 않는다. 발견 결함은 [CTP/CI 결함 통합 추적 (2기) — 결함 19번부터 단일 티켓](https://github.com/xmilex-git/workspace/issues/210)에 모은다.
+CI shell 검증과 운영 정책은 별도 열린 티켓에 남는다. HA 전수 검증은 사용자 합의로 이번 HA 논의용 검증의 완료 조건에서 제외했고, 향후 병합 전 검증 목록으로 보존한다. shell 분석의 PRODUCT 표시는 로그 기반 1차 분류인 경우가 많다. 코어·PL isolation 대기·CDC 접속 실패를 'TC만 바꾸면 됨'으로 묶지 않는다. 발견 결함은 [CTP/CI 결함 통합 추적 (2기) — 결함 19번부터 단일 티켓](https://github.com/xmilex-git/workspace/issues/210)에 모은다.
 
 추가 최적화는 다음 후보의 **조사 결과**까지 있으며 채택·우선순위 결정은 아직 남는다.
 
