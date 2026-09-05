@@ -35,7 +35,7 @@ set -euo pipefail
 readonly C_WORKDIR="/home"
 readonly C_CUBRID="/home/CUBRID"
 readonly C_CTP="/home/cubrid-testtools/CTP"
-readonly C_DB="/home/CUBRID_DB"
+C_DB="/home/CUBRID_DB" # HA resolves this below to match CTP cleanup paths.
 readonly C_REPORT="/home/reports"
 C_SCN=""          # scenario root inside the container; set by resolve_suite
 C_TCREPO=""       # testcases repo mount point inside the container
@@ -302,7 +302,10 @@ resolve_suite() {
     ha_shell)
       SUITE_TCREPO="cubrid-testcases-private";    SUITE_SUBPATH="HA/shell"
       SUITE_CAT="ha_shell"; SUITE_EXT="sh";       SUITE_UNIT_DEFAULT="dir"
-      SUITE_SHARDABLE=0;    SUITE_STYLE="status";     SUITE_CONF="conf/ha_shell_ci.conf"; SUITE_HA=1 ;;
+      SUITE_SHARDABLE=0;    SUITE_STYLE="status";     SUITE_CONF="conf/ha_shell_ci.conf"; SUITE_HA=1
+      # HA cleanup removes $CUBRID/databases/<db>*. Keep copylog files there too,
+      # or a later case reuses replication logs belonging to its previous DB.
+      C_DB="$C_CUBRID/databases" ;;
     *) usage; die "--suite must be one of: sql medium shell ha_shell (got: '$ARG_SUITE')" ;;
   esac
   C_TCREPO="$C_WORKDIR/$SUITE_TCREPO"
@@ -1170,7 +1173,6 @@ shard_mounts() {
   local -a m=(
     -v "$d/CTP:${C_CTP}:rw"
     -v "$d/testcases:${C_TCREPO}:rw"
-    -v "$dbs:${C_DB}:rw"
     -v "$d/reports:${C_REPORT}:rw"
     # The image ships its own /entrypoint.sh; bind this skill's fork over it so the
     # runner is always the one in this checkout and the image is never rebuilt.
@@ -1183,6 +1185,8 @@ shard_mounts() {
   else
     m+=( -v "$inst:${C_CUBRID}:rw" )
   fi
+  # HA nests the database mount under the install; mount the parent first.
+  m+=( -v "$dbs:${C_DB}:rw" )
   # Core capture: core_pattern is a global kernel knob but is resolved in the
   # crashing process's mount-ns, so for an absolute pattern we bind the shard's
   # cores/ over that directory and cores land on the host, outside $CUBRID and

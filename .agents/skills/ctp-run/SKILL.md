@@ -81,6 +81,8 @@ An `ha_shell` shard is two containers: the master runs CTP, the slave runs the
 image's `node` mode (sshd + a `qa` account CTP logs into). Each gets its OWN copy
 of the install and of `CUBRID_DATABASES` — they run separate servers and rewrite
 their own conf, so sharing those would make the pair clobber each other.
+Inside each HA node, mount `CUBRID_DATABASES` at `$CUBRID/databases`: CTP cleans
+that path between cases, including replication logs tied to the previous DB.
 
 ## Output
 
