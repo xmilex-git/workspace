@@ -274,7 +274,8 @@ function prepare_node ()
   # And the node account runs the server, so on a coverage run the build tree it writes its
   # .gcda into has to belong to it as well.
   local d
-  for d in "$CUBRID" "$WORKDIR"/cubrid-test* "$WORKDIR/ERROR_BACKUP" "$WORKDIR/do_not_delete_core" \
+  # The runner mounts the database registry separately; createdb runs as NODE_USER too.
+  for d in "$CUBRID" "${CUBRID_DATABASES:-$CUBRID/databases}" "$WORKDIR"/cubrid-test* "$WORKDIR/ERROR_BACKUP" "$WORKDIR/do_not_delete_core" \
            ${CODE_COVERAGE:+"$COVERAGE_SRC"}; do
     [ -d "$d" ] || continue
     chown -R "$NODE_USER" "$d"
