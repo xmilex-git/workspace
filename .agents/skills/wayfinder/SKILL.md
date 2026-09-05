@@ -12,6 +12,10 @@ The destination varies per effort, and naming it is the first act of charting �
 
 Wayfinder is **planning** by default: each ticket resolves a decision, and the map is done when the way is clear — nothing left to decide before someone goes and does the thing. The pull to just do the work is usually the signal you've reached the edge of the map and it's time to hand off. An effort can override this in its **Notes** — carrying execution into the map itself — but absent that, produce decisions, not deliverables.
 
+## Delegation model
+
+When delegating, choose the worker model by the lead's model family: **GPT/Codex → Sol (`gpt-5.6-sol`); Claude → Sonnet**. Use the current harness's subagent facility. Apply this routing to research subagents and execution workers, including existing map Notes or tickets that say "Sonnet"; keep their task boundaries and execution contracts intact. An explicit user model choice overrides this default.
+
 ## Refer by name
 
 Every map and ticket is an issue, so it has a **name** — its title. In everything the human reads — narration, the map's Decisions-so-far — refer to it by that name, never by a bare id, number, or slug. A wall of `#42, #43, #44` is illegible; names read at a glance. The id and URL don't vanish — a name wraps its link — but they ride _inside_ the name, never stand in for it.
