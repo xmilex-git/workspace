@@ -248,6 +248,8 @@ ctest mode="debug":
 #   just ctp-rerun <CI URL>              re-run exactly what failed in CI
 #
 # Suites: sql | medium | shell | ha_shell.
+# HA derives thin csql ports from CTP broker2 config for both SSH nodes and
+# starts the folded slave broker after HA setup; no manual port export is needed.
 # Env knobs (all optional):
 #   PR=<n>        testcases ref tc/pr-<n>            (else inferred from WORKSPACE)
 #   TC_REF=<ref>  explicit testcases branch/tag/sha  (wins over PR)

@@ -256,6 +256,59 @@ function run_checkout ()
   fi
 }
 
+
+# HA's qa commands run through non-login SSH shells on both nodes. Use the same
+# broker source as write_shell_conf, not thin csql's unrelated default port.
+function configure_ha_csql_port ()
+{
+  [ "${TEST_SUITE:-}" = ha_shell ] || return 0
+  local conf="$CTP_HOME/conf/shell_ci.conf" port
+  port=$(awk -F= '
+    {
+      key=$1; gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      if (key == "default.broker2.BROKER_PORT") {
+        n++; value=substr($0,index($0,"=")+1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      }
+    }
+    END {
+      if (n != 1 || value !~ /^[0-9]+$/ || value+0 < 1 || value+0 > 65535) exit 1
+      printf "%d\n", value
+    }' "$conf") || {
+      echo "** ERROR: $conf must contain exactly one valid default.broker2.BROKER_PORT" >&2
+      return 1
+    }
+  export CUBRID_CSQL_BROKER_PORT="$port"
+  echo "[ctp-run] HA remote csql broker port: $port (from $conf)"
+}
+
+# Only the shard's CTP copy changes. Folded remote csql needs a broker on the
+# slave too; start it after setup uploads the per-test config, not at node boot.
+function prepare_ha_shell_broker ()
+{
+  [ "${TEST_SUITE:-}" = ha_shell ] || return 0
+  grep -aFq CUBRID_CSQL_BROKER_PORT "$CUBRID/lib/libcubridcs.so" 2>/dev/null || return 0
+  local helper="$CTP_HOME/shell/init_path/make_ha_upper.sh"
+  local anchor='run_on_slave -c "cubrid hb start;cubrid hb status"'
+  local marker='# ctp-run: thin csql needs the slave broker'
+  if [ ! -f "$helper" ] || [ "$(grep -Fc "$anchor" "$helper")" != 1 ]; then
+    echo "** ERROR: HA slave setup anchor changed in $helper; refusing an unverified patch" >&2
+    return 1
+  fi
+  if grep -Fq "$marker" "$helper"; then
+    return 0
+  fi
+  awk -v anchor="$anchor" -v marker="$marker" '
+    { print }
+    index($0,anchor) {
+      print "   " marker
+      print "   run_on_slave -c \"cubrid broker start\""
+    }' "$helper" > "$helper.ctprun" || return 1
+  cat "$helper.ctprun" > "$helper" || return 1
+  rm -f "$helper.ctprun"
+  echo "[ctp-run] HA slave broker startup enabled in $helper"
+}
+
 # CTP reaches nodes with jsch ChannelExec, a non-login shell that inherits none of
 # Docker's ENV, and it authenticates by password only.
 function prepare_node ()
@@ -283,8 +336,12 @@ function prepare_node ()
 
   # HOME has to be $WORKDIR, whatever the controller's is: ha_shell cases address the build as
   # ~/CUBRID, and both CTP and the cases put their own copies and logs next to it.
+  configure_ha_csql_port || return 1
   local v
   { echo "HOME=$WORKDIR"
+    if [ "${TEST_SUITE:-}" = ha_shell ]; then
+      echo "CUBRID_CSQL_BROKER_PORT=$CUBRID_CSQL_BROKER_PORT"
+    fi
     for v in CUBRID CUBRID_DATABASES CTP_HOME init_path JAVA_HOME \
              LD_LIBRARY_PATH SHLIB_PATH LIBPATH PATH LANG TZ; do
       echo "$v=${!v}"
@@ -874,6 +931,7 @@ function run_test ()
   # ctp-run additions (see the fork header).
   print_ctprun_provenance
   apply_ctprun_overrides
+  prepare_ha_shell_broker || exit 1
 
   if [ -n "$MEMORY_LEAK" ]; then
     check_memory_env

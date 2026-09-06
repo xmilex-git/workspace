@@ -18,6 +18,19 @@ against a **private, pristine copy** of the build / scenario / CTP-conf. The sui
 is partitioned across shards via per-shard `exclusions.txt`, and results merge into
 one pass/fail summary. Wall-clock time drops to ~1/N.
 
+## HA remote csql setup
+
+`just ctp ha_shell ...` derives the thin-csql broker port from CTP's
+`default.broker2.BROKER_PORT` and supplies it to both nodes' non-login SSH
+environments. Missing, duplicate, or invalid ports stop preparation. For folded
+clients, the runner patches only its private CTP helper copy to start the slave
+broker after HA configuration upload and heartbeat startup. Testcase sources and
+assertions stay unchanged. No manual `CUBRID_CSQL_BROKER_PORT` export is needed.
+
+`test/ha_shell_test.sh` covers this setup with fixtures; the full self-test
+runner includes it. Runtime verification must check actual master/slave query
+results, not merely the absence of a crash.
+
 ## Deliverables
 
 | File | Role |

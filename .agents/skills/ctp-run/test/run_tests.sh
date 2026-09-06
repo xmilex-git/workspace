@@ -440,6 +440,13 @@ else
   fi
 fi
 
+# HA setup regression: exercise the entrypoint functions with isolated fixtures.
+if bash "$HERE/ha_shell_test.sh"; then
+  ok "HA csql port and slave broker setup regression"
+else
+  bad "HA csql port and slave broker setup regression"
+fi
+
 #-------------------------------------------------------------------
 # Summary
 #-------------------------------------------------------------------
