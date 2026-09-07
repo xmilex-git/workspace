@@ -199,6 +199,12 @@ Use `--format ansi` when colors and terminal styling are evidence. Otherwise use
 
 After that failed read, ask the agent to write its complete response as Markdown in the tooling repository's `.git_ignored_dir/scratch/` directory and reply only with the file path, then read the file directly. Use this only as a fallback; do not request file output in the initial prompt.
 
+## Finish and clean up workers
+
+After a worker finishes, read and preserve its final report before closing its pane. Close every worker pane created for the completed task with `herdr --session <selected-name> pane close <created-pane-id>` (internal callers may use the inherited session). Verify with `pane list` that those panes are gone. This ends the live Claude process; keep saved report artifacts. Do not leave idle workers open unless the user asks to keep them for reuse.
+
+Track created pane IDs when starting workers. Close only those panes, never pre-existing user agents or the whole Herdr session. If a worker is still working or blocked, resolve or report its status before cleanup; do not label an interrupted task complete.
+
 ## Safety and coordination rules
 
 - Use `--no-focus` for background work unless the user asked to switch context.
