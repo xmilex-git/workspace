@@ -6,7 +6,7 @@ Division of labor: the lead performs implementation and verification planning. T
 
 Delegation model: choose by the lead's model family:
 
-- **GPT/Codex → Claude Sonnet through the `herdr_orchestration` skill.** Read it before delegation. If actual Codex execution is outside Herdr, follow its single-coordinator conversation handoff before dispatch. Claude saves its result and sends labeled completion input to the idle Codex coordinator; Codex does not poll for worker completion. Preserve explicit task scope, checkout, model and permissions. Read and preserve each final report, then close task-created Claude panes. Report handoff or callback blockers honestly; do not silently switch back to external polling or another worker model.
+- **GPT/Codex → Claude Sonnet through the `herdr-integration` skill.** Keep S0 in place. Create a dedicated Herdr session for each delegated job, use native `herdr agent` waits, handle worker approvals/questions within existing user authorization, and preserve results before closing the session. The total deadline is two hours, including setup and approval waits; interrupt and clean up on expiry.
 - **Claude → Sonnet** using the current harness's native subagent facility.
 
 Apply this routing to research subagents and execution workers, including existing map Notes or tickets that say "Sonnet"; preserve their task boundaries and execution contracts. An explicit user instruction about the worker model or direct lead execution takes precedence.
