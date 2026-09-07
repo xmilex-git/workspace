@@ -7,19 +7,19 @@
 - 기준 CI: gha-ci run `34089071541`, 엔진 `2cb1f8865`, TC `f5ca3fd222128a02f750bf47032dfa3d6fc92e42`. 당시 OK 2,905 / NOK 295 / 미실행 0 / 보고된 코어 0. **295는 현재 head의 잔존 실패 수가 아니다.**
 - 기준 NOK 경로 295개를 [기계 판독 배정표](cas-merge-shell-followup-map.tsv)에 정확히 한 번씩 기록했다. 기존 A~L/NEW/UNEXECUTED 분류와 근인 추정은 원본 로그의 초기 가설이며, 새 담당 계열은 작업 배정이지 근인 확정이 아니다.
 - `local_status=recheck_required`는 현재 엔진에서 원본을 다시 검증해야 한다는 뜻이다. 최근 출력/GET 수정의 영향을 받은 TC를 검증 없이 완료로 처리하지 않는다. `verified_pass_*`는 해당 head에서 원본 TC를 실제로 통과한 행이며 전체 CI 통과를 뜻하지 않는다.
-- 작업 기준/설치본은 [CI test_shell 1차 안정화](https://github.com/xmilex-git/workspace/issues/211)의 종료 기록이 우선한다. 최초 분할 준비 기준은 `54126c187`; 마지막 차단 설정 수정의 검증 결과도 이 종료 기록에 합쳐진다.
+- 작업 기준/설치본은 [CI test_shell 1차 안정화](https://github.com/xmilex-git/workspace/issues/211)의 종료 기록이 우선한다. 최종 안정화 head는 `d1cf63b06`이며, 마지막 차단 설정 수정까지 양 빌드/원본 TC를 검증했다. 전체 셸 CI green은 후속 최종 게이트의 판정 대상이다.
 - 원본 근거: [기존 CI 분류](cas-merge-ci-test-shell-7837.md), 툴링 scratch `wf211-resume/ci-run-34089071541/classified.tsv`, `wf211-resume/repro-295/evidence/INDEX.tsv`와 개별 md. 원본 근거와 후속 소유권을 혼동하지 않는다.
 
 ## 담당 티켓
 
 | 담당 계열 | 기준 NOK 배정 수 | 선행 조건 |
 |---|---:|---|
-| [CI test_shell 1차 안정화 — 제품 수정 검증과 잔여 TC 계열 이관](https://github.com/xmilex-git/workspace/issues/211) | 1 | 이 세션에서 검증한 항목; 종료 기록 확인 |
+| [CI test_shell 1차 안정화 — 제품 수정 검증과 잔여 TC 계열 이관](https://github.com/xmilex-git/workspace/issues/211) | 2 | 이 세션에서 검증한 항목; 종료 기록 확인 |
 | [운영 호환 구현 잔여 — 로그·동적 제어·접속 종류·query replace](https://github.com/xmilex-git/workspace/issues/222) | 4 | 독립 진행 가능; 확정 운영 정책 준수 |
 | [CAS·SHARD 가정 TC 이행 — 상태 조회·프로세스·로그 기대값 갱신](https://github.com/xmilex-git/workspace/issues/223) | 110 | [운영 호환 구현 잔여](https://github.com/xmilex-git/workspace/issues/222) |
 | [csql histogram·드라이버 상세 계측 — 세션 귀속·권한·초기화 복구](https://github.com/xmilex-git/workspace/issues/224) | 14 | 독립 진행 가능; 확정 운영 정책 준수 |
 | [csql 출력·이력·실행계획 TC 계열 — 원본 재현과 렌더링 호환](https://github.com/xmilex-git/workspace/issues/225) | 62 | 독립 진행 가능; 확정 운영 정책 준수 |
-| [세션·설정 파일 TC 계열 — client-only 값·locale·설정 우선순위](https://github.com/xmilex-git/workspace/issues/226) | 9 | [선행 안정화 완료](https://github.com/xmilex-git/workspace/issues/211) |
+| [세션·설정 파일 TC 계열 — client-only 값·locale·설정 우선순위](https://github.com/xmilex-git/workspace/issues/226) | 8 | [선행 안정화 완료](https://github.com/xmilex-git/workspace/issues/211) |
 | [CS·CCI·접속 오류 TC 계열 — 유틸 접속·재시도·결과 정합성](https://github.com/xmilex-git/workspace/issues/227) | 21 | 독립 진행 가능; 확정 운영 정책 준수 |
 | [PL/CSQL·JavaSP·대기 TC 계열 — isolation·콜백·동시 접속](https://github.com/xmilex-git/workspace/issues/228) | 22 | 독립 진행 가능; 확정 운영 정책 준수 |
 | [코어·MERGE·클라이언트 kill TC 계열 — 종료 시그니처 판정](https://github.com/xmilex-git/workspace/issues/229) | 5 | 독립 진행 가능; 확정 운영 정책 준수 |
@@ -38,7 +38,7 @@
 - 최종 셸 게이트 → CTP/CI 결함 통합 추적의 최종 정리.
 - 새 티켓 전부 → 통합 JIRA 작성. 기존 지도의 다른 blocker도 보존한다. 결함 기록 정리와 최종 게이트를 역방향으로 연결하지 않는다.
 
-이 관계는 본문 관례가 아니라 GitHub native sub-issue/issue dependency로 연결한다. 지도 본문에는 열린 티켓을 나열하지 않고 자식 목록을 조회한다.
+추가한 자식 관계 13개와 native blocking 29개를 API로 재조회했고 순환이 없음을 확인했다. 이 관계는 본문 관례가 아니라 GitHub native sub-issue/issue dependency로 연결한다. 지도 본문에는 열린 티켓을 나열하지 않고 자식 목록을 조회한다.
 
 ## 공통 실행·판정 규칙
 
@@ -52,7 +52,7 @@
 
 - 기본 `csql_plan`은 양 비교 빌드·일반/sysadm PTY 및 정식 TC에서 통과했다. 다른 PrintInfo.exp 실패 계열 전체가 해소됐다는 증거는 아니다.
 - thin csql의 SET/GET과 SQL 실행은 서버로 전달된다. `libcubridcs` 심볼 유무나 과거 AGENTS 개요만으로 클라이언트 프로세스 내부 실행이라고 판정하지 않는다.
-- `bug_bts_11548`의 GET 세션 값과 실제 lock-timeout 별칭은 별개 결함으로 수정·검증됐다.
+- `bug_bts_11548`의 GET 세션 값과 실제 lock-timeout 별칭은 별개 결함으로 수정·검증됐다. `itrack_1002718`도 두 차단 설정의 연결 시 전달 수정 후 양 모드 12/12를 통과했다. 이 두 기준 TC만 선행 안정화의 검증 완료 행으로 분리했고, 나머지 293개는 후속 계열에서 재확인한다.
 - PL isolation의 개별 디렉터리 재현은 `common/` 누락으로 무효였다. 부모 디렉터리를 실행하고 원래 CI 원인을 새로 확인한다.
 - `e51ba31`은 과거 폴드 빌드다. 이를 develop 기준선으로 부르거나 양쪽 실패를 상류 결함의 증거로 쓰지 않는다.
 - 코어의 메인 스레드 `epoll_wait`는 크래시 스레드가 아니다. 실제 종료 스레드·맞는 ELF/라이브러리로 판정한다.
