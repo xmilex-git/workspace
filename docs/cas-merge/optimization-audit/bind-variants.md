@@ -1,5 +1,7 @@
 # 바인드 선택도별 계획 변형 감사
 
+이 문서는 정적 조사 당시의 사실·대안을 보존한다. 현재 결정은 [최종 판정](../candidate-disposition.md)과 [브레인스토밍](../optimization-brainstorm.md)을 따른다.
+
 - 대상: frozen engine `dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`
 - 질문: 현행이 한 SQL key에 여러 bind plan을 보관하는지, 새 shared immutable plan 구조가 variant map을 필요로 하는지.
 - 방법: 현재 코드만 읽었다. 실행·측정·정책 결정은 하지 않았다.

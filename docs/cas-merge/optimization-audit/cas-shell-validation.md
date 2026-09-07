@@ -1,5 +1,7 @@
 # CAS SHM·상태 동기화 보충 검증
 
+이 문서는 정적 조사 당시의 사실·대안을 보존한다. 현재 결정은 [최종 판정](../candidate-disposition.md)과 [브레인스토밍](../optimization-brainstorm.md)을 따른다.
+
 대상은 frozen `dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`, read-only 코드 감사다.
 
 ## 판정

@@ -1,6 +1,6 @@
 # CAS 통합 최적화 브레인스토밍
 
-상태: 논의 중. 사용자 목표와 현재 코드의 조사 결과를 기록한다. 후보의 최종 채택·보류·기각과 구현은 미확정이다.
+상태: 브레인스토밍 결정 완료. 사용자 합의에 따라 공유 구조·invalidation 정책·단일 계획·후속 구현 범위를 확정했다. 실제 최적화 구현과 새 성능 측정은 아직 수행하지 않았다.
 
 - 결정 티켓: [브레인스토밍: CAS·서버 단일 주소공간이 열어준 추가 최적화 — 후보 채택/보류/기각 결정](https://github.com/xmilex-git/workspace/issues/216)
 - 지도: [CAS 통합 후속 지도: develop 머지 → CI test_shell green → 통합 최적화 브레인스토밍 + 개발자 논의 자료](https://github.com/xmilex-git/workspace/issues/207)
@@ -46,13 +46,23 @@ CAS가 독립 프로세스였기 때문에 필요했던 복사·캐시·할당·
 
 사용자는 Q5에 "허용"이라고 답했다. 문장 핸들이 열려 있다는 사실만으로 큰 materialized 계획을 상주시킬 필요는 없다. 메모리 압박 시 유휴 계획을 회수하고 다음 사용에서 재준비한다. SQL·semantic key·재준비에 필요한 작은 정보는 공유하며, 실행·커서 등 실제 사용자가 참조 중인 객체는 수명 종료까지 보호한다.
 
+### D8. SQL key당 단일 현재 계획을 유지한다
+
+사용자는 Q6에 "단일로 ㄱㄱ"라고 답했다. 바인드 선택도별 여러 계획을 상주시키는 variant cache와 별도의 영구 generic fallback은 이번 채택 범위에 넣지 않는다. 기존 first-bind/bind-sensitive 재계획 동작을 보존하고, mutable fingerprint/선택 상태는 세션 핸들·실행 상태에 둔다. 통계 재최적화나 실행 중 참조의 수명 때문에 옛/새 세대가 잠시 공존하는 것은 여러 바인드 variants를 캐싱하는 것과 다르다.
+
+### D9. JDBC와 기존 후속 보류 후보도 필수 구현 대상으로 채택한다
+
+사용자는 Q7의 채택안에 동의하며 "jdbc쪽이랑 네가 후속으로 써놓은것들도 구현이 필요할거같아"라고 정정했다. 따라서 JDBC/PL 프로토콜, 접속 worker pool, 공유 TLS 설정, 공통 권한 cache·trigger 정의 공유, 새 클래스 IS 락 경로 등 기존 후속 보류 항목도 구현 대상으로 승격한다. 우선순위는 구현 순서를 정하며 필요 여부를 보류하는 의미가 아니다.
+
+상세 자료형/API, dependency producer 전수 감사와 각 구현의 검증은 후속 구현 노력의 작업이다. 무검증 raw mutable 객체 공유, schema lock을 CHN만으로 대체, 필요한 외부·디스크 codec의 일괄 삭제 같은 불안전한 수단은 채택하지 않는다. D8의 단일 계획 결정은 이 후속 항목 승격으로 번복되지 않는다.
+
 ## 핵심 판정
 
 현재 통합은 프로세스 경계의 호출을 접고, 기존 소유권 모델을 세션/TLS로 번역한 부분이 많다. 그래서 CAS가 사라진 뒤에도 준비 객체와 스키마의 복제, client/server 힙 경계, packed XASL을 이용한 전체 실행 그래프 복제가 남는다.
 
 XASL stream은 지금 단순한 전송 포맷 이상의 일을 한다. 그래프 복제·포인터 재배치, MOP→OID 정규화, parser arena에서 독립된 수명, 실행별 mutable state 분리를 동시에 제공한다. 따라서 내부 stream 제거는 캐시 삭제가 아니라 **그 역할을 native 객체·명시적 소유권·실행 상태로 옮기는 작업**이다. warm-cache hit에서 unpack이 적다는 이유는 이 구조적 목표를 기각하지 않는다.
 
-아래는 코드에서 확인한 34개 검토 항목이다. 채택 결정 34개나 성능 결함 34개를 의미하지 않는다. 기존에 이미 공유된 부분, 추가 공유가 가능한 부분, 여전히 세션별이어야 하는 부분을 함께 포함한다.
+아래는 코드에서 확인한 34개 검토 항목이다. 기존에 이미 공유된 부분과 유지할 세션 경계를 포함하므로 34개가 모두 신규 코드 변경이라는 뜻은 아니다. 최종 채택 범위와 구현 순서는 [전체 판정](candidate-disposition.md)에 기록했다. JDBC 연동 범위는 별도로 명시한다.
 
 ## 후보 전체 목록
 
@@ -124,7 +134,7 @@ XASL stream은 지금 단순한 전송 포맷 이상의 일을 한다. 그래프
 상세: [접속·버퍼·CAS 상태 감사](optimization-audit/runtime-shell.md), [SHM·상태 동기화 보충 검증](optimization-audit/cas-shell-validation.md).
 대표 근거: [접속별 스레드](https://github.com/xmilex-git/cubrid/blob/dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4/src/connection/adoption.cpp#L516), [로그 TLS 배열](https://github.com/xmilex-git/cubrid/blob/dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4/src/broker/cas_log.c#L59), [출력 버퍼 수명](https://github.com/xmilex-git/cubrid/blob/dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4/src/connection/driver_session.cpp#L438), [SHM의 4096개 CAS slot 배열](https://github.com/xmilex-git/cubrid/blob/dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4/src/broker/broker_shm.h#L651).
 
-## 확정한 목표 구조 — 구체 invalidation 설계 중
+## 확정한 목표 구조
 
 다음 3단계 분리는 사용자 Q2 답변으로 최종 목표에 채택됐다(D4). 아직 구현된 구조는 아니다. 다른 DB 사용자 사이에는 공유하지 않는다(D5).
 
@@ -144,13 +154,13 @@ flowchart TD
 - 공유 객체의 참조 수명과 allocator는 parser/session heap과 분리해야 한다. DDL/REVOKE, 통계 변경, 미커밋 DDL, bind-sensitive replan, OID 재사용도 기존 의미를 유지한다.
 - 단순 SQL 문자열만 key로 사용하면 안 된다. 사용자·현재 스키마·컴파일/metadata 영향 설정·prepare 옵션의 동일성을 확인해야 한다. 다른 DB 사용자 사이에는 공유하지 않는다(D5).
 
-## 우선순위 검토안
+## 확정한 구현 순서
 
-1. **주 목표:** P1/P4/P6을 묶어 준비 객체·native plan·실행 상태의 소유권 경계를 설계한다. P2/P3/P5는 여기서 빠뜨리면 안 되는 부속 보유물이다.
+1. **공유 핵심:** P1/P4/P6을 묶어 준비 객체·native plan·실행 상태의 소유권 경계를 구현한다. P2/P3/P5의 SQL·metadata·재계획 입력과 P7 계측을 포함한다.
 2. **함께 검토할 공유 메타데이터:** S3 schema descriptor, S4 MOP-free domain 확대 가능성, S5/S7의 권한·view 바인딩 경계. read latch 하나로 workspace를 치환하는 원안보다 공유 불변 정보와 local overlay의 분리가 목표에 맞는다.
 3. **독립적으로 쪼갤 수 있는 작업:** T1/T2/T3/R2/R3/R5/R7/R9. 구조 설계가 끝나기 전에 성능 수치만 보고 우선순위를 확정하지 않는다.
-4. **큰 실행 모델 변경:** R1은 별도 크기의 변경이다. prepared/native plan 공유가 thread-pool 전환을 기다려야 하는 것은 아니다.
-5. **YCSB에 드러나지 않는 후보:** PL·SSL·trigger/view는 목록에 유지하되 YCSB 측정값으로 효용을 판정하지 않는다. 사용자가 원하면 후속 대상별 검증 범위를 결정한다.
+4. **실행 모델·권한·TLS·락:** R1 접속 worker pool, 공유 권한·trigger/TLS 정의와 클래스 IS 락 경로도 필수 구현 대상이다. 공유 핵심 완료의 선결조건으로 두지는 않고 의존관계에 따라 이어서 구현한다.
+5. **JDBC·PL:** 외부 JDBC의 shared-plan/eviction/reprepare 연동과 PL 내부 JDBC의 prepare/execute/fetch 왕복 축소를 구현 범위에 포함한다. 일반 YCSB가 실행하지 않는 PL·SSL·trigger 경로는 해당 기능 검증도 동반한다.
 
 ## YCSB에서 확인할 것
 
@@ -186,14 +196,20 @@ flowchart TD
 
 upstream 대비 232개 변경 파일 목록과 CMake의 client-half/CAS speaker 목록을 기준으로 준비→컴파일→캐시→실행→결과→commit/teardown, 스키마·권한·세션, 접속·로그·SSL·PL 경로를 조사했다. 모든 CUBRID 함수나 mutable XASL 필드 write를 전수 증명한 것은 아니다. 분야별 문서에 미확인 소비자·필드·측정 항목을 남겼다.
 
-Q2/Q3는 D4/D5, Q4/Q5는 D6/D7로 확정했다. 현재는 바인드에 따른 계획 변형의 공유/상한과 후보별 채택·보류·기각 및 우선순위를 검토한다. invalidation producer의 완전성과 자료형/API의 상세는 후속 설계·조사 항목이다. 티켓은 열린 상태로 유지한다.
+Q2/Q3는 D4/D5, Q4/Q5는 D6/D7로 확정했다. Q6은 D8의 단일 계획, Q7은 D9의 JDBC·후속 항목까지 구현 대상으로 채택하는 것으로 확정했다. invalidation producer의 완전성과 자료형/API의 상세는 후속 설계·조사 항목이다. 이 티켓은 후보 결정 기록을 마감하며 실제 최적화 구현을 완료한 것으로 취급하지 않는다.
 
 ## Invalidation 정책 검토
 
 Q2/Q3 확정 뒤 [무효화·세대 교체·메모리 회수 검토안](invalidation-policy.md)을 작성했다. Q4(통계 재최적화 중 기존 유효 계획 사용 허용)와 Q5(열린 유휴 핸들의 큰 계획 객체 eviction 허용)는 모두 사용자 허용으로 확정됐다(D6/D7). schema/auth hard invalidation과 statistics-only reoptimization을 구분하고, 새로운 실행의 유효성 검증과 기존 실제 사용자의 수명 보호를 별도로 다룬다. 상세는 검토안과 두 코드 감사 문서에 있다.
 
-## 후보 정리의 다음 질문
+## 후보 정리의 최종 결정
 
-Q4/Q5는 D6/D7로 확정했다. [바인드별 계획의 현재 동작 감사](optimization-audit/bind-variants.md)에서 현행은 SQL key당 현재 계획 하나이며 여러 variants를 저장하지 않음을 확인했다. Q6은 이 정책을 유지할지 상한 있는 variants를 추가할지다. 추천은 현행 단일 계획 유지와 YCSB 교체 빈도 계측이다.
+Q4/Q5는 D6/D7로 확정했다. [바인드별 계획의 현재 동작 감사](optimization-audit/bind-variants.md)에서 현행은 SQL key당 현재 계획 하나이며 여러 variants를 저장하지 않음을 확인했다. Q6의 최종 결정은 단일 현재 계획 유지와 YCSB 교체 빈도 계측이다(D8).
 
-Q7은 [전체 후보의 채택·보류·우선순위 검토안](candidate-disposition.md)을 기준으로 정리한다. 추천은 준비 객체/native XASL 1순위, 공유 스키마·내부 복사/버퍼 축소 2순위, thread pool/JVM protocol/새 락 protocol은 별도 후속 보류다. 아직 Q6/Q7 답변은 받지 않았다.
+Q7은 [전체 후보의 최종 판정](candidate-disposition.md)으로 확정했다. 기존 채택안에 더해 JDBC·thread pool·JVM protocol·새 락 경로 등 후속 보류 항목도 구현한다(D9). 순서와 의존관계만 구분하며 필요 여부는 보류하지 않는다.
+
+## JDBC 연동과 최종 산출
+
+[외부 JDBC·PL 내부 JDBC 구현 범위](optimization-audit/jdbc-scope.md)를 추가했다. 외부 cubrid-jdbc는 엔진 gitlink의 `a3ebfb76bf4f0150fb8bd643e6dc2b5491b3d1cf`를 확인했다. 기존 CAS V12의 handler·pooling retry·metadata 규약을 유지한 공유/eviction 연동을 구현·검증하고, PL 내부 JDBC는 C++·Java의 typed callback·명령 결합·첫 fetch/metadata 최적화를 실제 구현 대상으로 삼는다.
+
+최종 결정은 D1~D9, 전체 항목별 범위는 [최종 판정](candidate-disposition.md), invalidation은 [정책·구현 계약](invalidation-policy.md)에 있다. 세부 write/dependency inventory와 API·단계·gate는 후속 구현 설계의 입력이다. 다음 cpp-perf-rules 브레인스토밍에서는 이 채택 범위를 뒤집어 보류 목록으로 되돌리지 않고 규칙·측정·게이트를 구체화한다.

@@ -1,5 +1,7 @@
 # CAS merge 내부 transport/copy/result/value 및 PL/JVM 감사
 
+이 문서는 정적 조사 당시의 사실·대안을 보존한다. 현재 결정은 [최종 판정](../candidate-disposition.md)과 [브레인스토밍](../optimization-brainstorm.md)을 따른다.
+
 - 대상: frozen engine `dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`, 비교 upstream `e374c7a24c46449c3f79e9413a6f4ff3d23b16c2`
 - 범위: `network_interface_cl`의 SERVER_MODE 직접 호출, query result/list/cursor, DB_VALUE/object/set 변환, method/PL executor/internal JDBC/Java protocol
 - 성격: 2026-09-06 현재 코드의 정적 감사. 코드 변경·실행·벤치마크 없음. 따라서 아래는 제거 후보와 계측 우선순위이지 성능 판정이 아니다(MEAS-01/04/06/07).

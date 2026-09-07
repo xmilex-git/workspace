@@ -1,5 +1,7 @@
 # 공유 준비 객체·native plan 무효화 감사
 
+이 문서는 정적 조사 당시의 사실·대안을 보존한다. 현재 결정은 [최종 판정](../candidate-disposition.md)과 [브레인스토밍](../optimization-brainstorm.md)을 따른다.
+
 - 대상: frozen engine `dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`
 - 전제: 수락된 3계층 = (1) DB user별 공유 immutable prepared/native plan, (2) session statement handle, (3) per-execution mutable state. DB user 간 공유하지 않는다.
 - 방법: 현재 xcache/compile/retry/DDL/stats 코드를 읽었다. 정책 결정, 구현, 실행 측정은 하지 않았다.

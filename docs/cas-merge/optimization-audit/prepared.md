@@ -1,5 +1,7 @@
 # 준비 객체·컴파일·XASL 공유 감사
 
+이 문서는 정적 조사 당시의 사실·대안을 보존한다. 현재 결정은 [최종 판정](../candidate-disposition.md)과 [브레인스토밍](../optimization-brainstorm.md)을 따른다.
+
 - 대상: `/home/cubrid/dev/workspace/.git_ignored_dir/scratch/wf216/engine` HEAD `dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`
 - 비교 기준: upstream `e374c7a24c46449c3f79e9413a6f4ff3d23b16c2` (merge-base와 동일)
 - 범위: CAS statement handle, DB_SESSION/parser/optimizer retained tree, query metadata/domain, SQL PREPARE, XASL/xcache. workspace/schema와 PL/transport는 다른 감사 범위다.

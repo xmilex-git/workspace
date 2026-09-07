@@ -1,5 +1,7 @@
 # 공유 준비 객체 세대의 schema/auth/transaction 무효화 감사
 
+이 문서는 정적 조사 당시의 사실·대안을 보존한다. 현재 결정은 [최종 판정](../candidate-disposition.md)과 [브레인스토밍](../optimization-brainstorm.md)을 따른다.
+
 대상 frozen `dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`, read-only current-code 확인이다. 서로 다른 DB user 간 공유는 하지 않는다는 전제에서도 같은 user의 권한·그룹·owner가 다른 세션에서 바뀔 수 있으므로 auth freshness는 남는다.
 
 ## 1. DDL과 transaction-local metadata

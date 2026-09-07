@@ -1,5 +1,7 @@
 # 접속·CAS 상태·버퍼·파서 scratch 감사
 
+이 문서는 정적 조사 당시의 사실·대안을 보존한다. 현재 결정은 [최종 판정](../candidate-disposition.md)과 [브레인스토밍](../optimization-brainstorm.md)을 따른다.
+
 코드 기준: `dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`. 현재 소스의 호출·생성·해제 경로를 확인했다. 실행·sizeof·RSS 측정은 하지 않았다.
 
 ## R1. 접속당 전용 스레드와 CAS_TLS 세션 상태

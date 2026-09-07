@@ -1,6 +1,6 @@
-# 공유 준비 객체의 invalidation·회수 정책 검토안
+# 공유 준비 객체의 invalidation·회수 정책과 구현 계약
 
-코드 기준: `cas-merge@dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`. 목표 구조(공유 준비 객체 / 세션 문장 핸들 / 실행 상태)와 다른 DB 사용자 간 미공유는 사용자 확정이다. Q4의 통계 재최적화 중 기존 유효 계획 사용과 Q5의 유휴 계획 회수는 모두 사용자 허용으로 확정됐다(D6/D7). 나머지 세부 정책은 현재 코드에 근거한 설계 검토안이다.
+코드 기준: `cas-merge@dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`. 목표 구조(공유 준비 객체 / 세션 문장 핸들 / 실행 상태)와 다른 DB 사용자 간 미공유는 사용자 확정이다. Q4의 통계 재최적화 중 기존 유효 계획 사용과 Q5의 유휴 계획 회수는 모두 사용자 허용으로 확정됐다(D6/D7). 단일 현재 계획 유지도 사용자 확정이다(D8). 아래는 합의한 정책과 현재 코드에서 도출한 구현 조건이며, 세부 API 및 모든 producer의 검증은 후속 구현 단계에서 수행한다.
 
 ## 무효화·교체·회수를 구분한다
 
@@ -76,7 +76,7 @@ view/trigger/routine·권한/group·synonym/serial·파티션의 의존성 closu
 
 자동 재준비/재시도는 준비 결과가 stale임을 실행 전 확인한 경우에 한한다. row 변경, sequence 소비, trigger/SP 호출 등의 효과가 시작된 뒤 arbitrary runtime error를 재실행하지 않는다. timeout/interrupt/SP 오류를 invalidation으로 취급하지 않는다. 기존 pooled-statement driver 재준비 규약도 유지 대상으로 검증한다.
 
-bind 값·fingerprint·현재 선택한 plan은 mutable shared descriptor 필드가 되면 안 된다. bind-sensitive plan variant를 둘 경우 같은 semantic identity 아래 불변 variant를 선택하며 statistics generation과 variant별 메모리 상한이 필요하다. generic plan과 variant 선택의 세부 정책은 남은 결정이며, 현재 구현의 fingerprint/cache key/상한을 추가 조사한다.
+bind 값·fingerprint·현재 선택한 plan은 mutable shared descriptor 필드가 되면 안 된다. 여러 바인드별 계획을 상주시키는 variant cache는 채택 범위에서 제외한다. 통계 교체나 실제 참조 수명 때문에 old/new generation이 일시 공존하는 것은 허용한 세대 관리다. Q6에서 단일 현재 계획을 확정했다. 따라서 reusable bind-variant map과 별도의 영구 generic fallback을 신설하지 않는다. fingerprint는 세션/실행 상태에 남기고 현재 계획의 교체 빈도를 계측한다.
 
 ## 검증 계획 — 실행 전
 
