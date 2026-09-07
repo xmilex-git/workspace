@@ -1,6 +1,6 @@
 # 공유 준비 객체의 invalidation·회수 정책 검토안
 
-코드 기준: `cas-merge@dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`. 목표 구조(공유 준비 객체 / 세션 문장 핸들 / 실행 상태)와 다른 DB 사용자 간 미공유는 사용자 확정이다. 아래 정책은 현재 코드에 근거한 검토안이며, Q4/Q5 답변 전에는 최종 정책으로 기록하지 않는다.
+코드 기준: `cas-merge@dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4`. 목표 구조(공유 준비 객체 / 세션 문장 핸들 / 실행 상태)와 다른 DB 사용자 간 미공유는 사용자 확정이다. Q4의 통계 재최적화 중 기존 유효 계획 사용과 Q5의 유휴 계획 회수는 모두 사용자 허용으로 확정됐다(D6/D7). 나머지 세부 정책은 현재 코드에 근거한 설계 검토안이다.
 
 ## 무효화·교체·회수를 구분한다
 
@@ -16,10 +16,10 @@
 |---|---|---|---|
 | 테이블·뷰·인덱스/파티션 shape, 참조 객체 제거 | 영향받는 의존성의 세대를 무효화하고 재준비 | 기존 schema lock·수명 규약을 보존; 단순 pin만으로 실행 허용을 판단하지 않음 | 전체 DB cache flush를 기본으로 하지 않음 |
 | REVOKE·owner·group 등 권한 변화 | 관련 권한/객체 의존성을 재검증, 허용되지 않으면 원래 권한 오류 | 강제 취소를 새 기능으로 추가하지 않음; 기존 실행/권한 경계 유지 | 같은 DB 사용자끼리 공유해도 필수 |
-| 통계만 변경 | 기존 계획은 유효; 첫 요청 하나가 재최적화하고 교체하는 안 | 기존 유효 계획 사용 허용 여부는 **Q4** | hard-invalid 계획에는 적용 금지 |
+| 통계만 변경 | 기존 계획은 유효; 첫 요청 하나가 재최적화하고 교체 | 기존 유효 계획 사용 허용 — **Q4 확정** | hard-invalid 계획에는 적용 금지 |
 | 준비 의미에 영향을 주는 세션 설정 | 필요 시 해당 핸들이 새 semantic key로 resolve | 다른 설정의 세션이 쓰는 객체까지 무효화하지 않음 | prepare 시 포착/execute 시 동적 설정 목록은 추가 확인 |
 | 미커밋 DDL을 참조한 준비 | transaction-private 결과로 사용; process 공유 cache에 게시하지 않음 | 자기 transaction의 변경 가시성 보존 | commit 후 committed 기준으로 재준비, abort/savepoint는 private 결과 정리 |
-| cache 용량 부족 | 유휴 materialized plan을 회수하고 다음 사용 시 재준비하는 안 | 실제 실행·커서·중첩/PX 사용자가 붙든 객체는 보호 | 핸들만 열려 있을 때 회수 허용은 **Q5** |
+| cache 용량 부족 | 유휴 materialized plan을 회수하고 다음 사용 시 재준비 | 실제 실행·커서·중첩/PX 사용자가 붙든 객체는 보호 | 핸들만 열려 있을 때 회수 허용 — **Q5 확정** |
 
 ## 현재 코드에서 재사용할 기반
 
@@ -48,7 +48,7 @@ flowchart LR
 ## compile·publish 경합
 
 - 동일 key에 miss 또는 hard-invalid가 나면 컴파일 중임을 공유하고 중복 compile을 합치는 방향을 제안한다. hard-invalid old plan으로 대기자를 실행시키지는 않는다.
-- stats-only 재최적화 동안 대기자가 기존 유효 계획을 쓸지는 Q4에서 정한다.
+- stats-only 재최적화 동안 대기자는 기존 유효 계획을 사용할 수 있다(Q4 확정).
 - compile이 읽은 의존성의 버전과 publish 시점 버전이 달라지면 그 결과를 현재 세대로 게시하지 않는다. 정확한 lock/epoch 관측 방식은 구현 설계에서 확정한다.
 - 현행 xcache도 old entry claim→새 entry publish→old retire 구조를 갖지만 일부 재최적화에서는 외부 XASL_ID 호환을 위해 `time_stored`를 계승한다. 새 준비 객체의 schema generation과 이 특례를 동일시하지 않는다.
 
@@ -60,9 +60,9 @@ flowchart LR
 
 view/trigger/routine·권한/group·synonym/serial·파티션의 의존성 closure는 compiler와 mutation producer 양쪽을 확인해야 한다. 현재 조사로 모든 변경 경로가 완전하다고 판정하지 않았다.
 
-## 메모리 목표와 Q5
+## 메모리 목표와 확정된 유휴 계획 회수
 
-열린 문장 핸들이 모든 옛 native plan을 강하게 붙들면, DDL/replan 뒤에도 세션 종료까지 메모리를 회수하지 못한다. Q5의 추천안은 다음과 같다.
+열린 문장 핸들이 모든 옛 native plan을 강하게 붙들면, DDL/replan 뒤에도 세션 종료까지 메모리를 회수하지 못한다. 사용자가 허용한 Q5의 경계는 다음과 같다.
 
 - SQL·semantic key·재준비에 필요한 작은 정보는 같은 준비 객체 identity 아래 공유한다.
 - 큰 materialized native plan과 더 이상 유효하지 않은 metadata generation의 장기 보유를 핸들 개수에 묶지 않는다.
@@ -76,7 +76,7 @@ view/trigger/routine·권한/group·synonym/serial·파티션의 의존성 closu
 
 자동 재준비/재시도는 준비 결과가 stale임을 실행 전 확인한 경우에 한한다. row 변경, sequence 소비, trigger/SP 호출 등의 효과가 시작된 뒤 arbitrary runtime error를 재실행하지 않는다. timeout/interrupt/SP 오류를 invalidation으로 취급하지 않는다. 기존 pooled-statement driver 재준비 규약도 유지 대상으로 검증한다.
 
-bind 값·fingerprint·현재 선택한 plan은 mutable shared descriptor 필드가 되면 안 된다. bind-sensitive plan variant를 둘 경우 같은 semantic identity 아래 불변 variant를 선택하며 statistics generation과 variant별 메모리 상한이 필요하다. generic plan과 variant 선택의 세부 정책은 Q4/Q5 뒤에 정할 남은 결정이다.
+bind 값·fingerprint·현재 선택한 plan은 mutable shared descriptor 필드가 되면 안 된다. bind-sensitive plan variant를 둘 경우 같은 semantic identity 아래 불변 variant를 선택하며 statistics generation과 variant별 메모리 상한이 필요하다. generic plan과 variant 선택의 세부 정책은 남은 결정이며, 현재 구현의 fingerprint/cache key/상한을 추가 조사한다.
 
 ## 검증 계획 — 실행 전
 
