@@ -30,6 +30,14 @@ CAS가 독립 프로세스였기 때문에 필요했던 복사·캐시·할당·
 이 지도에서는 후보 결정과 우선순위·측정 계획을 만든다. 실제 최적화 구현은 지도의 기존 범위대로 후속 노력이다.
 
 
+### D4. 공유 준비 객체 / 세션 문장 핸들 / 실행별 상태의 3단계 분리를 최종 목표로 채택
+
+사용자는 Q2에 "그렇게해"라고 답했다. 불변 SQL·준비 메타데이터·native 계획은 공유 준비 객체에 보관하고, 세션 문장 핸들과 동시에 살아 있는 실행의 바인드·커서·스캔/집계 상태를 분리하는 방향을 확정했다. 세션별 DB_SESSION/PT tree와 전체 XASL clone을 그대로 남기는 구조는 중간 단계다. 구체 자료형/API와 invalidation 정책은 후속 논의다.
+
+### D5. 다른 DB 사용자 사이에는 준비 객체를 공유하지 않는다
+
+사용자는 Q3(서로 다른 DB 사용자까지 공유할지)에 "아니"라고 답했다. 따라서 공유 범위는 같은 DB 사용자 내부다. 동일 SQL이어도 객체 해석·계획·준비 metadata에 영향을 주는 스키마/설정/옵션이 다르면 동일 객체로 합치지 않는다. 캐시 key의 구체 필드 목록과 권한 변경의 invalidation 연결은 후속 설계다.
+
 ## 핵심 판정
 
 현재 통합은 프로세스 경계의 호출을 접고, 기존 소유권 모델을 세션/TLS로 번역한 부분이 많다. 그래서 CAS가 사라진 뒤에도 준비 객체와 스키마의 복제, client/server 힙 경계, packed XASL을 이용한 전체 실행 그래프 복제가 남는다.
@@ -108,9 +116,9 @@ XASL stream은 지금 단순한 전송 포맷 이상의 일을 한다. 그래프
 상세: [접속·버퍼·CAS 상태 감사](optimization-audit/runtime-shell.md), [SHM·상태 동기화 보충 검증](optimization-audit/cas-shell-validation.md).
 대표 근거: [접속별 스레드](https://github.com/xmilex-git/cubrid/blob/dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4/src/connection/adoption.cpp#L516), [로그 TLS 배열](https://github.com/xmilex-git/cubrid/blob/dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4/src/broker/cas_log.c#L59), [출력 버퍼 수명](https://github.com/xmilex-git/cubrid/blob/dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4/src/connection/driver_session.cpp#L438), [SHM의 4096개 CAS slot 배열](https://github.com/xmilex-git/cubrid/blob/dbf0b6409ab8e15516a2df5580bffc0e5c1dcfe4/src/broker/broker_shm.h#L651).
 
-## 제안하는 목표 구조 — 사용자 답변 대기
+## 확정한 목표 구조 — 구체 invalidation 설계 중
 
-다음 구조는 검토안이다. D1~D3의 목표와 구분하며, 이를 구현한 것으로 기록하지 않는다.
+다음 3단계 분리는 사용자 Q2 답변으로 최종 목표에 채택됐다(D4). 아직 구현된 구조는 아니다. 다른 DB 사용자 사이에는 공유하지 않는다(D5).
 
 ```mermaid
 flowchart TD
@@ -126,7 +134,7 @@ flowchart TD
 - mutable execution state는 세션이 아니라 **동시에 살아 있는 실행** 단위다. 중첩 SQL, holdable cursor, 병렬 worker 때문에 단순한 세션당 scratch 하나로 대체할 수 없다.
 - 현재 XASL은 불변 객체가 아니다. list-id·SCAN_ID·집계값·DB_VALUE·memoize·parallel state 등을 실제로 수정하고 clear한다. 모든 write site를 plan/state로 분류하는 후속 설계가 필요하다.
 - 공유 객체의 참조 수명과 allocator는 parser/session heap과 분리해야 한다. DDL/REVOKE, 통계 변경, 미커밋 DDL, bind-sensitive replan, OID 재사용도 기존 의미를 유지한다.
-- 단순 SQL 문자열만 key로 사용하면 안 된다. 사용자·현재 스키마·컴파일/metadata 영향 설정·prepare 옵션의 동일성을 확인해야 한다. 다른 DB 사용자까지 공유할지는 별도 결정이다.
+- 단순 SQL 문자열만 key로 사용하면 안 된다. 사용자·현재 스키마·컴파일/metadata 영향 설정·prepare 옵션의 동일성을 확인해야 한다. 다른 DB 사용자 사이에는 공유하지 않는다(D5).
 
 ## 우선순위 검토안
 
@@ -170,8 +178,8 @@ flowchart TD
 
 upstream 대비 232개 변경 파일 목록과 CMake의 client-half/CAS speaker 목록을 기준으로 준비→컴파일→캐시→실행→결과→commit/teardown, 스키마·권한·세션, 접속·로그·SSL·PL 경로를 조사했다. 모든 CUBRID 함수나 mutable XASL 필드 write를 전수 증명한 것은 아니다. 분야별 문서에 미확인 소비자·필드·측정 항목을 남겼다.
 
-현재 질문:
-- **Q2:** 공유 준비 객체 / 세션 문장 핸들 / 실행 상태의 3단계 분리를 최종 목표로 삼을지.
-- **Q3:** 최초 공유 범위를 동일 DB 사용자·동일 의미 설정으로 한정할지, 다른 사용자까지 공유할지.
+Q2/Q3는 D4/D5로 확정했다. 현재는 사용자 요청에 따라 DDL·권한·통계·설정 변경의 invalidation, 실행 중 객체의 수명, 재준비 시점과 공유 cache 메모리 회수 정책을 검토한다. 이후 나머지 후보의 채택·보류·기각과 우선순위를 확정한다. 티켓은 열린 상태로 유지한다.
 
-Q2/Q3 이후에 후보의 채택·보류·기각, 우선순위와 후속 조사 경계를 확정한다. 티켓은 열린 상태로 유지한다.
+## Invalidation 정책 검토
+
+Q2/Q3 확정 뒤 [무효화·세대 교체·메모리 회수 검토안](invalidation-policy.md)을 작성했다. 현재 질문은 Q4(통계 재최적화 중 기존 유효 계획 사용 허용)와 Q5(열린 유휴 핸들의 큰 계획 객체 eviction 허용)다. schema/auth hard invalidation과 statistics-only reoptimization을 구분하고, 새로운 실행의 유효성 검증과 기존 실제 사용자의 수명 보호를 별도로 다룬다. 상세는 검토안과 두 코드 감사 문서에 있다.
