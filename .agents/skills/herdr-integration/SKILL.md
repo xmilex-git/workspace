@@ -37,7 +37,7 @@ The native wait returns on idle/done/blocked. After dispatch, S0 waits on that c
 Inspect only when the native wait returns an actionable event:
 
 - **Idle/done:** read the final report first. Idle is not proof of success; verify the report against the assigned criteria. Request a concise missing result if necessary. Read terminal output only to recover a missing report or clarify a specific reported failure.
-- **Blocked/question/approval:** use `agent get` and a bounded `agent read --source recent-unwrapped --lines 120` to identify the exact request, then handle it below.
+- **Blocked/question/approval:** use `agent get` and a bounded `agent read --source visible` to identify the exact request, then handle it below. Alternate-screen scrollback may be unavailable while blocked.
 - **Transport failure or deadline expiry:** inspect only enough state/output for recovery or cleanup. `--source visible` is reserved for those exceptions when the worker is still running, or an explicit user request to inspect it.
 
 Keep raw evidence on disk. Bring the worker's conclusions, verification summary and relevant evidence paths into S0's context; load a specific excerpt only when a concrete decision requires it.
