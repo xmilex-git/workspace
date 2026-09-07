@@ -30,9 +30,17 @@ Compute `remaining_ms = max(0, (deadline - current_time) * 1000)` immediately be
 herdr --session <name> agent prompt <worker> "<task and execution contract>" --wait --timeout <remaining_ms>
 ```
 
-The native wait returns on idle/done/blocked. It blocks on Herdr state, not model-driven status polling. If the shell tool yields a running process handle, resume that same handle; do not issue repeated `agent get` calls to wait. Keep S0's user informed at normal progress intervals. Native `agent wait <worker> --timeout <remaining_ms>` resumes waiting after an answered dialog or interrupted CLI wait.
+The native wait returns on idle/done/blocked. After dispatch, S0 waits on that call or does independent work outside the delegated scope. If the shell tool yields a running process handle, resume that same handle with bounded waits; a tool yield is not a worker state transition. Native `agent wait <worker> --timeout <remaining_ms>` resumes waiting after an answered dialog or interrupted CLI wait.
 
-Read `agent get` and `agent read --source recent-unwrapped --lines 120` at state transitions. For a working agent use `--source visible`. Prefer the assigned report if terminal output is clipped. Idle/done is not proof of success: inspect the actual final report.
+**Preserve context isolation.** While the worker runs, leave its terminal, logs, intermediate artifacts and investigation to the worker. Do not poll `agent get`/`agent read`, tail its files, or duplicate its analysis to narrate progress. If a user-facing update is required, state that the delegated task is awaiting its result; that is not a reason to inspect the worker.
+
+Inspect only when the native wait returns an actionable event:
+
+- **Idle/done:** read the final report first. Idle is not proof of success; verify the report against the assigned criteria. Request a concise missing result if necessary. Read terminal output only to recover a missing report or clarify a specific reported failure.
+- **Blocked/question/approval:** use `agent get` and a bounded `agent read --source recent-unwrapped --lines 120` to identify the exact request, then handle it below.
+- **Transport failure or deadline expiry:** inspect only enough state/output for recovery or cleanup. `--source visible` is reserved for those exceptions when the worker is still running, or an explicit user request to inspect it.
+
+Keep raw evidence on disk. Bring the worker's conclusions, verification summary and relevant evidence paths into S0's context; load a specific excerpt only when a concrete decision requires it.
 
 ## Handle approval and questions
 
