@@ -1,0 +1,139 @@
+##### shell/_06_issues/_12_2h/bug_bts_9478/cases/bug_bts_9478.sh
+CTX === <Result of SELECT Command in Line 1> === |             1 | ============= |             1 | 1 row selected. (0.000000 sec) Committed. (0.000000 sec) 
+##### shell/_06_issues/_14_1h/bug_bts_13390/cases/bug_bts_13390.sh
+DIFF test.result_temp_diff bug_bts_13390.answer_temp_diff -b :: 1,9c1,9 | < Fail: testMetaData | < Fail: testStatement | < Fail: testPreparedStatement | < Fail: testPrepare | < Fail: testExecuteBatchPreparedStatement | < Fail: testGetDBParameter | < Fail: testExecuteBatchStatement
+CTX > Success: testExecuteBatchPreparedStatement | > Success: testGetDBParameter | > Success: testExecuteBatchStatement | > Success: testGetGeneratedKeys | > Success: testSetDBParameter
+##### shell/_06_issues/_18_1h/bug_bts_13845/cases/bug_bts_13845.sh
+CTX /home/cubrid-testtools/CTP/shell/init_path/init.sh: line 1166: kill: (32477) - No such process
+CTX ----------------- 1 : NOK
+CTX ----------------- 3 : NOK | bug_bts_13845.sh: line 18: 32499 Killed                  csql -u $user_dba $db -i select.sql > ${result}_3_1.log 2>&1
+CTX /home/cubrid-testtools/CTP/shell/init_path/init.sh: line 1166: kill: (32522) - No such process
+CTX bug_bts_13845.sh: line 18: 32536 Killed                  csql -u $user_dba $db -i select.sql > ${result}_6_1.log 2>&1 | /home/cubrid-testtools/CTP/shell/init_path/init.sh: line 1166: kill: (32548) - No such process
+CTX /home/cubrid-testtools/CTP/shell/init_path/init.sh: line 1166: kill: (32570) - No such process
+##### shell/_06_issues/_20_2h/cbrd_23688_4/cases/cbrd_23688_4.sh
+CTX @ cubrid broker start | config error, query_editor, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB | config error, broker1, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB
+##### shell/_06_issues/_23_1h/cbrd_24644/cases/cbrd_24644.sh
+DIFF test1.log_temp_diff test1.answer_temp_diff -b :: 0a1,21 | >    "num_query_deletes" : "10", | >    "num_query_holdable_cursors" : "0", | >    "num_query_inserts" : "10", | >    "num_query_iscans" : "0", | >    "num_query_lscans" : "20", | >    "num_query_methscans" : "0", | >    "num_query_mjoins" : "0",
+DIFF test2.log_temp_diff test2.answer_temp_diff -b :: 0a1,21 | >    "num_query_deletes" : "2147483657", | >    "num_query_holdable_cursors" : "2147483647", | >    "num_query_inserts" : "2147483657", | >    "num_query_iscans" : "2147483647", | >    "num_query_lscans" : "2147483667", | >    "num_query_methscans" : "2147483647", | >    "num_query_mjoins" : "2147483647",
+CTX >    "num_tran_end_topops" : "30", | >    "num_tran_interrupts" : "0", | >    "num_tran_rollbacks" : "80", | >    "num_tran_savepoints" : "0", | >    "num_tran_start_topops" : "30",
+CTX >    "num_tran_end_topops" : "2147483677", | >    "num_tran_interrupts" : "2147483647", | >    "num_tran_rollbacks" : "2147483727", | >    "num_tran_savepoints" : "2147483647", | >    "num_tran_start_topops" : "2147483677",
+##### shell/_07_index_enhancement/_04_topn_prepare_stmt/cases/_04_topn_prepare_stmt.sh
+CTX This may take a long time depending on the amount of recovery works to do. | CUBRID 11.5.0 (11.5.0.2802) (64 optdebug build) | @ cubrid broker start
+CTX ----------------- 1 : NOK
+##### shell/_29_features_920/issue_10952_set_names/_03_session_persistence/cases/_03_session_persistence.sh
+CTX 0,70,532,120
+##### shell/_38_fig/cbrd_24416/cases/cbrd_24416.sh
+CTX 1 row affected. (0.001000 sec) Committed. (0.000000 sec) 
+CTX ----------------- 1 : NOK 0
+##### shell/_01_utility/_38_csql/_enhance_csql03/cases/_enhance_csql03.sh
+CTX ----------------- 2 : OK
+##### shell/_06_issues/_12_1h/bug_bts_6364/cases/bug_bts_6364.sh
+CTX 	at cubrid.jdbc.driver.CUBRIDStatement.executeCoreInternal(CUBRIDStatement.java:881) | 	at cubrid.jdbc.driver.CUBRIDStatement.executeCore(CUBRIDStatement.java:849) | 	at cubrid.jdbc.driver.CUBRIDPreparedStatement.executeUpdate(CUBRIDPreparedStatement.java:157) | 	at QueryCancel$ExecuteQuery.run(QueryCancel.java:53) | 	at java.lang.Thread.run(Thread.java:750)
+##### shell/_06_issues/_12_2h/bug_bts_9602_3/cases/bug_bts_9602_3.sh
+CTX CUBRID 11.5.0 (11.5.0.2802) (64 optdebug build) | @ cubrid broker start
+##### shell/_06_issues/_14_1h/bug_bts_13392/cases/bug_bts_13392.sh
+DIFF bug_bts_13392.output_temp_diff bug_bts_13392.answer_temp_diff -b :: 31c31 | < intl_date_lang="" | --- | > intl_date_lang="en_US" | 36c36 | < intl_number_lang="" | --- | > intl_number_lang="en_US"
+CTX > intl_number_lang="en_US" | 41c41 | < intl_collation="" | --- | > intl_collation="iso88591_bin"
+##### shell/_06_issues/_20_2h/cbrd_23688_5/cases/cbrd_23688_5.sh
+CTX @ cubrid broker start | config error, query_editor, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB | config error, broker1, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB
+##### shell/_07_index_enhancement/_05_topn_limit_external_sort/cases/_05_topn_limit_external_sort.sh
+CTX This may take a long time depending on the amount of recovery works to do. | CUBRID 11.5.0 (11.5.0.2802) (64 optdebug build) | @ cubrid broker start
+CTX ----------------- 1 : NOK
+##### shell/_30_banana_qa/issue_14038_show_threads/_01_basic/cases/_01_basic.sh
+CTX ----------------- 2 : OK
+CTX ----------------- 3 : NOK
+CTX ----------------- 8 : OK
+CTX ----------------- 14 : OK
+CTX ----------------- 15 : NOK
+##### shell/_05_addition/bug_xdbms_sus1545/cases/bug_xdbms_sus1545.sh
+CTX @ cubrid broker stop | @ cubrid broker start
+##### shell/_06_issues/_12_1h/bug_bts_6779/cases/bug_bts_6779.sh
+
+##### shell/_06_issues/_13_1h/bug_bts_10181/cases/bug_bts_10181.sh
+
+##### shell/_06_issues/_14_2h/bug_bts_15093/cases/bug_bts_15093.sh
+
+##### shell/_06_issues/_18_1h/bug_bts_14305/cases/bug_bts_14305.sh
+
+##### shell/_06_issues/_21_1h/cbrd_23991/cases/cbrd_23991.sh
+
+##### shell/_28_features_844/issue_10676_caserror/cases/issue_10676_caserror.sh
+CTX > connect db 10676 user gao url jdbc:cubrid:localhost:33000:10676:gao:********:, error:-165, User "gao" is invalid. | > connect db 10676 user gao url jdbc:cubrid:localhost:33000:10676:gao:********:, error:-171, Incorrect or missing password. | > connect db 10676 user PUBLIC url jdbc:cubrid:localhost:33000:10676::********:, error:-171, Incorrect or missing password. | > connect db 10676 user gao url jdbc:cubrid:localhost:33000:10676:gao:********:, error:-171, Incorrect or missing password. | ----------------- 1 : OK
+##### shell/_30_banana_qa/issue_14038_show_threads/_02_extend_03/cases/_02_extend_03.sh
+CTX @ cubrid server start: db14038 | This may take a long time depending on the amount of recovery works to do. | CUBRID 11.5.0 (11.5.0.2802) (64 optdebug build)
+CTX ----------------- 1 : NOK
+CTX ----------------- 2 : NOK
+CTX ----------------- 5 : OK
+CTX ----------------- 6 : NOK
+CTX ----------------- 7 : NOK
+##### shell/_05_addition/bug_xdbms_sus1937/cases/bug_xdbms_sus1937.sh
+DIFF record.txt_temp_diff result_temp_diff -b :: 1,9c1,99 | < brokerstatus | <  | < 0,HANDOFFS | <  | <  | < 0,HANDOFFS | < 
+CTX > 00 | > 00 | > 00 | > 00 | > 00
+##### shell/_06_issues/_12_1h/bug_bts_6910/cases/bug_bts_6910.sh
+CTX ----------------- 1 : OK
+CTX ----------------- 2 : NOK
+CTX ----------------- 3 : NOK
+CTX ----------------- 4 : NOK
+CTX ----------------- 5 : NOK
+CTX ----------------- 7 : OK
+##### shell/_06_issues/_13_1h/bug_bts_10235/cases/bug_bts_10235.sh
+CTX @ cubrid broker start
+##### shell/_06_issues/_15_1h/bug_bts_14752/cases/bug_bts_14752.sh
+CTX ----------------- 1 : OK
+##### shell/_06_issues/_20_1h/cbrd_23613_1/cases/cbrd_23613_1.sh
+CTX @ cubrid broker start | config error, query_editor, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB | config error, broker1, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB | grep: /home/CUBRID/log/broker/sql_log/*.log: No such file or directory
+##### shell/_06_issues/_22_2h/cbrd_24517/cases/cbrd_24517.sh
+CTX No such file or directory[/home/CUBRID/log/broker/sql_log/*.sql.log] | grep: log_top.res: No such file or directory
+##### shell/_28_features_844/issue_10986_eventlog/_01_eventlog_slowquery/cases/_01_eventlog_slowquery.sh
+DIFF result.log_temp_diff result.answer_temp_diff -b :: 1c1 | <   sql: select [dba.x].[a], [dba.x].[b] from [dba.x] [dba.x] where ([dba.x].[a]> ?: ) group by [dba.x].[b]?=n;=n;=n;=;="";="";=;=.M;="Asia/Seoul";=.M;user=||;b | --- | >   sql: select [dba.x].[a], [dba.x].[b] from [dba.x] [dba.x] where ([dba.x].[a]> ?: ) group by [dba.x].[b]?="en_US";="en_US";="Asia/Seoul";user=||;bind_var_cnt
+CTX 1c1 | <   sql: select [dba.x].[a], [dba.x].[b] from [dba.x] [dba.x] where ([dba.x].[a]> ?: ) group by [dba.x].[b]?=n;=n;=n;=;="";="";=;=.M;="Asia/ | --- | >   sql: select [dba.x].[a], [dba.x].[b] from [dba.x] [dba.x] where ([dba.x].[a]> ?: ) group by [dba.x].[b]?="en_US";="en_US";="Asia/Seoul";
+##### shell/_30_banana_qa/issue_14039_show_tran_tables/_02_extend_01/cases/_02_extend_01.sh
+CTX <         Client_db_user          : 'DBA' | <         Client_program          : 'csql' | --- | >         Client_db_user          : 'PUBLIC' | >         Client_program          : 'broker1_cub_cas_1'
+##### shell/_06_issues/_10_1h/bug_3734/cases/bug_3734.sh
+CTX bug_3734.sh: line 17: 11838 Killed                  csql -u dba --no-auto-commit $db -c "create table t1( i1 integer , i2 integer , i3 integ | 11838
+##### shell/_06_issues/_12_2h/bug_bts_7549/cases/bug_bts_7549.sh
+CTX This may take a long time depending on the amount of recovery works to do. | CUBRID 11.5.0 (11.5.0.2802) (64 optdebug build) | bug_bts_7549.sh: line 43: 12768 Killed                  java B7549 $port $db
+##### shell/_06_issues/_13_1h/bug_bts_9655/cases/bug_bts_9655.sh
+DIFF tranlist_invalid.log_temp_diff tranlist_invalid.answer_temp_diff -b :: 5a6 | > 4(ACTIVE)
+CTX 5a6 | > 4(ACTIVE)
+##### shell/_06_issues/_17_1h/cbrd_20145_1/cases/cbrd_20145_1.sh
+DIFF test1.answer_debug_temp_diff test1.result_temp_diff -b :: 1,626d0 | <  | < Histogram of client requests: | < Name                            Rcount   Sent size  Recv size , Server time  | < MNT_SERVER_START_STATS             1 X          0+         4 b,   0.000000 s | < MNT_SERVER_COPY_STATS              1 X          0+ b,   0.000000 s | < --------------------------------------------------------------------------- | < Totals:                            2 X          0+ b    0.000000 s
+DIFF plan.answer_temp_diff plan.result_temp_diff -b :: 1,48d0 | < Num_plan_cache_add            =          0 | < Num_plan_cache_lookup         =          0 | < Num_plan_cache_hit            =          0 | < Num_plan_cache_miss           =          0 | < Num_plan_cache_full           =          0 | < Num_plan_cache_delete         =          0 | < Num_plan_cache_invalid_xasl_id =          0
+DIFF lock.answer_debug_temp_diff lock.result_temp_diff -b :: 1,264d0 | < LC_FIND_LOCKHINT_CLASSOIDS         1 X         48+         0 b,   0.000000 s | < Num_page_locks_acquired       =         26 | < Num_object_locks_acquired     =         50 | < Num_page_locks_converted      =          0 | < Num_object_locks_converted    =          4 | < Num_page_locks_re-requested   =          0 | < Num_object_locks_re-requested =          9
+DIFF histogram.result_temp_diff histogram.answer_temp_diff -b :: 0a1,93 | > Histogram of client requests: | > Name                            Rcount   Sent size  Recv size , Server time  | > TM_SERVER_COMMIT                   0 X         0+         0 b,   0.0 s | > TM_SERVER_SAVEPOINT                0 X         0+        0 b,   0.0 s | > LC_FETCH                           0 X         0+      0 b,   0.0 s | > LC_FIND_CLASSOID                   0 X         0+        0 b,   0.0 s | > LC_FORCE                           0 X       0+       0 b,   0.0 s
+CTX < Thread_stats_counters_timers: | < Thread_pgbuf_daemon_stats_counters_timers: | < Num_dwb_flushed_block_volumes: | < Thread_loaddb_stats_counters_timers: | < 
+CTX < Num_plan_cache_miss           =          0 | < Num_plan_cache_full           =          0 | < Num_plan_cache_delete         =          0 | < Num_plan_cache_invalid_xasl_id =          0 | < Num_plan_cache_entries        =          0
+##### shell/_06_issues/_20_1h/cbrd_23613_5/cases/cbrd_23613_5.sh
+CTX @ cubrid broker start | config error, query_editor, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB | config error, broker1, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB
+##### shell/_06_issues/_23_2h/cbrd_24679/cases/cbrd_24679.sh
+CTX @ cubrid broker start | Execute OK. (0.003000 sec) Committed. (0.000000 sec)  | 0
+##### shell/_28_features_844/issue_10986_eventlog/_03_eventlog_tempvolume/cases/_03_eventlog_tempvolume.sh
+DIFF expand.txt_temp_diff expand.answer_temp_diff -b :: 51c51 | <   sql: select count(*) from (select /*+ NO_MERGE */ [t].[a], [t].[b], [t].[class_name], [t].[owner_name], [t].[class_type], [t].[is_system_class], [t].[tde_al | --- | >   sql: select count(*) from (select /*+ NO_MERGE */ [t].[a], [t].[b], [t].[class_name], [t].[owner_name], [t].[class_type], [t].[is_system_class], [t].[tde_al
+CTX 51c51 | <   sql: select count(*) from (select /*+ NO_MERGE */ [t].[a], [t].[b], [t].[class_name], [t].[owner_name], [t].[class_type], [t].[is_system | --- | >   sql: select count(*) from (select /*+ NO_MERGE */ [t].[a], [t].[b], [t].[class_name], [t].[owner_name], [t].[class_type], [t].[is_system
+##### shell/_36_damson/cbrd_23726/csqltest/cases/csqltest.sh
+CTX ls: cannot access 'ddl_audit.sql*_D*': No such file or directory
+##### shell/_06_issues/_11_1h/bug_bts_4321_1/cases/bug_bts_4321_1.sh
+CTX Try 'grep --help' for more information. | awk: cmd. line:1: NR== {print $13} | awk: cmd. line:1:      ^ syntax error | ,,, | bug_bts_4321_1.sh: line 66: [: =: unary operator expected
+##### shell/_06_issues/_12_2h/bug_bts_7956/cases/bug_bts_7956.sh
+CTX mv: cannot stat '/home/CUBRID/log/broker/sql_log/broker1_1.sql.log.bak': No such file or directory | @ cubrid server stop: functional | Server functional notified of shutdown. | This may take several minutes. Please wait.
+##### shell/_06_issues/_14_1h/bug_bts_12558/cases/bug_bts_12558.sh
+DIFF result2.log_temp_diff result2.answer_temp_diff -b :: 1,3c1,4 | < connect db db12558@localhost user public  | < connect db db12558@localhost user PUBLIC  | < connect db db12558@localhost user public  | --- | > connect db db12558@localhost user public url jdbc:cubrid:127.0.0.1:36733:db12558:public  | > connect db  user public url jdbc:cubrid:127.0.0.1:36733::public, error:-1. | > connect db db12558@localhost user PUBLIC url jdbc:cubrid:127.0.0.1:36733:db12558: 
+CTX --- | > connect db db12558@localhost user public url jdbc:cubrid:127.0.0.1:36733:db12558:public  | > connect db  user public url jdbc:cubrid:127.0.0.1:36733::public, error:-1. | > connect db db12558@localhost user PUBLIC url jdbc:cubrid:127.0.0.1:36733:db12558:  | > connect db db12558@localhost user public url jdbc:cubrid:127.0.0.1:36733:db12558:public 
+##### shell/_06_issues/_17_1h/cbrd_20759/hide_cubrid_replay/cases/hide_cubrid_replay.sh
+
+##### shell/_06_issues/_20_2h/cbrd_23688_1/cases/cbrd_23688_1.sh
+CTX @ cubrid broker start | config error, query_editor, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB | config error, broker1, DIRECT_HANDOFF with SSL requires DIRECT_HANDOFF_SSL_DB | grep: /home/CUBRID/log/broker/sql_log/*.log: No such file or directory
+##### shell/_06_issues/_24_1h/cbrd_25337/cases/cbrd_25337.sh
+CTX ERROR: cannot connect to the broker | ERROR: No error message available. | Warning: current CSQL session is disconnected. | ERROR: not connected | Exiting ...
+CTX Warning: current CSQL session is disconnected. | ERROR: not connected | Exiting ... | grep: /home/CUBRID/log/ddl_audit/csql_db25337_2_ddl.log: No such file or directory | cbrd_25337.sh: line 152: [: too many arguments
+CTX Warning: current CSQL session is disconnected. | ERROR: not connected | Exiting ... | grep: /home/CUBRID/log/ddl_audit/csql_db25337_2_ddl.log: No such file or directory | cbrd_25337.sh: line 207: [: too many arguments
+##### shell/_28_features_844/issue_11202_temp_volume_create/cases/issue_11202_temp_volume_create.sh
+DIFF create.log_temp_diff create.answer_temp_diff -b :: 51c51 | <   sql: select count(*) from (select /*+ NO_MERGE */ [t].[a], [t].[b], [t].[class_name], [t].[owner_name], [t].[class_type], [t].[is_system_class], [t].[tde_al | --- | >   sql: select count(*) from (select /*+ NO_MERGE */ [t].[a], [t].[b], [t].[class_name], [t].[owner_name], [t].[class_type], [t].[is_system_class], [t].[tde_al
+CTX 51c51 | <   sql: select count(*) from (select /*+ NO_MERGE */ [t].[a], [t].[b], [t].[class_name], [t].[owner_name], [t].[class_type], [t].[is_system | --- | >   sql: select count(*) from (select /*+ NO_MERGE */ [t].[a], [t].[b], [t].[class_name], [t].[owner_name], [t].[class_type], [t].[is_system
+##### shell/_37_elderberry/apis_869_jdbc_property/cases/apis_869_jdbc_property.sh
+CTX ----------------- 1 : OK
+CTX ----------------- 2 : NOK altHosts=localhost:33000
+CTX ----------------- 2 : NOK altHosts=localhost:33000 | ----------------- 3 : NOK rcTime=30
+CTX ----------------- 3 : NOK rcTime=30 | ----------------- 4 : NOK loadBalance=false
+CTX ----------------- 4 : NOK loadBalance=false | ----------------- 5 : NOK connectionTimeout=30
+CTX ----------------- 5 : NOK connectionTimeout=30 | ----------------- 6 : NOK queryTimeout=30
