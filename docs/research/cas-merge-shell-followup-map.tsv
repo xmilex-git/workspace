@@ -1,7 +1,7 @@
 case_path	baseline_category	baseline_reason_unverified	owner_title	owner_url	local_status
 _01_utility/_01_sqlx/bug_cubridsus2018	C	';run' session command loses statement history ('ERROR: No statement to execute.')	csql 출력·이력·실행계획 TC 계열 — 원본 재현과 렌더링 호환	https://github.com/xmilex-git/workspace/issues/225	recheck_required
 _01_utility/_11_killtran/itrack_10002	A	killtran output has no 'cub_cas' program name so TC's kill-by-username loop never triggers	CAS·SHARD 가정 TC 이행 — 상태 조회·프로세스·로그 기대값 갱신	https://github.com/xmilex-git/workspace/issues/223	recheck_required
-_01_utility/_14_lockdb/itrack_10001	C	'SET TRANSACTION ISOLATION LEVEL' no longer prints the 'Isolation level set to: X' confirmation line	csql 출력·이력·실행계획 TC 계열 — 원본 재현과 렌더링 호환	https://github.com/xmilex-git/workspace/issues/225	recheck_required
+_01_utility/_14_lockdb/itrack_10001	C	'SET TRANSACTION ISOLATION LEVEL' no longer prints the 'Isolation level set to: X' confirmation line	CS·CCI·접속 오류 TC 계열 — 유틸 접속·재시도·결과 정합성	https://github.com/xmilex-git/workspace/issues/227	recheck_required
 _01_utility/_17_loaddb/itrack_10009	NEW		loaddb·쿼리 결과·관리 유틸 TC 계열 — serial·덤프·시맨틱 정합성	https://github.com/xmilex-git/workspace/issues/230	recheck_required
 _01_utility/_38_csql/_enhance_csql03	A	csql --sysadm self-kill (;k / ;k 1 / ;res) sequence no longer produces the expected 1 ERROR line	CAS·SHARD 가정 TC 이행 — 상태 조회·프로세스·로그 기대값 갱신	https://github.com/xmilex-git/workspace/issues/223	recheck_required
 _01_utility/_38_csql/csql_checkpoint	NEW		csql 출력·이력·실행계획 TC 계열 — 원본 재현과 렌더링 호환	https://github.com/xmilex-git/workspace/issues/225	recheck_required

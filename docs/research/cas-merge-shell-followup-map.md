@@ -18,9 +18,9 @@
 | [운영 호환 구현 잔여 — 로그·동적 제어·접속 종류·query replace](https://github.com/xmilex-git/workspace/issues/222) | 4 | 독립 진행 가능; 확정 운영 정책 준수 |
 | [CAS·SHARD 가정 TC 이행 — 상태 조회·프로세스·로그 기대값 갱신](https://github.com/xmilex-git/workspace/issues/223) | 110 | [운영 호환 구현 잔여](https://github.com/xmilex-git/workspace/issues/222) |
 | [csql histogram·드라이버 상세 계측 — 세션 귀속·권한·초기화 복구](https://github.com/xmilex-git/workspace/issues/224) | 14 | 독립 진행 가능; 확정 운영 정책 준수 |
-| [csql 출력·이력·실행계획 TC 계열 — 원본 재현과 렌더링 호환](https://github.com/xmilex-git/workspace/issues/225) | 62 | 독립 진행 가능; 확정 운영 정책 준수 |
+| [csql 출력·이력·실행계획 TC 계열 — 원본 재현과 렌더링 호환](https://github.com/xmilex-git/workspace/issues/225) | 61 | 독립 진행 가능; 확정 운영 정책 준수 |
 | [세션·설정 파일 TC 계열 — client-only 값·locale·설정 우선순위](https://github.com/xmilex-git/workspace/issues/226) | 8 | [선행 안정화 완료](https://github.com/xmilex-git/workspace/issues/211) |
-| [CS·CCI·접속 오류 TC 계열 — 유틸 접속·재시도·결과 정합성](https://github.com/xmilex-git/workspace/issues/227) | 21 | 독립 진행 가능; 확정 운영 정책 준수 |
+| [CS·CCI·접속 오류 TC 계열 — 유틸 접속·재시도·결과 정합성](https://github.com/xmilex-git/workspace/issues/227) | 22 | 독립 진행 가능; 확정 운영 정책 준수 |
 | [PL/CSQL·JavaSP·대기 TC 계열 — isolation·콜백·동시 접속](https://github.com/xmilex-git/workspace/issues/228) | 22 | 독립 진행 가능; 확정 운영 정책 준수 |
 | [코어·MERGE·클라이언트 kill TC 계열 — 종료 시그니처 판정](https://github.com/xmilex-git/workspace/issues/229) | 5 | 독립 진행 가능; 확정 운영 정책 준수 |
 | [loaddb·쿼리 결과·관리 유틸 TC 계열 — serial·덤프·시맨틱 정합성](https://github.com/xmilex-git/workspace/issues/230) | 5 | 독립 진행 가능; 확정 운영 정책 준수 |
@@ -30,6 +30,10 @@
 | [최종 test_shell green 게이트 — 계열 통합·정당 skip·운영 정책 완료 판정](https://github.com/xmilex-git/workspace/issues/234) | 0 | 각 계열 티켓과 선행 안정화 완료 |
 
 최종 게이트는 개별 TC의 중복 소유자가 아니다. 기준 목록에 없던 새 CI 실패를 찾고 담당 계열에 배정하며, 모든 계열의 완료와 확정 운영 정책 검증을 합쳐 판정한다. 한 TC에 여러 원인이 있으면 담당 티켓은 하나를 유지하고 협업 링크를 추가한다. 소유권을 바꿀 때에는 양쪽 티켓의 목록과 TSV를 함께 수정한다.
+
+## 소유권 정정
+
+- `_01_utility/_14_lockdb/itrack_10001`은 csql 출력 계열에서 CS·CCI 접속 계열로 이관했다. 실제 원인은 잠금 검사 이전의 직접 `libcubridcs` 접속 거절이며 PASS/skip이 아니다. [재현·소스 근거와 남은 검증](https://github.com/xmilex-git/workspace/issues/227#issuecomment-5581315144). 전체 295건의 단일 소유권은 유지한다.
 
 ## Blocking
 
@@ -42,11 +46,13 @@
 
 ## 공통 실행·판정 규칙
 
+- 최신 지도 Notes·담당 티켓의 사용자 합의가 아래 기본 규칙보다 우선한다. csql 출력 계열은 optdebug만 검증한다. 신규 회귀 TC는 PR에 추가하지 않고, 지도 종료 시 단일 `test.md`로 요구사항을 취합해 QA가 작성한다. [지도 전체 정책](https://github.com/xmilex-git/workspace/issues/209#issuecomment-5580384559).
+
 - 구현·판단은 리드, 재현·분석·빌드·실행 검증은 `.agents/AGENTS.md`의 단일 `herdr-integration` 경로로 Sonnet에 위임한다. 실행 중 중간 로그를 리드에게 반복 유입하지 않고 native wait 뒤 최종 보고서를 읽는다.
 - CTP는 `just ctp`/`just ctp-rerun`의 컨테이너 경로만 사용한다. **smoke는 호스트 실행을 허용**하며 서버 제어 래퍼·포트 관리·정리를 준수한다. DB 생성 전에 작업 디렉터리도 scratch로 옮긴다.
 - 제품 수정은 fresh optdebug/release, 실제 활성화한 unit target, 관련 smoke와 원본 TC의 결과를 구분해 기록한다. `12/14`나 `No tests were found`를 PASS로 적지 않는다. 재사용 JDBC jar의 실제 버전도 명시한다.
 - [운영 정책](https://github.com/xmilex-git/workspace/issues/209#issuecomment-5559332086)은 기능 보존이 기준이다. histogram 미지원 처리, 기본값만 바꾼 동적 제어, 비활성 query replace를 완료로 보지 않는다.
-- 결함 상세는 [CTP/CI 결함 통합 추적](https://github.com/xmilex-git/workspace/issues/210)에 모으고 각 계열 티켓에서 참조한다. 이 분할은 결함별 독립 PR을 만드는 지시가 아니다. 기존 [엔진 PR](https://github.com/CUBRID/cubrid/pull/7837)과 [셸 TC PR](https://github.com/CUBRID/cubrid-testcases-private-ex/pull/4040)을 사용한다.
+- 결함 상세는 담당 계열 티켓에 기록하고 [CTP/CI 결함 통합 추적](https://github.com/xmilex-git/workspace/issues/210)에는 제목과 링크만 둔다. 이 분할은 결함별 독립 PR을 만드는 지시가 아니다. 기존 [엔진 PR](https://github.com/CUBRID/cubrid/pull/7837)과 [셸 TC PR](https://github.com/CUBRID/cubrid-testcases-private-ex/pull/4040)을 사용한다.
 
 ## 보존해야 할 정정
 
