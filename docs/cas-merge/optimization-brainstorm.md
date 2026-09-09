@@ -213,3 +213,13 @@ Q7은 [전체 후보의 최종 판정](candidate-disposition.md)으로 확정했
 [외부 JDBC·PL 내부 JDBC 구현 범위](optimization-audit/jdbc-scope.md)를 추가했다. 외부 cubrid-jdbc는 엔진 gitlink의 `a3ebfb76bf4f0150fb8bd643e6dc2b5491b3d1cf`를 확인했다. 기존 CAS V12의 handler·pooling retry·metadata 규약을 유지한 공유/eviction 연동을 구현·검증하고, PL 내부 JDBC는 C++·Java의 typed callback·명령 결합·첫 fetch/metadata 최적화를 실제 구현 대상으로 삼는다.
 
 최종 결정은 D1~D9, 전체 항목별 범위는 [최종 판정](candidate-disposition.md), invalidation은 [정책·구현 계약](invalidation-policy.md)에 있다. 세부 write/dependency inventory와 API·단계·gate는 후속 구현 설계의 입력이다. 다음 cpp-perf-rules 브레인스토밍에서는 이 채택 범위를 뒤집어 보류 목록으로 되돌리지 않고 규칙·측정·게이트를 구체화한다.
+
+## cpp-perf-rules 관점 (wf218)
+
+[브레인스토밍 2](https://github.com/xmilex-git/workspace/issues/218)는 채택 범위를 바꾸지 않고, 후보마다 규칙 ID·폴드 비용의 실체·op당 기대 효과·측정 방법·게이트 여부를 붙였다. 전문은 [cpp-perf-rules 관점 — 폴드 핫패스 규칙 ID 재검토와 측정 계획](perf-rules-review.md)에 있다. 요지:
+
+- **게이트 규약 확정(G1~G9):** 구현 PR은 YCSB C×3·A×3 median+MAD·p50/p99·Appendix E 위상 diff(MEAS-04/07/08). conf는 #125 + 체크포인트-조용(`checkpoint_every_size=256G`, `checkpoint_interval=120min`, 이벤트 0회가 레그 유효 조건). p99 +10% 초과는 귀속 필수 hold. R 계열은 연결 100/1,000 sweep에서 연결당 RSS 기울기로 판정. PGO는 기록만.
+- **사실 정정:** 엔진 전체가 `libcubrid.so` 하나(general-dynamic TLS, `__tls_get_addr` 호출 지점 231→5,463, 스레드당 TLS 240KiB zero-fill). `VALUE_IS_CLIENT_HALF`는 스캔 핫패스에 없고(Java SP 직렬화 4곳), 진짜 핫 TLS 지점은 `quick_fit.c:43`의 alloc/free당 `csc_current()`. 브래킷 뮤텍스는 연결당 1회(후보 아님). XASL_NODE는 +8B(후보 아님). 결과 하나에 16KiB memcpy ×2 + ≈48KiB malloc(행 수 무관).
+- **판정 분류:** 독립 quick-win = TLS `initial-exec`(G3). 흡수 = 값당 분기·래퍼 hop(T4/P6), alloc/free TLS(T4·S9), TLS 블록·출력 버퍼·스레드 모델(R1·R2·R3·R9), 요청 스크래치(R7), 바인드 clone(T1), 페이지 복사(T2·T3), 세션 고정항(S2·S9). 상류 후보 = `mht_clear` 4회/commit 빈 가드, classrepr 뮤텍스, 체크포인트 페이싱, qmgr 뮤텍스. 클래스 IS 락은 PG식 fastpath 방향(G6). 신규 발견 = 브로커 핸드오프 직렬화(PAR-05/A15, 콜드), NUMA 배치(PAR-09, 측정 후).
+- **귀속 프로브:** 현 head에서 dwarf 프로파일·TMA L1·c2c·5단계 메모리·접속 지연을 재채집해 기대 효과의 계수를 확정한다([스펙](https://github.com/xmilex-git/workspace/issues/218#issuecomment-5594773683)). 수치는 우선순위 확정 근거가 아니라 측정 계획의 시드다.
+- **프로브 결과 요지([전문](../research/cas-merge-perf-probe-2026-09.md)):** 체크포인트 0회로 A p99 6,067µs(#177 11,279µs). `__tls_get_addr` 1.85%(C), 결과 페이지 복사 두 곳이 memmove의 86%(children 5.7%), `db_cp_query_type` malloc 1.18%(P3 근거), `mht_clear` 1.32%, 락 비용의 2/3가 보유 목록 선형 탐색. TMA L1 **frontend-bound 44~56%**(IPC 0.58) — I-cache/iTLB 축 신설. c2c HITM 상위 = QMGR 질의 엔트리·classrepr 엔트리·pgbuf BCB·**xcache 엔트리 SHA1/fix 라인**(P6 설계에 COH-04 요건), AREA·`lk_res`는 부재. 연결당 세션 메모리 315~512 kB, 스레드 +1/연결. 핸드오프는 ≈1 ms 단일 서버로 직렬화(16스레드에 p50 7~9배).
