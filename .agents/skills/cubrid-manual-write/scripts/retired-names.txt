@@ -1,0 +1,10 @@
+# One extended regex per line. Names that no longer exist in the engine and must never appear in the
+# manual (GAP-AUDIT.md §4). Append when an audit retires another surface; never remove.
+NO_PARALLEL_HEAP_SCAN
+parallel_heap_scan_page_threshold
+NLJ_KEEP_HEAP_PAGE_PINNED
+memoize_hash_size
+gather: count
+list time
+key time
+P_ORDER
