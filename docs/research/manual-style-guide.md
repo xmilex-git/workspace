@@ -1,5 +1,9 @@
 # CUBRID 매뉴얼 집필 스타일 가이드 — CBRD-26722 (parallel query & memoize)
 
+> **Superseded (2026-09-09, wayfinder #155).** This guide has been distilled into the `cubrid-manual-write`
+> skill on `main` — `.agents/skills/cubrid-manual-write/STYLE.md` is now the living document; append new
+> lessons to its §11, not to §12 here. This file stays as the journey record for CBRD-26722.
+
 - 티켓: [#149](https://github.com/xmilex-git/workspace/issues/149) (맵 [#144](https://github.com/xmilex-git/workspace/issues/144))
 - 출처: PR [#753](https://github.com/CUBRID/cubrid-manual/pull/753) diff·리뷰, 머지된 [#723](https://github.com/CUBRID/cubrid-manual/pull/723) diff·리뷰 코멘트 ~90건, `/home/cubrid/cubrid-manual` (`develop`+`parallel_scan_all`) 관례 전수 조사.
 - 지위: **집필 티켓 #152(parallel)·#153(memoize)의 규범.** 이 가이드와 어긋나는 서술은 리뷰에서 되돌린다.
