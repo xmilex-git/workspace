@@ -77,31 +77,31 @@ Workload A — 독립 실행 4회(L2/L3/L4/L7, 각 5M ops):
 
 ## 3. L3 — 카운터와 TMA L1
 
-`perf stat -p <cub_server>` user-only, steady 30초 ×3(값은 rep1; 3회 모두 IPC C 0.58, A 0.38~0.45로 일치). 12이벤트 그룹이라 PMU 멀티플렉싱 33~50% 스케일링 — 절대치는 추정치.
+`perf stat -p <cub_server>` user-only, steady 30초 ×3, **median**(C 3회는 거의 동일; A는 cycles 333.4/376.6/388.0 B로 변동). 12이벤트 그룹이라 PMU 멀티플렉싱 33~50% 스케일링(배율은 반복 간 일관) — 절대치는 추정치.
 
-| 카운터 (30초) | C | A |
+| 카운터 (30초, median) | C | A |
 |---|---|---|
-| cycles:u | 859.2 B | 333.4 B |
-| instructions:u | 500.1 B | 151.2 B |
-| **IPC** | **0.58** | **0.45** |
-| cache-references / misses | 29.74 B / 2.307 B (**7.76%**) | 10.67 B / 1.109 B (**10.4%**) |
-| branch-instructions / misses | 119.8 B / 2.081 B (**1.74%**) | 34.16 B / 1.195 B (**3.50%**) |
-| uops_issued.any / uops_retired.retire_slots | 576.3 B / 521.3 B | 185.6 B / 158.7 B |
-| int_misc.recovery_cycles | 13.23 B | 7.62 B |
-| idq_uops_not_delivered.core | 1,925.6 B | 707.0 B |
-| dsb2mite_switches.penalty_cycles | 8.79 B (1.0% of cycles) | 3.13 B (0.9%) |
-| cycle_activity.stalls_mem_any | 422.2 B (49.1% of cycles) | 174.2 B (52.3%) |
+| cycles:u | 859.2 B | 376.6 B |
+| instructions:u | 500.4 B | 148.8 B |
+| **IPC** | **0.58** | **0.40**(0.38~0.45) |
+| cache-references / misses | 29.67 B / 2.309 B (**7.76%**) | 10.98 B / 1.297 B (**11.8%**) |
+| branch-instructions / misses | 119.9 B / 2.083 B (**1.74%**) | 33.74 B / 1.158 B (**3.43%**) |
+| uops_issued.any / uops_retired.retire_slots | 576.7 B / 521.4 B | 180.6 B / 154.5 B |
+| int_misc.recovery_cycles | 13.25 B | 7.42 B |
+| idq_uops_not_delivered.core | 1,925.6 B | 697.0 B |
+| dsb2mite_switches.penalty_cycles | 8.80 B (1.0% of cycles) | 3.13 B (0.8%) |
+| cycle_activity.stalls_mem_any | 422.2 B (49.1% of cycles) | 220.0 B (58.4%) |
 
-TMA L1(수동 공식, 4·cycles 기준) vs `perf stat --topdown -a`(시스템 전역 20초, 코어 간 균일):
+TMA L1(수동 공식, 4·cycles 기준, 3회 범위) vs `perf stat --topdown -a`(시스템 전역 20초; 대다수 코어 균일, 일부 코어는 타 프로세스로 이질):
 
-| 슬롯 | C 수동 | C topdown -a | A 수동 | A topdown -a |
+| 슬롯 | C 수동 (3회) | C topdown -a | A 수동 (3회) | A topdown -a |
 |---|---|---|---|---|
-| Retiring | 15.2% | 16.1% | 11.9% | 13.3% |
-| Bad speculation | 3.1% | 3.6% | 4.3% | 4.7% |
-| **Frontend bound** | **56.0%** | **44.5%** | **53.0%** | **38.2%** |
-| Backend bound | 25.7% | 35.7% | 30.8% | 43.8% |
+| Retiring | 15.2% | 15.6~16.1% | 10.0~11.9% | 13.3% |
+| Bad speculation | 3.1~3.2% | 3.4~3.7% | 3.5~4.3% | 4.7% |
+| **Frontend bound** | **56.0~56.1%** | **43.1~44.5%** | **44.8~53.0%** | **38.2%** |
+| Backend bound | 25.6~25.7% | 35.7~37.7% | 30.8~41.7% | 43.8% |
 
-두 방법 모두 **frontend-bound가 최대 슬롯**이고 retiring은 12~16%다. DSB→MITE 전환 페널티는 cycles의 1%에 그치므로 FE 병목의 주범은 DSB 스위치가 아니라 **I-cache/iTLB 미스·분기 resteer**로 좁혀진다(MEAS-02 3단계 후속: `icache_64b.iftag_stall`, `icache_16b.ifdata_stall`, `itlb_misses.walk_pending`, `frontend_retired.*`). 이는 327MB `libcubrid.so`·5,463 GD-TLS 호출·`-finline-functions` 코드 팽창과 정합하며 CC-08(레이아웃 민감성)·BR-08/CC-05(콜드 코드 분리) 축의 우선순위를 올린다.
+두 방법 모두 **frontend-bound가 최대 슬롯**이고 retiring은 10~16%다. 프로세스 한정 수동 공식(FE 56%)과 시스템 전역(FE 43%)의 FE/BE 배분 차이는 32코어 평균 희석과 공식 근사 차이로 보고 한쪽만 신뢰하지 않는다. A의 backend-bound는 반복 간 변동(30.8→41.7%)이 커 A는 방향만 취한다. DSB→MITE 전환 페널티는 cycles의 1%에 그치므로 FE 병목의 주범은 DSB 스위치가 아니라 **I-cache/iTLB 미스·분기 resteer**로 좁혀진다(MEAS-02 3단계 후속: `icache_64b.iftag_stall`, `icache_16b.ifdata_stall`, `itlb_misses.walk_pending`, `frontend_retired.*`). 이는 327MB `libcubrid.so`·5,463 GD-TLS 호출·`-finline-functions` 코드 팽창과 정합하며 CC-08(레이아웃 민감성)·BR-08/CC-05(콜드 코드 분리) 축의 우선순위를 올린다.
 
 ## 4. L4 — `perf c2c` HITM (COH-02)
 
@@ -121,7 +121,10 @@ TMA L1(수동 공식, 4·cycles 기준) vs `perf stat --topdown -a`(시스템 �
 | 1 | **classrepr 캐시 엔트리** 뮤텍스+필드 | `__pthread_mutex_lock/trylock/unlock`(0x10~0x20), `heap_classrepr_get`(0x38) | U3 확증 — 모든 세션이 `usertable` 엔트리 하나를 두드림 |
 | 2 | **pgbuf BCB** | `pgbuf_fix_release`(0x2c, 70%), `pgbuf_unfix`(0x38, 23%) | 핫 인덱스 페이지 BCB. 선존 |
 | 3 | **xcache 엔트리** | `SHA1Compare`·`xcache_compare_key`·`xcache_find_xasl_id_for_execute`·`xcache_entry_get_entrysize` — 한 엔트리의 SHA1/size 필드에 43~56% | 100세션이 같은 plan 엔트리를 fix/unfix. **P6 공유 준비 객체 설계의 COH-04 입력**: 불변 키(SHA1·size)와 가변 카운터(fix count·시각)를 다른 라인에 |
-| 4+ | 스캔 디스크립터(`scan_open_index_scan`/`scan_close_scan`), 커널 `switch_mm_irqs_off`; A에는 `futex_wake`·`native_queued_spin_lock_slowpath` 추가 | — | 선존 |
+| 4 | QMGR 임시파일 뮤텍스 | `__pthread_mutex_lock`(0x8, 96%) ← `qmgr_create_new_temp_file`(`query_manager.c:3584`) | 선존 |
+| 5, 7+ | 커널 `switch_mm_irqs_off`; 스캔 디스크립터(`scan_open_index_scan` `scan_manager.c:3483/3575`, `scan_close_scan` `:1446`); A에는 `futex_wake`·`native_queued_spin_lock_slowpath`·`_raw_spin_lock` 라인 추가 | — | 선존 |
+
+C/A 요약치: Load Local HITM 129,376 / 50,258, Remote HITM 78,120 / 30,558, LLC miss→Local DRAM 11.2% / 21.4%, →Remote DRAM 54.8% / 54.3%.
 
 부수 관찰(A, 라인 #9): `logtb_find_client_type`(`log_impl.h:1275`)과 `pgbuf_fix_release`가 **같은 캐시라인 오프셋**에서 샘플됨 — 진단 미완, 기록만.
 
@@ -171,17 +174,23 @@ numastat(MB): S1 부트 직후 node0 448 / node1 2,900(부트 스레드가 node1
 
 ## 7. L7 — statdump 워처 게이트
 
-A 실행 중 `cubrid statdump -c ycsb` 1회: 265개 비0 항목이지만 값이 작다(`Num_query_selects=452`, `Num_tran_commits=390` — 워처 부착~출력 사이 약 15ms 창). `statdump -i 5` 첫 반복은 전부 0(델타 기준선), 둘째 반복 `Num_tran_commits=137,802/5s ≈ 27.6k/s`(A 처리량과 일치). → 카운터는 `n_watchers>0`일 때만 누적한다는 코드 사실 확증. #177의 "전부 0"은 결함이 아니라 사용 의미론(부팅 이후 누적치가 아님). 게이트 계측은 `-i` 모드 또는 워처를 먼저 붙인 뒤 사용.
+A 실행 25초 시점에 `cubrid statdump -c ycsb` 1회: 265개 항목이 즉시 비0이지만 값이 작다(`Num_tran_commits=390`, `Num_query_selects=452`, `Num_object_locks_acquired=1,334`, `Num_data_page_fetches=4,316` — 처리량 27.6k/s 기준 약 15ms 분량). 두 해석을 병기한다: (a) 리드 — 워처 부착 RPC와 읽기 RPC 사이의 창만 누적된 것으로 "카운터는 `n_watchers>0`일 때만 누적"이라는 코드 사실과 정합, (b) 워커 — #177의 "전부 0"이 재현되지 않았고 앞선 접속이 워처를 올려 뒀을 가능성도 배제 못 함. 어느 쪽이든 `-c` 단발은 부팅 이후 누적치가 아니며, 게이트 계측은 `-i` 모드로 한다. `statdump -i 5` 첫 반복은 전부 0(델타 기준선), 둘째 반복 `Num_tran_commits=137,802/5s ≈ 27.6k/s`(A 처리량과 일치), `Num_object_locks_acquired=413,647/5s`, `Num_log_append_records=199,954/5s` — 델타 기구 정상.
+
+**이상값**: 둘째 반복의 `Num_object_locks_time_waited_usec=1,648,912,272,933,097`(5초 창에 약 5만 년어치 µs) — 미초기화/오버플로/단위 오류 의심, 원인 미추적. 상류 확인 후보로 기록.
 
 ## 8. L6 prepare-churn
 
-시간 예산으로 **생략**. 하네스 옵션은 구현 노력의 진입 게이트에서 추가한다(G9 유지).
+**생략**. `jdbc.cachestatements`(기본 true) 속성으로 `read()`/`update()`가 매번 새 PreparedStatement를 만들고 닫는 설계까지는 ≤30줄로 가능했으나, 공유 하네스 체크아웃(`~/dev/cubrid-perftools-internal/ycsb`)의 `lib/core-0.4.0.jar`·`lib/jdbc-binding-0.4.0.jar`가 워커가 손대기 전부터 커밋 대비 수정(uncommitted) 상태여서 Maven 재빌드·patch-revert가 원상을 보장하지 못한다고 판단해 안전 우선으로 생략했다. 시간 예산 지시도 같은 방향. 하네스 옵션은 구현 노력의 진입 게이트에서 추가한다(G9 유지).
 
 ## 9. 편차·미측정
 
-- dwarf 샘플 유실(`lost 80~82 chunks`) → L2 self%는 근사. 다음엔 `-F 249` 또는 `--call-graph dwarf,8192`.
+- dwarf 샘플 유실(`lost 80~82 chunks`; C 4.7GB/296K 샘플, A 2GB/123K 샘플) → L2 self%는 근사. 다음엔 `-F 249` 또는 `--call-graph dwarf,8192`.
 - C 커널 포함 10초 샘플 타이밍 실패(무효), A는 유효.
-- S3의 UPDATE가 golden 사본 1행을 덮어씀(스펙대로, gate-grade 수치 아님). S2−S1은 L2-C 개입으로 연결당 계수에 부적합. 1100-conf 부트 기준선(S1′) 미채집.
+- **툴링 갭**: `cubrid broker start`도 출력이 파이프에 물리면 hang(데몬은 정상 기동, 감시 셸만 멈춤). `cubrid-server-control` 스킬은 `cubrid server`만 감싸므로 워커가 `scripts/broker-ctl.sh`를 새로 써 대체 — 스킬 확장 후보.
+- A 4회 실행 사이에 copydb 재복사를 생략(S1→S5 연속 세션 유지 목적) → §1의 A 수치는 누적 갱신된 DB 위에서 측정. S3의 UPDATE가 golden 사본 1행을 덮어씀(스펙대로). 어느 것도 gate-grade 수치가 아니다.
+- S2−S1은 L2-C 개입으로 연결당 계수에 부적합. 1100-conf 부트 기준선(S1′) 미채집. numastat 보충 채집은 원 세션 종료 후 별도 재시작 세션(pid 583560)에서 loadavg1≈21(비유휴) 상태로 수행 — 비율만 취한다.
+- L5′ 1,000연결·S4/S5의 numastat 미채집(애드엔덤이 원 세션 종료 후 도착).
+- `statdump` 이상값(§7) 원인 미추적.
 - `__tls_get_addr`·`__pthread_mutex_lock`·`malloc` 호출자 분해는 0.3% 임계 아래로 파편화된 부분이 커서 합이 self%에 못 미침. 다음엔 `--percent-limit 0.1` + 심볼 필터.
 - 처리량은 perf 부착·호스트 이력 때문에 INDICATIVE. 게이트 판정에 쓰지 않는다.
 - 접속 지연의 100ms 계단 원인 미확정.

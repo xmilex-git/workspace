@@ -132,7 +132,8 @@ TMA L1은 프로세스·user-only 카운터로 수동 산출한다(Cascade Lake,
 | 후보 | 프로브 실측 | 3절 판정에 미치는 영향 |
 |---|---|---|
 | N1 TLS | `__tls_get_addr` self **1.85%(C) / 1.39%(A)** — #177(1.0–1.4%)보다 높음. 호출자는 `csc_current` 0.31% 외 파편화 | 독립 quick-win 유지·강화. 미니 게이트 기준 = 이 self가 0으로 |
-| N2 alloc/free TLS | 파편화 구간에 잠김(0.3% 미만/지점) | T4 첫 대상 유지; 계수는 `--percent-limit 0.1` 재분해로 |
+| N2 alloc/free TLS | `--children`: `csc_current` total **0.75%**(self 0.40%, C) / 0.52%(A); `db_ws_alloc`+`db_ws_free` total 0.19% / 0.19% | T4 첫 대상 유지하되 **op당 효과는 1% 미만**으로 계수 확정 — 메모리·구조 목적이 주, 속도 주장 금지 |
+| N4 `enter/exit_server` hop | `--children` 합 ≈0.56%(C) / 0.44%(A), self 0 | T4 흡수 유지, 속도 계수 소액 |
 | N9 페이지 복사 | `__memmove` 4.52%의 86% = `cursor_copy_list_id` 2.00 + `qmgr_attach_first_page_copy` 1.90; children **5.73%**(C) | T2·T3 기대 효과 상한 ≈ C 사이클 5~6% (게이트로 확정) |
 | P3 메타데이터 | `malloc` 4.09% 중 **`db_cp_query_type` 1.18%**(execute마다 `DB_QUERY_TYPE` 복사) | P3에 실측 근거 추가 — 1순위 근거 강화 |
 | N7 요청 스크래치 | malloc 파편화 구간 | 계수 미확정(재분해 필요) |
@@ -145,7 +146,8 @@ TMA L1은 프로세스·user-only 카운터로 수동 산출한다(Cascade Lake,
 | **신규 F1: frontend-bound** | TMA L1 **FE 44~56%**, retiring 12~16%, IPC 0.58/0.45; DSB→MITE 페널티 1%뿐 | I-cache/iTLB/resteer 축 신설 → CC-08 레이아웃 게이트의 중요도 상승, BR-08/CC-05 콜드 코드 분리·`-finline-functions` 재검토를 측정 후보로 추가(MEAS-02 3단계: `icache_64b.iftag_stall`, `itlb_misses.walk_pending`, `frontend_retired.*`) |
 | **신규 F2: xcache 엔트리 라인 HITM** | c2c 라인 #3: 한 엔트리의 SHA1/size/fix 필드에 43~56% HITM | P6 공유 준비 객체 설계 요건: 불변 키와 가변 카운터를 **다른 캐시라인**에(COH-04), fix count는 세션 로컬 ref 또는 샤딩(GLOB-09) |
 | **신규 F3: QMGR 질의 엔트리 라인 HITM** | c2c 라인 #0: 질의 엔트리 상태 필드(0x0/0x20)+뮤텍스(0x38) 왕복 | 선존. 전역 풀 재사용이 코어 간 transfer를 만듦 → 스레드 로컬 엔트리 캐시(COH-12) 상류 후보 |
-| 게이트 도구 | statdump는 워처 부착 후에만 누적(`-i` 모드 사용) | 측정 계획 4절에 반영 |
+| 게이트 도구 | statdump는 워처 부착 후에만 누적(`-i` 모드 사용); `Num_object_locks_time_waited_usec` 이상값(1.6×10¹⁵) 관찰 — 상류 확인 후보. `cubrid broker start`도 파이프 hang(스킬 갭) | 측정 계획 4절에 반영, 스킬 확장 후보 |
+| U1 보강 | C `lock_internal_perform_lock_object` 2.95% 전량이 `xcache_find_xasl_id_for_execute`→`lock_object` 경로; unlock 2.54%는 `lock_unlock_all`←`log_commit_local`(autocommit) | 실행마다 "클래스 IS 락 획득(xcache 검증) + 커밋 시 전체 해제" 왕복이 락 비용의 실체 — fastpath는 획득·해제 양쪽을 덮어야 함 |
 | NUMA | 부트 구조 node1 편중(448/2,900 MB), 실행 중 45/55 | 산포 원인 후보로만 기록 |
 
 미측정·편차(프로브 문서 9절): dwarf 샘플 유실로 self%는 근사, C 커널 샘플 무효, 1100-conf 부트 기준선 없음, L6 생략, 100 ms 계단 원인 미확정.
