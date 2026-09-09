@@ -3,7 +3,7 @@
 - 티켓: [브레인스토밍 2 — cpp-perf-rules 렌즈](https://github.com/xmilex-git/workspace/issues/218), 스펙: [프로브 스펙 코멘트](https://github.com/xmilex-git/workspace/issues/218#issuecomment-5594773683)
 - 실행: Sonnet 서브에이전트(리드 스펙 고정, 워커 실행). 워커의 `report.md` 쓰기는 하네스 훅이 막아 워커 답신과 원자료로 리드가 이 문서를 조립했다.
 - 성격: CONTEXT.md의 **귀속 프로브**. A/B 판정·accept/reject 근거가 아니며, [cpp-perf-rules 관점](../cas-merge/perf-rules-review.md) 후보의 기대 효과 계수와 측정 계획 시딩에만 쓴다. 등급 **INDICATIVE**(perf 부착·비단독 호스트 이력).
-- 원자료: 툴링 리포 `.git_ignored_dir/scratch/wf218-probe/`(`l1-layout/`, `l2-perf/`, `l3-counters/`, `l4-c2c/`, `l5-memory/`, `l7-statdump/`, `l8-connect/`, `logs/`, `conf/`, `scripts/ConnHold.java`, `PROGRESS.md`). perf.data 약 8GB.
+- 원자료: 툴링 리포 `.git_ignored_dir/scratch/wf218-probe/`(`l1-layout/`, `l2-perf/`, `l3-counters/`, `l4-c2c/`, `l5-memory/`, `l7-statdump/`, `l8-connect/`, `logs/`, `conf/`, `scripts/ConnHold.java`, `PROGRESS.md`). perf.data·c2c.data(약 8GB)는 2026-09-09 사용자 결정으로 삭제했고 텍스트 산출물(약 52MB, 132개)만 보존한다. 프로브 설치본과 DB 사본도 같은 결정으로 삭제.
 
 ## 0. 출처
 
