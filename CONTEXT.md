@@ -256,6 +256,14 @@ _Avoid_: 힙 전환(`db_change_private_heap` 자체와 혼동), 얕은 대입
 CBRD-27327의 채택 수정 형태 — 패스 **시작**(`manager::open()`의 handler 생성)에서 누산기를 코디네이터 heap → heap 0으로 빌리고, 패스 **안**(`read_node`)에서 heap 0 → 코디네이터 heap으로 반납하는 대칭 규약이다. 반납을 패스 끝(`read_finalize`)에 두면 안 되는 이유는 `read_finalize`가 `manager::end()`를 통해 쿼리 최종 종료 시에도 불리기 때문이다. ADR 0015 참조.
 _Avoid_: 파티션 게이트(증상 회피안 — 기각), `read_finalize` 반납(최종 teardown에서 재발)
 
+**체크포인트-조용 레그 (checkpoint-quiet leg)**:
+YCSB 게이트 레그를 측정창 안에서 체크포인트가 발화하지 않는 conf(`checkpoint_every_size`·`checkpoint_interval`을 실행 길이 위로)로 수행하는 규약이다. 서버 이벤트 로그의 체크포인트 이벤트 0회가 레그 유효 조건이며, 비교 대상이 cas-merge 자기 자신이라 #125 절대치 비교는 포기한다. 체크포인트를 끄는 것이 아니라 창 밖으로 미루는 것이다.
+_Avoid_: 체크포인트 비활성화, #125 conf(축자 conf와 혼동)
+
+**귀속 hold (attribution hold)**:
+게이트에서 p99가 기준선 중앙값 대비 허용폭(현재 +10%)을 넘었을 때 자동 fail이 아니라 원인 귀속을 요구하며 판정을 보류하는 상태다. 선존 기계로 귀속되면 기록 후 통과하고, 귀속에 실패하면 fail이다.
+_Avoid_: 자동 fail, 참고 지표(무시와 혼동)
+
 ### CTP 실행 도구 (컨테이너 격리 러너)
 
 **설치본 (install)**:
