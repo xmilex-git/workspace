@@ -199,3 +199,8 @@ vs 64 hardware threads explains the drop (A is less CPU-bound and did not drop).
 develop merge with CBRD-26662 elastic worker pool) are **not** implicated at C×1 resolution; a ≤3 % residual is within noise.
 Consequence: #177/#125 absolute numbers are not comparable to this track; all PoC A/B stays on the #244 baseline. Every leg
 should record `nproc`/SMT state (added to runbook).
+
+## Hard rule — SMT off (user decision, 2026-09-10 18:50)
+All PoC measurements are valid **only with SMT off** (32 online CPUs, 32-63 offline). `scripts/smt_check.sh` is enforced by the
+idle gate and by every leg script; a leg under SMT on is refused/invalid. Nothing in the tooling enables SMT; the control file is
+host-root only. Every leg in this document ran with SMT off.
