@@ -188,3 +188,14 @@ throughput. This is the P6 (native XASL / shared prepared) measurement lever.
 - `run.sh` rebuilds the harness jars every leg (cwd-relative `lib` test) — before the client starts, so measurement-neutral.
 - Broker CAS error logs show one benign `dynamic_load.c:1735 ER -380 "Dynamic loader already initialized"` per CAS at start.
 
+
+## Addendum — the ~20 % gap vs #177 is the host, not the code (2026-09-10 18:38)
+Discriminator: the exact #177 gate install (`CUBRID-wf143-ycsb`, tree hash `2a84546c…` = `7117c8a66`, JDBC 0075) copied to
+`CUBRID-wf-poc-ref7117` and run **today, same runbook, C×1 20M**: **121,228 ops/s**, READ p50 735 / p99 2,247, 0 checkpoints
+(`results/ref7117/refC1/`). Same band as the new baseline (118,374 median; +2.4 %, ≈2 MAD), nowhere near #177's 147,013.
+Cause: **SMT was turned off on the host between 09-01 and 09-09** — `lscpu` shows CPU(s) 64 with `Off-line CPU(s) list: 32-63`,
+`/sys/devices/system/cpu/smt/control = off`, `nproc` 32; #177 logged loadavg as "…/64". 100 client threads + server on 32 cores
+vs 64 hardware threads explains the drop (A is less CPU-bound and did not drop). The 97 commits between the shas (incl. the
+develop merge with CBRD-26662 elastic worker pool) are **not** implicated at C×1 resolution; a ≤3 % residual is within noise.
+Consequence: #177/#125 absolute numbers are not comparable to this track; all PoC A/B stays on the #244 baseline. Every leg
+should record `nproc`/SMT state (added to runbook).
