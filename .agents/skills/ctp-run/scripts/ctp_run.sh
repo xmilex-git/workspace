@@ -696,6 +696,29 @@ discover_units() {
   ' "$SQL_LIST" | LC_ALL=C sort > "$UNITS_FILE"
 }
 
+# shell_helper_dirs <scenario_root>
+# Print (scenario-relative, one per line) every directory that is neither a case
+# dir (has a cases/ beneath it), nor inside one, nor config/ — i.e. the shared
+# helper dirs (common/, commonMethod/) shell cases source by relative path. Only
+# the outermost such dir is printed; rsync -r ships its contents.
+shell_helper_dirs() {
+  local scn="$1"
+  local cases all
+  cases="$(cd "$scn" && find . -type d -name cases -printf '%h\n' | sed 's#^\./##' | LC_ALL=C sort -u)"
+  all="$(cd "$scn" && find . -mindepth 1 -type d ! -name cases ! -path '*/cases/*' ! -path './config' ! -path './config/*' \
+          | sed 's#^\./##' | LC_ALL=C sort)"
+  awk 'NR==FNR { c[$0]=1; next }
+       {
+         d=$0
+         for (k in c) {
+           if (k==d || index(k, d "/")==1 || index(d, k "/")==1) next
+         }
+         # skip a dir whose ancestor was already printed (rsync -r covers it)
+         for (h in out) if (index(d, h "/")==1) next
+         out[d]=1; print d
+       }' <(printf '%s\n' "$cases") <(printf '%s\n' "$all")
+}
+
 # apply_base_exclusions <in_sql_list> <out_surviving_list>
 # Replicates F4 CommonUtils.containPath byte-for-byte against every base entry.
 apply_base_exclusions() {
@@ -1055,6 +1078,17 @@ build_shard_workdir() {
     # contents — a shard that runs zero cases and reports a green empty pass.
     ( cd "$SCN" && rsync -a -r --exclude='*.result' --exclude='*.log' \
         --files-from="$WORK/shard_${i}.dirs.txt" ./ "$scn_dst/" )
+    # Helper dirs (common/, commonMethod/): shared libraries a case sources by a
+    # relative path (`. ../../../common/lib_csql_io.sh`). They hold no cases/, so
+    # the dir list above never names them and every case that sources one failed
+    # locally with a fake "No such file" (wf228, 2026-09-10). Ship all of them;
+    # they are a handful of tiny dirs.
+    shell_helper_dirs "$SCN" > "$WORK/shard_${i}.helpers.txt"
+    if [ -s "$WORK/shard_${i}.helpers.txt" ]; then
+      ( cd "$SCN" && rsync -a -r --exclude='*.result' --exclude='*.log' \
+          --files-from="$WORK/shard_${i}.helpers.txt" ./ "$scn_dst/" )
+      info "shard $i: $(wc -l < "$WORK/shard_${i}.helpers.txt") helper dir(s) shipped alongside the cases."
+    fi
     [ -d "$SCN/config" ] && rsync -a "$SCN/config" "$scn_dst/" || :
     find "$SCN" -maxdepth 1 -type f -exec cp -f {} "$scn_dst/" \; 2>/dev/null || :
   elif command -v rsync >/dev/null 2>&1; then
