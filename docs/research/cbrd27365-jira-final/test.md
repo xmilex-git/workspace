@@ -12,9 +12,11 @@
 - SET/MULTISET/SEQUENCE/JSON 컬럼(256B 초과 컬렉션 포함)이 정렬 키·DISTINCT·UNION 에서 정확하다.
 - 64컬럼을 넘는 리스트(널 비트맵 9B 이상)에서 65번째 이후 컬럼의 NULL 판정과 값이 정확하다.
 - JDBC scrollable 커서(TYPE_SCROLL_INSENSITIVE)의 previous()/absolute()/last() 가 전 행을 정확히 돌려준다(역방향 가능 리스트의 prev_len).
+- (2026-09-10 리뷰 반영) ORDER BY/LIMIT 없는 최상위 `UNION ALL`(2분기·3분기·한쪽 공집합) 결과를 CAS fetch 블록(100행)보다 큰 행수로 앞으로 전부 읽은 뒤 previous()/absolute() 로 되돌아가도 CAS 가 죽지 않고(`cursor_prev_tuple` assert / `ER_QPROC_INVALID_CRSOPR`) 앞으로 읽은 것과 같은 행·합계를 돌려준다. 재발 결함: `qfile_union_list` 가 자식 리스트를 clone 하여 결과 리스트가 prev_len 을 잃음. 확인: JDBC `TYPE_SCROLL_INSENSITIVE` + `setFetchSize(100)` 로 `SELECT id, v FROM t WHERE id<=5000 UNION ALL SELECT id, v FROM t WHERE id<=5000` 을 `next()` 로 전부 읽은 뒤 `afterLast(); while (previous())` 로 전부 되읽어 행수·합계 비교(리뷰어 재현 코드와 동일 형태). 신규 TC 는 추가하지 않았다.
 - 컴파일러가 도메인을 확정하지 않은 리스트 컬럼(파생 테이블의 숨은 ORDER BY 키)을 읽는 경로가 서버를 죽이지 않고 develop 과 같은 결과를 낸다: `percentile_cont(...) over(partition by ...)` 를 `order by ... limit 1` 서브쿼리로 감싼 비교, `group_concat(distinct <식> order by 1)` 을 `(select * from t order by 1, <식>)` 파생 테이블 위에서 GROUP BY 하는 질의(CTP `p_cont_subquery.sql` 70행, `group_concat_001.sql` 52~53행 형태).
 - SET/JSON 컬럼을 담은 파생 테이블(NO_MERGE) 위의 GROUP BY, SET 정렬키 정렬, JSON 분석함수 물질화가 develop 보다 느려지지 않는다(같은 호스트 release A/B, 명령어 수 기준 ±5%).
 - 임시 리스트 페이지 수가 변경 전보다 감소한다(SHOW TRACE 의 임시 리스트 SCAN `page:` 값, 또는 100만 행 (INT, BIGINT) 정렬의 정렬 데이터 페이지 -26%).
+- (2026-09-08 리뷰 반영) `agg_hash_respect_order=no` 에서 모든 그룹이 해시 메모리에 들어가는 GROUP BY(정렬 입력·partial 리스트 모두 비어 있어 해시 테이블의 first_tuple 을 직접 읽는 경로)가 서버를 죽이지 않고, `agg_hash_respect_order=yes`(기본) 및 `NO_HASH_AGGREGATE` 힌트 결과와 같은 집계값을 낸다. 재발 결함: 해시 테이블에 보관한 첫 튜플에 레이아웃이 연결되지 않아 `fetch_peek_dbval_pos` 에서 SIGSEGV. 확인 SQL: `set system parameters 'agg_hash_respect_order=no'; select k, sum(v) from t group by k;` (t 는 k 두 값 x 5,000행, 기대 (0,5000),(1,5000); 순서 무관). 신규 TC 는 추가하지 않았고 optdebug 재현·수정 확인만 수행했다.
 
 ## TC 배치
 
@@ -121,6 +123,7 @@ SHOW TRACE;
 | T9 | 73컬럼 리스트, 컬럼 1/65/72 NULL, 70컬럼 DISTINCT | cbrd_27365_9.sql | cbrd_27365_9.answer 와 동일 |
 | T10 | ORDERBY_NUM/ROWNUM/ISLEAF/ISCYCLE 이 가변 컬럼 뒤 | cbrd_27365_10.sql | cbrd_27365_10.answer 와 동일 |
 | T11 | JDBC scrollable 커서 previous/absolute/last | ScrollSmoke.java, 임의 100행 테이블 | 표준출력이 expected_scroll.out 과 동일 |
+| T14 | 최상위 UNION ALL(ORDER BY 없음) 역방향 커서, 행수 > fetch 블록(100) | JDBC scroll-insensitive, 5,000행 × 2 분기(3분기·한쪽 공집합 변형 포함), next() 전부 → afterLast() → previous() 전부, absolute() 되돌아가기 | fwd/bwd 행수·합계 동일, CAS 생존(cas 로그·코어 없음), release 는 오류 없음 |
 | T12 | 임시 페이지 수 감소 | t_sz 100만 행 ORDER BY b DESC, sort_buffer_size=2M | SHOW TRACE 임시 리스트 SCAN 의 page: 가 변경 전 빌드 대비 20% 이상 감소 (참고: 정렬 데이터 페이지 19,047 → 14,041) |
 | T13 | 기존 플랜 텍스트 케이스 유지 | cbrd_23665, cbrd_24148, cbrd_25382_1/_5, cbrd_25447, cbrd_25519, join_orderby_skip | 입력 확대 뒤 변경 전/후 빌드 모두 기존 answer 통과 |
 

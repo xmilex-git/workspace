@@ -36,7 +36,7 @@ JIRA 원안은 all-fixed 리스트 한정 + hidden 파라미터였으나, 두 �
 
 `qfile_open_list` flag 로 선언하고 `type_list.hdr_size`(4|8) 가 유일한 진실이다. 대상: (A) `XASL_TOP_MOST_XASL` 소유 최종 결과 리스트(CAS scrollable fetch, `qexec_setup_list_id` 의 DML 결과 포함), (B) MERGELIST_PROC outer/inner 자식, (C) 분석함수 group/value 리스트 4지점. 그 외 `qfile_open_list` 호출은 forward-only. 정렬 입력의 `qfile_scan_prev` un-read(list_file.c) 는 save/jump 로 바꿔 forward 유지.
 
-forward 자식 리스트의 raw 튜플을 backward 결과 리스트에 붙이는 경로(UNION/CTE `qfile_copy_tuple`, `qfile_combine_two_list`, 정렬 P 경로 put)는 `qfile_add_tuple_to_list_from(list, tpl, src_hdr_size)` 가 길이 워드만 다시 쓰고 `src+src_hdr` 이후를 그대로 복사한다(`data_off` 차이는 항상 4, D-199-3). 해시조인 파티션·`qfile_duplicate_list` 는 소스 헤더를 상속. `or_unpack_unbound_listid` 는 hdr_size 가 4/8 이 아니면 에러(D-199-10).
+forward 자식 리스트의 raw 튜플을 backward 결과 리스트에 붙이는 경로(UNION/CTE `qfile_copy_tuple`, `qfile_combine_two_list`, 정렬 P 경로 put)는 `qfile_add_tuple_to_list_from(list, tpl, src_hdr_size)` 가 길이 워드만 다시 쓰고 `src+src_hdr` 이후를 그대로 복사한다(`data_off` 차이는 항상 4, D-199-3). 해시조인 파티션·`qfile_duplicate_list` 는 소스 헤더를 상속. `or_unpack_unbound_listid` 는 hdr_size 가 4/8 이 아니면 에러(D-199-10). UNION ALL fast path(`qfile_union_list`)는 복사가 아니라 자식 리스트 clone 이므로, 최상위 UNION_PROC 의 자식은 `parser_generate_xasl` 이 `XASL_LIST_BACKWARD` 를 재귀 전파해 backward 로 열고(MERGELIST 자식과 같은 방식), `qfile_combine_two_list` 는 backward 결과가 요구되면 두 입력이 backward 일 때만 fast path 를 탄다(2026-09-10 리뷰 반영). 서버 `qfile_scan_prev` 는 backward 가 아닌 리스트의 후진을 release 에서도 `ER_QPROC_INVALID_CRSOPR` 로 거부한다(`cursor_prev_tuple` 과 대칭).
 
 ### 레이아웃 디스크립터 (`QFILE_TUPLE_VALUE_TYPE_LIST` 확장, `query_list.h`)
 

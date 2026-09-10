@@ -28,7 +28,9 @@ MinimalTuple과 같은 구조 — `[len(+prev_len)] [has-null 비트] [조건부
 - **역방향 가능 리스트만 `prev_len` 4B를 더해 헤더 8B.** 역방향 가능 여부는 리스트 생성 시 선언하는
   리스트 단위 속성이다. 대상은 (A) `XASL_TOP_MOST_XASL`이 소유한 최종 결과 리스트, (B) MERGELIST_PROC
   outer/inner 자식, (C) 분석함수 group/value 리스트 4지점이고 나머지 `qfile_open_list` 호출은 forward-only다
-  (#184). 정렬 입력의 `qfile_scan_prev` un-read 한 줄(list_file.c:3633)은 "정렬되는 모든 리스트"를
+  (#184). (A)에는 top-most UNION_PROC의 자식 리스트가 포함된다: UNION ALL fast path(`qfile_union_list`)는 자식
+  리스트를 clone하여 결과로 삼으므로 자식이 `prev_len`을 가져야 하고, MERGELIST와 같은 방식으로
+  `parser_generate_xasl`이 자식에 `XASL_LIST_BACKWARD`를 재귀 전파한다(#243, 2026-09-10 리뷰 P1). 정렬 입력의 `qfile_scan_prev` un-read 한 줄(list_file.c:3633)은 "정렬되는 모든 리스트"를
   backward로 만들므로 save/jump로 바꿔 forward를 유지한다.
 - **널 비트맵은 has-null일 때만, 헤더 직후, `ceil(type_cnt/8)`B, 1 = bound.** NULL 값은 0바이트. PG
   `att_isnull`/`first_null_attr`를 그대로 옮긴다.
@@ -157,7 +159,8 @@ CUBRID는 클라이언트/서버 lockstep 업그레이드만 지원한다. 혼�
   resource tracker 누수로 서버를 죽였다. PEEK 소비자는 읽기 전 값을 clear 하므로 소유권 의미 변화 없음.
 - **D-199-3 헤더 재작성 append (§1.1 역방향 플래그의 대가)**: forward 자식 리스트의 튜플이 backward 결과 리스트로 raw
   복사되는 경로(UNION/CTE, 정렬 출력)는 `qfile_add_tuple_to_list_from()` 이 길이 워드만 다시 쓰고 나머지를 그대로 복사한다
-  (`data_off` 차이는 항상 4). 해시조인 파티션·`qfile_duplicate_list` 는 소스 헤더를 상속한다.
+  (`data_off` 차이는 항상 4). 해시조인 파티션·`qfile_duplicate_list` 는 소스 헤더를 상속한다. UNION ALL fast path 는 복사가
+  아니라 clone 이므로 이 경로에 해당하지 않으며, backward 결과가 요구되면 두 입력이 backward 일 때만 fast path 를 탄다(#243).
 - **D-199-13 "확정 전 튜플의 해당 컬럼은 NULL" 전제(§4 늦은 도메인 확정) 정정**: regu 도메인이 VARIABLE 인 동안 bound 값이
   기록되므로 거짓이었다. 조립기 size pass 가 첫 bound 값의 도메인(`tp_domain_resolve_value`)으로 컬럼을 확정하고 재finalize
   한다. 이제 "레이아웃은 첫 bound 값 전에 확정된다" 는 구성상 참이다.

@@ -88,7 +88,7 @@
 
 | # | 위치 (함수) | 리스트 내용 | 소비자 / 읽기 방식 | 분류 |
 |---|---|---|---|---|
-| 1 | `2769` `qfile_combine_two_list` | UNION/INTERSECT/DIFFERENCE 결과 | 호출자 `query_executor.c:15522`(UNION_PROC → `15528`에서 `xasl->list_id`로 copy), `18455`(CTE 재귀 union), `query_hash_join.c:1900`(hash join 파티션 결과 병합). 이후 정방향 스캔 또는 클라이언트 | **B-CLIENT**(15522/18455가 TOP_MOST일 때) — `flag` 인자로 상속됨 |
+| 1 | `2769` `qfile_combine_two_list` | UNION/INTERSECT/DIFFERENCE 결과 | 호출자 `query_executor.c:15522`(UNION_PROC → `15528`에서 `xasl->list_id`로 copy), `18455`(CTE 재귀 union), `query_hash_join.c:1900`(hash join 파티션 결과 병합). 이후 정방향 스캔 또는 클라이언트 | **B-CLIENT**(15522/18455가 TOP_MOST일 때) — `flag` 인자로 상속됨. **정정(#243, 2026-09-10 리뷰)**: UNION ALL fast path(`qfile_union_list`)는 `flag`를 쓰지 않고 자식 리스트를 `qfile_clone_list_id`로 물려받으므로 `flag`만으로는 상속되지 않는다 → top-most UNION_PROC 자식에 `XASL_LIST_BACKWARD` 전파 + fast path 게이트 |
 | 2 | `4656` `qfile_sort_list_with_func` | 정렬 출력 | 호출자 `query_executor.c:4291`(ORDER BY/DISTINCT — 최상위면 최종 결과), `19189`(CONNECT BY order siblings — 이후 정방향), `list_file.c` 내부 `qfile_sort_list`(`4791`; aggregate `query_aggregate.cpp:1409`, analytic `query_analytic.cpp:835`, set-op용 `2753`) | **B-CLIENT**(4291이 TOP_MOST) 그 외 F. 플래그는 `flag` 인자로 전달 가능 |
 | 3 | `4939` `qfile_duplicate_list` | 원본 페이지 raw 복사 | `query_manager.c:1609` — 결과 캐시에 넣기 위해 최종 결과를 FILE_QUERY_AREA로 복제; 복제본이 클라이언트에 반환됨(`1614`) | **B-CLIENT**; 포맷은 원본과 동일하므로 **플래그를 원본에서 상속**해야 함 |
 
