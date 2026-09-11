@@ -239,7 +239,7 @@ ctest mode="debug":
 # recipe here, and none may be added.
 #
 # The runner is the ctp-run skill: the CI image (cubridci/cubridci:test_rl8.10,
-# digest-pinned) with the skill's entrypoint fork bind-mounted in, the local
+# digest-pinned) with only the skill's two HA entrypoint additions, the local
 # install mounted in, and the testcases materialized from the ref this run is
 # supposed to verify.
 #
@@ -256,6 +256,8 @@ ctest mode="debug":
 #   SHARDS=<n>    override the shard count           (refused for medium/ha_shell)
 #   BUILD=<dir>   install to test                    (else $CUBRID, else ~/CUBRID)
 #   CONF=<file>   cubrid.conf whose [<suite>/cubrid.conf] section CTP applies
+#   EXCLUDE=<file> host exclusion list (unset: suite default; empty: none)
+# Scope and exclusions become upstream TEST_SCENARIO / TEST_EXCLUDE in each shard.
 #   NO_ABORT_ON_CORE=1   keep running after a core dump (default: stop everything)
 #   CTP_ARGS="…"  extra ctp_run.sh flags, verbatim
 # ---------------------------------------------------------------------------
@@ -287,6 +289,7 @@ ctp SUITE *DIRS:
     fi
     [ -n "${SHARDS:-}" ] && args+=( --shards "$SHARDS" ) || :
     [ -n "${CONF:-}" ]   && args+=( --conf "$CONF" ) || :
+    [ "${EXCLUDE+x}" = x ] && args+=( --exclude "$EXCLUDE" ) || :
     [ -n "${NO_ABORT_ON_CORE:-}" ] && args+=( --no-abort-on-core ) || :
     for d in {{DIRS}}; do args+=( --only "$d" ); done
     exec "$runner" "${args[@]}" ${CTP_ARGS:-}

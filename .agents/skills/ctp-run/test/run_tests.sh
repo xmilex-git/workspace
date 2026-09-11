@@ -30,8 +30,9 @@ done
 SCN="$TC/sql"
 
 # Keep all scratch on disk-backed storage (NOT /tmp).
-SCRATCH="$SKILL/test/.scratch"
-rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+REPO="$(git -C "$SKILL" rev-parse --show-toplevel)"
+mkdir -p "$REPO/.git_ignored_dir/scratch/ctp-selftests"
+SCRATCH="$(mktemp -d "$REPO/.git_ignored_dir/scratch/ctp-selftests/run.XXXXXX")"
 export TMPDIR="$SCRATCH"
 trap 'rm -rf "$SCRATCH"' EXIT
 
@@ -196,10 +197,10 @@ if [ "${splitn:-1}" -eq 0 ]; then ok "bulk atomicity: no _* bulk split across sh
 #-------------------------------------------------------------------
 echo; echo "## (g) container contract (entrypoint fork + mount layout)"
 cfg_ok=1
-grep -q 'apply_ctprun_overrides' "$ENTRY" || { cfg_ok=0; note "entrypoint fork lost apply_ctprun_overrides"; }
+grep -q 'apply_scope' "$ENTRY" || { cfg_ok=0; note "entrypoint lost upstream apply_scope"; }
 grep -q 'testcase_update_yn=false' "$ENTRY" || { cfg_ok=0; note "entrypoint fork no longer forces testcase_update_yn=false (CTP would git-pull the testcases and switch to develop)"; }
-grep -q 'the orchestrator must mount a testcases worktree copy' "$ENTRY" || { cfg_ok=0; note "entrypoint's test path still demands an in-container checkout"; }
-grep -q 'CTP_SCENARIO' "$ORCH" || { cfg_ok=0; note "orchestrator does not pin CTP_SCENARIO"; }
+grep -q 'mount a testcases tree there' "$ENTRY" || { cfg_ok=0; note "entrypoint lost upstream mount guidance"; }
+grep -q 'TEST_SCENARIO' "$ORCH" || { cfg_ok=0; note "orchestrator does not pin TEST_SCENARIO"; }
 # The scenario mount must be repo-relative, so the STOCK CTP confs (which resolve
 # ${HOME}/<repo>/...) are correct with no rewriting — including medium's data_file.
 grep -q 'C_SCN="$C_TCREPO/$SUITE_SUBPATH"' "$ORCH" || { cfg_ok=0; note "scenario mount is not repo-relative"; }
@@ -438,6 +439,18 @@ else
   else
     bad "--env: malformed value rejection wrong (missing message or work dir leaked)"; cat "$SCRATCH/outebad.log" >&2
   fi
+fi
+
+if bash "$HERE/image_contract_test.sh"; then
+  ok "upstream image scope, source pinning and host exclusion planning"
+else
+  bad "upstream image scope, source pinning and host exclusion planning"
+fi
+
+if bash "$HERE/locale_staging_test.sh"; then
+  ok "shell/HA locale staging survives CTP library reset"
+else
+  bad "shell/HA locale staging survives CTP library reset"
 fi
 
 # HA setup regression: exercise the entrypoint functions with isolated fixtures.

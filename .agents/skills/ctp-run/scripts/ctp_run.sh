@@ -9,7 +9,7 @@
 # giant exclusion list; results are merged into one pass/fail summary.
 #
 # The container image and its entrypoint are the CI ones: cubridci/cubridci at
-# tag test_rl8.10, with this skill's entrypoint.sh (a small fork, see its header)
+# tag test_rl8.10, with this skill's entrypoint.sh (only two HA additions)
 # bind-mounted over /entrypoint.sh. The image is never rebuilt locally.
 #
 # Isolation is the whole point: CTP's teardown runs `pkill cub` / kills every
@@ -41,11 +41,11 @@ C_SCN=""          # scenario root inside the container; set by resolve_suite
 C_TCREPO=""       # testcases repo mount point inside the container
 
 # The CI test image, pinned by digest. Rocky Linux 8.10 / glibc 2.28, so an install
-# built on this host runs unchanged when mounted in; it ships no toolchain (CUBRID is
-# injected, never built here). Pinned because the tag moves: an upgrade must be a
+# built on this host runs unchanged when mounted in. CUBRID itself is injected,
+# not built here. Pinned because the tag moves: an upgrade must be a
 # deliberate edit of this line, never a silent `podman pull`.
 readonly DEFAULT_IMAGE="docker.io/cubridci/cubridci:test_rl8.10"
-readonly DEFAULT_IMAGE_DIGEST="sha256:a005ff514cdeeb7d8734950dfa851ecd1e5d8d32bca07a76148894d27d583ad6"
+readonly DEFAULT_IMAGE_DIGEST="sha256:79a344fc7664af48cd13b4b01bc54c059dd92ac2be812f2e4d9802234e06fb7e"
 
 # One id per invocation: every container / network of this run carries it, so
 # concurrent runs (different sessions, different suites) never share a name and
@@ -117,6 +117,7 @@ OPTIONS
   --testcases-as-is      use --testcases verbatim, skipping ref resolution
   --worktree-root <dir>  where testcase worktrees live
   --conf <file>          cubrid.conf whose [<suite>/cubrid.conf] section CTP applies
+  --exclude <file>       host exclusion file replacing the default; empty = none
   --image <ref>          container image override
   --env K=V              extra env into every container (repeatable)
   --by-category|--by-dir|--by-case   split unit (default: per suite)
@@ -151,11 +152,13 @@ ARG_TCREF=""           # explicit testcases ref (branch/tag/sha); "" = derive fr
 ARG_PR=""              # engine PR number -> testcases ref tc/pr-<N>
 ARG_WS=""              # CUBRID source checkout, used to infer the PR when --pr/--tc-ref are absent
 ARG_CONF=""            # host cubrid.conf whose [suite/cubrid.conf] params CTP should apply
+ARG_EXCLUDE=""         # host exclusion file; set-but-empty disables exclusions
+ARG_EXCLUDE_SET=0
 ARG_TC_ASIS=0          # 1 = use --testcases verbatim, no ref resolution / worktree
 ARG_WT_ROOT=""         # where testcase worktrees live (default: <out>/../tc-worktrees)
 ARG_SHARDS=""
 ARG_CTP="${HOME}/cubrid-testtools/CTP"
-ARG_IMAGE="$DEFAULT_IMAGE"
+ARG_IMAGE="${DEFAULT_IMAGE%:*}@$DEFAULT_IMAGE_DIGEST"
 ARG_OUT="./ctp-run-out"
 ARG_OVERLAY=0
 ARG_UNIT="auto"       # split-unit mode: auto (per-suite default) | category (top-level _* "bulk") | dir | case
@@ -184,6 +187,9 @@ parse_args() {
       --pr)          ARG_PR="${2:-}"; shift 2 ;;
       --workspace)   ARG_WS="${2:-}"; shift 2 ;;
       --conf)        ARG_CONF="${2:-}"; shift 2 ;;
+      --exclude)
+        [ "$#" -ge 2 ] || die "--exclude requires a host file path or an empty argument"
+        ARG_EXCLUDE="$2"; ARG_EXCLUDE_SET=1; shift 2 ;;
       --testcases-as-is) ARG_TC_ASIS=1; shift ;;
       --worktree-root)   ARG_WT_ROOT="${2:-}"; shift 2 ;;
       --shards)      ARG_SHARDS="${2:-}"; shift 2 ;;
@@ -211,6 +217,13 @@ parse_args() {
           [A-Za-z_]*=*) : ;;
           *) usage; die "--env expects NAME=VALUE (got: '${2:-}')" ;;
         esac
+        # Scope must reach the host planner before it materializes each shard.
+        case "${2%%=*}" in
+          CTP_SCENARIO|CTP_EXCLUDE|SHELL_SCENARIO|HA_SCENARIO|MEMORY_SCENARIO)
+            die "${2%%=*} is retired; use --only for scope or --exclude for exclusions" ;;
+          TEST_SCENARIO|TEST_EXCLUDE)
+            die "${2%%=*} is managed by the runner; use --only or --exclude so the split matches the run" ;;
+        esac
         ARG_ENV+=("$2"); shift 2 ;;
       --dry-run)     ARG_DRYRUN=1; shift ;;
       # Hidden self-test seam: run ONLY the offline split-validator against the
@@ -233,6 +246,12 @@ parse_args() {
     [ -d "$ARG_CTP" ]        || die "--merge-only: --ctp dir does not exist: $ARG_CTP"
     [ -d "$ARG_CTP/sql" ]    || die "--merge-only: $ARG_CTP has no sql/ (need a CTP_HOME with webconsole)"
     return 0
+  fi
+
+  if [ "$ARG_EXCLUDE_SET" -eq 1 ] && [ -n "$ARG_EXCLUDE" ]; then
+    [ -f "$ARG_EXCLUDE" ] && [ -r "$ARG_EXCLUDE" ] \
+      || die "--exclude file unreadable: $ARG_EXCLUDE"
+    ARG_EXCLUDE="$(readlink -f "$ARG_EXCLUDE")"
   fi
 
   resolve_suite
@@ -284,7 +303,7 @@ parse_args() {
 #####################################################################
 SUITE_TCREPO=""; SUITE_SUBPATH=""; SUITE_CAT=""; SUITE_EXT=""
 SUITE_UNIT_DEFAULT=""; SUITE_SHARDABLE=0; SUITE_STYLE=""; SUITE_HA=0
-SUITE_CONF=""     # the CTP conf the category resolves to (same table the entrypoint uses)
+SUITE_CONF=""     # source conf for host engine-parameter merging, before the runtime copy
 resolve_suite() {
   case "$ARG_SUITE" in
     sql)
@@ -423,6 +442,11 @@ write_provenance() {
     printf 'testcases_ref_source\t%s\n' "${TC_REF_SRC:-}"
     printf 'shards\t%s\n' "$NSHARDS"
     printf 'conf\t%s\n' "${ARG_CONF:-<CTP default>}"
+    if [ "$ARG_EXCLUDE_SET" -eq 1 ]; then
+      printf 'exclude\t%s\n' "${ARG_EXCLUDE:-<none>}"
+    else
+      printf 'exclude\t%s\n' '<suite default>'
+    fi
     printf 'started\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } > "$OUT/provenance.tsv"
   info "provenance: $PROVENANCE"
@@ -443,15 +467,8 @@ host_preflight() {
     info "image '$ARG_IMAGE' not present locally; pulling ..."
     podman pull "$ARG_IMAGE" || die "could not obtain image '$ARG_IMAGE' (pull failed)."
   fi
-  # The tag moves upstream; warn (do not fail) when what we have is not the pinned
-  # digest, so a surprising result is never blamed on the wrong image silently.
-  if [ "$ARG_IMAGE" = "$DEFAULT_IMAGE" ]; then
-    local have; have="$(podman image inspect "$ARG_IMAGE" --format '{{.Digest}}' 2>/dev/null || echo "")"
-    if [ -n "$have" ] && [ "$have" != "$DEFAULT_IMAGE_DIGEST" ]; then
-      warn "image digest $have != pinned $DEFAULT_IMAGE_DIGEST — the upstream tag moved."
-      warn "re-pin DEFAULT_IMAGE_DIGEST in $SELF after verifying, or pass --image <ref>@<digest>."
-    fi
-  fi
+  # The default reference includes its digest. --image is an explicit override;
+  # provenance records the resolved digest for either path.
   # Rough disk headroom check: N working copies of build+scenario+CTP.
   local avail_kb
   avail_kb="$(df -Pk "$(dirname "$ARG_OUT")" 2>/dev/null | awk 'NR==2{print $4}')"
@@ -627,7 +644,13 @@ suite_base_exclusion_file() {
 
 discover_units() {
   BASE_FILE="$(suite_base_exclusion_file)"
-  [ -r "$BASE_FILE" ] || { warn "base exclusion list not found: $BASE_FILE (treating as empty)"; BASE_FILE="/dev/null"; }
+  if [ "$ARG_EXCLUDE_SET" -eq 1 ]; then
+    BASE_FILE="${ARG_EXCLUDE:-/dev/null}"
+  fi
+  [ -r "$BASE_FILE" ] || die "exclusion list unreadable: $BASE_FILE (use --exclude '' for no exclusions)"
+  # Snapshot the exact list used for planning; every shard receives these bytes.
+  cp -f "$BASE_FILE" "$WORK/exclusions.txt"
+  BASE_FILE="$WORK/exclusions.txt"
   SQL_ALL="$WORK/sql_all.txt"
   SQL_LIST="$WORK/sql_surviving.txt"
   UNITS_FILE="$WORK/units.tsv"
@@ -668,6 +691,7 @@ discover_units() {
   GLOBAL_SQL=$total
   SURVIVING_SQL=$(wc -l < "$SQL_LIST")
   BASE_EXCLUDED=$(( GLOBAL_SQL - SURVIVING_SQL ))
+  [ "$SURVIVING_SQL" -gt 0 ] || die "exclusions removed every selected case; nothing to run"
 
   # Build "<unit>\t<weight>": aggregate the surviving .sql by their unit key and sum
   # weights (measured seconds from --weights, else 1 per .sql; an all-zero unit is
@@ -720,7 +744,7 @@ shell_helper_dirs() {
 }
 
 # apply_base_exclusions <in_sql_list> <out_surviving_list>
-# Replicates F4 CommonUtils.containPath byte-for-byte against every base entry.
+# Uses SQL containPath or shell raw-substring matching for the selected suite.
 apply_base_exclusions() {
   local in="$1" out="$2"
   # getLineList keeps every non-blank, trimmed line (comments included; they match nothing).
@@ -741,7 +765,12 @@ apply_base_exclusions() {
     return
   fi
   awk -v p="$pfx" '{print p $0}' "$in" > "$WORK/base_prefixed_in.txt"
-  contain_path_filter "$WORK/base_entries.txt" "$WORK/base_prefixed_in.txt" "$WORK/base_prefixed_out.txt"
+  # The shell runner matches raw substrings, including an individual .sh name;
+  # SQL's directory-suffix rule would turn x.sh into x.sh/ and miss that case.
+  awk -v entries="$WORK/base_entries.txt" '
+    BEGIN { while ((getline e < entries) > 0) if (e!="") ent[++n]=e }
+    { for (i=1;i<=n;i++) if (index($0,ent[i])>0) next; print }
+  ' "$WORK/base_prefixed_in.txt" > "$WORK/base_prefixed_out.txt"
   awk -v p="$pfx" 'index($0,p)==1 { print substr($0, length(p)+1); next } { print }' \
     "$WORK/base_prefixed_out.txt" > "$out"
 }
@@ -911,20 +940,9 @@ validate_split() {
 }
 
 #####################################################################
-# Generate a per-shard <suite>.conf from the real template (conf/sql.conf or
-# conf/medium.conf):
-#   - scenario  -> the container scenario path (no host paths leak)
-#   - testcase_exclude_from_file -> ${CTP_HOME}/conf/exclusions.txt (container)
-#   - data_file (medium only; absent from sql.conf) -> <container scenario>/files/<basename>,
-#     i.e. the mdb.tar.gz that lives inside the scenario tree and is copied with it
-#   - ports / SHM IDs kept verbatim (namespace isolation handles conflicts)
-#####################################################################
-# The per-shard CTP conf is NOT written here any more: the container's entrypoint
-# (this skill's cubridci fork) resolves the category's conf and applies our
-# CTP_SCENARIO / CTP_EXCLUDE overrides inside the container, where the paths are
-# the container's. The stock confs resolve ${HOME}/<tc repo> and ${CTP_HOME},
-# which is exactly where the orchestrator mounts things — including medium's
-# data_file tarball — so nothing needs rewriting on the host.
+# Upstream composes the runtime CTP conf inside the container and applies
+# TEST_SCENARIO / TEST_EXCLUDE there. Repo-relative mounts also preserve the
+# medium data_file path; namespace isolation preserves ports and SHM IDs.
 #
 # Optional --conf: a cubrid.conf whose server parameters this run should use.
 # WHERE they have to go differs by suite, because who starts the server differs:
@@ -1020,7 +1038,7 @@ print_plan_summary() {
   [ -r "$COLO_GIDS" ] && grpn=$(awk -F'\t' '{c[$2]++} END{m=0; for(g in c) if(c[g]>1) m++; print m+0}' "$COLO_GIDS" 2>/dev/null)
   printf '  colocate:           %d dir(s), %d multi-dir group(s) pinned  (keep-whole active only with --by-case)\n' "${kwn:-0}" "${grpn:-0}"
   printf '  shards:             %d\n' "$NSHARDS"
-  printf '  env passthrough (fixed): CUBRID CTP_HOME CUBRID_DATABASES WORKDIR TEST_REPORT TZ LC_ALL CTP_SCENARIO CTPRUN_PROVENANCE\n'
+  printf '  env passthrough (fixed): CUBRID CTP_HOME CUBRID_DATABASES WORKDIR TEST_REPORT TZ LC_ALL TEST_SCENARIO TEST_EXCLUDE\n'
   printf '  env passthrough (--env, %d): %s\n' "${#ARG_ENV[@]}" "${ARG_ENV[*]:-<none>}"
   printf '  %-7s %-10s %s\n' "shard" "sql" "weight$([ -n "$WEIGHTS_FILE" ] && echo '(s)')"
   local i
@@ -1032,6 +1050,24 @@ print_plan_summary() {
 #####################################################################
 # Per-shard working-copy construction (host side).
 #####################################################################
+prepare_shell_locale_conf() {
+  [ "$SUITE_STYLE" = status ] || return 0
+  local conf="$1/conf/cubrid_locales.txt" all="$1/conf/cubrid_locales.all.txt"
+  [ -r "$conf" ] && [ -r "$all" ] || return 0
+  cmp -s "$conf" "$all" || return 0
+  grep -qEv '^[[:space:]]*(#|$)' "$conf" || return 0
+
+  # CTP resets generated locale libraries before each shell/HA case. A build
+  # previously used for SQL can still enable the full sample list, making that
+  # deletion fatal even to en_US utilities. Reset only this recognizable preset;
+  # independently authored locale configs and the source install stay untouched.
+  [ "$ARG_OVERLAY" -eq 0 ] \
+    || die "shell/HA needs a private locale-config reset for this build; omit --overlay"
+  awk '/^[[:space:]]*(#|$)/' "$conf" > "$conf.ctprun"
+  mv -f "$conf.ctprun" "$conf"
+  info "locale: reset inherited all-locales preset in the $ARG_SUITE install copy (CTP deletes generated libraries)."
+}
+
 build_shard_workdir() {
   local i="$1" d="$OUT/shard_${i}"
   mkdir -p "$d"
@@ -1039,9 +1075,11 @@ build_shard_workdir() {
 
   # build -> CUBRID (writable copy absorbs CTP's conf rewrites; F3)
   if [ "$ARG_OVERLAY" -eq 1 ]; then
+    prepare_shell_locale_conf "$ARG_BUILD"
     info "shard $i: --overlay set; build mounted via podman :O overlay (no copy)."
   else
     cp -a "$ARG_BUILD" "$d/CUBRID"
+    prepare_shell_locale_conf "$d/CUBRID"
     # Locale speedup (D6): CTP keeps need_make_locale=yes, but make_locale is the
     # single slowest startup step (~60-90s of gcc, repeated in EVERY shard). Ship a
     # prebuilt libcubrid_all_locales.so + an early-exit make_locale.sh so CTP's
@@ -1133,7 +1171,7 @@ build_shard_workdir() {
     rm -rf "$d/CTP"/.output_*.log "$d/CTP"/.script_cont_* "$d/CTP"/sql/result/* "$d/CTP"/sql/log/* \
            "$d/CTP"/result/* "$d/CTP"/log/* 2>/dev/null || :
   fi
-  cp -f "$WORK/shard_${i}.exclusions.txt" "$d/CTP/conf/exclusions.txt"
+  cp -f "$WORK/shard_${i}.exclusions.txt" "$d/CTP/conf/ctprun_exclusions.txt"
   install_suite_conf "$d"
 
   # fresh per-shard CUBRID_DATABASES + report dir
@@ -1235,11 +1273,14 @@ shard_envs() {
     -e "CUBRID=${C_CUBRID}" -e "CTP_HOME=${C_CTP}" -e "CUBRID_DATABASES=${C_DB}"
     -e "WORKDIR=${C_WORKDIR}" -e "TEST_REPORT=${C_REPORT}"
     -e "TZ=Asia/Seoul" -e "LC_ALL=en_US"
-    # Our fork's knobs: pin the scenario explicitly rather than trusting whatever
-    # the stock conf defaults to (a wrong default would run the entire suite).
-    -e "CTP_SCENARIO=${C_SCN}"
-    -e "CTPRUN_PROVENANCE=${PROVENANCE}"
+    # Upstream options operate on the private, already partitioned scenario.
+    -e "TEST_SCENARIO=${C_SCN}"
   )
+  if [ "$ARG_EXCLUDE_SET" -eq 1 ] && [ -z "$ARG_EXCLUDE" ]; then
+    e+=( -e "TEST_EXCLUDE=" )
+  else
+    e+=( -e "TEST_EXCLUDE=${C_CTP}/conf/ctprun_exclusions.txt" )
+  fi
   local kv
   if [ "${#ARG_ENV[@]}" -gt 0 ]; then
     for kv in "${ARG_ENV[@]}"; do e+=( -e "$kv" ); done

@@ -1,22 +1,108 @@
-# ctp-run — design notes
-> **Status (2026-09-04).** This file is the design record of the split/merge
-> engine, which is unchanged. What changed around it: the image is now upstream's
-> CI image `cubridci/cubridci:test_rl8.10` (digest-pinned, never built locally)
-> with `scripts/entrypoint.sh` — a fork of cubridci's — bind-mounted over
-> `/entrypoint.sh`; the runner covers sql, medium, shell and ha_shell rather than
-> sql alone; a subset is expressed with `--only` instead of a synthesized
-> testcase tree; and the testcases ref is mandatory and materialized as a git
-> worktree. The user-facing contract is `SKILL.md`; the rationale is
-> `docs/adr/0017-ctp-runner-on-cubridci-image.md`. Where this file and those two
-> disagree, they win.
+# ctp-run — runtime and design notes
 
+The user-facing workflow is [SKILL.md](SKILL.md). The design decision is
+[ADR 0017](../../../docs/adr/0017-ctp-runner-on-cubridci-image.md).
+All commands below run from the standalone tooling repository, not an engine checkout.
 
-One-click tool to run the CUBRID **CTP SQL regression suite in N parallel shards**
-on a single host, mirroring CircleCI's `test_sql` job (`parallelism: 10`). Each
-shard runs the real `ctp.sh sql` inside an **isolated rootless-podman container**
-against a **private, pristine copy** of the build / scenario / CTP-conf. The suite
-is partitioned across shards via per-shard `exclusions.txt`, and results merge into
-one pass/fail summary. Wall-clock time drops to ~1/N.
+## Image update (2026-09-11)
+
+The default image is `docker.io/cubridci/cubridci:test_rl8.10`, pulled and run by
+full digest from `scripts/ctp_run.sh`. The September update uses
+`sha256:79a344fc7664af48cd13b4b01bc54c059dd92ac2be812f2e4d9802234e06fb7e`.
+The image's entrypoint matches upstream commit
+`452b7be0cee601b9efd59a1d9c9faf89886d255f`.
+
+- [#120](https://github.com/CUBRID/cubridci/pull/120): prepare the node account's DB directory and ownership.
+- [#121](https://github.com/CUBRID/cubridci/pull/121): disable shell/rqg testcase updates and print start/end provenance.
+- [#123](https://github.com/CUBRID/cubridci/pull/123): common `TEST_SCENARIO` / `TEST_EXCLUDE` and fresh runtime confs.
+
+`scripts/entrypoint.sh` is that upstream version plus **only two HA additions**
+described below. It is bind-mounted over `/entrypoint.sh`; the image is never
+built locally. A host-built CUBRID install is copied into each shard. There is
+no local `Containerfile` to build.
+
+`--image <ref>` deliberately overrides the pinned default. Changing only the
+image to an older version does not roll back the entrypoint or option contract;
+restore those together. Old image layers are retained for rollback.
+
+## Scope and exclusion options
+
+```bash
+# Select the testcase ref explicitly. Each example selects one directory.
+TC_REF=develop just ctp sql _01_object/_01_type/_004_integer
+
+# Replace the default exclusions with a host file.
+TC_REF=develop EXCLUDE="$PWD/my-exclusions.txt" just ctp sql _01_object/_01_type/_004_integer
+
+# Explicitly disable exclusions, including the host planner's defaults.
+TC_REF=develop EXCLUDE='' just ctp sql _01_object/_01_type/_004_integer
+
+# Inspect a plan without launching CTP.
+TC_REF=develop CTP_ARGS='--dry-run' just ctp sql _01_object/_01_type/_004_integer
+```
+
+The runner uses `--only <scenario-relative-dir>` for the selected directories and
+`--exclude <host-file>` for the list. It applies both before planning and copying
+the shard. Each container receives `TEST_SCENARIO` naming the materialized suite
+root, plus `TEST_EXCLUDE` naming the staged list (`conf/ctprun_exclusions.txt`),
+or an empty value for explicit exclusion disabling. An unreadable list fails
+before container startup.
+
+| List entry | Meaning |
+|---|---|
+| SQL/medium: `_01_object/.../cases/example.sql` | path relative to the suite root; omit `sql/` or `medium/` |
+| shell: `shell/_06_issues/.../cases/example.sh` | substring including the category prefix |
+| ha_shell: `HA/shell/.../cases/example.sh` | substring including the HA category prefix |
+
+A custom list replaces, rather than augments, the default. To add exclusions,
+prepare a host file containing both the default entries and the additions.
+The SQL scenario remains the suite root inside each shard, so subset selection
+does not change the root against which SQL exclusions are interpreted.
+
+`--env TEST_SCENARIO` and `--env TEST_EXCLUDE` are rejected: a container-only
+change would bypass the host plan and its executed-count checks. Use the host
+options above. The retired `CTP_SCENARIO`, `CTP_EXCLUDE`, `SHELL_SCENARIO`,
+`HA_SCENARIO`, `MEMORY_SCENARIO` names also fail, including empty values.
+Other `--env NAME=VALUE` values still pass to every container, e.g.:
+
+```bash
+TC_REF=develop CTP_ARGS='--env CUBRID_WM_SORT_NEW=1' just ctp sql _01_object/_01_type/_004_integer
+```
+
+The image itself has a broader category API than this runner. In upstream,
+`jdbc` accepts neither scope option and `sql_by_cci` accepts only `TEST_SCENARIO`.
+See [Running part of a category](https://github.com/CUBRID/cubridci/blob/452b7be0cee601b9efd59a1d9c9faf89886d255f/README.md#running-part-of-a-category)
+for the other runners' exclusion semantics.
+
+## Runtime configuration and provenance
+
+Upstream copies `sql.conf`, `medium_dev.conf`, and `shell_ci.conf` to
+`sql_runtime.conf`, `medium_runtime.conf`, and `shell_runtime.conf` respectively.
+For HA it derives `ha_shell_ci.conf` from `shell_ci.conf`. Scope and source pinning
+change those generated files. `CONF=<cubrid.conf>` still merges engine parameters
+into the shard's source conf before upstream copies it; the host CTP is not edited.
+
+Look at `[scope]` and `[pin]` in `shard_N/console.log` and the generated conf to
+verify the effective values. Upstream prints `[provenance]` before and after CTP.
+Because shard copies do not include `.git`, git fields there can be `unknown`;
+the host `provenance.txt` / `provenance.tsv` records the selected source ref/SHA,
+CTP revision, install, image digest and exclusion option.
+
+## Shell/HA locale baseline
+
+CTP removes generated locale libraries before each shell/HA case. A build already
+used for SQL can carry `cubrid_locales.txt` identical to `cubrid_locales.all.txt`;
+its enabled locales then require the deleted library even for ordinary utilities.
+The runner recognizes only that exact preset and clears its active entries in the
+private install copy, before CTP snapshots it. Built-in locales remain available.
+SQL/medium keep their full preset, and custom locale configurations are preserved.
+Locale-specific cases can still generate their own libraries. `--locale-dir` supplies
+a library and optional build script, not a locale configuration file.
+
+For that inherited preset, `--overlay` fails with a request to omit the flag;
+the shared source install is never normalized in place. `test/locale_staging_test.sh`
+exercises real shard construction followed by CTP-style deletion, including both
+HA install copies and preservation of SQL/medium/custom settings.
 
 ## HA remote csql setup
 
@@ -24,237 +110,60 @@ one pass/fail summary. Wall-clock time drops to ~1/N.
 `default.broker2.BROKER_PORT` and supplies it to both nodes' non-login SSH
 environments. Missing, duplicate, or invalid ports stop preparation. For folded
 clients, the runner patches only its private CTP helper copy to start the slave
-broker after HA configuration upload and heartbeat startup. Testcase sources and
-assertions stay unchanged. No manual `CUBRID_CSQL_BROKER_PORT` export is needed.
+broker after HA configuration upload and heartbeat startup. These two additions
+remain local until the engine parameter and CTP support reach upstream.
 
-`test/ha_shell_test.sh` covers this setup with fixtures; the full self-test
-runner includes it. Runtime verification must check actual master/slave query
-results, not merely the absence of a crash.
+The pair has separate install and database copies. Mount each node's DB directory
+**over `$CUBRID/databases`**; an external container path is incompatible with HA
+scripts and cases that directly access that location. The upstream ownership fix
+continues to apply, but ownership alone cannot make a different path work.
 
-## Deliverables
+## Isolation and splitting
 
-| File | Role |
-|------|------|
-| `scripts/Containerfile` | **#1** Per-shard runtime image. `FROM rockylinux:8` + JDK 8 + gcc + en_US locale + `entrypoint.sh`. glibc matches a modern host build; the CI build image (CentOS 6 / glibc 2.12) is too old to run one. State is mounted at run time, not baked in. |
-| `scripts/ctp_run.sh` | **#2** Host-side orchestrator (main entry point): split → validate → launch → aggregate. |
-| `scripts/entrypoint.sh` | In-container runner: preflight (D5 relocation guard) + `exec ctp.sh $CTP_SUITE` (`sql` default, `medium` via `--suite medium`). Bind-mounted from this checkout over the image copy, so edits need no image rebuild. |
-| `scripts/harvest_weights.sh` | Derive a per-`.sql` time table from run logs (refreshes `baseline_weights.tsv`). |
-| `baseline_weights.tsv` | Bundled per-`.sql` times (real green-run seconds); auto-loaded for time balancing. |
-| `colocate.tsv` | Order-sensitivity registry (used by `--by-case`): dirs kept whole / co-located. |
-| `SKILL.md` | **#3** One-click skill wrapper. |
-| `test/run_tests.sh` | Static + logic self-tests (run **without** podman). |
+CTP teardown kills processes by user/name. Every CTP execution therefore goes
+through `just ctp` / `just ctp-rerun` in private rootless-podman containers.
+Network, IPC, mount and cgroup namespaces are private; the common flags include
+`--cgroupns=private` for this Rocky 8 host. Raw podman probes without that flag
+can fail even when the runner works.
 
-## Why containers (isolation)
+SQL splits by top-level category by default, with measured per-case weights
+(`baseline_weights.tsv`) and greedy LPT balancing. `--by-dir` and `--by-case`
+provide finer opt-ins; `colocate.tsv` keeps registered case directories together.
+Shell splits by test directory and copies shared helper directories alongside
+it. SQL/medium copy only assigned case files; shell/HA copy whole test directories
+with their answer files, helpers and source files.
 
-Running N CTP processes directly on one host collides on TCP ports (1822/33120),
-SysV SHM IDs (33122/33120), the rewritten `$CUBRID/conf`, DB names, and concurrent
-`.result` writes into one scenario tree. Rootless podman isolates each shard:
+Default whole-suite concurrency is 7 for SQL/shell, 1 for subsets. Medium and
+HA always use one shard: medium mutates a shared dataset, and an HA shard is
+already a master/slave pair. The offline validator proves each planned case is
+assigned exactly once. SQL/medium executed totals must match the plan; shell/HA
+may skip cases by macro, but a run executing nothing is rejected.
 
-- **net namespace** (podman default; **no `--network=host`**, no published ports) —
-  each shard's `localhost` is private, so the fixed broker/server ports never clash.
-- **IPC namespace** (`--ipc=private`) — private SysV SHM space, so the fixed
-  `MASTER_SHM_ID` / `APPL_SERVER_SHM_ID` never collide. `/dev/shm` is sized with
-  `--shm-size`.
-- **mount namespace** — per-shard writable copies of build / scenario / CTP-conf.
+The selected exclusion list is snapshotted for planning and staged unchanged
+in every shard. SQL uses CTP's `containPath` rules; shell/HA use raw substring
+matching, including individual `.sh` entries. No complement-of-shard list is
+needed because unassigned test files/directories are not materialized.
 
-**Key simplification:** every shard reuses the *same* ports/SHM IDs. The only
-per-shard differences are its `exclusions.txt` and its output directories.
+SQL/medium results can be merged into the host CTP webconsole result tree.
+`--no-webconsole` skips that merge. `--merge-only <finished-run-dir>` performs
+only the merge, without starting containers. Timing weights can be refreshed
+with `scripts/harvest_weights.sh` from a completed run.
 
-## How the split works
-
-- **Split unit = top-level `_*` directory ("bulk"), exactly CircleCI's sql unit.**
-  `.circleci/config.yml` globs `cubrid-testcases/sql/_*` and ships each match WHOLE to
-  one node; this tree has **35** such bulks holding all **17,420** `.sql`. A bulk is
-  **atomic — never split across shards** — so every test inside a `_*` dir stays
-  co-located in canonical order, *exactly* as CI groups them. That co-location is what
-  keeps the suite green: finer splits move tests apart and expose cross-test/shared-DB
-  interference (each shard runs ONE database for all its cases, and not every test
-  self-isolates), producing failures that depend on which tests share a shard.
-  Reproducing CI's grouping avoids that whole class. **Tradeoff:** the heaviest single
-  bulk bounds the slowest shard (here `_01_object` ≈ 560 s vs a ~305 s ideal), since a
-  bulk cannot be split. Finer opt-ins exist: **`--by-dir`** (outermost `cases/` dir,
-  ~1157 units, better balance but co-locates fewer related tests) and **`--by-case`**
-  (per-`.sql`, NOT order-safe).
-- **Base exclusions merged first (D4):** the existing `$CTP_HOME/conf/exclusions.txt`
-  is applied with exact CTP semantics (`CommonUtils.containPath`: trim, `\`→`/`,
-  append `/` unless the entry ends in `/` or `.sql`, then substring `indexOf`) to
-  pre-remove globally-excluded `.sql` from the pool. Each shard's exclusion file =
-  the base list (verbatim) **+** every unit not assigned to that shard.
-- **Balance (greedy-LPT, D2):** bulks are packed descending into the least-loaded
-  shard (deterministic; name tie-break). By **count** the bulks are lumpy (one bulk
-  may hold 3000+ cases); the right metric is **time** (below).
-- **Time balancing (automatic, D7):** counts ≠ wall-time, and bulks vary widely (here
-  `_04_operator_function` has 1618 cases in ~48 s while `_05_plcsql` has 1249 cases in
-  ~323 s). A bundled `baseline_weights.tsv` (real per-case seconds) is loaded by default,
-  so each bulk's weight = the sum of its cases' seconds and LPT packs bulks by measured
-  time with no flags. Refresh it with `scripts/harvest_weights.sh` (parses the
-  `[HH:MM:SS] Testing … .sql` log lines); `--weights <file>` overrides, `--no-weights`
-  reverts to count. **Floor:** the slowest shard can't beat the heaviest single bulk's
-  total time (a bulk is atomic by design).
-- **Order-sensitivity registry (`colocate.tsv`, D6):** applies to **`--by-case` only**
-  — it keeps listed `cases/` dirs whole there (in bulk/`--by-dir` they are already
-  atomic). A line with 2+ dirs also pins them to the SAME shard (all modes). Override
-  with `--colocate <file>`, disable with `--no-colocate`.
-- **Webconsole merge (default ON):** at the end of every run the per-shard CTP result
-  dirs are merged into ONE schedule under `$CTP_HOME/sql/result`, so the whole parallel
-  run shows as a single browsable entry in `ctp.sh webconsole start` (`--no-webconsole`
-  to skip). To merge an already-finished run (e.g. one done with `--no-webconsole`), use
-  `--merge-only <out-dir> [--label <tag>]` — it merges that out dir and exits (no podman /
-  build / testcases needed). `--label` tags the run in the webconsole 'machine' field.
-- **Offline split-validator:** before launching anything, it replays `containPath`
-  to prove every surviving `.sql` is alive in **exactly one** shard (0 duplicates,
-  0 orphans), and aborts otherwise.
-
-## Usage
-
-# A bare run uses the fixed optimal config: 7 shards, bulk(_*) split, auto time-weights.
-```bash
-# Real parallel run (needs podman) — no flags needed beyond build + testcases:
-scripts/ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases   # = 7 shards, bulk, time-balanced
-
-# Plan + validate only, no podman, no --build needed:
-scripts/ctp_run.sh --dry-run --testcases ~/cubrid-testcases --out ./plan
-```
-
-Run `scripts/ctp_run.sh --help` for all flags (`--ctp`, `--image`, `--out`,
-`--overlay`, `--by-category`, `--by-dir`, `--by-case`, `--weights`, `--no-weights`,
-`--colocate`, `--no-colocate`, `--keep`, `--env NAME=VALUE`).
-
-**Env passthrough (`--env`, repeatable):** extra vars for every shard container, e.g.
-to run a gates-ON sharded suite:
+## Verification
 
 ```bash
-scripts/ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
-  --env CUBRID_WM_SCAN_NEW=1 --env CUBRID_WM_SORT_NEW=1 --env CUBRID_WM_HASHJOIN_NEW=1
+bash .agents/skills/ctp-run/test/run_tests.sh
 ```
 
-These reach the in-container `cub_server` process for free: `entrypoint.sh` execs
-`ctp.sh sql` without clearing the environment, and every descendant down to the server
-is a plain fork/exec, so no engine-side or entrypoint change was needed — see the
-`--dry-run` plan summary's `env passthrough` lines and the Manual e2e QA section below
-for how this is verified.
+This includes split invariants, the image scope contract, runtime conf isolation,
+unset/empty/custom exclusion planning, invalid-option rejection, and the two HA
+hooks. `test/image_contract_test.sh`, `test/locale_staging_test.sh` and
+`test/ha_shell_test.sh` use fixtures and
+never execute CTP. Scratch stays under `.git_ignored_dir/scratch/`.
 
-**Time balancing is automatic.** A bundled `baseline_weights.tsv` (real per-case seconds
-from a green run) is loaded by default, so bulks are packed by measured time with no extra
-flags. To refresh it after the suite changes, harvest a new table and replace the bundle (or
-pass `--weights`); use `--no-weights` to fall back to case-count balancing:
-
-```bash
-# refresh the bundled time table from a prior run's per-shard logs:
-scripts/harvest_weights.sh --out baseline_weights.tsv ./ctp-run-out/shard_*/console.log
-# (or use a one-off table for a single run:)
-scripts/ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases --weights my.tsv
-```
-
-Output lands in `--out` (default `./ctp-run-out`): `assignment.tsv`,
-`units.tsv`, `plan.tsv`, and `shard_<i>/{exclusions.txt,sql.conf,console.log,out/}`.
-The orchestrator exits non-zero if any shard fails, crashes, or an invariant breaks.
-
-## Self-tests (no podman)
-
-```bash
-cd ~/dev/cubrid
-bash -n .claude/skills/ctp-run/scripts/ctp_run.sh
-bash -n .claude/skills/ctp-run/scripts/entrypoint.sh
-bash    .claude/skills/ctp-run/test/run_tests.sh
-```
-
-`run_tests.sh` asserts (against the real trees): unit discovery vs direct `find`,
-partition disjointness/coverage for N∈{1,4,10}, the offline validator on the real
-tree **and** on a synthetic ambiguous fixture (must be flagged), the surviving-sql
-invariant, balance (max-shard ≤ 1.5×mean), config generation (scenario =
-`/home/cubrid-testcases/sql`, F2 ports/SHM verbatim, no host paths), and the
-podman-missing preflight. It prints `ALL TESTS PASSED (k checks)` on success.
-
-## Manual e2e QA (requires a podman host)
-
-These cannot be verified on a host without podman (this dev box has none), so run
-them on a podman-capable host. They are the real acceptance checks for the
-container path.
-
-```bash
-cd ~/dev/cubrid/.claude/skills/ctp-run/scripts
-
-# 0. Nothing to build: the runner pulls the pinned CI image on first use.
-podman build -t cubridci/cubridci:test_rl8.10 -f Containerfile .
-
-# 1. Real 4-shard run against a built engine + testcases.
-./ctp_run.sh \
-  --build "$CUBRID" \
-  --testcases ~/cubrid-testcases \
-  --image cubridci/cubridci:test_rl8.10 \
-  --shards 4 \
-  --out ./ctp-run-out \
-  --keep
-
-# 2. Confirm port/SHM NON-collision with 2+ live shards: while the run is in
-#    flight, every shard's broker/server is up on the SAME ports inside its own
-#    net/IPC namespace with no EADDRINUSE / shmget collisions:
-podman ps --filter "name=ctp_shard_" --format '{{.Names}} {{.Status}}'
-for c in $(podman ps -q --filter "name=ctp_shard_"); do
-  echo "== $c =="; podman exec "$c" sh -lc 'cubrid broker status 2>/dev/null | head; ipcs -m | head'
-done
-
-# 3. Aggregate equivalence: a sharded run's combined pass/fail must equal a single
-#    full CTP run. Compare totals:
-#    a) single run (one shard == whole suite):
-./ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
-   --image cubridci/cubridci:test_rl8.10 --shards 1 --out ./ctp-1shard
-#    b) parallel run (e.g. 10 shards):
-./ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
-   --image cubridci/cubridci:test_rl8.10 --shards 10 --out ./ctp-10shard
-#    Then diff the AGGREGATE 'ALL' rows: total and fail counts must match, and the
-#    set of failing cases must be identical (modulo shard grouping).
-
-# 4. Inspect a shard's artifacts:
-ls ./ctp-run-out/shard_0/           # console.log, exclusions.txt, sql.conf, out/
-cat ./ctp-run-out/shard_0/console.log
-
-# 5. --env passthrough (#108): prove a gate env var set on the HOST invocation is
-#    visible in the environ of the actual cub_server PROCESS inside a shard, not
-#    just at the container's PID 1. Run one shard with a marker var, find the
-#    server pid inside it, and grep its /proc/<pid>/environ:
-./ctp_run.sh --build "$CUBRID" --testcases ~/cubrid-testcases \
-  --image cubridci/cubridci:test_rl8.10 --shards 1 --keep --out ./ctp-env-check \
-  --env CUBRID_WM_SORT_NEW=1
-c="$(podman ps -q --filter 'name=ctp_shard_' | head -1)"
-pid="$(podman exec "$c" pgrep -f cub_server | head -1)"
-podman exec "$c" tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep '^CUBRID_WM_SORT_NEW=1$' \
-  && echo "PASS: gate env reached the cub_server process (pid $pid)" \
-  || echo "FAIL: gate env NOT in cub_server's environ"
-```
-
-**Deferred (no podman on this dev host):** real container launch, port/SHM
-non-collision with 2 live shards, "aggregate pass/fail == single-CTP-run
-pass/fail", and the `--env`-reaches-`cub_server`-environ check above (step 5).
-Everything else (split, validator, exclusions merge, invariants, config generation,
-lint, and the `--env` flag's own parsing/plan-summary behavior) is fully verified
-by `test/run_tests.sh` without podman.
-
-## Decision log
-
-- **D1** default = per-shard `cp -a` of the build (overlay `:O` reliability is
-  unproven rootless); `--overlay` opts into the overlay mount.
-- **D2** split unit = top-level `_*` "bulk" (= CircleCI's sql unit), atomic per shard,
-  packed greedy-LPT (by time with `--weights`, else count). Mirroring CI's grouping
-  avoids the cross-test interference finer splits expose. `--by-dir` / `--by-case` are
-  finer opt-ins (better balance, weaker isolation).
-- **D3** scenario isolation = pristine per-shard copy (rsync, `*.result`/`*.log`
-  excluded); never a shared writable scenario.
-- **D4** base `exclusions.txt` is merged into every shard list and pre-removed from
-  the pool — an invariant, no escape hatch.
-- **D5** copied builds: `export CUBRID` before sourcing `.cubrid.sh`, assert it
-  wasn't relocated afterward.
-- **D6** isolation comes from matching CI's bulk grouping (default), so `colocate.tsv`
-  is a narrow aid for `--by-case` only: keep listed `cases/` dirs whole there, and
-  optionally pin co-dependent dirs to one shard. Opt-out via `--no-colocate`.
-- **D7** balance by **measured time, on by default** — a bundled `baseline_weights.tsv`
-  (real per-case seconds from a green run) auto-loads, no flag needed; `--weights`
-  overrides, `--no-weights` reverts to count. With atomic bulks the slowest shard is
-  bounded by the heaviest single bulk — accepted, in exchange for CI-parity / no
-  isolation-induced failures. `--by-dir` trades that isolation for finer balance.
-- **D8** (#108) `--env NAME=VALUE` is a **generic, repeatable passthrough**, not a
-  `CUBRID_WM_*`-specific flag — the orchestrator has no engine-gate-specific logic,
-  it only appends `-e` to `podman run`. It reaches `cub_server` via plain fork/exec
-  inheritance (no entrypoint.sh change needed), so the fix is purely host-side
-  argument plumbing.
+For an image update, also run small real SQL, shell and HA subsets via `just ctp`.
+Compare a SQL run with `EXCLUDE=''` to one with a custom list: excluded cases must
+be absent, actual totals must match the plan, and the source conf must remain
+unchanged by the entrypoint. For HA, verify both nodes and query results as well
+as the generated config and DB ownership. Inspect only containers owned by that
+run; keep other tasks' containers and host servers untouched.
