@@ -2,14 +2,17 @@
 
 Whenever modifying CUBRID source code, ALWAYS consult the `cpp-perf-rules` skill (C/C++ performance rulebook) and apply its rules.
 
-Division of labor: the lead performs implementation and verification planning. The following tasks MUST be handed off to a subagent: build, test/validation execution, server start & query execution, data loading, core analysis, gdb analysis, error reproduction, and callstack analysis from a core file.
+Division of labor:
+- **Lead directly:** source reading/comparison, static code and call-path analysis, documentation/research, design, implementation, and verification planning. Read-only inspection of files, git history/diffs, and tracker records belongs to the lead; it is not execution validation.
+- **Delegate runtime work only:** builds, test/validation execution, server start & query execution, data loading, error reproduction, core/gdb analysis, and callstack analysis from a core file. The lead uses the worker's runtime evidence to make the final diagnosis and implementation decisions.
+- A skill or map asking for a research/exploration subagent does not expand this boundary: the lead performs source investigation directly. Delegate such investigation only when the user explicitly requests it.
 
 Delegation model: choose by the lead's model family:
 
 - **GPT/Codex → Claude Sonnet through [herdr-integration](skills/herdr-integration/SKILL.md), the single source of truth for Herdr delegation and orchestration.** Follow its session lifecycle, context isolation, native waits and result handling.
 - **Claude → Sonnet** using the current harness's native subagent facility.
 
-Apply this routing to research subagents and execution workers, including existing map Notes or tickets that say "Sonnet"; preserve their task boundaries and execution contracts. An explicit user instruction about the worker model or direct lead execution takes precedence.
+Apply this routing to the runtime workers above and to research subagents explicitly requested by the user, including existing map Notes or tickets that say "Sonnet"; preserve their task boundaries and execution contracts. An explicit user instruction about the worker model or direct lead execution takes precedence.
 
 Delegation execution contract (CUBRID_SSOT.md 환경·운영 16–17 — include VERBATIM in every delegation prompt; incidents recur whenever it is omitted):
 - Finite gate work (incremental build, unit, smoke — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
