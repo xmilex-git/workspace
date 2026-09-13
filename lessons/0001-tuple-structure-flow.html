@@ -1,0 +1,61 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>튜플 구조와 전달</title><link rel="stylesheet" href="../assets/teach.css"><body><header><p>PR #7866 · CBRD-27365 · 91fc19a83</p><h1>튜플은 작게,<br>해석 규칙은 리스트에.</h1><p>발표 목표: 같은 행이 어떻게 저장되고, 함수 사이를 지나 다시 값이 되는지 설명한다.</p></header>
+<nav><a href="#structure">구조</a> · <a href="#flow">전달</a> · <a href="#bytes">저장</a> · <a href="#practice">복습</a> · <a href="../reference/0001-tuple-contracts.html">요약표</a></nav>
+<section><h2>문제 정의와 해결 방향 · 2–3분</h2><p>기존 qfile은 각 값에 flag 4B와 길이 4B를 붙이고 본문을 8B 단위로 정렬했다. INT 본문은 4B지만 컬럼 하나에 헤더 8B + 정렬된 본문 8B = 16B가 필요했다. 행 수와 컬럼 수가 늘면 이 반복 비용도 늘어난다.</p><p>이미 type_list가 가진 도메인에서 고정 길이와 정렬 규칙을 계산한다. NULL은 조건부 비트맵으로 모으고, 가변 값만 길이를 저장한다. 목표는 임시 리스트 크기 감소이며, 모든 질의의 실행시간 개선을 보장하는 것은 아니다.</p><p>첨부 HTML에 기록된 초기 대안은 고정폭 전용 포맷과 전환 파라미터였다. 현재 PR은 단일 포맷으로 교체한다. 두 종류의 reader/writer를 유지하는 부담을 피한다는 설계 방향이다. 정렬을 항상 8B로 하는 대안 대신 4B를 사용하고, 정렬이 필요한 가변 타입은 저장할 때 정렬해 반복 복사를 피한다.</p></section>
+<section id="structure"><h2>큰 그림과 데이터 구조 · 2–3분</h2><p>실행기가 값을 만들고 → 리스트에 저장하고 → scan·정렬·집계·cursor가 읽는 큰 흐름은 유지된다. 바뀌는 지점은 가운데의 튜플 조립과 해석이다. <b>아래 구조체 전체를 행마다 디스크에 저장하는 것은 아니다.</b></p>
+<table><tr><th>범위 / 구조</th><th>가지고 있는 정보</th><th>이유</th></tr>
+<tr><td>리스트 공통<br>QFILE_TUPLE_VALUE_TYPE_LIST</td><td>domp, type_cnt, col[], hdr_size, bitmap_size, data_off[2], first_non_cached_col, finalized</td><td>공통 해석 규칙을 한 번 계산. 도메인 변경 시 finalize로 다시 계산.</td></tr>
+<tr><td>컬럼별 규칙<br>QFILE_COL_LAYOUT</td><td>kind, size, alignby, off, var_access, type_id</td><td>고정/가변, 폭, 정렬, 인코딩 경로. off는 값 영역 기준이며 모든 컬럼에서 유효하지 않음.</td></tr>
+<tr><td>현재 행의 슬롯<br>QFILE_TUPLE_RECORD</td><td>tpl, size, tl + nvalid, off, fast_limit, data_off, has_null</td><td>튜플과 해석 규칙 연결. 값 배열이 아닌 탐색 진행 위치를 캐시. size는 할당 용량.</td></tr>
+<tr><td>쓰기 입력<br>QFILE_TUPLE_COL_SRC</td><td>val 또는 data + len, is_null</td><td>DB_VALUE를 인코딩하거나 호환되는 기존 본문을 그대로 복사.</td></tr></table>
+<p><a href="https://github.com/CUBRID/cubrid/blob/91fc19a83d9d9d5db0d46a137063fe2c8099740d/src/query/query_list.h#L290">구조체 원문</a> · <a href="https://github.com/CUBRID/cubrid/blob/91fc19a83d9d9d5db0d46a137063fe2c8099740d/src/query/qfile_tuple_layout.c#L144">finalize 원문</a></p></section>
+<section id="flow"><h2>새 로직: 함수 사이에 무엇이 오가는가 · 2분</h2>
+<pre>domp[] + 컬럼 수 + 헤더 크기
+    ↓ qfile_type_list_finalize
+공통 레이아웃 tl
+    + 컬럼 입력 src[]
+    ↓ qfile_tuple_size
+전체 길이 + has_null + src[i].len
+    ↓ 호출자가 버퍼/페이지 공간 확보
+    ↓ qfile_tuple_fill
+튜플 바이트
+    ↓ slot_bind(tl), slot_set_tuple(tpl)
+슬롯 + 컬럼 번호
+    ↓ qfile_slot_locate
+본문 포인터 + 본문 길이 + NULL 여부
+    ↓ qfile_slot_read_value (+ domain, copy)
+DB_VALUE / is_null</pre>
+<p>size와 fill은 2패스다. size에서 본문 길이를 구해 저장하므로 fill이 다시 계산하지 않는다. 미확정 VARIABLE 도메인은 첫 non-NULL 값으로 확정하고 레이아웃을 재계산할 수 있다. 역방향 리스트의 prev_len은 fill이 아니라 페이지 writer가 채운다.</p>
+<p>locate는 가변 길이 헤더를 제외한 본문을 반환한다. read_value는 그 본문을 인코딩에 맞게 해석한다. <b>NULL이면 is_null=true를 돌려주고 출력 DB_VALUE는 그대로 둔다.</b> 호출자가 NULL을 처리해야 한다. copy=false일 때 참조형 값은 튜플 바이트 수명에 의존한다.</p>
+<p>고정 접두부이면서 앞에 NULL이 없으면 주소는 tpl + data_off + col[i].off다. 첫 가변 컬럼 또는 첫 NULL 이후는 길이를 따라 걷는다. nvalid/off로 진행 위치를 기억하며, 새 튜플을 설정하면 캐시를 초기화한다. 임의 순서 접근 전체가 O(1)인 것은 아니다.</p>
+<p><a href="https://github.com/CUBRID/cubrid/blob/91fc19a83d9d9d5db0d46a137063fe2c8099740d/src/query/qfile_tuple_layout.h#L513">size/fill</a> · <a href="https://github.com/CUBRID/cubrid/blob/91fc19a83d9d9d5db0d46a137063fe2c8099740d/src/query/qfile_tuple_layout.h#L308">read_value 계약</a> · <a href="https://github.com/CUBRID/cubrid/blob/91fc19a83d9d9d5db0d46a137063fe2c8099740d/src/query/qfile_tuple_layout.c#L234">위치 탐색</a></p></section>
+<section id="bytes"><h2>새 로직: 실제 저장 형식 · 2–3분</h2>
+<pre>같은 행: (INT 7, VARCHAR 'abc'), 정방향
+
+OLD 40B
+[행 길이 4][prev_len 4]
+[flag 4][길이 4][INT 4][패딩 4]
+[flag 4][길이 4][문자열 표현 4][패딩 4]
+
+NEW 12B
+offset  0         4         8   9       12
+        [길이 4B][INT 7 4B][03][a b c 3B]
+
+NEW (NULL, 'abc') 12B
+offset  0         4    5       8   9       12
+        [길이+N ][02 ][패딩 3][03][a b c 3B]
+비트맵 02: bit0=0 → INT NULL, bit1=1 → 문자열 있음</pre>
+<p>NULL은 본문 0B지만 비트맵과 패딩이 추가될 수 있어, NULL로 바꾼다고 행이 반드시 더 작아지지는 않는다. 40→12는 이 예시의 70% 축소이며 파일 전체의 감소율과 같지 않다.</p>
+<table><tr><th>영역</th><th>현재 규칙</th></tr>
+<tr><td>행 길이</td><td>4B. bit31은 has-null, 나머지는 전체 길이. 전체 길이는 4B 배수.</td></tr>
+<tr><td>prev_len</td><td>QFILE_FLAG_BACKWARD 리스트만 추가 4B.</td></tr>
+<tr><td>비트맵</td><td>NULL이 있을 때만 ceil(컬럼 수/8)B. 1=값 있음, 0=NULL. 값 영역 시작은 ALIGN4.</td></tr>
+<tr><td>고정폭</td><td>타입 크기 그대로. 정렬 요구는 최대 4B. BIGINT는 여전히 8B.</td></tr>
+<tr><td>VAR / DIRECT</td><td>문자열·BIT·NUMERIC 등. 비정렬, index_* 인코딩. 본문 0–127B는 1B 헤더, 128B 이상은 4B.</td></tr>
+<tr><td>VAR / SCRATCH</td><td>SET·JSON·ELO·OBJECT 등. 4B 정렬 + 항상 4B 헤더 + data_* 본문. 이름과 달리 현재는 제자리 디코딩.</td></tr>
+<tr><td>패딩</td><td>정렬 공간일 뿐 내용은 미정의. 문자열 NUL 종료로 사용 불가.</td></tr></table>
+<p><a href="https://github.com/CUBRID/cubrid/blob/91fc19a83d9d9d5db0d46a137063fe2c8099740d/src/query/qfile_tuple_layout.h#L40">타입별 배치와 길이 헤더 원문</a></p></section>
+<section><h2>영향 범위와 리스크 · 1분</h2><p>리스트 생산·소비 경로인 정렬, 집계, 조인, 실행기, 서버/SA/클라이언트 cursor가 영향을 받는다. P_sort_key도 키 컬럼의 미니 튜플을 사용한다. DIRECT 비교는 index_cmpdisk, FIXED/SCRATCH 비교는 data_cmpdisk로 저장 인코딩에 맞춘다.</p><p>or_pack_listid에는 hdr_size가 추가된다. 첨부 HTML은 클라이언트·서버 혼합 버전 미지원과 동시 업그레이드 전제를 기록한다. 힙 레코드의 영속 저장 형식 변경과는 구분해야 한다.</p><p>페이지 수 감소는 병렬도와 해시조인의 실행 경로 선택까지 바꿀 수 있다. HTML의 TPC-H 결과 동치 및 A/B 수치는 해당 측정 조건의 보고이며 이번 수업에서 재실행하지 않았다. HTML은 NULL 도메인 UNION의 알려진 결과 차이도 기록한다. ‘모든 SQL 결과와 성능이 동일’이라고 발표하지 않는다.</p></section>
+<section id="practice"><h2>책을 덮고 30초</h2><p>① 왜 tpl만 넘기지 않고 tl도 필요한가? ② id=NULL이어도 왜 12B인가? ③ locate와 read_value의 반환 정보는 어떻게 다른가?</p>
+<details><summary>답을 말한 뒤 확인</summary><p>① 고정 길이·정렬·인코딩 규칙을 행에서 제거하고 공통 레이아웃으로 옮겼기 때문이다. ② INT 4B가 사라지는 대신 비트맵 1B와 시작 패딩 3B가 생긴다. ③ locate는 본문 위치·길이·NULL 여부, read_value는 도메인으로 해석한 값과 NULL 여부를 제공한다. NULL인 경우 출력 값은 호출자가 처리한다.</p></details>
+<p>헷갈리는 부분은 에이전트에게 후속 질문하세요. 다음에는 (INT, VARCHAR, BIGINT)에서 마지막 컬럼 위치를 직접 계산해 봅니다.</p></section>
+<footer>추천 1차 자료: <a href="https://github.com/CUBRID/cubrid/blob/91fc19a83d9d9d5db0d46a137063fe2c8099740d/src/query/qfile_tuple_layout.h">qfile_tuple_layout.h</a>의 locate → read_value → size → fill 순서. <a href="https://github.com/CUBRID/cubrid/pull/7866">PR 원문</a>. 첨부 HTML은 보조 설명과 과거 측정 출처로 사용. 코드 확인 기준 2026-09-08.</footer></body></html>
