@@ -156,3 +156,22 @@ PG도 fork·인증·공유 메타데이터 등록 비용이 없어지는 것은 
 - 실제 빌드·재현·검증·core/gdb 작업은 실행 워커에 위임하며, 소스 조사·설계·판단은 리드가 직접 수행한다.
 
 검증 데이터가 없으므로 풀 크기·대기시간·보관 세션 예산이나 성능 향상 수치는 이 조사에서 정하지 않는다.
+
+## 7. 추가 원인 분석 — 기존 CAS의 병렬성과 통합 후 직렬화
+
+사용자 후속 질문: 기존에는 왜 이 구조를 지원할 수 있었고, 통합 후 왜 달라졌으며, 어떤 설계가 맞는가?
+
+**기존도 경합이 없지는 않았다.** `find_idle_cas`는 broker_shm_mutex와 후보 CAS의 con_status 락을 사용했고, dispatch는 빈 CAS를 기다리며 30ms sleep했다. 엔진 내부 락·접속 등록도 공유 자원이다. 기존의 장점은 초기화·클라이언트 상태의 소유 범위가 CAS 프로세스마다 분리돼 있었다는 데 있다. [기존 선택 락](https://github.com/CUBRID/cubrid/blob/c3967ec22/src/broker/broker.c#L2700), [기존 dispatch 대기](https://github.com/CUBRID/cubrid/blob/c3967ec22/src/broker/broker.c#L1211).
+
+**기존 CAS는 준비된 DB 연결도 재사용했다.** `ux_database_connect`는 미접속·DB/host 변경 등의 경우에 `db_restart_ex`를 호출한다. 같은 DB/host의 연결이 살아 있으면 cache_user_info/자격증명 조건에 따라 `au_login`으로 재인증하고 `db_find_or_create_session`으로 논리 세션을 연결한다. CAS 초기화 전체를 클라이언트 교체마다 반복하는 구조가 아니다. 재인증 실패 등은 shutdown/full connect로 돌아갈 수 있으므로 모든 교체가 저비용이라는 뜻은 아니다. [전체 분기](https://github.com/CUBRID/cubrid/blob/c3967ec22/src/broker/cas_execute.c#L384), [재인증·세션 연결](https://github.com/CUBRID/cubrid/blob/c3967ec22/src/broker/cas_execute.c#L496).
+
+통합 후에는 두 변화가 겹쳤다.
+
+1. **소유 범위 변화:** 프로세스별 초기화 상태가 한 서버 주소공간에 모였다. client-half 부트에 process-once 초기화와 세션 초기화가 섞여 있고 once flag가 일반 변수여서, `boot_restart_client` 전체를 전역 mutex로 보호했다. 브로커별 mutex로 교체하면 동일 공용 상태를 다른 락으로 동시에 변경하게 된다.
+2. **수명 정책 변화:** 접속=스레드=새 논리 세션으로 묶고 기존 세션 재연결을 폐기했다. 현재 `driver_session_run`은 새 접속마다 `db_restart_ex`를 호출한다. 기존 CAS의 warm DB 연결 재사용 경로와 다르다. AUTO 상실은 mutex 자체 때문이 아니라 이 수명 정책과 슬롯 회계 변경 때문이다.
+
+근거: [부트 보호의 이유](https://github.com/xmilex-git/cubrid/blob/67c6fe88c54bb627e75f0eef4daa2e3dfe8c8437/src/transaction/boot_cl.c#L1208), [접속별 부트](https://github.com/xmilex-git/cubrid/blob/67c6fe88c54bb627e75f0eef4daa2e3dfe8c8437/src/connection/driver_session.cpp#L761).
+
+설계 권고는 다음 소유권을 복원하는 것이다. 공용 모듈 초기화는 서버 수명에, 사용자 상태는 논리 세션 수명에, 재사용 가능한 실행 자원은 실행 소유자에게 귀속한다. 프로세스 공용 상태를 전수 분류하고 재진입성을 확인한 뒤에만 부트의 전역 보호 범위를 줄인다. broker별 세션 그룹은 서버 안에서 admission·양보·회계를 나누는 수단이다. 실제 브로커 측 manager는 이미 브로커별이므로 서버 공용 부트까지 자동으로 병렬화하는 수단은 아니다.
+
+브로커별 관리자는 짧은 상태 전이와 예약을 담당하고, 인증·초기화·양보 정리 완료를 기다리며 그룹 전체를 붙잡지 않는다. 개별 세션의 요청 시작과 양보 확정은 동기화하고, 전체 서버 용량과 엔진 공유 자료구조의 동기화는 유지한다. 실행 자원을 재사용할 때는 세션별 인증·설정·workspace의 잔류가 없는 attach/detach 계약을 먼저 증명한다. 이는 설계 제안이며 새 풀·구체 구현에 대한 최종 HITL 결정은 아니다.
