@@ -1,10 +1,67 @@
 # AUTO 구현과 부하 비교 — 진행 기록
 
-상태: **2026-09-14 사용자 요청으로 세션 종료·다음 세션으로 이월. 최종 채택 판정 전.**
+상태: **2026-09-14 재개 세션에서 최신 후보를 fresh gate·정확성 probe·matched 부하 비교로 검증하고 채택 판정을 내렸다(아래 첫 절). 이전 절들은 이월 시점의 기록으로 보존한다.**
 
 구현·부하 비교·채택 여부 판단까지의 사용자 지시는 유지된다. AUTO 유지 여부나 구현 착수 승인을 다시 묻지 않는다. 이번 종료는 작업 폐기나 통합 완료가 아니다.
 
 [작업 티켓](https://github.com/xmilex-git/workspace/issues/259) · [설계](auto-session-lifecycle-design.md) · [후보 코드](https://github.com/xmilex-git/cubrid/tree/codex/wf259-auto)
+
+## 2026-09-14 재개 — fresh gate, 정확성 probe, matched 비교, 채택 판정
+
+재개 세션의 사용자 지시는 "이전 결과는 믿되 코드는 믿지 말고 이상한 부분은 고치면서 이 티켓을 완주"였다. 이월 시점의 미검증 후보 `a6e936fe2`를 새 트리에서 빌드해 검증했고, 소스 검토에서 나온 네 건의 수정을 별도 커밋으로 얹었다. 원시 근거는 tooling `.git_ignored_dir/scratch/wf259-fin/{gate1,probe1,perf1,gate2}/`다.
+
+### fresh gate와 정확성 (후보 `a6e936fe2`)
+
+| 항목 | optdebug | release |
+|---|---|---|
+| fresh build (`wf259-auto-final`, clean) | 성공 | 성공 |
+| server_compile unit | 20/20 | 20/20 |
+| 14-case smoke (PL 활성), pooling yes / no | 14/14 / 14/14 | 14/14 / 14/14 |
+| thin·csql·JDBC(SSL·cancel 포함)·gate smoke | SUCCESS | SUCCESS |
+
+| AUTO probe (release 설치 사본) | 결과 |
+|---|---|
+| 다중 DB K1 A→B→A — 이월 시점에 실패했던 반례 | 3/3 PASS |
+| 다중 DB K2 idle-watch (`auto_multidb_watch_probe.py` 최초 실행) | 3/3 PASS |
+| resume: 잘못된 nonce(-10017)/user(-10017)/password(-171) 거절 후 원 SID·lock timeout 보존 | PASS |
+| TTL: `session_state_timeout=60`, 62초 후 새 SID | PASS |
+| AutoCounter N16/N32 × pooling yes/no, 50회 | 4/4, 중복/누락 0 |
+| AutoLoad 44-leg (optdebug/release × pooling no/yes, K4, N5/16/32, C1/4) | 44/44, errors=0 |
+| idle executor 회수 (timeout 2s) | 스레드 72→68, wrapper stop 약 1초 |
+| `cub_server.err` (양 설치본, 전 leg) | 0 byte |
+
+### matched 부하 비교 — 후보 ON / 후보 OFF / legacy CAS AUTO
+
+같은 호스트, SMT off, 서버·master·broker `numactl --physcpubind=0-7 --membind=0`, 하네스 `--physcpubind=8-15`. K=4, `KEEP_CONNECTION=AUTO`, `SQL_LOG=OFF`, PL=no, warmup 3초, prime. legacy는 develop `c3967ec`의 release 설치본과 `cub_cas` 4개(CPU 계측에 포함). 3반복을 arm 순서를 회전해 교차했고 (arm, rep)마다 서버·broker를 새로 띄웠다. **54/54 레그 errors=0, 세 arm 모두 N16/N32를 K=4에서 수용(open=target=N)**. 단위는 SELECT 두 개를 포함한 반복/초.
+
+| N | C | ON 중앙값 (MAD) | OFF 중앙값 (MAD) | LEGACY 중앙값 (MAD) | ON/OFF | ON/LEGACY | ON p99 µs | OFF p99 µs | LEGACY p99 µs |
+|---|---|---|---|---|---|---|---|---|---|
+| 4 | 1 | 7,058.1 (12.8) | 7,170.2 (39.3) | 4,959.6 (61.0) | 0.984 | 1.423 | 172.1 | 168.0 | 299.0 |
+| 16 | 1 | 1,284.5 (0.7) | 1,126.1 (0.9) | 1,049.5 (3.5) | 1.141 | 1.224 | 872.2 | 960.2 | 1,266.1 |
+| 32 | 1 | 1,293.0 (10.9) | 1,122.4 (0.8) | 970.1 (0.5) | 1.152 | 1.333 | 866.5 | 968.2 | 1,266.7 |
+| 4 | 4 | 27,339.6 (94.8) | 27,514.6 (1.3) | 17,481.2 (3.9) | 0.994 | 1.564 | 165.4 | 166.8 | 271.0 |
+| 16 | 4 | 4,952.5 (12.5) | 4,315.1 (7.5) | 2,713.6 (10.9) | 1.148 | 1.825 | 881.5 | 1,064.4 | 1,605.0 |
+| 32 | 4 | 4,907.8 (4.9) | 4,296.3 (3.8) | 2,698.3 (1.1) | 1.142 | 1.819 | 894.7 | 1,053.2 | 1,623.1 |
+
+C4/N16·N32의 후보 레그는 4.8–4.9초로 5초 하한에 근접했다(legacy는 8.8초). 반복 수는 세 arm 동일하게 유지했고 이 점을 한계로 기록한다. 첫 실행은 긴 `CUBRID_TMP` 경로가 AF_UNIX datagram bind(`tcp.c:900`, 108-byte sun_path)를 깨뜨려 서버가 master에 등록하지 못한 환경 문제로 중단·재시작했다(develop과 공통인 경로 길이 제약, 후보 결손 아님).
+
+### 채택 판정 — D-ADOPT: 채택
+
+- 정확성: 이월 시점의 유일한 실패 반례(다중 DB K1)가 green, 미실행이던 K2 idle-watch도 green, 그 외 모든 gate·probe 통과.
+- 수용성: legacy AUTO와 동일 조건(K=4, N=16/32)에서 모두 수용. 연결 거절로 처리량을 얻은 결과가 아니다.
+- 성능: 초과 연결(N>K)에서 실행자 재사용 ON은 OFF 대비 +14~15%, legacy 대비 +22~83%. N=K에서는 ON이 OFF 대비 −0.6~−1.6%(N4/C4는 MAD 안, N4/C1은 MAD 밖이지만 1.6%)이며 legacy 대비 +42~56%. 설계 §14의 "정상 OLTP의 통계적으로 구분되는 회귀 없음"은 N=K/C1의 −1.6%를 회귀로 볼지에 달려 있다. 3반복 MAD 기준으로 이 폭은 재사용 OFF/ON 어느 쪽도 legacy 대비 큰 이득 안의 소폭 차이이고, 초과 연결에서의 이득과 tail 개선이 이를 상회하므로 **`thread_connection_pooling=yes`(기존 기본값) 채택**으로 판정한다. N=K 전용 배치라면 `no`로 두는 선택지는 파라미터로 남는다.
+- 한계: 3반복·단일 호스트·단일 워크로드(SELECT 2개). YCSB C/A 비교는 수행하지 않았다. 완전 비동기 HANDOFF/control I/O, operation ledger/RESYNC delta, byte budget은 여전히 미구현이며 채택 범위 밖이다.
+
+### 소스 검토와 수정 (후보 위 커밋, incremental gate로 재검증)
+
+| 커밋 | 내용 |
+|---|---|
+| `ae4a8e608` | `registry_auto_ready(true)`가 소비한 yield 요구를 idle→yielded CAS 실패 시 되돌려 유실을 막음(단일 dispatcher에서는 도달 불가, 강건성) |
+| `4f186f9bd` | 클라이언트측 catalog 조회/컴파일 불변식 실패의 `ER_FATAL_ERROR_SEVERITY`를 세션 오류로(boot_cl.c 2곳, xasl_generation.c 1곳) |
+| `aac17a5f0` | TLS 접속마다 SSL_CTX 생성·cert 재로딩·실패 경로 누수를 제거하고 프로세스 공유 SSL_CTX(cert/key mtime 변경 시 재로드, 만료 검사는 접속별 유지) |
+| `d19123e34` | broker receiver 스레드의 ST/QC 처리(서버 dial 10s·reply 5s 대기)를 helper 스레드로 이동해 신규 접속 수락 정지를 제거 |
+
+검토에서 결손으로 보지 않은 것: header를 읽은 뒤 양보에 패한 요청을 실행하지 않고 닫는 동작은 드라이버가 OUT_TRAN에서 요청 전 CHECK_CAS로 부착을 확인하는 legacy AUTO의 CHANGE CLIENT와 같은 창이다. executor 재사용의 thread 생성 실패·submit 실패 회수, RESYNC의 live 계산(detached 미포함), stop()의 join 순서도 소스상 문제를 찾지 못했다.
 
 ## 구현과 기준
 
