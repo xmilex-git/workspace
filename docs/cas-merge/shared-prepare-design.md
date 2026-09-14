@@ -225,3 +225,21 @@ C에서 "불변 정본 1벌"은 S1에서 달성되고, "실행별 상태 분리"
 ## 11. QA `test.md` 요구사항 (초안; S5/S6에서 완성)
 
 invalidation-policy §검증 계획 1~7항을 그대로 요구사항으로 옮기고, 추가로: (8) 100 연결 동일 SQL의 서술자/핸들/인스턴스 계수, (9) pinned/pooling 4조합의 `CAS_ER_STMT_POOLING` 동작 동일성, (10) `tree_required` 문장(트리거·메서드·뷰 갱신·DDL)의 결과 동일성, (11) 예산 초과 시 유휴 회수 후 재실행 정확성, (12) PX 병렬 질의(`parallelism>1`)의 결과 동일성. 신규 TC는 QA가 작성하며 이 노력은 PR에 TC를 추가하지 않는다.
+
+## 12. S0 보강 — 소스 확인 결과 (2026-09-14, c49af22e8)
+
+### 12.1 P5 (a)의 추가 의존: bind fingerprint도 파스 트리를 걷는다
+`histogram_bind_fingerprint` (`histogram_cl.cpp:2850`) → `bind_fp_walk` (`:2733-2816`): 트리에서 `histogram_split_hv_predicate`로 `(op, 컬럼 name 노드, host-var index)`를 찾고 `histogram_get_{equal,comp}_selectivity (name, val)`로 선택도 밴드를 구해 `bind_fp_mix (op, hash(name), band)`를 섞는다. 트리 없는 핸들에서 같은 fingerprint를 내려면 컴파일 시 **fingerprint 레시피** `{op, class OID, attr id, name-hash, hv_index, reversed}[]`를 서술자에 기록하고, 실행 시 레시피+bind 값만으로 같은 mixing을 재현하는 `histogram_bind_fingerprint_from_recipe`를 둔다(선택도 조회 함수에 (class, attr) 인자 변형 필요). 레시피가 비어 있으면 현행과 같이 "priced 항 없음 → fingerprint 없음". → S4 항목.
+
+### 12.2 XASL-only SELECT 실행 경로가 트리에서 실제로 읽는 것
+`do_execute_select` (`execute_statement.c`): `xasl_id`; query_flag 입력 = `si_datetime/si_tran_id`(→reexecute·do_not_cache), `flag.do_cache`, `do_not_cache`, `oids_included`, `is_holdable`, `is_xasl_pinned_reference`, `dont_collect_exec_stats`, `use_auto_commit`(+`ws_need_flush` → `locator_all_flush`), `is_auto_commit`, `query_trace`; `ws_has_updated()`면 `pt_flush_classes` 트리 워크(→ 서술자에 참조 클래스 OID 목록을 두고 같은 flush 수행); `clt_cache_check/cache_time`; `execute_query(xasl_id, host_variables …)`; `into_list`(csql 전용). 결과 서술자는 `pt_new_query_result_descriptor` (`query_result.c:1075`)가 `PT_EXECUTE_PREPARE`에 대해 이미 **트리 없이** `column_count`·`oids_included`·`cache_time`·`is_holdable`·list_id만으로 만든다 → 서술자 기반 `db_execute_shared_select (desc, hostvars, exec_flags, &result)`의 골격.
+DML: `do_execute_update` (`:10203-10440`)의 트리 의존은 `server_update`·`do_class_attrs`·`object`·`orderby_for` auto-param·`spec` flush 대상 클래스뿐 → 전부 컴파일-시 상수화 가능(§4).
+
+### 12.3 host-var 바인드
+`ux_execute` → `make_bind_value` → `set_host_variables` → `db_push_values` → `pt_set_host_variables`(deep copy, `db_vdb.c:1920`) → 실행 직전 `do_cast_host_variables_to_expected_domain`(`host_var_expected_domains[]`, `db_vdb.c:3220-3258`). 서술자에는 expected domains를 packed로 두고 세션이 `tp_domain_cache`로 복원(non-OBJECT는 프로세스 공유 캐시라 복원 비용 ≈ 0). 오류 시 `db_has_modified_class` chn 검사 → `CAS_ER_STMT_POOLING`(`cas_execute.c:10398-10401`) — 트리 없는 핸들은 서술자 세대 불일치로 같은 판정.
+
+### 12.4 S1 native 복사기 — 생성 방식과 검증 오라클
+- `stream_to_xasl.c`(6,953줄)의 `stx_build_*` 58개 + `stx_restore_*` 45종은 필드마다 `offset==0 ? NULL : stx_restore_T(packed[offset])` 패턴이라 **복사기를 기계적으로 유도**할 수 있다: `cpy_restore_T(src)` = visited-map(src 포인터 키) → `stx_alloc_struct` → `*dst = *src`(스칼라 일괄) → 포인터 필드만 재귀. 인라인 서브구조(`stx_build_T (ptr, &node->f)` 38곳)는 `cpy_build_T(&dst->f, &src->f)`. 특수: `DB_VALUE`는 `pr_clone_value`(payload heap — 현행 unpack과 동일 소유), 문자열은 아레나 strdup, `int/hfid/domain 배열`은 memcpy, `sub_host_var_index`는 malloc 복사, `list_id.type_list.domp`는 private alloc 복사, `cache_attrinfo`는 아레나 zero-alloc, 도메인 포인터(`or_unpack_domain` 8곳)는 **공유**.
+- 도메인 공유의 예외: B4-D9로 MOP를 품는 도메인은 세션 리스트에 interning된다(`object_domain.c:2878, 2950, 3110`). 정본을 만든 세션이 사라지면 그 포인터는 dangling → 정본 unpack 중 세션-스코프 interning이 1회라도 일어나면(`object_domain.c`에 스레드-로컬 카운터 추가로 검출) 그 엔트리는 `native_master` 비활성 → 현행 stream clone 경로로 폴백. OLTP 계획(비-OBJECT 컬럼)은 영향 없음.
+- **오라클**: `xts_map_xasl_to_stream (copy)`의 바이트열 == 엔트리의 `stream.buffer`(packer는 `SERVER_MODE`에서도 링크됨, `xasl_to_stream.c:287`). optdebug 빌드에서 첫 복사마다 검증(파라미터로 게이트), CTP sql·medium 전량이 실행하는 모든 계획을 자동 검증한다. 추가로 `qexec_clear_xasl` 후 `IS_XASL_INITIAL_STATUS` 계약 유지.
+- 규칙: ALLOC-07/08(인스턴스 아레나는 만든 스레드가 해제 — 현행 `db_change_private_heap(0)` 전역 heap 규약 유지), MEM-01(복사는 아레나 순차 쓰기), GLOB-03.
