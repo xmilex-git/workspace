@@ -200,7 +200,17 @@ C에서 "불변 정본 1벌"은 S1에서 달성되고, "실행별 상태 분리"
 | S5 | `.../S5` | 서술자 hard-invalid producer 연결, private 게시 금지, 예산·회수, `CAS_ER_STMT_POOLING` 호환 | invalidation-policy 검증 7항 재현 스크립트(리드가 QA test.md 요구사항으로 기록) + unit, CTP shell 관련 계열 |
 | S6 | `.../S6` | P7 노출, 최종 측정·문서 | YCSB C×3·A×3·churn ×3·L7·PSS vs S0, cas-merge 합류 |
 
-## 10. 결정 요청 (HITL — 사용자 확인 후 확정)
+## 10. 결정 (HITL — 2026-09-14 사용자 확정)
+
+| ID | 결정 | 비고 |
+|---|---|---|
+| D-P6 | **C 단계적**: S1 정본 1벌 + native 복사기, S2 G1→G2→G3 상태 이동, G4 값 슬롯은 per-execution 값 아레나 복사 유지; 전면 분리(A)는 S2 실측이 정당화할 때 별도 단계 | 사용자 확정 |
+| D-P5 | **(a) 원문 재컴파일** — 핸들 트리 0 보유, fingerprint 변경 시만 일시 파서로 재컴파일·새 세대 게시 | 사용자 확정 |
+| D-P4 | **허용** — `tree_required` 문장은 현행 세션 트리 보유, 판정 누락은 트리 보유 쪽 보수적 기본값 | 사용자 확정 |
+| D-EVICT | **xcache 예산에 합산** — 서술자 바이트를 `xcache_Memory_usage`(`max_plan_cache_entries` 기반 Hard/Soft) 회계에 편입, 별도 파라미터 신설 없음; pinned/reclaimable 분리 계상은 유지 | 사용자 확정(권고와 다름) |
+| D-KEY / D-PRIVATE / D-PX | 권고안대로(key_flags에 `include_oid`/updatable, 미커밋 DDL 게시 금지는 서술자 계층만, PX 워커도 S1에서 native 복사) | 권고 수용 |
+
+원 질문(기록용):
 
 | ID | 질문 | 권고 |
 |---|---|---|
