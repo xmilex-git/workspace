@@ -317,3 +317,21 @@ _Avoid_: 서버 전체 statdump, 클라이언트 RTT
 **Herdr 작업 세션**:
 하나의 위임 작업을 위해 새로 만들고, 그 작업이 끝나면 닫는 전용 Herdr 세션이다. 사용자가 대화 중인 조정 대화와 수명을 분리한다.
 _Avoid_: 조정 대화, Claude 대화 자체
+
+### 호스트 변수 도메인 사전 확정 (지도: xmilex-git/workspace#268)
+
+**기대 도메인 (expected domain)**:
+prepare(컴파일) 시 파서가 `?` 를 비교·대입 상대(컬럼 등)로부터 추론해 `PT_HOST_VAR.expected_domain` 과 `host_var_expected_domains[]` 에 적는 도메인이다. 바인드 값은 execute 시 이 도메인으로 캐스트된다.
+_Avoid_: 바인드 도메인(실제 값의 타입과 혼동), 호스트 변수 타입
+
+**바인드 도메인 (bound domain)**:
+execute 시 드라이버가 보낸 실제 값의 도메인이다. 기대 도메인이 없는 `?` 는 이 도메인 그대로 서버에 도착한다.
+_Avoid_: 기대 도메인과 혼용
+
+**사전 확정 (pre-execution pin)**:
+호스트 변수와 그것을 품은 식·비교·키 범위의 regu 도메인을 **행을 읽기 전에** 고정하는 행위다. 컴파일 시점 확정(기대 도메인·타입 추론)이 우선이고, 진짜 추론 불가한 `?` 만 execute 직전에 바인드 도메인으로 확정한다.
+_Avoid_: 도메인 확정(VARIABLE 컬럼이 첫 non-NULL 값으로 확정되는 사건 — 리스트 파일 용어), 늦은 바인딩
+
+**늦은 바인딩 (late binding)**:
+호스트 변수 도메인을 `DB_TYPE_VARIABLE` 로 남겨 두고 실행 중 값을 보고 푸는 현행 기법 전반 — `pt_is_op_hv_late_bind` 연산군의 MAYBE 잔존, fetch 의 `tp_domain_resolve_value` 확정, `original_domain` 복원, `qexec_resolve_domains_for_aggregation`, `resolve_domains_on_list_scan` 등. 이 지도의 제거 대상.
+_Avoid_: HV late binding 을 파라미터 `hostvar_late_binding` 하나로 좁혀 부르기
