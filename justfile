@@ -273,7 +273,7 @@ ctp SUITE *DIRS:
         sql)      repo=dev/cubrid-tc-worktree/develop ;;
         medium)   repo=dev/cubrid-tc-worktree/develop ;;
         shell)    repo=dev/cubrid-tc-ex-worktree/develop ;;
-        ha_shell) repo=cubrid-testcases-private ;;
+        ha_shell) repo=dev/cubrid-testcases-private ;;
         *) echo "ERROR: suite must be sql | medium | shell | ha_shell (got '{{SUITE}}')" >&2; exit 1 ;;
     esac
     tc="${TESTCASES_ROOT:-$HOME}/$repo"
