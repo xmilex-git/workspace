@@ -270,16 +270,16 @@ ctp SUITE *DIRS:
     runner="{{justfile_directory()}}/.agents/skills/ctp-run/scripts/ctp_run.sh"
     [ -x "$runner" ] || { echo "ERROR: ctp-run runner missing: $runner" >&2; exit 1; }
     case "{{SUITE}}" in
-        sql)      repo=cubrid-testcases ;;
-        medium)   repo=cubrid-testcases ;;
-        shell)    repo=cubrid-testcases-private-ex ;;
+        sql)      repo=dev/cubrid-tc-worktree/develop ;;
+        medium)   repo=dev/cubrid-tc-worktree/develop ;;
+        shell)    repo=dev/cubrid-tc-ex-worktree/develop ;;
         ha_shell) repo=cubrid-testcases-private ;;
         *) echo "ERROR: suite must be sql | medium | shell | ha_shell (got '{{SUITE}}')" >&2; exit 1 ;;
     esac
     tc="${TESTCASES_ROOT:-$HOME}/$repo"
     [ -d "$tc" ] || { echo "ERROR: testcases checkout not found: $tc" >&2; exit 1; }
     args=( --suite "{{SUITE}}" --build "${BUILD:-${CUBRID:-$HOME/CUBRID}}" --testcases "$tc"
-           --ctp "${CTP_HOME:-$HOME/cubrid-testtools/CTP}"
+           --ctp "${CTP_HOME:-$HOME/dev/cubrid-testtools-worktree/develop/CTP}"
            --out "{{justfile_directory()}}/.git_ignored_dir/scratch/ctp-run-out/{{SUITE}}-$(date -u +%Y%m%dT%H%M%SZ)-$$" )
     # Which testcases ref: explicit wins, else the PR, else infer from the engine
     # checkout's branch. Never a silent develop — the runner refuses instead.

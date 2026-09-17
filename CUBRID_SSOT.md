@@ -83,7 +83,10 @@
 
 18. **(2026-09-04) TPC-H(SF10) 는 `~/databases/tpch/` 공용 자산만 쓴다 — 매번 찾아다니지 말 것.** DB `tpch_sf10_q1` 은 `CUBRID_DATABASES=~/databases`(볼륨 `~/databases/tpch_sf10_q1/`), 질의 22종 `~/databases/tpch/queries/qN-cubrid.sql`(Q15 는 create_view/select/drop_view 3파일), 스키마 `schema/`, 측정 conf `conf/cubrid.conf.tpch-b8192`(parallelism=6·8192M, 포트는 `just port-claim tpch_sf10_q1 <effort>` 값으로 교체), 재적재 `load_tpch.sh <설치본> [port]`(데이터 SA 적재 → 서버 기동 → PK/FK `loaddb -C --no-logging-index -i` → 통계 → vacuum, 1~2h). 상세 `~/databases/tpch/README.md`. **온디스크 포맷을 바꾸는 develop 커밋(예: CBRD-24094 비유니크 오버플로 헤더 8B→16B, 2026-08-27) 뒤에는 이 DB 를 측정 대상 빌드로 재적재해야 한다** — 새 코드는 레거시 체인을 손상으로 취급하고 release 빌드는 assert 없이 오독한다(#193 인시던트: 옛 DB 로 A 패스 6개 질의를 잰 뒤 폐기). 옛 DB(607f1ee9) 는 `~/dev/workspace/.git_ignored_dir/tpch-sspq/cubrid-databases/` 에 보존만 하며 새 빌드로 열지 않는다. Notion 기준선 절대값과의 비교는 참고용, 판정은 같은 호스트 A/B.
 
+19. **(2026-09-16) 테스트 데이터셋은 `CONNECT BY LEVEL <= N`으로 만들지 않는다 — 시드 테이블 + cross join + ROWNUM으로 만든다.** `INSERT ... SELECT level FROM db_root CONNECT BY LEVEL <= 300000`(정수 2컬럼)이 30분+ CPU 100%·RSS 8GB+로 발산한 인시던트(PR7866 경계 검증, 기준 빌드에서도 동일하므로 패치 결함이 아니라 계층 질의 자체의 비용). 정석: `CREATE TABLE t1 (n INT PRIMARY KEY); INSERT INTO t1 VALUES (1),(2),...,(10);` 10건을 만든 뒤 `INSERT INTO t SELECT ROWNUM, ... FROM t1 a, t1 b, t1 c, t1 d, t1 e WHERE ROWNUM <= N` (10^k cross join, 필요한 k만 곱한다; 열 값은 `ROWNUM`/`MOD(ROWNUM, m)`으로 파생)처럼 cross join + ROWNUM 상한으로 생성한다. 수천 건 이하의 소형 시드에만 `CONNECT BY`를 허용하고, 위임 프롬프트에 데이터셋 생성 SQL을 넣을 때 이 형태를 명시한다.
+
 ---
+
 
 ## 4. 코드 작업 규칙
 
