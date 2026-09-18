@@ -395,16 +395,27 @@ materialize_tc_worktree() {
   git -C "$repo_dir" rev-parse --git-dir >/dev/null 2>&1 \
     || die "not a git checkout: $repo_dir"
 
-  if ! git -C "$repo_dir" fetch --quiet origin "$ref" 2>/dev/null; then
-    if [ "$ref" != "develop" ]; then
-      warn "$(basename "$repo_dir"): ref '$ref' not on origin -> falling back to develop."
-      TC_REF="develop"; TC_REF_SRC="$TC_REF_SRC + fallback (no $ref on origin)"
-      materialize_tc_worktree "$repo_dir" develop "$wt_root"
-      return
+  if git -C "$repo_dir" fetch --quiet origin "$ref" 2>/dev/null; then
+    TC_SHA="$(git -C "$repo_dir" rev-parse FETCH_HEAD)"
+  else
+    # A raw commit SHA is not fetchable by name (GitHub refuses want-of-arbitrary-SHA), so a
+    # fetch failure alone does not mean the ref is unknown. Refresh the remote refs and try to
+    # resolve it locally before giving up -- otherwise pinning a SHA silently degrades into
+    # "whatever develop is right now", which is exactly what an explicit ref is for, and makes
+    # two runs pinned to the same SHA incomparable.
+    git -C "$repo_dir" fetch --quiet origin 2>/dev/null || true
+    TC_SHA="$(git -C "$repo_dir" rev-parse --verify --quiet "$ref^{commit}" 2>/dev/null || true)"
+    if [ -z "$TC_SHA" ]; then
+      if [ "$ref" != "develop" ]; then
+        warn "$(basename "$repo_dir"): ref '$ref' not on origin -> falling back to develop."
+        TC_REF="develop"; TC_REF_SRC="$TC_REF_SRC + fallback (no $ref on origin)"
+        materialize_tc_worktree "$repo_dir" develop "$wt_root"
+        return
+      fi
+      die "$(basename "$repo_dir"): cannot fetch origin develop"
     fi
-    die "$(basename "$repo_dir"): cannot fetch origin develop"
+    TC_REF_SRC="$TC_REF_SRC (resolved locally)"
   fi
-  TC_SHA="$(git -C "$repo_dir" rev-parse FETCH_HEAD)"
 
   mkdir -p "$(dirname "$wt")"
   if [ -d "$wt/.git" ] || [ -f "$wt/.git" ]; then
