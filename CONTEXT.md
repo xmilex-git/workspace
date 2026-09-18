@@ -44,6 +44,10 @@ _Avoid_: 텔레메트리 패스, A/B 블록
 XASL 생성 시 select 리스트와 HAVING절의 형태만으로 결정되는 정적 플래그로, 런타임에 해시가 실제로 유지됐는지와는 별개다. 런타임 해시 상태와 혼용하지 않는다.
 _Avoid_: 런타임 해시 상태, hash: true/partial
 
+**파티션 패스 간 리스트 인계 (cross-pass list handover)**:
+파티션 스캔은 파티션마다 별도 병렬 패스를 돌고, 병렬 패스가 끝날 때 워커 리스트를 메인 리스트에 병합한다. 메인 리스트가 비어 있으면 페이지를 복사하지 않고 워커 리스트 객체를 그대로 인계받으므로, 인계받은 리스트는 닫혀 있고 튜플 디스크립터가 없다. 다음 패스가 직렬이면 메인이 그 리스트에 다시 쓰므로, 직렬 폴백 진입 지점에서 재오픈과 디스크립터 복구를 해야 한다. 대상은 결과 리스트와 집계 partial list 둘 다이며, 스캔 방식(순차·인덱스)과 무관하게 같은 규약이 적용된다.
+_Avoid_: 리스트 병합(복사 경로와 이어붙이기 경로를 뭉뚱그림), swap
+
 **TPC-H 공용 자산 (tpch home, `~/databases/tpch/`)**:
 TPC-H SF10 작업에 쓰는 단일 위치 — DB `tpch_sf10_q1`(`CUBRID_DATABASES=~/databases`), 질의 22종(`queries/`), 스키마(`schema/`), 측정 conf(`conf/`), 재적재 스크립트(`load_tpch.sh`). 온디스크 포맷 커밋 뒤에는 측정 대상 빌드로 재적재한다(CUBRID_SSOT §3-18).
 _Avoid_: `tpch-sspq/queries`·`.vscode/TPC-H`·`.git_ignored_dir/tpch-sspq` 를 직접 참조(원본·이력 보관용일 뿐)
