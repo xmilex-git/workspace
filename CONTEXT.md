@@ -343,3 +343,35 @@ _Avoid_: 도메인 확정(VARIABLE 컬럼이 첫 non-NULL 값으로 확정되는
 **늦은 바인딩 (late binding)**:
 호스트 변수 도메인을 `DB_TYPE_VARIABLE` 로 남겨 두고 실행 중 값을 보고 푸는 현행 기법 전반 — `pt_is_op_hv_late_bind` 연산군의 MAYBE 잔존, fetch 의 `tp_domain_resolve_value` 확정, `original_domain` 복원, `qexec_resolve_domains_for_aggregation`, `resolve_domains_on_list_scan` 등. 이 지도의 제거 대상.
 _Avoid_: HV late binding 을 파라미터 `hostvar_late_binding` 하나로 좁혀 부르기
+
+### 온디스크 바이트오더 조사 (CBRD-27366)
+
+**고정 LE 전환 (fixed little-endian)**:
+온디스크 정수 표현을 플랫폼과 무관하게 little-endian 하나로 못박는 포맷 변경이다. 볼륨을 기록한 기계의 바이트오더를 따르는 host-native와 다르며, 어느 시점에도 두 바이트오더를 동시에 지원하지 않는다.
+_Avoid_: native 바이트오더(host-native와 혼동), 엔디안 지원
+
+**이중 지원 (dual-format support)**:
+하나의 바이너리가 구 BE 볼륨과 신 LE 볼륨을 함께 읽는 상태로, 마이그레이션 창에서만 나타날 수 있는 과도 상태다. 설계 목표가 아니며 레코드 언패킹 hot path에 런타임 분기를 수반한다.
+_Avoid_: 하위 호환, 엔디안 중립
+
+### MVCC 레코드 헤더 조사 (CBRD-27368)
+
+**헤더 고정화 (fixed-size MVCC header)**:
+가변 8~32B인 MVCC 레코드 헤더를 플래그와 무관하게 한 크기(제안된 값은 32B)로 못박는 포맷 변경이다. 온디스크 포맷과 WAL(undo 이미지)을 동시에 바꾸므로 `disk_compatibility_level` 인상과 마이그레이션을 수반한다.
+_Avoid_: 헤더 크기 계산 호이스팅(포맷 무관한 코드 변경과 혼동), 레이아웃 현대화(세 제안을 뭉뚱그림)
+
+**vacuum 헤더 축소 (vacuum header shrink)**:
+vacuum이 전역 가시 레코드의 INSID·PREV_VERSION 플래그를 끄고 페이로드를 좌측으로 옮겨 레코드 길이 자체를 줄이는 동작이다. 현행 엔진이 이미 수행하며 home 레코드를 8B 하한까지 내린다. REC_BIGONE(오버플로)은 의도적 예외로 32B에 고정된다.
+_Avoid_: 플래그만 끄는 것(길이가 실제로 줄어듦), 최소 헤더 비율 상향(이미 달성된 상태를 미달성처럼 부름)
+
+**헤더 크기 계산 호이스팅 (header-size hoisting)**:
+헤더 크기를 레코드당 한 번만 구해 재사용하도록 코드를 바꾸는 최적화다. 현행은 속성 접근 매크로가 레코드당 O(속성 수)회 `or_header_size()`를 아웃오브라인 호출하며 매번 다시 계산한다. 온디스크 포맷과 무관하다.
+_Avoid_: 헤더 고정화(포맷 변경을 수반함), 헤더 크기 룩업 제거(룩업 자체가 아니라 반복 호출이 대상)
+
+**회수 공간 재사용 (reclaimed-space reuse)**:
+헤더 축소로 페이지 안에 생긴 여유가 값을 갖기 위한 조건 — 이후 INSERT가 그 페이지를 다시 쓰는 것이다. OID가 물리 주소라 기존 레코드는 옮길 수 없으므로, 사후 축소는 힙 페이지 수를 줄이지 않고 이미 적재된 데이터의 풀스캔 I/O도 줄이지 않는다.
+_Avoid_: 축소 가능 바이트를 곧바로 스캔량 감소로 환산, 공간 이득과 스캔 이득을 같은 지표로 취급
+
+**OR 레이어 (OR layer)**:
+`OR_GET_*`/`OR_PUT_*` 매크로와 그 위의 `or_pack_*`/`or_unpack_*` 함수군이 이루는 단일 직렬화 계층으로, 바이트오더 결정 하나가 디스크 레코드와 클라이언트-서버 와이어 프로토콜을 함께 지배한다. 반면 슬롯 페이지·볼륨·로그·btree 노드 헤더는 이 계층을 타지 않는 native 구조체다.
+_Avoid_: 온디스크 포맷(디스크 전용이라는 오해를 부름), 레코드 포맷
