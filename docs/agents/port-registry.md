@@ -37,6 +37,20 @@ The recipes implement the protocol below — use them instead of hand-editing.
 - `1568` — `~/CUBRID/conf/cubrid.conf` install default.
 - `30000-30999`, `33000-33999` — default broker ranges of existing installs.
 
+## Reserved ports: a port with no listener is not necessarily free
+
+`just port-claim` skips ports that are claimed above or listening right now. Neither
+test sees a port whose owner has simply stopped their server for a moment — a stopped
+master frees the port but not the intent, and people running servers by hand do not
+write claim lines. `port-claim` therefore also skips every port listed in
+`.git_ignored_dir/port-registry/reserved.txt` (machine-local, one port per line,
+`#` comments allowed).
+
+Put a port there when you find it in use by someone who has not claimed it. Incident
+that added the file (2026-09-20): `port-claim` handed out `1702` to an agent while the
+other session's master on that port happened to be down; `1700-1703` on this host
+belong to other sessions and are now reserved.
+
 ## Recommended free range for agent claims
 
 `1700-1799` for `cubrid_port_id`; `36000+` for brokers (one hundred-block per claim).

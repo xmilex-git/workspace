@@ -353,10 +353,15 @@ port-claim db effort:
     fi
     claimed=$(awk -F'|' 'NR>2 {gsub(/ /,"",$2); if ($2 ~ /^[0-9]+$/) print $2}' "$f")
     listening=$(ss -ltn 2>/dev/null | awk 'NR>1 {n=split($4,a,":"); print a[n]}')
+    # A port whose owner is not listening right now is still taken: a stopped master frees
+    # the port but not the intent, and people do not write claim lines.  reserved.txt is the
+    # machine-local record of those.
+    reserved=$(sed 's/#.*//' "$(dirname "$f")/reserved.txt" 2>/dev/null | tr -d ' \t' | grep -E '^[0-9]+$' || true)
     port=""
     for p in $(seq 1700 1799); do
         echo "$claimed"   | grep -qx "$p" && continue
         echo "$listening" | grep -qx "$p" && continue
+        echo "$reserved"  | grep -qx "$p" && continue
         port=$p; break
     done
     [ -n "$port" ] || { echo "ERROR: no free port in 1700-1799." >&2; exit 1; }
