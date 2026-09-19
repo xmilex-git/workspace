@@ -48,9 +48,9 @@ _Avoid_: 런타임 해시 상태, hash: true/partial
 파티션 스캔은 파티션마다 별도 병렬 패스를 돌고, 병렬 패스가 끝날 때 워커 리스트를 메인 리스트에 병합한다. 메인 리스트가 비어 있으면 페이지를 복사하지 않고 워커 리스트 객체를 그대로 인계받으므로, 인계받은 리스트는 닫혀 있고 튜플 디스크립터가 없다. 다음 패스가 직렬이면 메인이 그 리스트에 다시 쓰므로, 직렬 폴백 진입 지점에서 재오픈과 디스크립터 복구를 해야 한다. 대상은 결과 리스트와 집계 partial list 둘 다이며, 스캔 방식(순차·인덱스)과 무관하게 같은 규약이 적용된다.
 _Avoid_: 리스트 병합(복사 경로와 이어붙이기 경로를 뭉뚱그림), swap
 
-**TPC-H 공용 자산 (tpch home, `~/databases/tpch/`)**:
-TPC-H SF10 작업에 쓰는 단일 위치 — DB `tpch_sf10_q1`(`CUBRID_DATABASES=~/databases`), 질의 22종(`queries/`), 스키마(`schema/`), 측정 conf(`conf/`), 재적재 스크립트(`load_tpch.sh`). 온디스크 포맷 커밋 뒤에는 측정 대상 빌드로 재적재한다(CUBRID_SSOT §3-18).
-_Avoid_: `tpch-sspq/queries`·`.vscode/TPC-H`·`.git_ignored_dir/tpch-sspq` 를 직접 참조(원본·이력 보관용일 뿐)
+**TPC-H SF10 측정 자산**:
+이 호스트에 현존하는 TPC-H SF10 작업 자산 — DB `tpch_sf10`(`CUBRID_DATABASES=~/databases/pr7866`), 질의 `tpch-sspq/queries/`, 측정 conf `.git_ignored_dir/conf/pr7866.conf`, 하네스 `tpch-sspq/harness/`. 적재 이력이 기록돼 있지 않으므로 온디스크 포맷이 바뀐 빌드로 재는 측정에는 재적재가 선행돼야 한다(CUBRID_SSOT §3-18).
+_Avoid_: `~/databases/tpch/`·DB `tpch_sf10_q1`(2026-09-19 기준 호스트에 없음), `.vscode/TPC-H`
 
 **신선한 체크포인트 (fresh checkpoint)**:
 온라인 FULL 백업 진입 시점에 capture한 append LSA(T) 이후에 완료되어 redo LSA(R) ≥ T를 만족하는 checkpoint다. 백업 진입 전부터 진행 중이던 checkpoint는 R이 T보다 앞설 수 있으므로 아무리 기다려도 fresh로 인정하지 않는다.
