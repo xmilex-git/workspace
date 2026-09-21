@@ -54,8 +54,9 @@ on an unattended remote run. The skills that hard-require `$WORKSPACE` are exact
 - **obsidian-vault** — operates on `"$WORKSPACE"/.claude/vault/`.
 - **cubrid-server-control** — starts/stops the CUBRID server living in `$WORKSPACE`.
 
-`ctp-run` keeps working copies, per-shard CTP confs, results and cores on the mounted
-artifact disk at `/bench/hdd/<user>/<tooling-repo>/ctp-run-out/` (see its skill); it takes the install to test via `BUILD=`
+`ctp-run` keeps each run's evidence (console logs, CTP results, composed confs) on the NVMe home disk at
+`/home/<user>/ctp-run-out/<tooling-repo>/` with cores on the HDD under `/bench/hdd/core/ctp/<run>/`, prunes the shard working copies when the run ends, and `just ctp-prune`
+deletes old runs after their evidence was read (see its skill); it takes the install to test via `BUILD=`
 (default `$CUBRID`) and needs `WORKSPACE` only to infer the testcase ref from the engine branch.
 `cubrid-deps-check` also takes the workspace as its first argument (it diagnoses a checkout's
 build/test dependencies). The other skills are workspace-agnostic or operate on fixed
@@ -70,7 +71,7 @@ own fix suggestions — it only prints them.
 ## House rules
 
 - **Never write scratch to `/tmp` or `$TMPDIR`** (the host's `/tmp` is tmpfs-backed and OOMs).
-  Use the mounted HDD for CTP artifacts (see `ctp-run` above), and this tooling repository's `.git_ignored_dir/scratch/` for other local tooling artifacts. See `.agents/AGENTS.md` / `.claude/CLAUDE.md` for the full policy.
+  CTP runs live under `/home/<user>/ctp-run-out/<tooling-repo>/` (see `ctp-run` above: pruned per run, `just ctp-prune` for old runs); use this tooling repository's `.git_ignored_dir/scratch/` for other local tooling artifacts. See `.agents/AGENTS.md` / `.claude/CLAUDE.md` for the full policy.
 - The locale `*.so` artifacts and `.git_ignored_dir/` are git-ignored and must never be committed.
 - Read `.agents/AGENTS.md` (and the longer `.claude/CLAUDE.md`) before making code changes —
   they encode the behavioral guidelines this repo's owner expects.

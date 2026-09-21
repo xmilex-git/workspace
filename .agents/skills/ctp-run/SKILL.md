@@ -127,31 +127,34 @@ the shared lower directory.
 
 ## Output
 
-### HDD storage and cleanup
+### Storage: NVMe runs, pruned working copies, explicit cleanup
 
-CTP output defaults to `/bench/hdd/<user>/<tooling-repo>/ctp-run-out/`,
-including shard install/testcase copies, DBs, reports and `shard_*/cores`.
-Merged SQL/medium reports stay in `<run>/webconsole/`; the runner no longer
-copies them into the source `CTP_HOME/sql/result` on the home disk. Existing
-CTP webconsole instances reading that old path will not list these new runs.
-`just ctp`, `just ctp-rerun` and the scripts' default output share
-`scripts/artifact_root.sh`. On another host set `CTP_ARTIFACT_MOUNT` to its
-mounted artifact disk. An absent mount is an error; restore it rather than
-falling back to the home directory or `/tmp`. Explicit `--out` and
-`--worktree-root` overrides must also stay on the artifact disk.
+CTP runs live on the NVMe home disk: `/home/<user>/ctp-run-out/<tooling-repo>/`
+(`scripts/artifact_root.sh`, shared by `just ctp`, `just ctp-rerun` and the
+scripts' default output; `CTP_ARTIFACT_MOUNT` points it at another mounted disk).
+Runs were moved to the mounted HDD for a while; a run there spent most of its
+wall clock in I/O (install copies, DB volumes, cores), so they are back on NVMe
+with two rules that keep the disk from filling:
 
-On this host, non-container cores already use
-`/bench/hdd/core/core.%e.%p.%h.%t` (`/proc/sys/kernel/core_pattern`). CTP
-bind-mounts each shard's `cores/` over that kernel path inside its container;
-the host kernel path alone does **not** keep CTP cores off NVMe.
-Keep the default stop-on-core behavior. Repeated crash runs accumulated
-570 GiB of core dumps and 924 GiB of CTP output on the home disk.
+1. **A run prunes its own working copies when it ends.** After the results are
+   merged the runner deletes each `shard_N/{CUBRID,CTP,testcases,CUBRID_DB}` copy
+   and keeps the evidence: `console.log`, `out/` (CTP result + log, the composed
+   `ctp-conf/`, the install's `cubrid-log/`), `reports/`, `cores/` (a symlink to the HDD store). The copies are
+   reproducible from `--build` / `--testcases`. `--keep-copies` (or
+   `CTP_KEEP_COPIES=1`) keeps them for a run whose shard you need to debug in place.
+2. **Analyze, then delete.** `just ctp-runs` lists runs with size; `just ctp-prune
+   [KEEP]` deletes all but the newest KEEP (default 3), never a run whose container
+   is still up. Read `console.log` / `cores/` first — a deleted run is gone. Remove
+   generated `tc-worktrees` with `git worktree remove` before deleting their parent.
 
-For authorized cleanup, verify that no running container/process uses the
-selected runs, then remove only those completed runs. Remove generated
-`tc-worktrees` with `git worktree remove` before deleting their parent.
-Retain diagnostic evidence only when the task still needs it; never treat
-an entire scratch tree containing active installs/DBs as disposable.
+Merged SQL/medium reports stay in `<run>/webconsole/`; the runner does not copy
+them into the source `CTP_HOME/sql/result`.
+
+Cores stay on the HDD: each `shard_N/cores/` is a symlink into
+`/bench/hdd/core/ctp/<run>/shard_N/` (`CTP_CORE_STORE` overrides the store), so
+`just ctp-prune` removes a run's NVMe evidence but not its cores; delete those
+in the store once analyzed. Keep the default stop-on-core behavior: a
+crash-looping server once wrote 1.1T of cores.
 
 Every run writes, under its `--out` dir:
 

@@ -17,7 +17,8 @@
 #   WORKSPACE=/path/to/cubrid just build           (env var)
 #   just workspace=/path/to/cubrid build           (just variable)
 # Source-touching recipes (build/configure/rebuild/ctest/deploy) operate on $WORKSPACE.
-# CTP artifacts (including cores) use /bench/hdd/<user>/<tooling-repo>/ctp-run-out/.
+# CTP runs live on the NVMe home disk: /home/<user>/ctp-run-out/<tooling-repo>/; cores stay on the HDD (/bench/hdd/core/ctp/<run>/).
+# Each run prunes its shard working copies when it ends; `just ctp-prune` deletes old runs.
 # Run `just` from THIS repo's root (so it finds this justfile and the bundled locale files).
 #
 # Usage:
@@ -262,7 +263,9 @@ ctest mode="debug":
 #   EXCLUDE=<file> host exclusion list (unset: suite default; empty: none)
 # Scope and exclusions become upstream TEST_SCENARIO / TEST_EXCLUDE in each shard.
 #   NO_ABORT_ON_CORE=1   keep running after a core dump (default: stop everything)
-#   CTP_ARTIFACT_MOUNT=<mount>  artifact disk (default /bench/hdd; must be mounted)
+#   CTP_ARTIFACT_MOUNT=<mount>  disk for runs (default /home = NVMe; must be mounted)
+#   CTP_KEEP_COPIES=1    keep shard install/CTP/testcases/DB copies after the run (default: pruned)
+#   CTP_CORE_STORE=<dir>  where shard cores go (default /bench/hdd/core/ctp; shard_N/cores is a symlink into it)
 #   CTP_ARGS="…"  extra ctp_run.sh flags, verbatim
 # ---------------------------------------------------------------------------
 
@@ -326,6 +329,38 @@ ctp-rerun URL *ARGS:
 # ---------------------------------------------------------------------------
 
 _ports_file := justfile_directory() / ".git_ignored_dir/port-registry/claims.md"
+
+# List CTP runs on the artifact disk, newest first, with size and whether a container of theirs is up.
+[doc("List CTP runs (artifact disk), newest first")]
+ctp-runs:
+    #!/usr/bin/env bash
+    set -eu
+    root="$(bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/artifact_root.sh")"
+    echo "root: $root"
+    for d in $(ls -dt "$root"/*-*Z-* 2>/dev/null); do
+        n="$(basename "$d")"; live=""
+        podman ps --format '{{{{.Names}}}}' 2>/dev/null | grep -q "ctprun_${n#*-}" && live=" [container up]"
+        printf '%-8s %s%s\n' "$(du -sh "$d" 2>/dev/null | cut -f1)" "$n" "$live"
+    done
+
+# Delete CTP runs beyond the newest KEEP, never one whose container is still up.
+# Read the evidence (console.log, cores) before pruning: this is the "analyze, then delete" step.
+[doc("Delete old CTP runs beyond the newest KEEP (default 3)")]
+ctp-prune KEEP="3":
+    #!/usr/bin/env bash
+    set -eu
+    root="$(bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/artifact_root.sh")"
+    i=0
+    for d in $(ls -dt "$root"/*-*Z-* 2>/dev/null); do
+        i=$((i+1)); [ "$i" -le "{{KEEP}}" ] && continue
+        n="$(basename "$d")"
+        if podman ps --format '{{{{.Names}}}}' 2>/dev/null | grep -q "ctprun_${n#*-}"; then
+            echo "skip (container up): $n"; continue
+        fi
+        echo "delete: $n ($(du -sh "$d" 2>/dev/null | cut -f1))"
+        rm -rf "$d"
+    done
+    echo "kept newest {{KEEP}} run(s) under $root"
 
 # Show active port claims and live listeners.
 [doc("Show CUBRID port claims (port registry) + live listeners")]

@@ -125,6 +125,7 @@ OPTIONS
   --colocate <f>|--no-colocate       order-sensitivity registry
   --overlay              mount the install via overlay instead of copying it
   --keep                 do not remove the containers afterwards
+  --keep-copies          keep each shard's install/CTP/testcases/DB copies after the run
   --abort-on-core        stop every shard on the first real core dump (default ON)
   --no-abort-on-core     opt out
   --no-webconsole        skip the sql/medium merged report under <out>/webconsole
@@ -164,6 +165,7 @@ ARG_OVERLAY=0
 ARG_UNIT="auto"       # split-unit mode: auto (per-suite default) | category (top-level _* "bulk") | dir | case
 declare -a ARG_ONLY=()   # scenario-relative subset prefixes ("" = whole suite)
 ARG_KEEP=0
+ARG_KEEP_COPIES="${CTP_KEEP_COPIES:-0}"   # 1: keep shard working copies (see prune_shard_copies)
 ARG_WEIGHTS="auto"   # "auto" = bundled baseline_weights.tsv (time-based) | <path> | "none" (count)
 ARG_LOCALE_DIR=""
 ARG_WEBCONSOLE=1
@@ -202,6 +204,7 @@ parse_args() {
       --by-dir)      ARG_UNIT="dir"; shift ;;
       --by-case)     ARG_UNIT="case"; shift ;;
       --keep)        ARG_KEEP=1; shift ;;
+      --keep-copies) ARG_KEEP_COPIES=1; shift ;;
       --weights)     ARG_WEIGHTS="${2:-}"; shift 2 ;;
       --no-weights)  ARG_WEIGHTS="none"; shift ;;
       --locale-dir)  ARG_LOCALE_DIR="${2:-}"; shift 2 ;;
@@ -1236,6 +1239,12 @@ setup_core_capture() {
 #####################################################################
 SHM_SIZE="2g"
 
+# Where shard core dumps are kept. Runs live on the NVMe home disk, cores stay on
+# the HDD: each shard's cores/ is a symlink into $CORE_STORE/<run>/shard_N, so the
+# bind-mount, the watchdog and the collector see the same directory, and deleting
+# a run (just ctp-prune) leaves its cores in the store until they are removed there.
+CORE_STORE="${CTP_CORE_STORE:-/bench/hdd/core/ctp}"
+
 # Common podman arguments for any container of this run.
 #   no --network=host / no published ports : each shard's localhost is private, so
 #     every shard can reuse the conf's fixed ports without colliding.
@@ -1277,7 +1286,7 @@ shard_mounts() {
   # crashing process's mount-ns, so for an absolute pattern we bind the shard's
   # cores/ over that directory and cores land on the host, outside $CUBRID and
   # $CTP_HOME where CTP's clean_log_cores cannot delete them.
-  [ "$CORE_MODE" = "path" ] && m+=( -v "$d/cores:${CORE_DIR}:rw" )
+  [ "$CORE_MODE" = "path" ] && m+=( -v "$(readlink -f "$d/cores"):${CORE_DIR}:rw" )
   printf '%s\n' "${m[@]}"
 }
 
@@ -1329,7 +1338,12 @@ launch_ha_slave() {
 launch_shard() {
   local i="$1" d="$OUT/shard_${i}" name="ctprun_${RUN_ID}_${i}"
   SHARD_NAMES[i]="$name"
-  mkdir -p "$d/cores"
+  if mkdir -p "$CORE_STORE/$(basename "$OUT")/shard_${i}" 2>/dev/null; then
+    ln -sfn "$CORE_STORE/$(basename "$OUT")/shard_${i}" "$d/cores"
+  else
+    warn "core store $CORE_STORE not writable; keeping shard $i cores under $d/cores."
+    mkdir -p "$d/cores"
+  fi
 
   local -a args=(); mapfile -t args < <(shard_common_args)
   local -a mounts=(); mapfile -t mounts < <(shard_mounts "$d" master)
@@ -1375,7 +1389,7 @@ start_core_watchdog() {
       else
         # core_pattern names have no whitespace (core.%e.%p.%h.%t), so word
         # splitting the find output is safe here.
-        for f in $(find "$OUT"/shard_*/CUBRID "$OUT"/shard_*/CUBRID_DB "$OUT"/shard_*/CTP "$OUT"/shard_*/cores \
+        for f in $(find "$OUT"/shard_*/CUBRID "$OUT"/shard_*/CUBRID_DB "$OUT"/shard_*/CTP "$OUT"/shard_*/cores/ \
                      -type f -name 'core.*' 2>/dev/null); do
           if file -b "$f" 2>/dev/null | grep -q 'core file'; then reason="core dump detected: $f"; break; fi
         done
@@ -1433,12 +1447,12 @@ collect_shards() {
     # relative mode: cores landed in the server cwd inside the mounted CUBRID*/CTP
     # copies; sweep them into $d/cores before they are lost. (CTP only deletes cores
     # under $CUBRID/$CTP_HOME, so sweep those plus CUBRID_DB.)
-    mkdir -p "$d/cores"
+    [ -e "$d/cores" ] || mkdir -p "$d/cores"
     if [ "$CORE_MODE" = "relative" ]; then
       find "$d/CUBRID" "$d/CUBRID_DB" "$d/CTP" -type f -name 'core*' 2>/dev/null \
         -exec sh -c 'f="$1"; [ "$(file -b "$f" 2>/dev/null | grep -c core)" -gt 0 ] && mv "$f" "$2/" || :' _ {} "$d/cores" \; 2>/dev/null || :
     fi
-    SHARD_CORES[i]=$(find "$d/cores" -type f -name 'core*' 2>/dev/null | wc -l)
+    SHARD_CORES[i]=$(find "$d/cores/" -type f -name 'core*' 2>/dev/null | wc -l)
     [ "${SHARD_CORES[i]}" -gt 0 ] && err "shard $i: ${SHARD_CORES[i]} core dump(s) preserved in $d/cores"
   done
   cp -f "$ASSIGN_FILE" "$OUT/assignment.tsv" 2>/dev/null || :
@@ -1746,6 +1760,31 @@ resolve_locale() {
 #####################################################################
 WORK=""
 OUT=""
+# After the results are merged, drop each shard's working copies (install, CTP tree,
+# testcases, DB volumes) and keep only the evidence: console.log, out/ (CTP result +
+# log), reports/, cores/, the composed CTP conf and the install's log/. The copies
+# are the bulk of a run and are reproducible from --build / --testcases; keeping them
+# on the NVMe home disk is what filled it before runs were moved to the HDD, and the
+# HDD is what made runs slow. --keep-copies (or CTP_KEEP_COPIES=1) opts out for a run
+# that needs a shard's copy for debugging.
+prune_shard_copies() {
+  [ "$ARG_KEEP_COPIES" -eq 0 ] || { info "--keep-copies set: shard working copies left in place."; return 0; }
+  local i d before after sub
+  before="$(du -sh "$OUT" 2>/dev/null | cut -f1)"
+  for (( i=0; i<NSHARDS; i++ )); do
+    d="$OUT/shard_${i}"
+    [ -d "$d" ] || continue
+    mkdir -p "$d/out"
+    [ -d "$d/CTP/conf" ]   && rm -rf "$d/out/ctp-conf"   && cp -a "$d/CTP/conf"   "$d/out/ctp-conf"   2>/dev/null || :
+    [ -d "$d/CUBRID/log" ] && rm -rf "$d/out/cubrid-log" && cp -a "$d/CUBRID/log" "$d/out/cubrid-log" 2>/dev/null || :
+    for sub in CUBRID CUBRID.slave CTP CTP.slave testcases CUBRID_DB CUBRID_DB.slave; do
+      rm -rf "$d/$sub" 2>/dev/null || :
+    done
+  done
+  after="$(du -sh "$OUT" 2>/dev/null | cut -f1)"
+  info "pruned shard working copies: $OUT $before -> $after (evidence kept: console.log, out/, reports/, cores/)."
+}
+
 cleanup() {
   stop_core_watchdog 2>/dev/null || :
   [ -n "${WORK:-}" ] && rm -rf "$WORK" 2>/dev/null || :
@@ -1832,6 +1871,7 @@ main() {
   local agg_rc=0
   aggregate || agg_rc=$?
   merge_results || :
+  prune_shard_copies || :
   return "$agg_rc"
 }
 
