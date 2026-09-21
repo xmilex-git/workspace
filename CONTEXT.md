@@ -56,6 +56,28 @@ _Avoid_: `~/databases/tpch/`·DB `tpch_sf10_q1`(2026-09-19 기준 호스트에 �
 온라인 FULL 백업 진입 시점에 capture한 append LSA(T) 이후에 완료되어 redo LSA(R) ≥ T를 만족하는 checkpoint다. 백업 진입 전부터 진행 중이던 checkpoint는 R이 T보다 앞설 수 있으므로 아무리 기다려도 fresh로 인정하지 않는다.
 _Avoid_: "진행 중 checkpoint 대기 완료"를 fresh로 간주, 최신 checkpoint
 
+### 언네스트된 SEMI/ANTI JOIN의 조기정지와 메모이즈 (CBRD-27465)
+
+**EXISTS 키 한도 주입 (EXISTS limit injection)**:
+언네스트되지 않은 EXISTS 부질의에 재작성 단계가 LIMIT 1을 심어, 인덱스 스캔이 키 하나에서 멈추게 하는 장치다. 언네스트된 부질의는 이 단계를 거치지 않으므로 효과를 잃는다.
+_Avoid_: 단건 정지(층위 불명), XASL_NEED_SINGLE_TUPLE_SCAN(도달하지 않는 별개 플래그)
+
+**인덱스 키 한도 (index key limit)**:
+인덱스 범위 스캔이 정해진 개수의 키를 읽고 스캔 자체를 끝내는 저장 층의 조기정지다. semi/anti inner에서는 첫 키가 곧 정답임이 보장될 때 — 인덱스 밖 필터가 없을 때 — 에만 1로 둘 수 있다.
+_Avoid_: scan_immediately_stop(0건 전용 킬스위치), 단건 정지
+
+**재진입 게이트 (single-fetch gate)**:
+NL semi/anti inner에서 첫 통과 행 이후 조인이 같은 outer로 inner를 다시 묻지 않게 하는 조인 층의 래치다. semi join 의미 그 자체이자 anti 판정(매치 유무)의 통신 채널이며, 인덱스 읽기 양은 줄이지 않는다.
+_Avoid_: 단건 정지, 조기정지(인덱스 키 한도와 혼동)
+
+**부질의 결과 캐시 (subquery result cache)**:
+언네스트되지 않은 상관 부질의의 결과를 상관값별로 기억하는 장치다. 언네스트되면 사라지며, 언네스트 후의 대응물은 메모이즈다.
+_Avoid_: 메모이즈(다른 장치), 캐시(무엇의 캐시인지 불명)
+
+**매치 전용 메모이즈 (match-only memoize)**:
+semi/anti inner에서 outer 키별로 "매치 있음/없음"만 기억하는 메모이즈 모드다. 값을 저장하지 않고 조인 타입도 모르며, anti의 반전은 재생 시 실행기가 맡는다.
+_Avoid_: 값 메모이즈, 부질의 결과 캐시
+
 ### 임시 리스트 튜플 포맷 (지도: xmilex-git/workspace#179)
 
 **복합 값 (composite value)**:
