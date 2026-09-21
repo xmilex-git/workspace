@@ -10,7 +10,7 @@
 # The prebuilt locale files (this repo's .claude/locale/) are copied into EVERY build — the
 # all-locales lib is needed for CTP execution and rebuilding it via make_locale is slow.
 # No machine-local scripts (~/bin/*.sh) or CMakeUserPresets.json required.
-# The cubrid-cci submodule auto-inits on first build (needs network for the initial clone).
+# The cubrid-cci and cubrid-jdbc submodules auto-init on first build (needs network for the initial clone).
 #
 # WORKSPACE (the CUBRID source dir) is REQUIRED — this justfile lives in the standalone
 # tooling repo, NOT inside a CUBRID checkout, so there is NO cwd default. Pass it explicitly:
@@ -57,6 +57,9 @@ _submodules:
     [ -n "$ws" ] || { echo "ERROR: WORKSPACE not set — pass the CUBRID source dir (e.g. 'WORKSPACE=/path/to/cubrid just build' or 'just workspace=/path/to/cubrid build')." >&2; exit 1; }
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
     [ -f "$ws/cubrid-cci/CMakeLists.txt" ] || git -C "$ws" submodule update --init cubrid-cci
+    # CMake builds the JDBC driver only `if(EXISTS cubrid-jdbc/src)`: a fresh worktree without the
+    # submodule silently installs no jdbc/ jar, and CTP's console then dies on cubrid.sql.CUBRIDOID.
+    [ -d "$ws/cubrid-jdbc/src" ] || git -C "$ws" submodule update --init cubrid-jdbc
 
 # Configure a preset's build tree with install prefix = ~/<mode>/CUBRID-<version>.
 configure mode="debug" version=ver: _submodules
