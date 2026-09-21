@@ -137,7 +137,7 @@
 
 ### 7.3 결과·로그·임시 파일의 디스크 전달
 
-- 결과, 다운로드, evidence, command log, scratch는 반드시 tooling repo의 git-ignored 디스크 경로인 `.git_ignored_dir/scratch/`와 그 하위 디렉터리에 직접 저장한다. `/tmp`, `/var/tmp`, 상속된 `$TMPDIR`에 대형 결과를 저장하지 않는다.
+- 결과, 다운로드, evidence, command log, scratch는 반드시 tooling repo의 git-ignored 디스크 경로인 `.git_ignored_dir/scratch/`와 그 하위 디렉터리에 직접 저장한다. `/tmp`, `/var/tmp`, 상속된 `$TMPDIR`에 대형 결과를 저장하지 않는다. CTP 실행 산출물·코어는 예외로 HDD `/bench/hdd/<user>/<tooling-repo>/ctp-run-out/`에 저장한다(`ctp-run` 스킬 참조). 일반 프로세스 코어는 `/bench/hdd/core/`를 사용한다.
 - `TMPDIR`, `TMP`, `TEMP`는 명시적인 디스크 경로로 지정한다. `TMUX_TMPDIR`은 결과 저장 경로가 아니다. 외부 tmux server의 ownership/visibility를 깨뜨릴 수 있으므로 임의로 디스크 scratch로 바꾸지 말고, runtime socket과 결과 파일을 구분한다.
 - 대형 결과·JSONL·로그·artifact를 GJC 컨텍스트에 직접 열거나 `Read artifact://...`, `@` 첨부로 가져오지 않는다. 파일은 디스크에 남기고 GJC에는 경로, 크기, checksum, exit code, 유계 요약만 전달한다.
 - 명령 stdout은 파일로 redirect하고, 대화에는 필요한 짧은 tail·summary만 넣는다. 파일 크기와 출력 상한을 먼저 정하고 무제한 `cat`/전체 로그 import를 하지 않는다.

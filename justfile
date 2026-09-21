@@ -17,7 +17,7 @@
 #   WORKSPACE=/path/to/cubrid just build           (env var)
 #   just workspace=/path/to/cubrid build           (just variable)
 # Source-touching recipes (build/configure/rebuild/ctest/deploy) operate on $WORKSPACE.
-# CTP run artifacts stay in this tooling repo's .git_ignored_dir/scratch/ctp-run-out/.
+# CTP artifacts (including cores) use /bench/hdd/<user>/<tooling-repo>/ctp-run-out/.
 # Run `just` from THIS repo's root (so it finds this justfile and the bundled locale files).
 #
 # Usage:
@@ -259,6 +259,7 @@ ctest mode="debug":
 #   EXCLUDE=<file> host exclusion list (unset: suite default; empty: none)
 # Scope and exclusions become upstream TEST_SCENARIO / TEST_EXCLUDE in each shard.
 #   NO_ABORT_ON_CORE=1   keep running after a core dump (default: stop everything)
+#   CTP_ARTIFACT_MOUNT=<mount>  artifact disk (default /bench/hdd; must be mounted)
 #   CTP_ARGS="…"  extra ctp_run.sh flags, verbatim
 # ---------------------------------------------------------------------------
 
@@ -278,9 +279,10 @@ ctp SUITE *DIRS:
     esac
     tc="${TESTCASES_ROOT:-$HOME}/$repo"
     [ -d "$tc" ] || { echo "ERROR: testcases checkout not found: $tc" >&2; exit 1; }
+    out_root="$(bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/artifact_root.sh")"
     args=( --suite "{{SUITE}}" --build "${BUILD:-${CUBRID:-$HOME/CUBRID}}" --testcases "$tc"
            --ctp "${CTP_HOME:-$HOME/dev/cubrid-testtools-worktree/develop/CTP}"
-           --out "{{justfile_directory()}}/.git_ignored_dir/scratch/ctp-run-out/{{SUITE}}-$(date -u +%Y%m%dT%H%M%SZ)-$$" )
+           --out "${out_root}/{{SUITE}}-$(date -u +%Y%m%dT%H%M%SZ)-$$" )
     # Which testcases ref: explicit wins, else the PR, else infer from the engine
     # checkout's branch. Never a silent develop — the runner refuses instead.
     if   [ -n "${TC_REF:-}" ]; then args+=( --tc-ref "$TC_REF" )
@@ -302,9 +304,10 @@ ctp-rerun URL *ARGS:
     set -euo pipefail
     rerun="{{justfile_directory()}}/.agents/skills/ctp-run/scripts/ctp_rerun.sh"
     [ -x "$rerun" ] || { echo "ERROR: ctp-rerun script missing: $rerun" >&2; exit 1; }
+    out_root="$(bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/artifact_root.sh")"
     exec "$rerun" "{{URL}}" \
         --build "${BUILD:-${CUBRID:-$HOME/CUBRID}}" \
-        --out "{{justfile_directory()}}/.git_ignored_dir/scratch/ctp-run-out" \
+        --out "$out_root" \
         --testcases-root "${TESTCASES_ROOT:-$HOME}" \
         {{ARGS}}
 

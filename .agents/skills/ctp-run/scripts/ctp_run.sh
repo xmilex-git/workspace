@@ -127,8 +127,8 @@ OPTIONS
   --keep                 do not remove the containers afterwards
   --abort-on-core        stop every shard on the first real core dump (default ON)
   --no-abort-on-core     opt out
-  --no-webconsole        skip the sql/medium webconsole merge
-  --merge-only <dir>     merge a finished run's dir into the webconsole and exit
+  --no-webconsole        skip the sql/medium merged report under <out>/webconsole
+  --merge-only <dir>     merge a finished run into <dir>/webconsole and exit
   --label <text>         label for the merged run
   --locale-dir <dir>     prebuilt libcubrid_all_locales.so to inject
   --dry-run              plan + validate the split, launch nothing
@@ -159,7 +159,7 @@ ARG_WT_ROOT=""         # where testcase worktrees live (default: <out>/../tc-wor
 ARG_SHARDS=""
 ARG_CTP="${HOME}/cubrid-testtools/CTP"
 ARG_IMAGE="${DEFAULT_IMAGE%:*}@$DEFAULT_IMAGE_DIGEST"
-ARG_OUT="./ctp-run-out"
+ARG_OUT=""
 ARG_OVERLAY=0
 ARG_UNIT="auto"       # split-unit mode: auto (per-suite default) | category (top-level _* "bulk") | dir | case
 declare -a ARG_ONLY=()   # scenario-relative subset prefixes ("" = whole suite)
@@ -255,6 +255,9 @@ parse_args() {
   fi
 
   resolve_suite
+  if [ -z "$ARG_OUT" ]; then
+    ARG_OUT="$(bash "$SELF_DIR/artifact_root.sh")/$ARG_SUITE-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  fi
   # Both MUST be absolute before anything uses them. `git worktree add` resolves a
   # relative path against the REPOSITORY, not the invocation cwd, so a relative
   # --out silently created the worktree inside the testcases checkout while every
@@ -1617,7 +1620,7 @@ aggregate() {
 
 #####################################################################
 # Merge the per-shard CTP result dirs into ONE schedule dir under
-# $CTP_HOME/sql/result so `ctp.sh webconsole start` shows the whole parallel run
+# $OUT/webconsole, keeping the merged report beside the parallel run
 # as a single entry whose failures are all browsable (D7).
 #
 # CTP makes each schedule dir self-contained for FAILED cases: it co-locates the
@@ -1636,7 +1639,8 @@ merge_results() {
     return 0
   fi
   [ "$NSHARDS" -gt 0 ] || return 0
-  local resroot="$ARG_CTP/sql/result"
+  # Keep the merged copy on the same artifact disk as its source shards.
+  local resroot="$OUT/webconsole"
   if [ ! -d "$ARG_CTP/sql" ]; then
     warn "webconsole merge: $ARG_CTP/sql not found; skipping."
     return 0
@@ -1701,7 +1705,7 @@ merge_results() {
   } > "$dest/main.info"
 
   info "webconsole: merged $NSHARDS shards -> $dest (success=$sum_succ fail=$sum_fail total=$sum_total)"
-  info "webconsole: view with  CTP_HOME=$ARG_CTP $ARG_CTP/bin/ctp.sh webconsole start  (then open http://<host>:8888 )"
+  info "webconsole-format reports retained under $resroot (not copied into CTP_HOME)."
 }
 
 #####################################################################
@@ -1761,13 +1765,13 @@ main() {
     return $?
   fi
 
-  # --merge-only: merge a finished run's out dir into webconsole and exit (no podman).
+  # --merge-only: write merged reports alongside a finished run (no podman).
   if [ -n "$ARG_MERGE_ONLY" ]; then
     OUT="$(cd "$ARG_MERGE_ONLY" && pwd)"
     NSHARDS="$(find "$OUT" -maxdepth 1 -type d -name 'shard_*' 2>/dev/null | wc -l)"
     [ "$NSHARDS" -ge 1 ] || die "--merge-only: no shard_* dirs under $OUT"
     ARG_WEBCONSOLE=1
-    info "merge-only: merging $NSHARDS shard result dir(s) from $OUT into $ARG_CTP/sql/result ..."
+    info "merge-only: merging $NSHARDS shard result dir(s) into $OUT/webconsole ..."
     merge_results
     return 0
   fi

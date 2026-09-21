@@ -127,6 +127,32 @@ the shared lower directory.
 
 ## Output
 
+### HDD storage and cleanup
+
+CTP output defaults to `/bench/hdd/<user>/<tooling-repo>/ctp-run-out/`,
+including shard install/testcase copies, DBs, reports and `shard_*/cores`.
+Merged SQL/medium reports stay in `<run>/webconsole/`; the runner no longer
+copies them into the source `CTP_HOME/sql/result` on the home disk. Existing
+CTP webconsole instances reading that old path will not list these new runs.
+`just ctp`, `just ctp-rerun` and the scripts' default output share
+`scripts/artifact_root.sh`. On another host set `CTP_ARTIFACT_MOUNT` to its
+mounted artifact disk. An absent mount is an error; restore it rather than
+falling back to the home directory or `/tmp`. Explicit `--out` and
+`--worktree-root` overrides must also stay on the artifact disk.
+
+On this host, non-container cores already use
+`/bench/hdd/core/core.%e.%p.%h.%t` (`/proc/sys/kernel/core_pattern`). CTP
+bind-mounts each shard's `cores/` over that kernel path inside its container;
+the host kernel path alone does **not** keep CTP cores off NVMe.
+Keep the default stop-on-core behavior. Repeated crash runs accumulated
+570 GiB of core dumps and 924 GiB of CTP output on the home disk.
+
+For authorized cleanup, verify that no running container/process uses the
+selected runs, then remove only those completed runs. Remove generated
+`tc-worktrees` with `git worktree remove` before deleting their parent.
+Retain diagnostic evidence only when the task still needs it; never treat
+an entire scratch tree containing active installs/DBs as disposable.
+
 Every run writes, under its `--out` dir:
 
 - `provenance.txt` / `provenance.tsv` — install, image digest, CTP revision,

@@ -79,7 +79,7 @@ done
 
 [ -x "$RUNNER" ] || die "runner not found/executable: $RUNNER"
 ARG_BUILD="${ARG_BUILD:-${CUBRID:-$HOME/CUBRID}}"
-ARG_OUT="${ARG_OUT:-$SELF_DIR/../../../../.git_ignored_dir/scratch/ctp-run-out}"
+ARG_OUT="${ARG_OUT:-$(bash "$SELF_DIR/artifact_root.sh")}"
 
 #####################################################################
 # CI extraction
@@ -161,7 +161,8 @@ tc_repo_of_suite() {
 #####################################################################
 # Resolve the input into WORK/<suite>.dirs files + PR number.
 #####################################################################
-WORK="$(mktemp -d "${TMPDIR:-$ARG_OUT}/.rerun.XXXXXX" 2>/dev/null || mktemp -d)"
+mkdir -p "$ARG_OUT"
+WORK="$(mktemp -d "$ARG_OUT/.rerun.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 RAW="$WORK/raw.txt"; : >"$RAW"
 PR="$ARG_PR"; TCREF=""
