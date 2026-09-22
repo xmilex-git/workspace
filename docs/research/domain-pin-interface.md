@@ -58,12 +58,13 @@ typedef enum
   OPERAND_VOLATILE = 4      /* 세션변수·난수·serial·시각 등 부작용/상태 연산자: 도메인은 실행당 1회 확정, 값은 행마다 읽고 계획된 변환기 (R2) */
 } DOMAIN_OPERAND_CLASS;
 
-/* 확정된 도메인 하나. 컴파일 확정 자리는 DOMAIN_PLAN_ITEM.fixed 에, 게이트 확정 자리는 xasl_state->resolved.table 에. 40B. */
+/* 확정된 도메인 하나. 컴파일 확정 자리는 DOMAIN_PLAN_ITEM.fixed 에, 게이트 확정 자리는 xasl_state->resolved.table 에. 64B (D-328-03 으로 operand_domain 추가; 초판 40B). */
 typedef struct resolved_domain RESOLVED_DOMAIN;
 struct resolved_domain
 {
   const TP_DOMAIN *domain;        /* 확정 도메인(캐시 도메인 또는 arena 도메인 — 소유 없음). 문자면 codeset·collation 포함, flag 는 NORMAL */
   DOMAIN_CONV_FUNC conv[3];       /* 피연산자별 변환기 (leftptr/rightptr/thirdptr, 비교는 lhs/rhs, 키는 원소) */
+  const TP_DOMAIN *operand_domain[3]; /* 피연산자별 변환 목표 (conv[i] 는 이것에 대해 조회; domain 은 결과 도메인만). 날짜+정수처럼 목표 ≠ 결과인 격자 때문 — #328 D-328-03 */
   const TP_DOMAIN *setdomain;     /* 상수 키 range 항목만: strict-or-keep 결과로 조립한 midxkey setdomain (arena/캐시 소유) */
 };
 
@@ -75,11 +76,11 @@ struct domain_plan_item
   int slot;                       /* resolved.table 인덱스. -1 = 컴파일 확정(답은 fixed) */
   int ref;                        /* 상수 참조의 값 인덱스: resolved.vals[ref]. 그 외 -1 */
   unsigned char operand_class;    /* DOMAIN_OPERAND_CLASS */
-  unsigned char flags;            /* DOMAIN_PLAN_GATE 0x01 · KEY1 0x02 · KEY2 0x04 · ISS 0x08 · ALIAS 0x10 · KEEP_LAZY 0x20 · RESIDUAL 0x40 */
+  unsigned char flags;            /* DOMAIN_PLAN_GATE 0x01 · KEY1 0x02 · KEY2 0x04 · ISS 0x08 · ALIAS 0x10 · KEEP_LAZY 0x20 · RESIDUAL 0x40 · TRUNCATE_OK 0x80 (사용자 CAST 의 비슬롯 피연산자: 절단 수용 = 현행 tp_value_cast_force, D-328-02) */
   unsigned char fail[3];          /* 피연산자별 DOMAIN_FAIL_POLICY — 참조 자리의 속성이므로 표가 아니라 항목에 */
   unsigned char pad[3];
   RESOLVED_DOMAIN fixed;          /* 컴파일 확정 답(로드가 채움). 게이트 항목은 domain=NULL */
-};                                /* 16 + 40 = 56B */
+};                                /* 16 + 64 = 80B (D-328-03) */
 STATIC_ASSERT (sizeof (DOMAIN_PLAN_ITEM) <= 64, "hot item must fit one cache line");
 
 typedef struct domain_plan_item_cold DOMAIN_PLAN_ITEM_COLD;   /* 덤프·qexec_resolve_domains·경계 검사만 읽는다 */
@@ -104,7 +105,7 @@ struct domain_plan
 };
 ```
 
-- **필드 재사용(구조체 크기 불변)**: `regu_variable_node::original_domain` → `DOMAIN_PLAN_ITEM *domain_plan`; `arith_list_node::original_domain` → 동일; `aggregate_list_node::original_domain` → 동일, `original_opr_dbtype`(4B) → `int domain_plan_acc`(누산기 value2 항목 인덱스); `analytic_list_node` 동일; `qfile_tuple_value_position::original_domain` → 동일. `xasl_node` 에 `DOMAIN_PLAN *domain_plan` 1개 추가(디스크 무관). 노드 크기는 불변이지만 **트리당 플랜 메모리는 늘어난다**(항목 56B + 콜드 32B × 노드 수, arena) — 클론 풀 상주 메모리 증가는 #324 에서 xcache 항목 크기로 잰다.
+- **필드 재사용(구조체 크기 불변)**: `regu_variable_node::original_domain` → `DOMAIN_PLAN_ITEM *domain_plan`; `arith_list_node::original_domain` → 동일; `aggregate_list_node::original_domain` → 동일, `original_opr_dbtype`(4B) → `int domain_plan_acc`(누산기 value2 항목 인덱스); `analytic_list_node` 동일; `qfile_tuple_value_position::original_domain` → 동일. `xasl_node` 에 `DOMAIN_PLAN *domain_plan` 1개 추가(디스크 무관). 노드 크기는 불변이지만 **트리당 플랜 메모리는 늘어난다**(항목 80B + 콜드 32B × 노드 수, arena — D-328-03 뒤) — 클론 풀 상주 메모리 증가는 #324 에서 xcache 항목 크기로 잰다.
 - **스트림 변경은 둘뿐**: `REGU_VARIABLE_GATE = 0x4000`(regu_var.hpp 의 다음 미사용 비트; 컴파일 세팅) + `INDX_INFO.key_type`(§5). regu/arith/pred 레이아웃은 필터·함수 인덱스 스트림(디스크)이라 불변. agg 는 `flag.dummy` → `flag.gate`, analytic 은 `flag` 의 미사용 비트.
 - 부류·슬롯·변환기는 **항목에만**. `flags` 에 비팩 비트를 두지 않는다(β 안 기각).
 - 항목·배열은 unpack arena(`stx_alloc_struct`)에 두어 트리와 함께 해제되고 클론 풀 재사용 시 재도출 0. `sizeof`/`offsetof` 는 구현 커밋에서 `STATIC_ASSERT` 로 고정하고 실측을 커밋 메시지에 남긴다(R5).
@@ -163,6 +164,10 @@ int domain_resolve (DOMAIN_CTX ctx, int opcode, const DOMAIN_OPERAND * operands,
 /* (원 타입, 목표 도메인, 문맥) → 고정 변환기. 대입 문맥은 반올림 캐스트(현행 tp_value_cast 의미), 산술·비교·키는 strict. 항등이면 NULL. */
 DOMAIN_CONV_FUNC domain_lookup_converter (DB_TYPE src_type, const TP_DOMAIN * dst_domain, DOMAIN_CTX ctx);
 const char *domain_converter_name (DOMAIN_CONV_FUNC f);   /* 덤프 전용 */
+
+/* 값 부류 오버로드 자리(MEDIAN/PERCENTILE 슬롯 · STR_TO_DATE 포맷 슬롯 · ADDTIME 문자 슬롯)의 val_type 분류. 게이트에서만, domain_resolve 전에 1회.
+ * 규칙은 오늘 그 함수 첫머리 그대로(DOUBLE→DATETIME→TIME 파싱 시도 / db_check_time_date_format / 존 유무). 파싱은 상태 전용 코어(D-328-07). #328 D-328-06 */
+DB_TYPE domain_classify_value (DOMAIN_CTX ctx, int opcode, int arg_index, const DB_VALUE * value);
 ```
 
 ### 1.4 헤더 계약 (R7)
@@ -446,7 +451,7 @@ struct domain_plan_key
 | D-323-02 | 규칙 자리 = `domain_resolve`/`domain_lookup_converter`(ctx·needs_gate), 로드·게이트·키가 공용; 헤더 계약 §1.4 |
 | D-323-03 | `qexec_resolve_domains` 뒤 `vd.dbval_ptr = vals`(1차 참조 = val_pos), 원 입력 `resolved.in` const; **소비자별**: fetch·partition 은 `ref` 로, 서브쿼리 결과 캐시 키·dblink 는 `resolved.in`(R3) |
 | D-323-04 | 참조 = (val_pos, 도메인, 정책) 삼중 중복 제거; 표 항목 없음 |
-| D-323-05 | `RESOLVED_DOMAIN {domain, conv[3], setdomain}` 40B; 실패 정책은 항목에; 표는 GATE·KEEP_LAZY·상수 키 range 만; 컴파일 확정 답은 항목 `fixed` 인라인 → 정적 계획 표 할당 0 |
+| D-323-05 | `RESOLVED_DOMAIN {domain, conv[3], setdomain}` 40B(#328 D-328-03 이 `operand_domain[3]` 을 더해 64B); 실패 정책은 항목에; 표는 GATE·KEEP_LAZY·상수 키 range 만; 컴파일 확정 답은 항목 `fixed` 인라인 → 정적 계획 표 할당 0 |
 | D-323-06 | PX = `qexec_deep_copy_xasl_state`/`qexec_free_xasl_state` 짝 하나(깊은 복사 범위 §1.2, 정렬 주장 없음), `owner` assert, 워커의 `qexec_resolve_domains` 금지, pxt:505·px_scan.cpp 직접 해제 경로 교체(R8) |
 | D-323-07 | 술어 노드(`comp_eval_term` 등)는 항목 없음: 변환기는 피연산자 regu 항목, 비교 도메인은 KEEP_LAZY 슬롯/양 피연산자의 fixed |
 | D-323-08 | **G2·range 시점 결정 함수 없음**: 결정은 `qexec_execute_mainblock` 전 1회; mainblock 안은 읽기 전용 뷰 + 계획된 변환기 + 스코프 소유 실행 임시값(§3.4, 상관 값 스코프당 1회)과 혼합 setdomain 스크래치(§5, 결정·할당 0). 규칙표 P3 ③ "스코프당 1회" 는 §3.4 의 뜻 |
@@ -470,4 +475,4 @@ struct domain_plan_key
 - MEAS-01/02/06: 벽시계 시간과 함께 instructions, branch 수·miss 수, cache reference·miss **절대값**을 기록하고 병목을 식별한다. `Num_domain_*` 카운터 0 은 도메인 재결정이 없다는 뜻이지 추가된 간접 호출·복제 비용을 설명하지 않는다 — 삭제된 코드와 함께 카운터 증분이 사라져 0 이 된 것과, 새 경로에 재결정이 없음을 검증한 것을 구분해 적는다(정적 호출 경계 감사 + 실제 계획된 변환 호출 수 `Num_planned_convert`).
 - MEAS-04/07: 같은 빌드 종류(optdebug 끼리, release 끼리)의 A/B, 워밍 뒤 5회 중앙값 + MAD. 기존 전체 스캔/PX 셀 외에 **짧은 질의·정적 계획**을 넣어 게이트 고정 비용(값 복제·표 할당 0 확인)을 본다. 상관 셀은 외부 행 수 대비 실제 변환 호출 수를 포함한다(§3.4).
 - MEAS-08/CC-08: 실행 시간 차이를 소스 변경에 귀속하기 전에 hot symbol 주소·정렬 위상·바이트 변화 게이트를 수행하고 필요하면 layout control 로 분리한다. 헤더·cold 코드 삭제도 예외가 아니다.
-- 플랜 메모리: xcache 항목당 arena 크기 증가(항목 56B + 콜드 32B × 노드 수)를 기록한다.
+- 플랜 메모리: xcache 항목당 arena 크기 증가(항목 80B + 콜드 32B × 노드 수, D-328-03 뒤)를 기록한다.
