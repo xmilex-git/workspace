@@ -232,8 +232,8 @@ A = develop `cad27172b` optdebug 실측(2026-09-22, `dpin_probe`, `.git_ignored_
 
    | leaf 부류 | 허용 피호출 함수 |
    |---|---|
-   | 숫자×숫자 | `numeric_coerce_num_to_<T>[_strict]`·`numeric_coerce_<T>_to_num`(D-328-01 하위 연산), `numeric_coerce_num_to_num`, `numeric_internal_real_to_num`, `OR_CHECK_*_OVERFLOW`, `ROUND`/`modf`, `db_make_*` |
-   | 문자→숫자 | `tp_atof`·`tp_atobi`(er_set 없음), `numeric_coerce_string_to_num` 의 상태 전용 코어(D-328-07), 위 숫자 하위 연산 |
+   | 숫자×숫자 | `tp_value_convert_number<SRC,DST,MODE>` → `tp_numeric_value<T>::get/make`, `tp_numeric_overflow<DST>`, `tp_numeric_from_num<DST,STRICT>` → `numeric_coerce_num_to_<double\|float\|monetary\|short\|int\|bigint>[_strict]`; NUMERIC 목표는 `numeric_coerce_value_to_num<SRC>` → `numeric_internal_double_to_num`/`numeric_internal_float_to_num`, `numeric_coerce_int_to_num`/`numeric_coerce_bigint_to_num`, `numeric_coerce_num_to_num`. 공통은 `OR_CHECK_*_OVERFLOW`, `ROUND`/`modf`/`modff`, `db_get_*`/`db_make_*`, NUMERIC 버퍼·부호·precision/scale 헬퍼. 기존 dispatch 래퍼 호출 없음 |
+   | 문자→숫자 | `tp_atof`·`tp_atobi`, `numeric_coerce_string_to_num_status` → `analyze_numeric_string`/`determine_prec_scale`/`numeric_coerce_dec_str_to_num`, 위 숫자 하위 연산. 기존 진입점은 NUMERIC 파서의 오류 보고 래퍼를 호출한 뒤 같은 NUMERIC 셀을 공유한다 |
    | →문자 인쇄 | `tp_ftoa`/`tp_dtoa`, `numeric_db_value_print`, `db_*_to_string`, `db_make_char`/`db_make_varchar` |
    | 문자→문자·비트 | `db_char_string_coerce`, `db_bit_string_coerce`, `db_string_put_cs_and_collation`, `pr_clone_value` |
    | 문자→날짜·시간 | `db_date_parse_*`·`db_string_to_*_ex` 의 상태 전용 코어(D-328-07), `tz_*`(세션 TZ) |
