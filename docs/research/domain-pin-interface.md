@@ -81,7 +81,7 @@ struct domain_plan_item
   unsigned char pad[3];
   RESOLVED_DOMAIN fixed;          /* 컴파일 확정 답(로드가 채움). 게이트 항목은 domain=NULL */
 };                                /* 16 + 64 = 80B (D-328-03) */
-STATIC_ASSERT (sizeof (DOMAIN_PLAN_ITEM) <= 64, "hot item must fit one cache line");
+STATIC_ASSERT (sizeof (DOMAIN_PLAN_ITEM) == 80, "D-328-03 operand target layout");
 
 typedef struct domain_plan_item_cold DOMAIN_PLAN_ITEM_COLD;   /* 덤프·qexec_resolve_domains·경계 검사만 읽는다 */
 struct domain_plan_item_cold
@@ -434,7 +434,7 @@ struct domain_plan_key
 |---|---|---|
 | BR-04·A59·A62 | 부류·변환기·`FETCH_ALL_CONST`·`AGG_OPERAND`·원복은 로드 1회; 고정 조건(`slot < 0`, `conv != NULL`)은 §3.3 준비 지점에서 kernel 선택 | #324 branch 카운트(MEAS-06), 생성 코드 확인 |
 | BR-06·A61 | rank 사슬·2단 디스패치 → 로드 고정 함수 포인터; #325 변환기 본문에 타입 switch 재실행 금지 | #325 검수 |
-| MEM-02·MEM-05 | `DOMAIN_PLAN_ITEM` ≤ 64B(`STATIC_ASSERT`), 콜드는 `items_cold[]` | `sizeof`/`offsetof` 실측을 커밋에 |
+| MEM-02·MEM-05 | `DOMAIN_PLAN_ITEM` 80B(`STATIC_ASSERT`, D-328-03이 초판 64B 한도를 대체), 콜드는 `items_cold[]` | `sizeof`/`offsetof` 실측을 커밋에 |
 | MEM-03·ALLOC-08·A64 | 값·표 워커 사본은 워커 private heap, `owner` assert, 해제 경로 단일화(pxt:505 교체) | 코드 감사 + ASan/optdebug |
 | ALLOC-01 | 행 루프 할당 0; range open 스크래치 체인은 scan open 에 1회 | 코드 감사 |
 | 규약 3(안전 > 성능) | 판별자는 항목 안(β 기각); const 뷰 + 문서화된 구멍 1곳 | — |
