@@ -2,7 +2,7 @@
 
 지도: xmilex-git/workspace#312 · 티켓: #317(타입 축) · 짝 티켓: #322(collation 축 — §6, D-322-01~04) · 작성 2026-09-22 · 기준 엔진: `develop` `cad27172b`.
 입력: `domain-pin-asis-matrix.md`(전수 실측, 부록 A1~A4) · `domain-pin-rules-parser.md`(#313) · `domain-pin-rules-server.md`(#321) · `domain-pin-exec-sites.md`(#314) · `domain-pin-pg-mysql.md`(#315) · `domain-pin-lessons.md`(렛저).
-결정 기록(사용자 답변 원문·근거·예시): #317 코멘트 "결정 기록 1라운드"(D-317-01~09), "2라운드"(D-317-10~15), "3라운드"(D-317-16~24); collation 축은 #322 코멘트 "결정 기록 1라운드"(D-322-01~03), "2라운드"(D-322-04). collation 실측: `.git_ignored_dir/scratch/dpin-322/probe-develop-collation.md`(A~F, develop `cad27172b` release/optdebug).
+결정 기록(사용자 답변 원문·근거·예시): #317 코멘트 "결정 기록 1라운드"(D-317-01~09), "2라운드"(D-317-10~15), "3라운드"(D-317-16~24); collation 축은 #322 코멘트 "결정 기록 1라운드"(D-322-01~03), "2라운드"(D-322-04); 탐침(#319) 뒤 개정은 #327 코멘트 "결정 기록"(D-327-01~11, 2026-09-22 — R-1~R-11 전건 승인, 정본은 이 개정판). collation 실측: `.git_ignored_dir/scratch/dpin-322/probe-develop-collation.md`(A~F, develop `cad27172b` release/optdebug).
 
 이 표는 **"어떤 조합이 어떤 도메인이 되는가"** 와 **"그것을 누가 언제 확정하고, 값은 누가 언제 변환하는가"** 를 한 행에 적는다. 아키텍처(#318)·인터페이스(#323)·변환기 티켓(신규)은 이 표를 입력으로 삼고, 여기 없는 규칙은 구현 중 코멘트로 만들지 않고 이 표를 개정해 사용자 승인을 받는다(L-01).
 
@@ -13,8 +13,8 @@
 | # | 원칙 | 결정 | 한 줄 근거 |
 |---|---|---|---|
 | **P0** | **현행 답 유지.** 규칙표는 답을 바꾸는 표가 아니라 현행 답을 "어느 지점에서 확정하는가" 를 정하는 표다. 예외는 크래시·assert 가 나는 동작(§5)뿐. | D-317-14·15·24 | 사용자 결정. 이전 캠페인 483건 실패 중 정당한 변경 270건이 전부 "규칙을 바꿔서" 생긴 것 |
-| **P1** | **형제 미러.** 슬롯(호스트 변수·auto-param·세션변수 읽기·PL 인자)의 도메인은 같은 식에서 타입이 알려진 형제(컬럼·리터럴·CAST·PL 선언 타입)를 따른다. 비교·대입은 이미 현행, 산술·함수·공통값·집계로 확장. | D-317-01 | 실측 §3.3: 비교는 이미 미러. PG·MySQL 첫 규칙 |
-| **P2** | **게이트 확정.** 형제가 부류를 못 정하는 자리(형제가 전부 슬롯 / 집계·분석 인자 / ENUM 산술 / 값 요구 함수 인자 / 형제 없는 세션변수)는 컴파일이 "게이트 확정" 으로 표시만 하고 서버 게이트가 바인드 값의 타입으로 **실행당 1회** 확정한다. 행마다 정하는 늦은 바인딩은 전부 삭제. | D-317-02·12·13 | `? + ?` 접합·`enum + ?`·`addtime(?, …)` 등 현행 답 유지 |
+| **P1** | **형제 미러.** 슬롯(호스트 변수·auto-param·세션변수 읽기·PL 인자)의 도메인은 같은 식에서 타입이 알려진 형제(컬럼·리터럴·CAST·PL 선언 타입)를 따른다. 비교·대입은 이미 현행, 산술·함수·공통값·집계로 확장. **소비자 도메인 우선**: 식 결과의 소비자(대입 대상 컬럼·비교 상대)가 정한 기대 도메인이 중첩 식 안의 슬롯에 먼저 닿고, 리터럴 형제 미러는 소비자 도메인이 없을 때만(D-327-11; develop `type_checking.c` 의 expected_domain 인자 전달과 같은 방향 — `INSERT decimal(10,5) VALUES (IFNULL(?, 0))` 은 decimal). 미러는 **직접 슬롯 인자**에만 — 게이트 확정 식을 피연산자로 가진 노드는 미러하지 않고 게이트 의존 노드로 둔다(D-327-08). 형제는 시그니처 CAST 뒤가 아니라 **원 노드** 기준(#319 F-3). | D-317-01·D-327-08·11 | 실측 §3.3: 비교는 이미 미러. PG·MySQL 첫 규칙 |
+| **P2** | **게이트 확정.** 형제가 부류를 못 정하는 자리(형제가 전부 슬롯 / 집계·분석 인자 / ENUM 산술 / 값 요구 함수 인자 / 형제 없는 세션변수)는 컴파일이 "게이트 확정" 으로 표시만 하고 서버 게이트가 바인드 값의 타입으로 **실행당 1회** 확정한다. 행마다 정하는 늦은 바인딩은 전부 삭제. **게이트 의존 상향 전파**: 게이트 확정 식을 피연산자로 가진 노드(`abs(?) + 1`, `(? + ?) + 1`, `coalesce(?, ?) + 1`)도 게이트 의존 노드 — G1 이 생산자 우선 순서로 현행 격자를 1회 적용해 확정한다(D-327-08; 목록 형태·순회는 #323). 게이트 변환 실패의 의미는 문맥별 현행(§4 X1, D-327-10). | D-317-02·12·13·D-327-08·10 | `? + ?` 접합·`enum + ?`·`addtime(?, …)` 등 현행 답 유지 |
 | **P3** | **피연산자 3부류 변환 시점.** ① 상수 부류(리터럴 → 컴파일 폴딩, 슬롯 → 게이트 1회) ② 행 의존 부류(컬럼·컬럼 식 → 계획된 변환기로 행마다) ③ 상관 부류(외부 행 값·비상관 서브쿼리 결과 → 소비 블록 시작/range open 시 스코프당 1회). | D-317-17 | `int_col > 1.5`: 1.5 는 1회, int_col 은 행마다 |
 | **P4** | **행당 결정 0회, 변환은 계획된 변환기만.** 비교·범위·키·산술·집계·함수 인자마다 (도메인, 피연산자별 변환기 ID 또는 게이트 슬롯 참조)를 계획에 고정. 실행은 타입 판정(`tp_value_compare_with_error` rank, `tp_value_cast_internal` switch, `qdata_*` 2단 디스패치)을 타지 않고 변환기를 바로 부른다. 변환 방향·도메인은 현행 서버 표(#321 §1·§2)를 그대로 옮긴다. | D-317-16·19 | 분기 예측. 행당 변환 0 이 목표가 아님(Destination 정정) |
 | **P5** | **상태는 XASL_STATE, 플랜 불변.** 게이트·스코프당 변환값은 `vd.dbval_ptr[]`(슬롯) 와 계획 슬롯 ID 로 인덱싱되는 게이트 표(XASL_STATE 확장)에 두고, aptr/dptr 는 같은 상태를 공유, PX 는 깊은 복사를 상속. 플랜 안의 DB_VALUE 를 실행이 쓰지 않는다. | D-317-18 | L-42·L-46, `px_query_executor.cpp:48` deep copy |
@@ -40,16 +40,20 @@
 | A1 | `int_col + 1` | INTEGER | C | R int —, K 폴딩 | int | — |
 | A2 | `int_col + 1.5` | **NUMERIC**(현행; DOUBLE 아님, D-317-23) | C | R int→numeric, K 폴딩 numeric | numeric floating(p/s 는 현행 서버 공식 통과) | — |
 | A3 | `int_col + '1'`, `str_col ± num` | DOUBLE | C | R int→double / R str→double | double | — |
+| A3' | `str_col * ?`, `str_col / ?`, `str_col % ?` | **DOUBLE**(컴파일이 이미 `CAST(str_col AS DOUBLE)` 시그니처 캐스트를 만든다 — #319 §3.2) | C | R str→double, K 게이트 값→double(실패 정책 = 파라미터, X1) | double | 오류 코드 -181 → -494(P7 ②); `return_null_on_function_errors=yes` 면 NULL 유지 (D-327-03·10) |
+| A3'' | `str_col + ?`, `str_col − ?` | 게이트 확정(P2, 현행 값 격자 — `cannot_use_signature` 라 형제 CAST 없음) | G | K 게이트 | 현행 | — (D-327-03) |
 | A5 | `int_col + ?` | **INTEGER 미러**(P1) | C | R int —, K 게이트: 값→INT **strict**(소수부 손실 -494, 문자 파싱, 날짜 -494) | int | **있음**: 소수·날짜·문자(비숫자) 바인드 → -494 (현행 값 타입 산술: 1.1 → NUMERIC 2.1, date → date+1). D-317-01·10 |
 | A5' | `numeric_col + ?`, `double_col + ?` | NUMERIC floating / DOUBLE 미러 | C | K 게이트 값→numeric(값 p/s 보존)/double | 현행 표기 유지(`2.20`) | 정수·문자 바인드 → 변환(값 같음); 날짜 → -494 |
 | A6 | `int_col / ?` | INTEGER 미러 → **정수 절삭** | C | 위와 같음 | int(`7/2`=3) | 소수 바인드 → -494 |
 | A7 | `int_col DIV ?`, `MOD ?` | BIGINT(현행 시그니처) | C | K 게이트 값→bigint | 현행 | — |
 | A8 | `? + ?`, `? − ?` … | **게이트 확정**(P2): 값 격자(문자·문자 = 접합, 숫자 = 값 타입, 문자·숫자 = DOUBLE, 날짜·숫자 = 날짜, 문자·날짜 = -494) | G | K 게이트(도메인·변환기 채움) | 현행 그대로 | — |
-| A8' | `? + 1`, `? − 1` | INTEGER 미러(리터럴 형제) | C | K 게이트 값→INT strict | int | 문자 `'1.0'` → 2(현행 DOUBLE 2.0 표기 변경), 1.5 → -494, DATE → -494(현행 date+1). **있음** |
+| A8' | `? + 1`, `? − 1` | INTEGER 미러(리터럴 형제) | C | K 게이트 값→INT strict | int | 문자 `'1.0'` → 2(현행 DOUBLE 2.0 표기 변경), 1.5 → -494, DATE → -494(현행 date+1). **있음** — 규모 재확인 뒤 유지(D-327-09: CTP 65곳, §7) |
+| A8'' | `(? + ?) + 1`, `abs(?) + 1`, `coalesce(?, ?) + 1` — 게이트 확정 식 + 형제 | **게이트 의존 노드**: 안쪽 G 결과 도메인과 형제로 현행 격자 → G1 이 생산자 우선 1회(형제 미러는 직접 슬롯 인자에만) | G | K 게이트(안쪽 → 바깥 순) | 현행(`abs(?) + 1` 1.5 → 2.5) | — (D-327-08; 목록·순회는 #323) |
 | A9 | `date_col + ?`, `? + date_col` | `CAST(? AS BIGINT)`(현행) | C | K 게이트 값→bigint | date | — |
 | A11 | `date_col − ?` | 현행: 정수→DATE, DATE→INT(일), 문자→DATETIME 파싱 후 BIGINT(ms) — 값 타입으로 갈림 | **G** | K 게이트 | 현행 | — (P0; "값에 따라 의미 갈림" 이지만 현행 유지 결정) |
 | A12 | `numeric_col(10,2) + ?` | NUMERIC floating 미러 | C | K 게이트 값→numeric(p/s 보존) | `2.20` 유지 | DOUBLE 바인드 → NUMERIC(현행 DOUBLE 결과) 표기 변경 가능 → 목록 |
-| A13 | `enum_col + ?`, `− ? * ? / ?` | **게이트 확정**: 문자 바인드 → 이름(VARCHAR 접합), 숫자·날짜 → 서수 SMALLINT + 값 격자 | G | K 게이트, R enum→varchar 또는 enum→short 변환기(게이트가 선택) | 현행(`'Cancel-a'`, `2`, date+서수) | — (D-317-12) |
+| A13 | `enum_col + ?`, `enum_col − ?` | **게이트 확정**: 문자 바인드 → 이름(VARCHAR 접합), 숫자·날짜 → 서수 SMALLINT + 값 격자 | G | K 게이트, R enum→varchar 또는 enum→short 변환기(게이트가 선택) | 현행(`'Cancel-a'`, `2`, date+서수) | — (D-317-12; `*`·`/`·`%` 는 A13' 로 분리 D-327-04) |
+| A13' | `enum_col * ?`, `enum_col / ?`, `enum_col % ?` | **SMALLINT 미러**(컴파일이 이미 `CAST(enum_col AS SMALLINT)` 서수 캐스트를 만든다 — #319 §3.2) | C | R enum→short, K 게이트 값→short strict(실패 정책 = 파라미터, X1) | 현행 서수 산술 | #319 §3.2 실측 diff(NULL → 값, double → smallint 표기)는 답안 변경 → §7 (D-327-04) |
 | A14 | `−?`, `abs(?)`, `round(?, n)`, `ceil/floor/trunc(?)` | 게이트 확정(값 타입; 문자 → DOUBLE) | G | K 게이트 | 현행 | — |
 | A15 | `int_col + numeric_col`, `str_col + int_col` 등 컬럼×컬럼 | 현행 격자 | C | R·R 변환기 고정(int→numeric, str→double …) | 현행 | — (실행 디스패치만 제거, D-317-19) |
 | A16 | `bigint_col + double_col` | DOUBLE(현행, 2^53 손실 현행) | C | R bigint→double | 현행 | — |
@@ -68,7 +72,7 @@
 | B4 | `int_col = ?` | INTEGER 미러 | K 게이트 **strict-or-keep**: 손실 없으면 INT 로 변환(비교 INT, 변환기 —), 손실(1.5)이면 값 유지 + 비교 도메인을 현행 표(DOUBLE)로 게이트 확정 + R int→double | C(슬롯)/G(손실 시 비교 도메인) | `'1.0'` → 1행, 1.5 → 0행 | — (D-317-10·16) |
 | B5 | `int_col < ?` 1.5 | INTEGER 미러 | 위와 같음 → 비교 DOUBLE, R int→double | C/G | 1행 | — |
 | B6 | `varchar_col = ?` | VARCHAR + 컬럼 collation | 정수·numeric 바인드 → 게이트 문자화 → 문자 비교 | C | 현행(정수 1 → `'1'` ≠ `'1.0'`) | — |
-| B7 | `char(n)_col = ?` | **VARCHAR + 컬럼 collation, 패딩 없음** | CHAR↔VARCHAR 현행 규칙(trailing space 구분) | C | 리터럴 바인드 현행 1행; VARCHAR(20) 값이 NULL 이던 현행은 결함 → 값 | 결함 소멸 1건 (D-317-04) |
+| B7 | `char(n)_col = ?` | **CHAR(n) 미러(현행) + 컬럼 collation** | CHAR↔VARCHAR 현행 규칙(trailing space 구분) | C | 리터럴 바인드 현행 1행 유지; VARCHAR(20) 값이 NULL 이던 현행은 결함 → 게이트의 CHAR 변환이 VARCHAR 값의 원 값을 유지(pd:3128 의미)해 값 | 결함 소멸 1건. D-317-04 의 VARCHAR 미러는 **D-327-01 로 철회**(탐침 §3.2: VARCHAR 미러 + trailing-space 구분 = 1행 → 0행, silent P0 위반) |
 | B8 | `? = ?`, `? < ?` | 게이트 확정 | 게이트가 값 격자로 비교 도메인·변환기 채움(문자·숫자 → DOUBLE) | G | 현행(`'01' = 1` 참) | — (D-317-02) |
 | B9 | `? = 1`, `? BETWEEN 1 AND 10`, `? IN (1, 2)` | INTEGER 미러 | K 게이트 strict-or-keep | C/G | 현행 | — |
 | B10 | `? = 'a'`, `? LIKE 'a%'`, `col LIKE ?` | VARCHAR + 리터럴/컬럼 collation | K 게이트 문자화 | C | 현행 | — |
@@ -90,18 +94,19 @@
 
 | # | 조합 | 도메인 | 확정 | 부류·변환기 | 결과 | 답안 변경 |
 |---|---|---|---|---|---|---|
-| U0 | `INSERT col ← ?`, `UPDATE SET col = ?`, MERGE INSERT/UPDATE | 컬럼의 완전한 도메인(현행) | C | K 게이트: 현행 대입 캐스트(정수 ← 1.5 **반올림 2**, 문자 파싱, 날짜 ← 숫자 -494) | 현행 | `INSERT int_col ← ?` DATE 바인드가 오류 없이 0행이던 현행은 결함 → -494 (D-317-15 정정) |
+| U0 | `INSERT col ← ?`, `UPDATE SET col = ?`, MERGE INSERT/UPDATE — 대입 대상 도메인은 VALUES/SET 식 안의 슬롯까지 **소비자 도메인 우선**으로 닿는다(`VALUES (IFNULL(?, 0))` decimal(10,5) → decimal, D-327-11) | 컬럼의 완전한 도메인(현행) | C | K 게이트: 현행 대입 캐스트(정수 ← 1.5 **반올림 2**, 문자 파싱, 날짜 ← 숫자 -494) | 현행 | `INSERT int_col ← ?` DATE 바인드가 오류 없이 0행이던 현행은 결함 → -494 (D-317-15 정정) |
 | U2 | `SELECT int_col UNION SELECT ?`, `(VALUES (1), (?))` | 알려진 가지의 공통 타입 미러 → INTEGER | C | K 게이트 값→int strict | **int**(현행 DOUBLE `1.0`) | **있음**: 표기 `1.0`→`1`, 문자·날짜 바인드 -494 (D-317-07) |
 | U3 | `SELECT ? UNION SELECT ?`, `(VALUES (?), (?))` | 게이트 확정; NULL·NULL 은 VARCHAR NULL 도메인 | G | 게이트 표 → 리스트 컬럼 도메인 | 현행(NULL·NULL 은 assert D6 → 값) | 결함 소멸 |
 | U4 | `(VALUES (timestamp'…'), (?))`, `INSERT … VALUES (dtt'…'), (?)` | 첫 알려진 행 미러 → TIMESTAMP/DATETIME | C | K 게이트 | 값(현행 **항상 -494**) | **오류 → 값**(개선, L-18) |
 | U6 | `CASE WHEN c THEN ? ELSE ? END`, `IF(c, ?, ?)`, `DECODE(x, k, ?, ?)` | 현행 VARCHAR(둘 다 슬롯이면) — P2 로는 게이트 확정이 맞으나 **현행이 컴파일 VARCHAR** 이므로 현행 유지 | C | K 게이트 문자화 | 현행 | — |
-| U7 | `CASE … THEN ? ELSE 1`, `COALESCE(?, 1)`, `IFNULL(?, 'a')`, `NVL2`, `NULLIF(?, x)`, `LEAST/GREATEST(?, x)` | 알려진 형제의 공통 타입 미러(현행 시그니처: 부류 다르면 VARCHAR) | C | K 게이트 | `COALESCE(?, 1)` 정수 → int; 문자 `'a'` → -494(현행 VARCHAR `'a'`) | **있음** (D-317-07; `bug_3256`·`cbrd_24598` 부류) |
+| U7 | `CASE … THEN ? ELSE 1`, `COALESCE(?, 1)`, `IFNULL(?, 'a')`, `NVL2`, `NULLIF(?, x)`, `LEAST/GREATEST(?, x)` | 알려진 형제의 공통 타입 미러(현행 시그니처: 부류 다르면 VARCHAR). 사슬(COALESCE/LEAST/GREATEST/NULLIF/CASE 중첩)은 이진이 아니라 `recursive_type`(tc:5680)의 **사슬 전체 공통 타입**을 형제로 본다(`greatest(?, 3, 'b')` → VARCHAR, D-327-07); 소비자 도메인이 있으면 그것이 우선(D-327-11) | C | K 게이트 | `COALESCE(?, 1)` 정수 → int; 문자 `'a'` → -494(현행 VARCHAR `'a'`) | **있음** (D-317-07; `bug_3256`·`cbrd_24598` 부류) |
 | U8 | `CASE ? WHEN ? …`, `DECODE(?, ?, …)` | 조건 슬롯끼리 → 게이트 확정(값 격자 비교) | G | 게이트 | 현행 | — |
 | U10 | `COALESCE(?, ?)`, `IFNULL(?, ?)` | 게이트 확정 | G | 게이트 | 현행 | — |
 | U13 | `COALESCE(CAST(? AS DATETIME), CAST(? AS DATETIME), ?)` | 형제 DATETIME 미러; 비문자 결과 도메인에 collation 플래그 금지 | C | K 게이트 | 현행 값; optdebug assert(L-19) 소멸 | 결함 소멸 |
 | U16 | `INSERT t(c) SELECT ?`, MERGE 소스 `SELECT ? v` | 대상 컬럼 미러 | C | K 게이트 | 현행 값; 날짜 바인드 0행 → -494 | 결함 소멸 |
 | U17 | 파생 테이블 컬럼 `?`(`SELECT * FROM (SELECT ? c) t WHERE t.c = 1`), CTE `?`, 재귀 CTE 시드 `?`, 스칼라 서브쿼리 `(SELECT ?)` | 게이트 확정 → 리스트 컬럼 도메인 게이트 표; 소비 측 비교는 상관 부류 S | G | 게이트·S | 현행(`t.c = 1` 의 `CAST(t.c AS INTEGER)` 래핑 유지) | — |
 | F1 | `to_char(?, '<날짜 포맷 리터럴>')` | DATETIME(포맷 추론) | C | K 게이트 값→datetime(문자 파싱) | 현행(숫자 바인드는 현행도 오류) | — (D-317-13) |
+| F1-T | `to_char(?, '<시간 토큰만 있는 포맷>')` | TIME(포맷 추론 — 시간 토큰만이면 DATETIME 미러가 TIME 바인드를 -494 로 만든다, #319 D-319-04) | C | K 게이트 값→time | 현행 | — (D-327-05) |
 | F1' | `to_char(?, '<숫자 포맷 리터럴>')` | NUMERIC floating(값 p/s 보존) | C | K 게이트 | 숫자 바인드 현행; 문자 `'1.0'` 바인드는 게이트가 NUMERIC 파싱 후 포맷 적용 → 현행(`'1.0'` 그대로)과 표기 다를 수 있음 | **후보** → 값 A/B 후 목록 |
 | F2 | `to_char(?, ?)`, `to_char(col, ?)`, `to_char(?)` | 게이트 확정(값 슬롯·포맷 슬롯) | G | 게이트 | 현행; `to_char(dtt, ?)` BIGINT assert(D5) → 오류 | 결함 소멸 |
 | F3 | `str_to_date(?, 'fmt')`, `str_to_date(s, ?)`, `to_date(?, 'fmt')`, `to_number(?)` | 값 슬롯 VARCHAR(현행 명시 부여), 포맷 슬롯 VARCHAR; 결과는 포맷 리터럴이면 C, 포맷 슬롯이면 G | C/G | K 게이트 문자화 | 현행 | — |
@@ -116,14 +121,15 @@
 | S1 | `SELECT ?`, `SELECT typeof(?)` | 게이트 확정 | G | 게이트 | 현행(바인드 타입 그대로) | — |
 | S2 | `SELECT ? FROM t WHERE 1 = 0`, `LIMIT 0` 컬럼 메타 | 게이트가 안 돌면 미확정(현행) | — | — | 현행 | — (후속 티켓, D-317-15) |
 | S3 | `@v := ?`, `@v := x` | 값 저장(현행; 날짜는 문자열로 저장되는 현행 유지) | — | — | 현행 | — |
-| S4 | `@v` 읽기 — 형제 있음(`@v + 1`, `c_int = @v`, `to_char(@v, fmt)`) | 형제 미러(슬롯 취급, L-32) | C | K 게이트 값→미러 도메인(문자 파싱; 실패 -494) | `@v := '1.0'; @v + 1` → **INTEGER 2**(현행 DOUBLE 2.0) | **있음**(표기) (D-317-05) |
+| S4 | `@v` 읽기 — 형제 있음(`@v + 1`, `c_int = @v`, `to_char(@v, fmt)`) | 형제 미러(슬롯 취급, L-32) | C | K 게이트 값→미러 도메인(문자 파싱; 실패 -494) | `@v := '1.0'; @v + 1` → **INTEGER 2**(현행 DOUBLE 2.0); `to_char(@v, 날짜 포맷)` 은 비날짜 문자열 통과 → 오류, 저장 문자열 재포맷('01/02/2024' → '2024-01-02') | **있음**(표기·to_char) (D-317-05·D-327-05) |
 | S5 | `@v` 읽기 — 형제 없음(`SELECT @v`, `sum(@v)`) | 게이트 확정 | G | 게이트 | 현행 | — |
 | S6 | PL/CSQL 정적 SQL 의 `?` | **선언 타입** = 알려진 형제(PG param_types); NULL 은 typed NULL | C | K 게이트 | 현행 값(이전 캠페인 33건 결함 해소) | — (D-317-06) |
 | S7 | 세션변수·PL 인자·auto-param 을 "슬롯" 정의에 포함 | — | — | — | — | 게이트가 다루는 슬롯 = 사용자 `?` + auto-param + 세션변수 읽기 + PL 인자 |
+| X1 | 게이트 변환 **실패 정책**(`return_null_on_function_errors`) | 문맥별 현행: 산술·함수 인자(A·F·U7 등 현행이 `tp_value_auto_cast` 를 타던 자리)는 파라미터를 따름(yes → 슬롯 값 NULL, 오류 없음); 대입(U0)은 항상 -494(현행 바인드 시점 캐스트 `pt_set_host_variables` 는 파라미터를 안 본다); 비교(B)는 strict-or-keep 이라 오류 없음 | G/C | 계획 항목의 실패 정책 열(-494 / NULL / keep, #325). 한 `?` 의 다중 참조는 참조별 계획 슬롯에만 NULL, 공유 `vd.dbval_ptr[]` 원 값 불변(#323) | 현행(CTP C5 `s1 / ?` cfg_null_on_errors NULL 유지) | — (D-327-10) |
 
 ## 5. 이 PR 에서 고치는 결함(P0 의 예외)과 후속으로 보내는 것
 
-**고친다(크래시·assert·조용한 0행)**: 실측 §1 D2·D3·D4·D5·D6·D7, L-19(§6 C15), `INSERT int_col ← ?` DATE 0행, `char(n)_col = ?` VARCHAR 값 NULL, `enum_col < ?` TIME 2행(값 A/B 뒤). 새 경로가 대체하는 자리에서 자연히 사라지거나, 게이트 CTP 에서 드러나면 이 PR 안에서 수정.
+**고친다(크래시·assert·조용한 0행)**: 실측 §1 D2·D3·D4·D5·D6·D7, L-19(§6 C15), `INSERT int_col ← ?` DATE 0행, `char(n)_col = ?` VARCHAR 값 NULL(CHAR 미러 유지, 게이트 CHAR 변환에서 — D-327-01), `enum_col < ?` TIME 2행(값 A/B 뒤). 새 경로가 대체하는 자리에서 자연히 사라지거나, 게이트 CTP 에서 드러나면 이 PR 안에서 수정.
 **후속으로 뺀 결함(D-322-04)**: D1 `coalesce/nullif/case(enum_col, ?)` — optdebug 는 prepare 시 csql assert, release 는 정상 오류 -494 라 크래시 기준에 걸리지 않고 파서 래핑 타입 선택을 바꾸는 별건. 방향(리터럴 경로와 같게: VARCHAR + ENUM collation)만 확정, 작업은 xmilex-git/workspace#326.
 **후속 티켓(현행이 이상하지만 규칙과 무관)**: 미실행 문장 메타(L-24), `str_col = 1` vs `= 1.00` 인덱스 갈림, UNION NUMERIC (38,15), `int_col = 1.5` 0행 vs `< 1.5`, `SET @v = date` 문자열 저장, SUM(int) 승격, `extract(… from time)` 쓰레기 값, `hour('1.0')` = 0.
 
@@ -154,19 +160,29 @@
 
 **귀결(아키텍처 #318·인터페이스 #323·변환기 #325 입력)**: (1) 게이트 표 항목 = 슬롯 ID → (도메인, collation) 한 쌍 — collation 축을 별도 표로 두지 않는다. (2) 삭제 목록에 #314 §4 26곳(연산자 결과 2·REGUVAL_LIST 1·리스트 컬럼 11·집계 9·빠른 경로 차단 3)을 추가하고, `qfile_unify_types`·`qexec_end_one_iteration` 의 collation 플래그 분기도 함께. (3) 오류 코드 불변(-1150·-622·-1509), 시점만 게이트. (4) 후속(Out of scope): 플랜 캐시 키 텍스트가 LANG_SYS 와 같은 리터럴 collation 을 생략 인쇄해 다른 세션 collation 의 같은 문장이 같은 캐시 항목을 쓰는 문제(#313 §3.6, 리터럴 축) · D1 ENUM 형제 #326.
 
-## 7. 답안 변경 목록(초안 — 게이트 CTP 결과로 채움)
+## 7. 답안 변경 목록(확정 — 탐침 #319 CTP sql 111건·셀 §3 을 개정 규칙으로 재분류, D-327-02·09)
 
-| 부류 | 규칙 행 | 변경 | 근거 원칙 | 예상 TC(이전 캠페인 diff 부록 A4) |
+TC expected 갱신은 이 목록의 행만 대상으로 하고 구현 게이트 CTP 에서 건별로 확인한다(값 A/B, `silent` 최우선 L-06). "불변 목표" 는 답안 변경이 **아니며** 게이트 CTP 에서 diff 가 나면 회귀다.
+
+| 부류 | 규칙 행 | 변경 | 근거 원칙 | 탐침 CTP(#319 §4) · 예상 TC |
 |---|---|---|---|---|
-| 정수 형제 산술에 소수·날짜·비숫자 문자 바인드 | A5·A5'·A6·A8' | 값 → -494 | P7 ① | `bug_bts_4562`·`bug_bts_6605`(소수 블록), `late_binding_001/002` 의 `e1 + date`… 는 A13 게이트 확정이라 **해당 없음** |
-| `? + 1` 문자 바인드 | A8' | DOUBLE 2.0 → INTEGER 2 | P7 ① | `bug_bts_12256` 유사 |
-| 공통값 미러 | U2·U7 | `1.0`→`1`, 부류 다른 바인드 -494, 다중 행 VALUES 오류 → 값 | P7 ①③ | `bug_3256`, `cbrd_24598`, `bug_bts_4565`(역방향) |
-| 세션변수 형제 미러 | S4 | `@v + 1` 표기 `2.0`→`2` | P7 ① | `_07_session_var` 일부 블록 |
+| 정수 형제 산술에 소수·비숫자 문자 바인드 | A5·A5'·A6·A8'·U2·S4 | 값 → -494(게이트 strict; 프로토타입의 silent 반올림 C3 은 한계, expected 는 -494 기준) | P7 ① | C3(12곳: `_07_plus`·`_08_minus`·`_04_divide/number_number`, `_12_common/agg_group_by·distinct`, `group_concat(i1 + ?)`), `bug_bts_4562`·`bug_bts_6605` 소수 블록 |
+| **`? + n` 날짜 바인드**(관용구 "날짜 + n일") | A8'·A5 | 날짜 → -494; DATE 컬럼 대입 `values (? + 4)` 는 **prepare 시점** 컴파일 오류(오류 문장 위치 이동, L-23) | P7 ①② | **65곳**: C1(58 — `issue_5765_timezone_support` `date_format/time_format/to_char(? + 1, ?)` 13 로케일 × dt/ts)·C6(4 — `_07_plus/_08_minus/date_number` + cfg_null)·C14(3 — `insert_value`). 릴리스 노트: 날짜 산술은 `? + INTERVAL`/명시 CAST (D-327-09) |
+| **넓은 바인드 축소** | A5·A8'·S4·U2 | BIGINT 2^53+·DOUBLE 1.79E308 → 오버플로(-730/-458)·-494; `@v := bigint; @v + 1` INT 오버플로; `sum(i + ?)` INT 오버플로(리터럴 `sum(i + 1)` 과 같음); `limit 0 + ?` 조용한 0행 → -494 | P7 ①③ | C4(4 — `_06_times`·`_07_plus/number_number`, `host_variables_bingding_002`, `_12_common/union`)·C13(`20567_limit_1`) (D-327-02) |
+| 숫자 형제 산술 표기 | A5·A5'·A8'·U2·S4·A12 | `x.0` → `x`, DOUBLE/NUMERIC 값 타입 → 형제 타입 | P7 ① | C2(23 — `_15_host_variable/_04~_08`, `_12_common/*`, `_07_misc/_02_prameter_bind`, `bug_bts_4565`·`8743`·`12326`, `cbrd_20968`, CTE `x + ?`) |
+| 문자 컬럼 `×÷%` 슬롯 | A3' | 오류 코드 -181 → -494; 날짜·bit·set 바인드 NULL → -494, monetary → double 표기 | P7 ①② | C5 오류 코드 3곳(`_04_divide·_05_modulus·_06_times/string_string`); **`*_cfg_null_on_errors` 3곳은 NULL 유지 = 불변 목표**(D-327-03·10) |
+| ENUM `×÷%` 슬롯 | A13' | #319 §3.2 diff: NULL → 값, double → smallint 표기 | P7 ① | 셀만(CTP 없음) (D-327-04) |
+| 공통값 미러 | U2·U4·U7 | `1.0` → `1`, 부류 다른 바인드 -494(`ifnull(?, 1)` 날짜 C7), 다중 행 VALUES/UNION 오류 → 값(C9, 값 A/B 완료 §4.1), `1 + ?` BIT NULL → -494(C8), `nvl(i, ?) between …` INT 미러 → B25 격자 파급 -181/-494(C15) | P7 ①③ | `bug_3256`·`cbrd_24598`·`bug_bts_4565`·`_07_multi_values_clause/01_values·06_types`·`bug_bts_13523`·`cbrd_20769_exp` |
+| 세션변수 형제 미러 | S4 | `@v + 1` 표기 `2.0` → `2`; `to_char(@v, 날짜 포맷)` 비날짜 문자열 통과 → 오류, 저장 문자열 재포맷 | P7 ① | `_07_session_var` 일부 블록 (D-327-05) |
+| `to_char(?, 시간 포맷)` | F1-T | TIME 바인드 유지(DATETIME 미러였다면 -494 였을 자리 — 변경 없음, 행만 신설) | — | — (D-327-05) |
+| U13 결과 타입 | U13 | `coalesce(cast(? as datetime), cast(? as datetime), ?)` 문자 바인드 결과 VARCHAR → DATETIME | P7 ① | 셀 U13 (D-327-06) |
 | `to_char(?, 숫자 포맷)` 문자 바인드 | F1' | 후보 | 값 A/B | — |
 | 결함 소멸 | §5 | assert/0행 → 오류 또는 값 | P7 ③ | — |
 | 오류 코드·트레이스 | — | 게이트 시점 오류는 -494 계열 유지; `?:0` 플랜 텍스트 유지 | P7 ② | `cbrd_25374`·`cbrd_24906_2` 부류는 텍스트 불변 목표 |
 | collation 충돌 시점 | C3·C4·C9 | -1150/-622 가 행 평가 → 게이트(코드 불변, 값 없음) | P7 ② | `issue_12129_HV_collation` 21건은 답 불변 목표(이전 캠페인 19건 diff 는 회귀로 분류) |
 | collation 결함 소멸 | C10·C15 | D2 서버 assert → NULL, L-19 assert → 값 | P7 ③ | — |
+
+**불변 목표(탐침 diff 였지만 개정 규칙에서는 답이 그대로여야 하는 것)**: C10 세션변수 재작성 텍스트(계획된 변환기는 텍스트를 바꾸지 않는다, L-50) · C11 `INSERT decimal VALUES (IFNULL(?, 0))` 12.34568 유지(소비자 도메인 우선, D-327-11) · C12 재귀 CTE `median(m) over()` double 유지(UNION/VALUES 미러는 호스트 변수 가지만, #319 F-6) · C5 `*_cfg_null_on_errors` NULL 유지(X1, D-327-10) · B7 `char_col = ?` 1행(D-327-01) · 중첩 게이트 식 `abs(?) + 1` 등 현행 값(A8'', D-327-08).
 
 ## 8. 렛저 대응표
 
@@ -194,3 +210,5 @@
 | L-47 | §6 원칙(LEAVE 폐기)·C3·C8·C10, 귀결 (2) |
 | L-49 | B33 불변식 |
 | L-51 | P6 삭제 목록 |
+| L-50 | S4·§7 불변 목표 C10(계획된 변환기는 재작성 텍스트를 바꾸지 않음) |
+| L-06 | §7 불변 목표(탐침 silent 4종 C3·C10·C11·C12 전부 원인 특정·규칙 반영) |
