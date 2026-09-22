@@ -93,7 +93,7 @@ PX                   워커 클론이 각자 resolve → 루트로 역전파    
 | S-26 | `qdata_update_agg_interpolation_func_value_and_domain` qa:3343~3346: MEDIAN/PERCENTILE 도메인 ← 값 타입 | 행당 | 값 타입 | 계획 + 규칙표 | G-03(e) G-08(5) | L-43 |
 | S-27 | `qdata_evaluate_analytic_func` qn:188~259: `opr_dbtype VARIABLE || collation_flag` 이고 값이 non-NULL 이면 함수별 기본 도메인(COUNT→BIGINT, AVG/STDDEV→DOUBLE, SUM 숫자면 값 도메인 아니면 DOUBLE, MEDIAN 숫자면 DOUBLE 아니면 값, 기타 값) → 피연산자 coerce → `func_p->value` init → distinct 리스트 도메인 ← 함수 도메인; 이후 행은 리스트 도메인으로 coerce qn:284~292 | 첫값까지 행당 + 행당 coerce | 첫 non-NULL 값 | 계획 + 규칙표 | G-03(e) G-08(5) | L-43 |
 | S-28 | 같은 함수 `is_first_exec_time` 첫값 블록 qn:683~792: 보간 함수 도메인을 첫 값 타입 switch 로(숫자 → 상수 피연산자/PERCENTILE_DISC 면 값 도메인, 아니면 DOUBLE; 날짜/시간 8종은 각각) | 첫값 1회 | 첫 값 타입 | 계획 | G-03(e) | L-43 |
-| S-29 | `qdata_analytic_is_plain_sum_avg` qn:59 / `qdata_agg_is_plain_sum_avg`: `opr_dbtype VARIABLE || collation_flag` 이면 빠른 경로 차단 | 행당 검사 | 도메인 | 계획(조건 자체 삭제) | G-03(e) | L-51 |
+| S-29 | `qdata_analytic_is_plain_sum_avg` qn:59: `opr_dbtype VARIABLE || collation_flag` 이면 빠른 경로 차단. 일반 집계 `qdata_agg_is_plain_sum_avg`는 해당 없음(기준 `cad27172b`에 도메인 차단 조건 없음; D-324-01) | 행당 검사 | 도메인 | 계획(조건 자체 삭제) | G-03(e) | L-51 |
 
 ### 1.5 인덱스 키
 
@@ -152,7 +152,7 @@ PX                   워커 클론이 각자 resolve → 루트로 역전파    
 
 ---
 
-## 4. 타입 축 · collation 축 쌍 조건 지점(26곳) — L-47 의 실체
+## 4. 타입 축 · collation 축 쌍 조건 지점 — L-47 의 실체
 
 `TP_DOMAIN_TYPE(d) == DB_TYPE_VARIABLE || TP_DOMAIN_COLLATION_FLAG(d) != TP_DOMAIN_COLL_NORMAL` 형태로 두 축이 한 조건에 묶인 곳. 타입 축을 지운 뒤 collation 축이 남으면 이 지점이 그대로 남는다(#322 입력).
 
@@ -162,7 +162,7 @@ PX                   워커 클론이 각자 resolve → 루트로 역전파    
 | REGUVAL_LIST (1) | fe:5239(S-06) |
 | 리스트 컬럼·위치 서술자 (11) | lf:7082(S-13), qx:1362(S-24), qx:21193(S-17), qx:21249 21277 21405(S-18), qx:23137(S-19), qx:27787(S-11), sm:8231 8254 8287 8293(S-20) |
 | 집계·분석 (9) | qx:21328 21336 21440(S-18), qx:21605(S-23), qa:1876(S-25), qa:3343(S-26), qn:59(S-29), qn:188(S-27), sm:8240 8264(S-20 하위) |
-| 빠른 경로 차단 (3) | fe:5273(S-05 FAST_PEEK), qn:59, `qdata_agg_is_plain_sum_avg` |
+| 빠른 경로 차단 (2; S-29 정정) | fe:5273(S-05 FAST_PEEK), qn:59. 일반 집계 `qdata_agg_is_plain_sum_avg`의 이 도메인 조건은 해당 없음(D-324-01; 다른 누산기 타입 검사의 부재를 뜻하지 않음) |
 
 ---
 
