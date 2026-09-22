@@ -5,8 +5,9 @@ was not rendered is a review round waiting to happen.
 
 ## 1. Test server (isolated install, claimed port)
 
-Never reuse another session's server or `~/CUBRID`. Everything below is delegated to a Sonnet
-subagent with the delegation contract from `.agents/AGENTS.md`.
+Never reuse another session's server or `~/CUBRID`. Use the harness-specific worker policy
+(Codex: Luna/max, fast when supported; Claude Code: Sonnet) and delegation contract from
+`.agents/AGENTS.md` for delegated work below.
 
 ```bash
 # in the tooling repo
@@ -102,11 +103,11 @@ cd /home/cubrid/cubrid-manual/en && make html 2>&1 | tee ../../.git_ignored_dir/
 
 ## 6. English QA (3 passes, branch diff only)
 
-- **A. Semantic ko↔en comparison** (Sonnet subagent): paragraph by paragraph — conditions, numbers,
+- **A. Semantic ko↔en comparison** (worker per `.agents/AGENTS.md`): paragraph by paragraph — conditions, numbers,
   hint names, `:ref:` targets, note presence. Report each mismatch with both texts.
 - **B. Mechanical sweep** (lead, grep): American spelling (beware `parallelism` false positives on
   `-is` patterns), term/hyphen consistency, trace strings verbatim.
-- **C. en-only read-through** (Sonnet subagent): grammar and clarity for a reader who never sees ko.
+- **C. en-only read-through** (worker per `.agents/AGENTS.md`): grammar and clarity for a reader who never sees ko.
 
 The lead verifies each finding against the files before accepting; findings that would break a
 tree-wide convention (e.g. the config.rst unit sentence pattern) are rejected with the reason. Fix by

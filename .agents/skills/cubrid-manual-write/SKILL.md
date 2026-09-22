@@ -58,7 +58,8 @@ Both scripts also run without `-d` (whole-file mode) — the right gate for a pa
 ## Delegation
 
 Build, server start/stop, data generation, query/trace capture, and ko↔en semantic comparison are
-delegated to a Sonnet subagent (repo rule). Include the delegation execution contract from
+delegated using the harness-specific worker policy in `.agents/AGENTS.md` (Codex: Luna/max,
+fast when supported; Claude Code: Sonnet). Include the delegation execution contract from
 `.agents/AGENTS.md` verbatim, the scratch rule (`.git_ignored_dir/scratch/`, never `/tmp`), and the
 `cubrid-server-control` requirement in every delegation prompt. The lead keeps: the audit verdicts,
 the prose, the mechanical sweeps, and the PR.

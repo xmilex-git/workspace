@@ -48,7 +48,7 @@
 
 - 최신 지도 Notes·담당 티켓의 사용자 합의가 아래 기본 규칙보다 우선한다. csql 출력 계열은 optdebug만 검증한다. 신규 회귀 TC는 PR에 추가하지 않고, 지도 종료 시 단일 `test.md`로 요구사항을 취합해 QA가 작성한다. [지도 전체 정책](https://github.com/xmilex-git/workspace/issues/209#issuecomment-5580384559).
 
-- 구현·판단은 리드, 재현·분석·빌드·실행 검증은 `.agents/AGENTS.md`의 위임 모델에 따라 하네스 자체 서브에이전트로 Sonnet에 위임한다. 실행 중 중간 로그를 리드에게 반복 유입하지 않고 최종 보고서만 읽는다.
+- 구현·판단은 리드, 재현·분석·빌드·실행 검증은 `.agents/AGENTS.md`의 위임 모델에 따라 하네스 자체 서브에이전트(Codex: Luna/max·지원 시 fast mode, Claude Code: Sonnet)에 위임한다. 실행 중 중간 로그를 리드에게 반복 유입하지 않고 최종 보고서만 읽는다.
 - CTP는 `just ctp`/`just ctp-rerun`의 컨테이너 경로만 사용한다. **smoke는 호스트 실행을 허용**하며 서버 제어 래퍼·포트 관리·정리를 준수한다. DB 생성 전에 작업 디렉터리도 scratch로 옮긴다.
 - 제품 수정은 fresh optdebug/release, 실제 활성화한 unit target, 관련 smoke와 원본 TC의 결과를 구분해 기록한다. `12/14`나 `No tests were found`를 PASS로 적지 않는다. 재사용 JDBC jar의 실제 버전도 명시한다.
 - [운영 정책](https://github.com/xmilex-git/workspace/issues/209#issuecomment-5559332086)은 기능 보존이 기준이다. histogram 미지원 처리, 기본값만 바꾼 동적 제어, 비활성 query replace를 완료로 보지 않는다.
