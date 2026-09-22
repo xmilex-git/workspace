@@ -58,6 +58,6 @@ CTP의 유효 두 런에서 새 assert·signal·raw diff도 0개다. 정규화�
 
 원본 TSV는 `.git_ignored_dir/scratch/312-329/bench/baseline-db-optdebug.tsv`, 비교 로그는 `logs/baseline-db-counter-compare.log`다. 새로 생성한 별도 DB에서는 인덱스를 사용하는 네 질의의 16개 셀/카운터 조합이 과거 기준선과 달랐으나, 소스·바이너리 변경 없이 기존 물리 DB 복사본에서 모두 일치했다. 따라서 새 DB의 측정은 물리 배치가 다른 비교 자료로 보존하고, 동일 DB 대조를 최종 판정에 사용한다.
 
-벤치의 코어·새 assert는 0이며, 후보 라이브러리 해시는 CTP 설치본과 같다. 전용 DB·broker·master를 종료하고 포트 claim을 해제했다. `logs/final-provenance.log`에 바이너리·DB 파일·정리 결과를 보존한다. DB 복사본은 `baseline-db-copy/`이며, 기존 데이터 볼륨은 수정되지 않았으나 복사된 DB 헤더의 로그 경로 때문에 기존 디렉터리의 `dpin324_lgat`, `dpin324_lgar_t`, `dpin324_lginf`가 갱신되었다. 두 디렉터리 모두 보존했으며, 다음 동일 DB 대조에서는 이번에 검증한 복사 데이터 볼륨과 실제 사용된 로그의 경로를 함께 확인해야 한다. 원본 디렉터리 전체가 불변이라고 간주하지 않는다.
+벤치의 코어·새 assert는 0이며, 후보 라이브러리 해시는 CTP 설치본과 같다. 전용 DB·broker·master를 종료하고 포트 claim을 해제했다. `logs/final-provenance.log`에 바이너리·DB 파일·정리 결과를 보존한다. DB 복사본은 `baseline-db-copy/`이며, 기존 데이터 볼륨은 수정되지 않았으나 복사된 DB 헤더의 로그 경로 때문에 기존 디렉터리의 `dpin324_lgat`, `dpin324_lgar_t`, `dpin324_lginf`가 갱신되었다. 실행 종료 후 워커가 이 로그 3개를 실행 전 복사본으로 복구했으며, 복구 파일의 해시 일치는 `logs/baseline-source-restore.log`에 기록했다. 실행 중 원본 디렉터리 전체가 불변이었던 것은 아니다. 다음 동일 DB 대조는 복구된 원본 기준에서 시작하고, 복제할 때 데이터 볼륨뿐 아니라 내부 로그 경로도 함께 분리한다. 이번 실행 후 복사 데이터 볼륨과 실행 전 로그를 그대로 조합해 재시작하지 않는다.
 
 최초 SQL 런 `sql-20260922T133016Z-881721`은 공용 `cubrid.conf`의 `[service]` 항목이 CTP DB 설정에 합쳐져 `server=demodb`가 거절되는 초기화 실패였다(실행 0개, 코어 0). 이 런은 회귀 판정에 사용하지 않는다. 재실행은 이전 CTP 검증과 같은 기본 설정을 사용하며, 소스 변경 없이 실행 설정만 바로잡는다.
