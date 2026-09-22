@@ -106,9 +106,11 @@ develop 과의 기능 차이: 이 7건은 모두 현행 답을 보존하는 계�
 |---|---|---|---|
 | codeset 같고 collation 다름 | **복제 + 라벨만** 교체(`pr_clone_value` + `db_string_put_cs_and_collation`) — 원 값은 const 이므로 `tp_value_slam_domain`/`tp_can_steal_string`(od:9186) 제자리 경로는 쓰지 않는다 | 없음 | `tp_value_convert_string_relabel` |
 | codeset 다름 | `db_char_string_coerce`(od:9195) 로 재코딩; 변환 불가 → INCOMPATIBLE(-622 계열은 게이트 collation 병합 단계 `domain_resolve` 가 낸다, 표는 재코딩만) | ASSIGN: 절단이면 절단 값 + `DOMAIN_TRUNCATED`(아래 행) · COMPARE/OPERAND: 목표가 floating VARCHAR 라 절단 없음 | `…_string_recode[_assign]` |
-| 같은 codeset·collation, VARCHAR→CHAR(n) | **COMPARE/OPERAND: 항등**(D-327-01, pd:3128 의 의미: 값·collation 모두 원 값) — CHAR↔VARCHAR trailing space 비교 규칙 현행(#321 §2.4; 실측 `char3_col = ?` 'ab'·'ab ' → 1행, 'abcd' → 0행) | **ASSIGN: 현행 캐스트 본문**(od:9177~9209 `db_char_string_coerce`; 절단이면 절단 값 + `DOMAIN_TRUNCATED`, 결과는 CHAR(n) 값 + 목표 collation 라벨) — 사용자 `CAST(? AS CHAR(n))`·대입 U0 이 여기(D-328-02) | NULL(COMPARE/OPERAND) / `tp_value_convert_string_recode_assign`(ASSIGN) |
+| 같은 codeset·collation, VARCHAR→CHAR(n) | **COMPARE/OPERAND: 항등**(D-327-01, pd:3128 의 의미: 값·collation 모두 원 값) — CHAR↔VARCHAR trailing space 비교 규칙 현행(#321 §2.4; 실측 `char3_col = ?` 'ab'·'ab ' → 1행, 'abcd' → 0행) | **ASSIGN: 현행 캐스트 본문**(od:9177~9209 `db_char_string_coerce`; 절단이면 절단 값 + `DOMAIN_TRUNCATED`, 결과는 CHAR(n) 값 + 목표 collation 라벨) — 사용자 `CAST(? AS CHAR(n))`·대입 U0 이 여기(D-328-02) | 정책·항목에서 원 값 유지(COMPARE/OPERAND, B7) / 고정 문자 셀(ASSIGN) |
 | **절단 셀 3종**(문자→문자(n) od:9201 · 문자→비트(n) od:9100 · 비트→비트(n) od:9166) | leaf 는 절단 값을 target 에 남기고 **`DOMAIN_TRUNCATED`** 를 돌려준다(`TP_DOMAIN_STATUS` 에 값 하나 추가, leaf 만 반환). 두 큰 함수는 자기 `coercion_mode` 로 사상 — FORCE → COMPATIBLE, 명시 → `allow_truncated_string` yes → COMPATIBLE / no → OVERFLOW + clear, 묵시 → OVERFLOW + clear(동작 불변). 게이트·행 kernel: 항목 플래그 `DOMAIN_PLAN_TRUNCATE_OK`(FORCE 자리 — 사용자 T_CAST·STRICT 플래그 없는 T_CAST_WRAP 의 컬럼·세션변수·식 피연산자, fe:3162~3170) 면 수용; 그 밖(대입 U0 · STRICT 시그니처 CAST qx:13952·qo:6913 · `CAST(? AS T)` 아래 슬롯 = 오늘의 바인드 캐스트 pd:3119) 은 게이트가 1회 읽은 `allow_truncated_string` 으로 yes → 수용 / no → OVERFLOW 로 실패 정책(D-328-02). 실측: `CAST(@s AS CHAR(3))` 'abcdef' → 'abc'(양 설정), `INSERT CHAR(3) ← @s` no → -493 / yes → 'abc' | ASSIGN 만 | 위 leaf |
-| CHAR→VARCHAR | 항등(trailing space 는 값에 있음) | | NULL |
+| CHAR→VARCHAR | 정책이 원 값 유지를 선택할 수 있음(trailing space 는 값에 있음); 일반 타입 변환 조회는 문자 leaf | | 계획 항등 / 고정 문자 셀 |
+
+`domain_lookup_converter`는 원 **타입**과 목표 도메인만 받는다(D-325-06). 따라서 이 절의 B7 항등은 정책·항목의 원 값 유지 결정이며, 일반 표의 VARCHAR→CHAR 셀을 NULL로 만드는 규칙이 아니다(D-327-01). 같은 타입의 문자·비트도 표에는 leaf가 있고, leaf에서 목표 파라미터가 이미 일치하면 복제한다. 문자 타입·길이 변경이 필요하면 현행 변환 본문을 거쳐 길이 검사와 절단을 보존한다. 같은 타입·precision·codeset에서 collation만 바꾸는 경로는 복제 후 라벨만 바꾼다.
 
 ### 2.5 날짜·시간
 
@@ -119,7 +121,10 @@ develop 과의 기능 차이: 이 7건은 모두 현행 답을 보존하는 계�
 | DATE → DATETIME*/TIMESTAMP*, TIMESTAMP ↔ DATETIME, TZ ↔ LTZ | 확대·세션 TZ 변환 | 같음 | |
 | SHORT/INTEGER/BIGINT → TIME | `값 % 86400` 초(od:8713) | **INCOMPATIBLE**(strict 표에 없음 od:6270 → KEEP 판정 실패); KEEP 뒤 비교 변환은 ASSIGN 셀 `…_integer_to_time` 이라 INT 3600 = TIME 01:00:00 이 동등(D-328-05, 실측 1행 · 90000 도 1행) | `…_integer_to_time` (COMPARE/OPERAND 는 incompatible) |
 | FLOAT/DOUBLE → TIME | ROUND → 위 | INCOMPATIBLE | |
-| 숫자 → DATE/TIMESTAMP*/DATETIME* | INCOMPATIBLE(od:7940) | 같음 | `tp_value_convert_incompatible` |
+| 숫자 → DATE/DATETIME* | INCOMPATIBLE | 같음 | `tp_value_convert_incompatible` |
+| 숫자 → TIMESTAMP* | 현행 INTEGER 대입 변환(ROUND·범위 검사) 후 음수가 아니면 timestamp 구성 | INCOMPATIBLE | `…_to_timestamp*` |
+
+숫자→TIMESTAMP*는 기존 `tp_value_cast_internal`의 default가 INTEGER 변환을 거치는 지원 경로다. 이전 표에서 DATE/DATETIME과 함께 incompatible로 묶은 설명을 현행 답 보존(D-317-03)에 맞춰 바로잡았다. 고유 셀 추출 시 기준/후보에서 `3600` 및 `1.5`의 CAST 결과가 같음을 확인했다. 변환 규칙을 새로 추가한 것이 아니다.
 
 ### 2.6 ENUM · BIT · 컬렉션 · 객체 · JSON · LOB
 
@@ -234,10 +239,10 @@ A = develop `cad27172b` optdebug 실측(2026-09-22, `dpin_probe`, `.git_ignored_
    |---|---|
    | 숫자×숫자 | `tp_value_convert_number<SRC,DST,MODE>` → `tp_numeric_value<T>::get/make`, `tp_numeric_overflow<DST>`, `tp_numeric_from_num<DST,STRICT>` → `numeric_coerce_num_to_<double\|float\|monetary\|short\|int\|bigint>[_strict]`; NUMERIC 목표는 `numeric_coerce_value_to_num<SRC>` → `numeric_internal_double_to_num`/`numeric_internal_float_to_num`, `numeric_coerce_int_to_num`/`numeric_coerce_bigint_to_num`, `numeric_coerce_num_to_num`. 공통은 `OR_CHECK_*_OVERFLOW`, `ROUND`/`modf`/`modff`, `db_get_*`/`db_make_*`, NUMERIC 버퍼·부호·precision/scale 헬퍼. 기존 dispatch 래퍼 호출 없음 |
    | 문자→숫자 | `tp_atof`·`tp_atobi`, `numeric_coerce_string_to_num_status` → `analyze_numeric_string`/`determine_prec_scale`/`numeric_coerce_dec_str_to_num`, 위 숫자 하위 연산. 기존 진입점은 NUMERIC 파서의 오류 보고 래퍼를 호출한 뒤 같은 NUMERIC 셀을 공유한다 |
-   | →문자 인쇄 | `tp_ftoa`/`tp_dtoa`, `numeric_db_value_print`, `db_*_to_string`, `db_make_char`/`db_make_varchar` |
+   | →문자 인쇄 | `tp_ftoa_char/varchar`·`tp_dtoa_char/varchar` → 원 타입 고정 `tp_ftoa_buffer`·`tp_dtoa_buffer`(기존 공개 출력 함수도 공유), `numeric_db_value_print`, `db_*_to_string`, `tp_make_char/varchar_conversion` → `db_make_char/varchar`·`db_char_string_coerce` |
    | 문자→문자·비트 | `db_char_string_coerce`, `db_bit_string_coerce`, `db_string_put_cs_and_collation`, `pr_clone_value` |
-   | 문자→날짜·시간 | `db_date_parse_*`·`db_string_to_*_ex` 의 상태 전용 코어(D-328-07), `tz_*`(세션 TZ) |
-   | ENUM·컬렉션·JSON·LOB | `db_make_enumeration`, `set_coerce`, `db_json_*`, 다른 leaf(직접 호출) |
+   | 문자→날짜·시간 | `tp_ato*_core` → `db_date_parse_*_core`·`db_string_to_*_ex_core`; 날짜 인코딩·timestamp decode·세션 TZ의 직접 도달 경로까지 `date_conversion_error`를 전달한다. 37개 코어의 계산 본문을 기존 오류 보고 진입점과 공유하며, leaf는 보고 래퍼를 부르지 않는다(D-328-07). |
+   | ENUM·컬렉션·JSON·LOB | `tp_finish_enumeration_conversion`·`tp_enumeration_to_varchar`·`db_make_enumeration`; ENUM→숫자는 고정 숫자 생성자 또는 `numeric_coerce_value_to_num<DB_TYPE_ENUMERATION>`; `set_copy`·`set_coerce`·`tp_domain_compatible`; `tp_json_unwrap_scalar`·`db_json_*`; `db_*lob_to_*`·`bfmt_print`·`qstr_hex_to_bin`; 다른 고정 셀의 공통 코어(직접 호출). JSON 내부 값 종류 분기는 JSON payload 해석이며 DB_VALUE 타입이나 목표 도메인을 다시 선택하지 않는다. |
 
    목록 밖의 함수를 leaf 가 부르면 리뷰에서 잡는다(호출 그래프 도구는 쓰지 않는다).
 2. **두 큰 함수의 동작 불변**: 추출 커밋은 `tp_value_cast_internal`·`tp_value_coerce_strict` 의 switch 구조를 유지하고 본문만 leaf 호출로 바꾼다; 그 커밋 단독으로 양 빌드 green + CTP sql 전수(optdebug) 무 diff.
