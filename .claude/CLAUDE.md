@@ -1,5 +1,7 @@
 9. when develop/execute/review CUBRID, use CUBRID_SSOT.md and justfile.
 
+CUBRID validation policy (user instruction, 2026-09-22): skip unit tests, including enabling/configuring unit-test targets and `just ctest`. Validate with the required builds, containerized CTP suites, and task-specific runtime checks instead. This supersedes unit-test gates in older maps, tickets, and skills unless the user explicitly requests unit tests later.
+
 Whenever modifying CUBRID source code, ALWAYS consult the `cpp-perf-rules` skill (C/C++ performance rulebook) and apply its rules.
 
 Division of labor (mirrored VERBATIM from [`.agents/AGENTS.md`](../.agents/AGENTS.md), which the harness does not auto-load — a pointer alone was not followed; same remedy as CUBRID_SSOT.md 환경·운영 17; keep the two copies in lockstep):
