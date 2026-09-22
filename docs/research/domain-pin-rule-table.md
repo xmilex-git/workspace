@@ -1,8 +1,8 @@
 # 타입 규칙표 — 도메인·변환의 확정 시점과 변환기 계획 (정본)
 
-지도: xmilex-git/workspace#312 · 티켓: #317(타입 축) · 짝 티켓: #322(collation 축 — 이 문서의 §6 을 그 티켓이 채운다) · 작성 2026-09-22 · 기준 엔진: `develop` `cad27172b`.
+지도: xmilex-git/workspace#312 · 티켓: #317(타입 축) · 짝 티켓: #322(collation 축 — §6, D-322-01~04) · 작성 2026-09-22 · 기준 엔진: `develop` `cad27172b`.
 입력: `domain-pin-asis-matrix.md`(전수 실측, 부록 A1~A4) · `domain-pin-rules-parser.md`(#313) · `domain-pin-rules-server.md`(#321) · `domain-pin-exec-sites.md`(#314) · `domain-pin-pg-mysql.md`(#315) · `domain-pin-lessons.md`(렛저).
-결정 기록(사용자 답변 원문·근거·예시): #317 코멘트 "결정 기록 1라운드"(D-317-01~09), "2라운드"(D-317-10~15), "3라운드"(D-317-16~24).
+결정 기록(사용자 답변 원문·근거·예시): #317 코멘트 "결정 기록 1라운드"(D-317-01~09), "2라운드"(D-317-10~15), "3라운드"(D-317-16~24); collation 축은 #322 코멘트 "결정 기록 1라운드"(D-322-01~03), "2라운드"(D-322-04). collation 실측: `.git_ignored_dir/scratch/dpin-322/probe-develop-collation.md`(A~F, develop `cad27172b` release/optdebug).
 
 이 표는 **"어떤 조합이 어떤 도메인이 되는가"** 와 **"그것을 누가 언제 확정하고, 값은 누가 언제 변환하는가"** 를 한 행에 적는다. 아키텍처(#318)·인터페이스(#323)·변환기 티켓(신규)은 이 표를 입력으로 삼고, 여기 없는 규칙은 구현 중 코멘트로 만들지 않고 이 표를 개정해 사용자 승인을 받는다(L-01).
 
@@ -123,12 +123,36 @@
 
 ## 5. 이 PR 에서 고치는 결함(P0 의 예외)과 후속으로 보내는 것
 
-**고친다(크래시·assert·조용한 0행)**: 실측 §1 D1(`coalesce(enum_col, ?)`)·D2·D3·D4·D5·D6·D7, `INSERT int_col ← ?` DATE 0행, `char(n)_col = ?` VARCHAR 값 NULL, `enum_col < ?` TIME 2행(값 A/B 뒤). 새 경로가 대체하는 자리에서 자연히 사라지거나, 게이트 CTP 에서 드러나면 이 PR 안에서 수정.
+**고친다(크래시·assert·조용한 0행)**: 실측 §1 D2·D3·D4·D5·D6·D7, L-19(§6 C15), `INSERT int_col ← ?` DATE 0행, `char(n)_col = ?` VARCHAR 값 NULL, `enum_col < ?` TIME 2행(값 A/B 뒤). 새 경로가 대체하는 자리에서 자연히 사라지거나, 게이트 CTP 에서 드러나면 이 PR 안에서 수정.
+**후속으로 뺀 결함(D-322-04)**: D1 `coalesce/nullif/case(enum_col, ?)` — optdebug 는 prepare 시 csql assert, release 는 정상 오류 -494 라 크래시 기준에 걸리지 않고 파서 래핑 타입 선택을 바꾸는 별건. 방향(리터럴 경로와 같게: VARCHAR + ENUM collation)만 확정, 작업은 xmilex-git/workspace#326.
 **후속 티켓(현행이 이상하지만 규칙과 무관)**: 미실행 문장 메타(L-24), `str_col = 1` vs `= 1.00` 인덱스 갈림, UNION NUMERIC (38,15), `int_col = 1.5` 0행 vs `< 1.5`, `SET @v = date` 문자열 저장, SUM(int) 승격, `extract(… from time)` 쓰레기 값, `hour('1.0')` = 0.
 
-## 6. collation 축 (짝 티켓 #322 가 채운다)
+## 6. collation 축 (짝 티켓 #322, D-322-01~04)
 
-이 표의 모든 문자 도메인(VARCHAR 미러·문자화 변환기·리스트 컬럼)의 collation 확정 시점·LEAVE 계약·`SET NAMES` 재컴파일은 #322 의 결정으로 이 절에 추가된다. 실측 참고: 슬롯 collation 은 `utf8_bin`(LANG_SYS), `set names … collate utf8_en_ci` 뒤 새 prepare 의 `?` 는 `utf8_en_ci`(부록 A2 `COLL.*`).
+**원칙**: 도메인 축과 collation 축은 코드가 다르지만(L-14) **확정 지점은 같다** — 컴파일 또는 게이트, 게이트 뒤 결정 0. 문자 형제(컬럼·리터럴·CAST·ENUM 컬럼)가 있으면 컴파일이 형제 collation 으로 ENFORCE(현행 `pt_coerce_node_collation`), 형제가 전부 슬롯이면 **게이트 확정**(D-322-01): 게이트가 바인드 값들의 collation 에 현행 실행 병합 규칙 `LANG_RT_COMMON_COLL`(같으면 그것 / 한쪽 coercible 이면 다른 쪽 / 둘 다 coercible 이면 ISO 바이너리 / 둘 다 비-coercible 이면 -1150 / codeset 변환 불가 -622)을 실행당 1회 적용해 슬롯·연산자 결과·리스트 컬럼·누산기 collation 을 게이트 표에 넣는다. coercibility 8-레벨(#313 §3.1)·컴파일 병합 `pt_common_collation`·실행 병합 규칙 자체는 **변경 없음** — 실행 병합의 위치만 행 평가 → 게이트. `TP_DOMAIN_COLL_LEAVE` 는 XASL 에서 사라진다(계획 도메인의 collation_flag 는 항상 NORMAL 이거나 게이트 슬롯 참조) → #314 §4 의 쌍 조건 26곳은 타입 축과 함께 삭제(G-04 충족). 슬롯의 기본 collation 이 `LANG_SYS`(로케일 바이너리)이지 클라이언트 collation 이 아니라는 현행(#313 §3.5)은 게이트 확정 아래에서 "바인드 값이 가져오는 collation(CAS 가 세션 collation 으로 만듦)" 으로 대체되며 관찰 가능한 답은 같다(실측 A2 `COLL.hv_after_set_names`, 프로브 C1·C3·C5).
+
+| # | 조합 | collation | 확정 | 근거·현행 | 답안 변경 |
+|---|---|---|---|---|---|
+| C1 | `col(A) = ?`, `col LIKE ?`, `col IN (?, ?)`, `col BETWEEN ? AND ?`, `INSERT col ← ?`, `substr(col, ?)`·`replace(col, ?, ?)` 등 문자 컬럼 형제 | 슬롯 VARCHAR + **A ENFORCE**(D-317-04 와 한 결정) | C | K2·K10·B6·B7·B20 | — |
+| C2 | `'x' = ?`, `? IN ('a', 'b')`, `? LIKE 'a%'`, `concat(?, 'a')` 리터럴 형제 | 리터럴 collation(prepare 시점 클라이언트 collation) ENFORCE | C | K3·K11·B10; 프로브 C2·C4: prepare 뒤 `SET NAMES` 해도 리터럴·미러 슬롯 고정 | — |
+| C3 | `? = ?`, `? LIKE ?`, `concat(?, ?)`, `? + ?`(plus_as_concat), `? \|\| ?`, `upper/trim/lpad(?)`, `to_char(?)`, `greatest/least(?, ?)`, `nullif(?, ?)`, `case when ? = ? then ? else ? end`, `decode(?, ?, ?)`, `insert/replace/translate/substring_index/find_in_set/position(?, ?)` — 형제 전부 슬롯 | **게이트 확정**: 값 collation 병합, 실패 -1150/-622 | G | K4·K5·B21·F9·F10; 실측 A2 `COLL.*`; `issue_12129_HV_collation` 21건의 현행 답(값 collation 표기·혼합 charset -1150) 유지 | 없음 — -1150/-622 시점만 행 평가 → 게이트(P7 ②) |
+| C4 | 중첩 식 `s1 LIKE ? + ?`, `rtrim(? + ?, ?)`, `find_in_set(s1, ? + ?)`, `position(s1 in ? + ?)` | 안쪽 `? + ?` 는 C3(게이트) → 바깥 형제 collation 으로 **계획된 CAST**(현행 `CAST(expr AS VARCHAR COLLATE c)` 래핑 자리). 하향 전파 없음 | G+C | D-322-02; `_03_plus`·`_12_like`·`_14_find_in_set` 의 `_euckr + _utf8` -1150 유지 | 없음 |
+| C5 | `COALESCE(?, col(A))`, `IFNULL(?, col)`, `CASE … THEN ? ELSE col(A)`, `NULLIF(?, col)`, `GREATEST(?, col)` | 슬롯 A ENFORCE, 결과 A(현행 `is_wrapped_res_for_coll` 래핑) | C | K8·K9; 실측 A2 `COLL.coalesce_hv_col`·`case_hv_col` = `utf8_en_cs` | — |
+| C6 | `COALESCE(enum_col, ?)`, `NULLIF(enum_col, ?)`, `CASE … ELSE ?`(ENUM 형제) | **후속 #326** — 방향: 리터럴 경로(`coalesce(e, 'x')` = VARCHAR + ENUM collation, 프로브 A1)와 같게 슬롯 VARCHAR + ENUM collation ENFORCE. 이 PR 은 현행(release -494; optdebug prepare assert D1) 유지 | C(후속) | D-322-04; 프로브 A1·A2 | 후속(오류 → 값, 결함 소멸) |
+| C7 | `enum_col + ?` 문자 바인드(A13 게이트 확정 → 이름 접합) | 결과 VARCHAR + **ENUM 컬럼 collation**(컴파일에 알려짐) | G(타입)/C(collation) | 프로브 A1 `e + 'x'` = `utf8_en_ci`; #321 §2.1 ENUM→문자 = 이름 + ENUM collation | — |
+| C8 | 리스트 컬럼 — `SELECT ? UNION SELECT 'a'`(문자 가지 있음) / `SELECT ? UNION SELECT ?`, 파생 테이블·CTE·스칼라 서브쿼리 `?` | 문자 가지 collation 미러(C) / 게이트 표(G) | C/G | K14·U3·U17; `qfile_unify_types` 의 collation 플래그 -1509 분기 삭제 | — |
+| C9 | 다중 행 VALUES `(values (?), (?))`, `INSERT … VALUES (?), (?)` | 게이트가 열마다 1회 병합(현행 "첫 행과 비교" S-06 대체), 실패 -1150 | G | G-08(2); 프로브 E2 `_utf8`+`_euckr` = "Context requires compatible collations" | 없음(시점만) |
+| C10 | 집계·분석 `group_concat(?)`, `min/max(?)`, `count(distinct ?)`, `lead/lag/first_value(?)`, `percentile_* … order by ?` | 누산기·distinct/정렬 리스트 collation 을 게이트 표에서; 바인드 전부 NULL 이면 결과 NULL(collation NULL) | G | F7; 프로브 B1·B2 release `NULL`/`'a' utf8_bin`. D2(optdebug 서버 assert qx:1375 = 누산 도메인 LEAVE 플래그)는 LEAVE 소멸로 자연 해소 | 결함 소멸(D2 서버 크래시 → NULL) |
+| C11 | `group_concat(col + ?)`, `group_concat(s1)`, `min(col)` 컬럼 형제 | 컬럼 collation | C | `_04_group_concat`(`i1 + ?` 는 타입 축 A5 INTEGER 미러 → 문자 바인드 -494 는 타입 축 답안 변경) | — |
+| C12 | 세션변수 `@v` 읽기(`SET @v = 'x' COLLATE c` 저장 collation 포함) | 형제 있으면 ENFORCE(게이트가 값 codeset 변환), 없으면 게이트 확정(저장 값 collation) | C/G | S4·S5·L-32; `_07_session_var`·`_12_like` 세션변수 블록 현행 유지 | 없음 |
+| C13 | PL/CSQL 정적 SQL 의 `?`(PL 이 만든 값) | 문자 형제 있으면 ENFORCE, 없으면 게이트 확정 | C/G | S6·L-32 — 탐침(#319)에서 PL 값 collation 확인 | — |
+| C14 | 보간 정렬 키 `percentile_cont … ORDER BY varchar_col`, `median(varchar_col)` | 정렬 키 collation = 컬럼 collation(컴파일). 타입만 F10 X 잔존 | C | K13·L-21 | — |
+| C15 | 비문자 결과 도메인 — `COALESCE(CAST(? AS DATETIME), CAST(? AS DATETIME), ?)`, 산술·날짜 함수 결과, 비문자 게이트 슬롯 | **collation 0 + NORMAL, 플래그 없음**(게이트 표의 비문자 항목에 collation 칸 없음). `pt_upd_domain_info` 가 인자 플래그를 비문자 결과로 옮기는 경로는 이 PR 결함 수정 | C | K15·U13·L-19 | 결함 소멸(optdebug assert → 값) |
+| C16 | 인덱스 키 `varchar_col(A) = ?`, `LIKE ?` | 슬롯 A ENFORCE 이므로 키 collation = 인덱스 collation(strict 성공). 명시 `COLLATE` 로 다른 collation 을 바인드하면 현행 strict 실패 → 값 collation 키 + 공통 collation 비교(B30 계획된 변환기) | C/G | B30·#321 §4.2 | — |
+| C17 | `COLLATE` 수식어 `? = ? COLLATE c`, `col COLLATE c = ?` | 수식어 collation 강제(codeset 다르면 컴파일 오류) | C | #313 §3.3-3 | — |
+| C18 | 재컴파일 트리거 | `SET NAMES … COLLATE` 는 prepared 문 무효화 없음(리터럴·ENFORCE 슬롯은 prepare 고정, 게이트 슬롯은 값 따라 세션 반영); `ALTER … COLLATE` 는 xcache 무효화로 재컴파일. 새 트리거·캐시 키 변경 없음 | — | D-322-03; 프로브 C1~C5·D1·D2 | 없음 |
+
+**귀결(아키텍처 #318·인터페이스 #323·변환기 #325 입력)**: (1) 게이트 표 항목 = 슬롯 ID → (도메인, collation) 한 쌍 — collation 축을 별도 표로 두지 않는다. (2) 삭제 목록에 #314 §4 26곳(연산자 결과 2·REGUVAL_LIST 1·리스트 컬럼 11·집계 9·빠른 경로 차단 3)을 추가하고, `qfile_unify_types`·`qexec_end_one_iteration` 의 collation 플래그 분기도 함께. (3) 오류 코드 불변(-1150·-622·-1509), 시점만 게이트. (4) 후속(Out of scope): 플랜 캐시 키 텍스트가 LANG_SYS 와 같은 리터럴 collation 을 생략 인쇄해 다른 세션 collation 의 같은 문장이 같은 캐시 항목을 쓰는 문제(#313 §3.6, 리터럴 축) · D1 ENUM 형제 #326.
 
 ## 7. 답안 변경 목록(초안 — 게이트 CTP 결과로 채움)
 
@@ -141,6 +165,8 @@
 | `to_char(?, 숫자 포맷)` 문자 바인드 | F1' | 후보 | 값 A/B | — |
 | 결함 소멸 | §5 | assert/0행 → 오류 또는 값 | P7 ③ | — |
 | 오류 코드·트레이스 | — | 게이트 시점 오류는 -494 계열 유지; `?:0` 플랜 텍스트 유지 | P7 ② | `cbrd_25374`·`cbrd_24906_2` 부류는 텍스트 불변 목표 |
+| collation 충돌 시점 | C3·C4·C9 | -1150/-622 가 행 평가 → 게이트(코드 불변, 값 없음) | P7 ② | `issue_12129_HV_collation` 21건은 답 불변 목표(이전 캠페인 19건 diff 는 회귀로 분류) |
+| collation 결함 소멸 | C10·C15 | D2 서버 assert → NULL, L-19 assert → 값 | P7 ③ | — |
 
 ## 8. 렛저 대응표
 
@@ -150,20 +176,21 @@
 | L-11 | A2·A5'·A12·F1'(NUMERIC floating, 값 p/s 보존) |
 | L-12 | A5·A6·A7·D-317-10(산술 strict, `/` 절삭) |
 | L-13 | A8(게이트 확정, 접합 유지 — 매뉴얼 변경 없음) |
-| L-14 | §6(#322) |
+| L-14 | §6 원칙·C1~C5(도메인 축과 확정 지점 공유, 하향 전파 없음 D-322-02) |
 | L-15 | S3·S4·S5 |
+| L-32 | S7·§6 C12·C13 |
 | L-16 | S6 |
 | L-17 | F1·F1'·F2·F4 |
 | L-18 | U4·U3 |
-| L-19 | U13 |
+| L-19 | U13·§6 C15 |
 | L-20 | B34 |
 | L-21 | F7·F10 |
 | L-22 | B33 |
 | L-23 | §7 |
 | L-24 | S2(후속) |
-| L-25 | §6 |
+| L-25 | §6 C2·C18(D-322-03; 캐시 키 리터럴 문제는 후속) |
 | L-42·L-46 | P5 |
 | L-45 | B30·B31·B32 |
-| L-47 | §6 |
+| L-47 | §6 원칙(LEAVE 폐기)·C3·C8·C10, 귀결 (2) |
 | L-49 | B33 불변식 |
 | L-51 | P6 삭제 목록 |
