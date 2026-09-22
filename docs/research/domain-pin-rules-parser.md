@@ -441,7 +441,7 @@ regu 도메인 결정 순서:
 | F12 | `rtrim(? + ?, ?)` | `? + ?` MAYBE(PLUS) 가 CHAR generic 인자 → `CAST(?+? AS VARCHAR)` 래핑(늦은 바인딩 결과) | A | 내부 슬롯은 규칙 A8 |
 | F13 | `sum(?)`, `min(?)`, `max(?)` | 결과 MAYBE, 누산기 도메인 실행 결정(L-43) | A | DOUBLE/VARCHAR 부류 고정 |
 | F14 | `avg(?)` | `CAST(? AS DOUBLE)`, 결과 DOUBLE | C | — |
-| F15 | `sum(int_col)` | INTEGER(data_type 복사) → 서버가 BIGINT/NUMERIC 승격(#321) | C | — |
+| F15 | `sum(int_col)` | INTEGER(data_type 복사); 서버 누산도 INTEGER 로 INT 오버플로 -3009, 승격 없음(#321 §5 F15 정정) | C | — |
 | F16 | `median(?)`, `percentile_cont(0.5) WITHIN GROUP (ORDER BY ?)` | 결과 MAYBE, 정렬 키 MAYBE | A | 인자·정렬 키 모두 DOUBLE(문자열 입력은 CAST 요구, L-21) |
 | F17 | `median(varchar_col)` | 결과 **MAYBE**(시그니처 `{MAYBE,{STRING}}`) | A(슬롯 없이도!) | 값이 숫자면 DOUBLE, 날짜면 DATE — 규칙표: 문자열 입력은 오류 또는 DOUBLE |
 | F18 | `group_concat(?, ',')` | `CAST(? AS VARCHAR)` | C | — |
