@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted (amended 2026-09-24 by #335 D-335-10 — see "Amendment")
 date: 2026-09-22
 locked-by: xmilex-git/workspace#320 (2026-09-22)
 ---
@@ -20,6 +20,6 @@ locked-by: xmilex-git/workspace#320 (2026-09-22)
 - `original_domain`/`original_opr_dbtype` 필드와 클론 원복 5곳·PX 스폰 원본 저장 3곳·워커→루트 역전파가 통째로 사라진다(G-02·G-06). 그 자리는 `domain_plan` 포인터가 재사용한다(D-323-13, 구조체 크기 불변 MEM-02). **구현 순서상** 이 필드 제거는 실행 지점이 플랜 도메인에 쓰기를 멈춘 뒤(삭제 티켓 마지막)에만 가능하다 — 그 전에 원복을 지우면 플랜 캐시 클론이 오염된다.
 - `pt_make_regu_hostvar` 의 2단계(바인드 값 타입을 도메인으로)와 바인드 피크 재계획의 값 타입 도메인은 삭제된다 — 클라이언트에 숨어 있던 세 번째 결정 지점(D-318-05). 재계획은 값을 비용 추정에만 쓴다.
 - 미확정 도메인에 닿으면 전용 오류 `ER_QPROC_DOMAIN_UNRESOLVED = -1382`(로드 경계 (a): `stx_build_domain_plan` 끝, 예외 표 X-1~X-7 정적 배열; 실행 경계 (b): 설치 자리 6곳 = #324 카운터와 1:1) + optdebug assert. `ER_QPROC_INVALID_XASLNODE` 재사용은 기각 — 클라이언트가 그 코드를 받으면 조용히 재컴파일·재실행해 위반을 숨긴다(db_vdb.c:2277, D-318-04, D-323-09). 재컴파일 트리거 목록에 넣지 않는다. 필터/함수 인덱스 스트림은 GATE 비트가 하나라도 있으면 로드 거부, `fpcache_claim` 오류 삼킴은 전파로.
-- 실행 결정 잔존 X(`median(varchar_col)`·`percentile_* … order by varchar_col`)는 예외 표 X-7 에 RESIDUAL 로 둔다(D-317-15).
+- ~~실행 결정 잔존 X(`median(varchar_col)`·`percentile_* … order by varchar_col`)는 예외 표 X-7 에 RESIDUAL 로 둔다(D-317-15).~~ **Amendment(2026-09-24, #335 D-335-10, 사용자 선택)**: 잔존 X 는 없다 — 게이트가 값을 갖지 않는 문자 인자는 타입으로 정한다(MEDIAN/PERCENTILE 문자 컬럼·식 → 컴파일 DOUBLE, ADDTIME 문자 → 컴파일 VARCHAR, 게이트 의존 문자 식은 해석기가 같은 답), RESIDUAL 표시와 X-7 은 삭제. 답안 변경은 규칙표 §7 D-335-10 행(날짜·시간 문자열 컬럼의 MEDIAN/PERCENTILE → -1118). 결정 원문: [#335 D-335-10](https://github.com/xmilex-git/workspace/issues/335#issuecomment-5797393992).
 - 헤더 계약: `domain_resolver.h`(1) ← `domain_plan.h`(2) ← `query_executor.h`(3) ← `fetch.h`(4), `parser/`·`compat/`·`broker/`·`method/` 포함 금지, 순환 검사는 구현 게이트(D-323-15).
 - 되돌리는 길: 스트림 레이아웃이 불변이므로 서버 측 변경만 되돌리면 develop 클라이언트·저장된 필터 스트림과 그대로 호환된다. 컴파일 측은 GATE 비트를 내보내지 않으면 VARIABLE 이 로드 경계에 걸리므로, 되돌릴 때는 경계 (a) 를 먼저 끈다.

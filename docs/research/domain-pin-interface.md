@@ -76,7 +76,7 @@ struct domain_plan_item
   int slot;                       /* resolved.table 인덱스. -1 = 컴파일 확정(답은 fixed) */
   int ref;                        /* 상수 참조의 값 인덱스: resolved.vals[ref]. 그 외 -1 */
   unsigned char operand_class;    /* DOMAIN_OPERAND_CLASS */
-  unsigned char flags;            /* DOMAIN_PLAN_GATE 0x01 · KEY1 0x02 · KEY2 0x04 · ISS 0x08 · ALIAS 0x10 · KEEP_LAZY 0x20 · RESIDUAL 0x40 · TRUNCATE_OK 0x80 (사용자 CAST 의 비슬롯 피연산자: 절단 수용 = 현행 tp_value_cast_force, D-328-02) */
+  unsigned char flags;            /* DOMAIN_PLAN_GATE 0x01 · KEY1 0x02 · KEY2 0x04 · ISS 0x08 · ALIAS 0x10 · KEEP_LAZY 0x20 · TRUNCATE_OK 0x80 (RESIDUAL 0x40 은 D-335-10 으로 삭제) (사용자 CAST 의 비슬롯 피연산자: 절단 수용 = 현행 tp_value_cast_force, D-328-02) */
   unsigned char fail[3];          /* 피연산자별 DOMAIN_FAIL_POLICY — 참조 자리의 속성이므로 표가 아니라 항목에 */
   unsigned char pad[3];
   RESOLVED_DOMAIN fixed;          /* 컴파일 확정 답(로드가 채움). 게이트 항목은 domain=NULL */
@@ -159,7 +159,7 @@ struct domain_operand
  * LANG_RT_COMMON_COLL, ENUM 변환 표, NUMERIC p/s 공식)를 여기로 옮기고 원 자리는 지운다. 로드는 val_type 없이 불러 *needs_gate 로
  * 게이트 확정 자리를 판별하고, 게이트는 값 타입을 넣어 부른다. */
 int domain_resolve (DOMAIN_CTX ctx, int opcode, const DOMAIN_OPERAND * operands, int n_operands,
-                    const TP_DOMAIN * consumer_domain, RESOLVED_DOMAIN * result, bool * needs_gate);   /* NO_ERROR / -1150 / -622 / -494 계열 */
+                    const TP_DOMAIN * consumer_domain, RESOLVED_DOMAIN * result, bool * needs_gate);   /* 현행 함수 코드(-454 등). 연산자가 받지 못하는 조합은 dispatcher 의 현행 결과(오류 / 오류 없는 NULL)를 구분해 돌려준다(D-335-02) */
 
 /* (원 타입, 목표 도메인, 문맥) → 고정 변환기. 대입 문맥은 반올림 캐스트(현행 tp_value_cast 의미), 산술·비교·키는 strict. 항등이면 NULL. */
 DOMAIN_CONV_FUNC domain_lookup_converter (DB_TYPE src_type, const TP_DOMAIN * dst_domain, DOMAIN_CTX ctx);
@@ -259,7 +259,8 @@ void        qexec_free_xasl_state      (THREAD_ENTRY *, xasl_state *);   /* asse
 1. `assert (plan->dbval_cnt == vd.dbval_cnt && !resolved.sealed)`; `vals[n_refs]`(+`table[n_slots]`) 한 블록 할당; `resolved.in = vd.dbval_ptr; vd.dbval_ptr = vals`.
 2. **상수 참조**(`const_refs`): `src = in[val_pos]`(auto-param 은 `regu->value.dbvalptr`). 변환기 = `domain_lookup_converter (값 타입, fixed.domain, ctx)` 실행당 1회 → `vals[ref]`. 실패 → `fail`: ERROR 는 즉시 반환(현행 -494 계열 코드), NULL 은 `vals[ref] = NULL`(`return_null_on_function_errors` 가 no 면 ERROR), KEEP 은 원 값 복제 + KEEP_LAZY 슬롯을 `domain_resolve (DOMAIN_CTX_COMPARE, …, {계획 도메인, 값 도메인})` 로 재확정. GATE 슬롯은 `table[slot].domain = tp_domain_resolve_value (src)`(codeset·collation 포함) + 복제.
 3. **휘발 항목**(`volatile_refs`): 형제 미러가 없는 세션변수 읽기(S5)는 초기값(`session_get_variable`)의 타입으로 `table[slot].domain` 확정; 값은 캐시하지 않는다(행마다 fetch).
-4. **게이트 의존 노드**(`gate_nodes`, 생산자 우선 — 트리 전체): 피연산자 도메인을 읽어 `domain_resolve (item->ctx, opcode, operands, n, consumer_domain, &table[slot], …)`. 산술 결과·COALESCE 류 공통 타입·누산기·리스트 컬럼·collation 병합(-1150/-622)이 1회. aptr 결과 리스트 파일의 `type_list` 는 나중에 `qdata_get_valptr_type_list` 가 이 표를 읽어 만든다.
+4. **게이트 의존 노드**(`gate_nodes`, 생산자 우선 — 트리 전체): 피연산자 도메인을 읽어 `domain_resolve (item->ctx, opcode, operands, n, consumer_domain, &table[slot], …)`. 산술 결과·COALESCE 류 공통 타입·누산기·리스트 컬럼이 1회. collation 병합(-1150/-622)은 #338 이 이 자리에 넣는다(D-335-03). 연산자가 받지 못하는 조합: develop 이 계산 때 오류(-454)를 내던 조합은 여기서 같은 오류로 실패(0행·미선택 분기도 — 규칙표 §7), 오류 없이 NULL 이던 조합은 NULL 결과만 기록(D-335-02). aptr 결과 리스트 파일의 `type_list` 는 나중에 `qdata_get_valptr_type_list` 가 이 표를 읽어 만든다.
+   **구현(#335)**: 피연산자는 로드가 `gate_links[g]`(`gate_nodes` 와 평행 — 피연산자 항목·리터럴 값·AGG/ANALYTIC 컴파일 도메인)에 적어 둔다. 값을 가진 피연산자(바인드·리터럴)는 값 타입(F-335-06), 게이트 의존 생산자는 그 칸, 나머지는 컴파일 도메인; 값 부류 자리(D-328-06)는 바인드·리터럴 값으로 분류하고, 값이 없는 문자열은 타입으로 정한다(ADDTIME VARCHAR·MEDIAN/PERCENTILE DOUBLE, D-335-10, converters §3 끝). 산술 문맥의 거부만 실행 전 오류이고, 다른 문맥의 오류는 계산 때 develop 대로 나며 칸에는 "값 없음"을 기록한다. 해석기가 모르는 연산자는 `ER_QPROC_DOMAIN_UNRESOLVED`(optdebug assert). 게이트 노드 기준과 이관(S5 → dpin-10, 파생 소비자 → dpin-11)은 converters §3 끝.
 5. **상수 키 range**(`keys` 중 `OPERAND_CONST`): 원소마다 strict-or-keep → `table[slot].setdomain` 1회 조립(§5). 상관 키는 여기서 할 일이 없다.
 6. 불변식 검사: 모든 상수 참조에서 `DB_VALUE_DOMAIN_TYPE (vals[ref]) == TP_DOMAIN_TYPE (RESOLVED (…)->domain)` 이거나 KEEP 으로 기록됨. `resolved.sealed = true`.
 
@@ -341,7 +342,7 @@ struct domain_plan_key
 | X-4 | `TYPE_LIST_ID`·`TYPE_ORDERBY_NUM`·`TYPE_INST_NUM` | 도메인 무의미 | 항목 없음 |
 | X-5 | `TYPE_FUNCTION` 집합 생성자(F_SEQUENCE/F_SET…) | 컬렉션 도메인은 원소에서 | 정적(원소 ALIAS) |
 | X-6 | `T_EVALUATE_VARIABLE` 세션변수 읽기 | 형제 있으면 미러(S4), 없으면 GATE(S5); 값은 VOLATILE | GATE 비트 요구 |
-| X-7 | F10 `median(varchar_col)`·`percentile_* … order by varchar_col` 인자 | 실행 결정 잔존(D-317-15) | RESIDUAL 표시, 검사 제외 |
+| X-7 | ~~F10 `median(varchar_col)`·`percentile_* … order by varchar_col` 인자~~ | **폐기(D-335-10, 2026-09-24)**: 컴파일이 DOUBLE 로 확정, 잔존 없음 | — |
 
 필터/함수 인덱스 스트림: GATE 비트 하나라도 있으면 거부. `fpcache_claim`(filter_pred_cache.c:355~416)의 오류 삼킴(S-42)은 전파로 수정.
 
@@ -361,7 +362,7 @@ struct domain_plan_key
 | `resolve_domains_on_list_scan` + `resolve_domain_on_regu_operand` | sm:8216·8312 (S-20) | list scan 의 `TYPE_POSITION`/`TYPE_CONSTANT` 도메인은 컴파일 확정 |
 | `qfile_update_domains_on_type_list` | lf:7041 (S-13) | 리스트 컬럼 도메인은 `qdata_get_valptr_type_list` 가 `RESOLVED (…)->domain` 으로 만든다 |
 | `update_domains_on_type_list_by_val_list` (PX) | px_scan_result_handler.cpp:58 (S-37) | 워커도 같은 값을 읽는다 |
-| `qdata_update_agg_interpolation_func_value_and_domain` | qa:3329 (S-26) | MEDIAN/PERCENTILE 도메인은 게이트(F7) 또는 RESIDUAL(F10) |
+| `qdata_update_agg_interpolation_func_value_and_domain` | qa:3329 (S-26) | MEDIAN/PERCENTILE 도메인은 게이트(F7) 또는 컴파일 DOUBLE(F10, D-335-10) |
 | `qexec_mark_aggregate_operand_expressions` | qx:21839, pxt:675 (M8) | `operand_class`·AGG_OPERAND 는 로드 항목 |
 
 **함수는 남고 블록이 사라진다**
@@ -389,13 +390,13 @@ struct domain_plan_key
 | `qexec_generate_row_default_expr`·`qexec_execute_insert` qx:13110·13650 | `db_to_char` 결과 도메인을 포맷 값에서 결정 (S-40) → 포맷 슬롯은 게이트(F1·F2) |
 | collation 쌍 조건 26곳(#314 §4) | `TP_DOMAIN_TYPE (d) == DB_TYPE_VARIABLE \|\| TP_DOMAIN_COLLATION_FLAG (d) != TP_DOMAIN_COLL_NORMAL` 조건 전부 — LEAVE 가 XASL 에서 사라지므로 두 축이 함께 |
 
-**남는 것(결정적이 될 뿐)**: `qdata_*_dbval` 의 값 타입 dispatch(S-08), `tp_value_compare_with_error`·`btree_compare_key` 함수 본체(호출자만 줄어듦), `scan_check_user_given_keylimit_overflow` 의 NUMERIC assert(S-33, 이제 불변식이 보호), F10 `median(varchar_col)` 의 DOUBLE→DATETIME→TIME 시도(X, RESIDUAL 항목), `INDX_SCAN_ID` 의 range 별 setdomain 자리(이름과 수명만 바뀜, §5).
+**남는 것(결정적이 될 뿐)**: `qdata_*_dbval` 의 값 타입 dispatch(S-08), `tp_value_compare_with_error`·`btree_compare_key` 함수 본체(호출자만 줄어듦), `scan_check_user_given_keylimit_overflow` 의 NUMERIC assert(S-33, 이제 불변식이 보호), `INDX_SCAN_ID` 의 range 별 setdomain 자리(이름과 수명만 바뀜, §5).
 
 ---
 
 ## 8. 클라이언트
 
-- `pt_set_host_variables`(pd:3072): 참조 OID 검사 + `pr_clone_value` 만. `tp_value_cast_preserve_domain` 분기·CHAR 원 값 유지 분기(pd:3128) 삭제(B7 의미는 게이트 CHAR 변환기, D-327-01). 탐침 실측: `int_col = ?`·`i + ?` 슬롯은 오늘 `host_var_expected_domains` 가 비어 있어(DB_TYPE_NULL) 캐스트가 없었다 — 정수 미러 슬롯의 변환은 이 PR 에서 **처음 생기므로** strict-or-keep 이 규칙표 그대로여야 답이 유지된다.
+- `pt_set_host_variables`(pd:3072): 참조 OID 검사 + `pr_clone_value` 만. `tp_value_cast_preserve_domain` 분기·CHAR 원 값 유지 분기(pd:3128) 삭제(B7 의미는 게이트 CHAR 변환기, D-327-01). **정정(D-335-08, #335)**: 두 분기와 `do_cast_host_variables_to_expected_domain` 은 **남는다** — 바인드 캐스트는 클라이언트가 문장마다 develop 규칙으로 하고(리터럴·바인드 문장의 XASL 공유 F-335-04, 클라이언트 전용 객체 변환 F-335-05), `do_cast` 경로도 VARCHAR 원 값을 유지한다(B7). 게이트는 값을 바꾸지 않고 GATE 슬롯 도메인만 기록한다. 탐침 실측: `int_col = ?`·`i + ?` 슬롯은 오늘 `host_var_expected_domains` 가 비어 있어(DB_TYPE_NULL) 캐스트가 없었다 — 정수 미러 슬롯의 변환은 이 PR 에서 **처음 생기므로** strict-or-keep 이 규칙표 그대로여야 답이 유지된다.
 - `host_var_expected_domains[]` 는 남는다: prepare 메타(db_vdb.c:2954, db_query.c:461·546·639), PL 보고(mc:657), semantic_check.c:13412, 하위 세션 공유(db_vdb.c:3350·3436), 바인드 피크(db_vdb.c:3209, 비용 추정만). 삭제 소비자는 pd:3110 하나.
 - `pt_make_regu_hostvar`(xg:6391): 2단계(바인드 값 타입 → 도메인, xg:6418~6445)와 꼬리 `tp_value_cast (val, val, regu->domain)`(xg:6493~6500) 삭제. 순서 = data_type → expected_domain → type_enum → GATE 면 placeholder + `REGU_VARIABLE_GATE`. 형제 미러·소비자 도메인 우선은 첫 패스 확정 + 재평가 멱등(#319 F-3).
 - 카운트 불변식(L-30): `pt_to_xasl` 끝 `assert (parser->dbval_cnt == parser->host_var_count + parser->auto_param_count)`; 서버 `qexec_resolve_domains` 1.

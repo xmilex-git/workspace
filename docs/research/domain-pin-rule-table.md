@@ -78,7 +78,7 @@
 | B10 | `? = 'a'`, `? LIKE 'a%'`, `col LIKE ?` | VARCHAR + 리터럴/컬럼 collation | K 게이트 문자화 | C | 현행 | — |
 | B11 | `date_col = ?` | DATE 미러 | K 게이트 값→date(문자 파싱; 숫자 -494 현행) | C | 현행 | — |
 | B13 | `enum_col = ?`, `<> ?`, `IN (?, …)` | **컬럼의 ENUM 도메인(원소 포함)** | K 게이트: 현행 ENUM 변환 표(정수→서수, 문자→이름(ENUM collation), 실수→floor, 범위 밖 -494); 비교 서수 | C | 현행 | — (D-317-12) |
-| B14 | `enum_col < ?` | ENUM 도메인 | 위와 같음(서수 비교) | C | 현행; TIME 바인드 2행은 결함 → 값 A/B 로 확정 후 -494 | 결함 1건 |
+| B14 | `enum_col < ?` | ENUM 도메인 | 위와 같음(서수 비교) | C | 현행; TIME 바인드 2행은 결함 → 값 A/B 로 확정 후 -494 | 결함 1건 (D-335-06·08: 바인드 캐스트는 클라이언트가 develop 처럼 하고 ENUM 은 캐스트하지 않으므로 dpin-10 으로 이월) |
 | B15 | `int_col IN (1, '2', ?)` | 원소 공통 타입(현행 컬렉션 CAST) 미러 | K 게이트 | C | 현행 | — |
 | B16 | `int_col IN ?`(집합 바인드) | SET 기본 도메인(현행) | 원소는 게이트 확정 | G | 현행 | — |
 | B19 | `int_col IN (SELECT ? …)` | 서브쿼리 컬럼 `?` = 게이트 확정 → 리스트 컬럼 도메인 게이트 표에 | G | 현행 | — |
@@ -87,7 +87,7 @@
 | B30 | 인덱스 키(단일 컬럼): `int_col = ?` 1.5, `int_col > 1.5` | 키 도메인 = 값 도메인(현행 strict-or-keep) | K 게이트 1회(strict 성공 시 인덱스 도메인, 실패 시 값 도메인), B+tree 원소 비교 = 계획된 **R idx_elem→double 변환기**(`btree_compare_key` 의 comparable 판정·`tp_value_compare_with_error` 폴백 제거) | C/G | 현행(실측: 인덱스/순차 스캔 답 전 셀 일치) | — (P4·P6) |
 | B31 | 인덱스 키(다중 컬럼, midxkey) | 원소마다 strict-or-keep, 실패 원소만 값 도메인 | 게이트가 setdomain 을 1회 확정(현행 `need_new_setdomain`/`prebuilt_midxkey_domains` 대체), 원소 변환기 고정; 상관 키는 range open 시 S | C/G | 현행 | — |
 | B32 | ISS 첫 컬럼, KEYLIMIT, MRO/top-N 정렬 도메인 | #314 G-05·L-44·L-45(e) 그대로: 인덱스 스키마에서 시딩, 오름차순 사본 | C | 현행 | — (#323 키 변환 계획) |
-| B33 | auto-param 슬롯(`int_col = 3`, `int_col > 1.5`, `int_col = to_number('3')`) | 리터럴 규칙 결과 도메인(INTEGER / DOUBLE / NUMERIC floating) | K 게이트가 값을 그 도메인으로 변환 → "값 타입 = 계획 도메인" 불변식 | C | 현행(플랜 `c = ?:0` 동일) | — (D-317-08) |
+| B33 | auto-param 슬롯(`int_col = 3`, `int_col > 1.5`, `int_col = to_number('3')`) | 리터럴 규칙 결과 도메인(INTEGER / DOUBLE / NUMERIC floating) | K 게이트가 값을 그 도메인으로 변환 → "값 타입 = 계획 도메인" 불변식 | C | 현행(플랜 `c = ?:0` 동일) | — (D-317-08) (D-335-07·08: auto-param 은 develop 의 컴파일 꼬리 캐스트 그대로 — 값과 슬롯의 타입·collation 이 같으면 변환하지 않는다; 컬렉션 리터럴을 변환하면 develop 의 NULL 저장 답이 바뀐다, 그 결함은 #347) |
 | B34 | `LIMIT ?`, `LIMIT ?, ?`, `KEYLIMIT ?`, `orderby_num() <= ?` | BIGINT(현행) | K 게이트 값→bigint(문자 파싱 허용, 날짜 -494 현행) | C | 현행 | — |
 
 ## 4. 규칙표 — 대입·공통값·집계·함수·세션변수·PL·기타
@@ -116,8 +116,10 @@
 | F7 | `sum(?)`, `min(?)`, `max(?)`, `count(distinct ?)`, `avg(?)`, `median(?)`, `percentile_* … order by ?`, `lead/lag/first_value/nth_value(?)`, `ntile(?)`, `group_concat(?)` | 게이트 확정 → 누산기·정렬 키 도메인을 게이트 표에(첫 값 대기 코드 삭제) | G | 게이트 | 현행(`sum(?)` TIME 누산까지) ; `group_concat(?)` NULL(D2)·`sum(?) over` 날짜(D4)·`group_concat(s + ?)`(D3) assert → 오류/값 | 결함 소멸 |
 | F8 | `sum(int_col + ?)`, `sum(i) … having sum(i) > ?` | 미러(INTEGER; `having` 은 sum 결과 타입) | C | K 게이트 | 현행(INT 오버플로 오류 포함) | — |
 | F9 | `sum(int_col)` | INTEGER 누산, 승격 없음(현행) | C | — | 현행 | — (승격은 후속) |
-| F10 | `median(varchar_col)`, `percentile_cont … order by varchar_col` | **X**: 값 내용으로 DOUBLE→DATETIME→TIME 시도(현행) | X | — | 현행 | — (실행 결정 잔존 명시; 아키텍처 삭제 대상 제외) |
+| F10 | `median(varchar_col)`, `percentile_cont … order by varchar_col` | **DOUBLE**(D-335-10, 사용자 선택 2026-09-24: 게이트가 값을 갖지 않는 문자 인자는 타입으로 — 매뉴얼 PERCENTILE_CONT/DISC "숫자로 변환되는 문자열", Oracle 숫자 변환; 옛 X "값 내용으로 DOUBLE→DATETIME→TIME" 폐기. `func_type.cpp` `pt_eval_function_type_aggregate` 문자 비상수 인자 → DOUBLE) | C | R 문자→DOUBLE ASSIGN(현행 `tp_value_cast`; 첫 비NULL 값 실패 -1118 "DOUBLE", 이후 행 현행 -181) | 숫자 문자열·'abc'(-1118)·혼합(-181) 현행; **날짜·시간 문자열 컬럼 DATETIME/TIME → -1118** | **있음** → §7 (D-335-10) |
 | F11 | `GROUP BY ?`, `ORDER BY ?`, `IF(?, a, b)` | 컴파일 오류(현행 문법) | C | — | 현행 | — |
+| F4' | `addtime(str_col, ?)`, `addtime(? \|\| 'x', ?)` — 왼쪽 문자가 게이트가 값을 갖지 않는 문자열(컬럼·계산식) | **VARCHAR**(D-335-10: 매뉴얼 표 4행 "날짜/시간 문자열 → VARCHAR" = 컴파일 시그니처 STRING+x → VARCHAR; arg2 MAYBE 라도 MAYBE 로 올리지 않음 `type_checking.c` `pt_apply_expressions_definition`; 게이트 의존 문자 식은 해석기가 VARCHAR). 존 문자열은 `db_add_time` 이 VARCHAR 도메인을 받아 DATETIMETZ 결과를 문자열(존 포함)로 렌더 | C/G | — | 현행(존 없는 문자열 VARCHAR); 존 문자열 컬럼은 develop optdebug `assert (domain == result_type)` → 문자열 | 결함 소멸(CTP 0건) (D-335-10) |
+| F10' | `median(? + ?)`(`plus_as_concat` 문자 바인드), `median(coalesce(?, ?))` 문자 — 인자가 문자 결과를 내는 게이트 의존 식(문자 컬럼·고정 문자 식은 F10) | **DOUBLE**(D-335-10: 해석기가 값 없는 문자 피연산자를 DOUBLE 로; 실행은 게이트 노드의 값 없는 피연산자(`TYPE_DBVAL`·`TYPE_POS_VALUE`·세션변수 읽기가 아닌 것)에서 같은 DOUBLE — dpin-14 가 게이트 표를 읽을 때까지의 미러) | G | 게이트 | 숫자 내용 현행; 날짜 내용 → -1118(CTP 0건) | 셀만 → §7 (D-335-10) |
 | S1 | `SELECT ?`, `SELECT typeof(?)` | 게이트 확정 | G | 게이트 | 현행(바인드 타입 그대로) | — |
 | S2 | `SELECT ? FROM t WHERE 1 = 0`, `LIMIT 0` 컬럼 메타 | 게이트가 안 돌면 미확정(현행) | — | — | 현행 | — (후속 티켓, D-317-15) |
 | S3 | `@v := ?`, `@v := x` | 값 저장(현행; 날짜는 문자열로 저장되는 현행 유지) | — | — | 현행 | — |
@@ -152,7 +154,7 @@
 | C11 | `group_concat(col + ?)`, `group_concat(s1)`, `min(col)` 컬럼 형제 | 컬럼 collation | C | `_04_group_concat`(`i1 + ?` 는 타입 축 A5 INTEGER 미러 → 문자 바인드 -494 는 타입 축 답안 변경) | — |
 | C12 | 세션변수 `@v` 읽기(`SET @v = 'x' COLLATE c` 저장 collation 포함) | 형제 있으면 ENFORCE(게이트가 값 codeset 변환), 없으면 게이트 확정(저장 값 collation) | C/G | S4·S5·L-32; `_07_session_var`·`_12_like` 세션변수 블록 현행 유지 | 없음 |
 | C13 | PL/CSQL 정적 SQL 의 `?`(PL 이 만든 값) | 문자 형제 있으면 ENFORCE, 없으면 게이트 확정 | C/G | S6·L-32 — 탐침(#319)에서 PL 값 collation 확인 | — |
-| C14 | 보간 정렬 키 `percentile_cont … ORDER BY varchar_col`, `median(varchar_col)` | 정렬 키 collation = 컬럼 collation(컴파일). 타입만 F10 X 잔존 | C | K13·L-21 | — |
+| C14 | 보간 정렬 키 `percentile_cont … ORDER BY varchar_col`, `median(varchar_col)` | 정렬 키 collation = 컬럼 collation(컴파일). 타입은 F10 DOUBLE(D-335-10; 분석 정렬 키 `cmp_dom` 도 컴파일 도메인) | C | K13·L-21 | — |
 | C15 | 비문자 결과 도메인 — `COALESCE(CAST(? AS DATETIME), CAST(? AS DATETIME), ?)`, 산술·날짜 함수 결과, 비문자 게이트 슬롯 | **collation 0 + NORMAL, 플래그 없음**(게이트 표의 비문자 항목에 collation 칸 없음). `pt_upd_domain_info` 가 인자 플래그를 비문자 결과로 옮기는 경로는 이 PR 결함 수정 | C | K15·U13·L-19 | 결함 소멸(optdebug assert → 값) |
 | C16 | 인덱스 키 `varchar_col(A) = ?`, `LIKE ?` | 슬롯 A ENFORCE 이므로 키 collation = 인덱스 collation(strict 성공). 명시 `COLLATE` 로 다른 collation 을 바인드하면 현행 strict 실패 → 값 collation 키 + 공통 collation 비교(B30 계획된 변환기) | C/G | B30·#321 §4.2 | — |
 | C17 | `COLLATE` 수식어 `? = ? COLLATE c`, `col COLLATE c = ?` | 수식어 collation 강제(codeset 다르면 컴파일 오류) | C | #313 §3.3-3 | — |
@@ -180,8 +182,10 @@ TC expected 갱신은 이 목록의 행만 대상으로 하고 구현 게이트 
 | `to_char(?, 숫자 포맷)` 문자 바인드 | F1' | 후보 | 값 A/B | — |
 | 결함 소멸 | §5 | assert/0행 → 오류 또는 값 | P7 ③ | — |
 | 오류 코드·트레이스 | — | 게이트 시점 오류는 -494 계열 유지; `?:0` 플랜 텍스트 유지 | P7 ② | `cbrd_25374`·`cbrd_24906_2` 부류는 텍스트 불변 목표 |
+| **타입 조합 거부 오류 시점**(D-335-02) | A 행 G(게이트 의존 노드) | 슬롯 값 타입 조합을 연산자가 받지 못하고 develop 이 계산 때 오류(-454 `ER_QPROC_INVALID_DATATYPE`)를 내던 경우 → 게이트가 실행 전에 같은 오류: **0행·선택 안 된 CASE 분기에서도 오류**(develop 은 계산하지 않으면 무오류). develop 이 오류 없이 NULL 을 내던 조합(`DATETIME − TIME` 등)은 NULL 유지. 같은 규칙으로 `+` 의 문자·비트 첫 피연산자가 `db_string_concatenate` 에서 받는 거부(-621·-622)와 `%`·부호·ABS/CEIL/FLOOR 의 거부(-454)도 게이트에서(#335). 함수(F 행)·집계의 오류는 시점 불변 | P7 ② | develop 실측 `? + ?` DATE+DATE: 1행 -454 · 0행 무오류 · 미선택 CASE 0; `DATETIME − TIME` NULL(#335 develop-probe) |
 | collation 충돌 시점 | C3·C4·C9 | -1150/-622 가 행 평가 → 게이트(코드 불변, 값 없음) | P7 ② | `issue_12129_HV_collation` 21건은 답 불변 목표(이전 캠페인 19건 diff 는 회귀로 분류) |
 | collation 결함 소멸 | C10·C15 | D2 서버 assert → NULL, L-19 assert → 값 | P7 ③ | — |
+| **문자 컬럼·식의 MEDIAN/PERCENTILE 정적 DOUBLE**(D-335-10) | F10·F10'·F4' | 날짜·시간 문자열을 담은 문자 컬럼의 MEDIAN/PERCENTILE_CONT/PERCENTILE_DISC(집계·분석): DATETIME/TIME 값 → -1118(첫 비NULL 값; 이후 행 -181 은 현행). 숫자 문자열·'abc'(-1118)·혼합(-181) 불변. ADDTIME 문자 컬럼은 0건 — 존 문자열 컬럼은 develop optdebug assert 자리 → VARCHAR 문자열(결함 소멸). 리터럴·바인드·세션변수 인자는 값 분류 그대로(불변) | P7 ①③ | CTP sql 10건(게이트 `sql-20260923T154508Z-2465048` 실측, 전부 이 부류): `issue_11087_median/11087·11087_1·11087_3·11743`(`median(c12)`·`median(c)` 날짜 문자열 컬럼), `_14_1h/bug_bts_13916`(뒷부분 `median(c12)`), `issue_11088_percentile_cont/_01_aggregate_function/_00_from_dev·_08_expression`, `issue_11089_percentile_disc/_01_aggregate_function/_00_from_dev·_08_expression`(`order by c12`, `order by to_char(col4, 'HH24:MI:SS.FF DD/MM/YYYY')` 날짜 문자열 **식**), `_07_misc/domain_conversion_contract/conversion_contract` R5 (D-335-10, [결정](https://github.com/xmilex-git/workspace/issues/335#issuecomment-5797393992)) |
 
 **불변 목표(탐침 diff 였지만 개정 규칙에서는 답이 그대로여야 하는 것)**: C10 세션변수 재작성 텍스트(계획된 변환기는 텍스트를 바꾸지 않는다, L-50) · C11 `INSERT decimal VALUES (IFNULL(?, 0))` 12.34568 유지(소비자 도메인 우선, D-327-11) · C12 재귀 CTE `median(m) over()` double 유지(UNION/VALUES 미러는 호스트 변수 가지만, #319 F-6) · C5 `*_cfg_null_on_errors` NULL 유지(X1, D-327-10) · B7 `char_col = ?` 1행(D-327-01) · 중첩 게이트 식 `abs(?) + 1` 등 현행 값(A8'', D-327-08).
 

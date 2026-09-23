@@ -1,11 +1,20 @@
 ---
-status: accepted
+status: accepted (amended 2026-09-23 by #335 D-335-08 — see "Amendment")
 date: 2026-09-22
 locked-by: xmilex-git/workspace#320 (2026-09-22)
 ---
 # 바인드 값 변환은 서버 게이트에서 전부 한다 (클라이언트 캐스트 삭제, 값 소유는 XASL_STATE, 참조별 자리)
 
 클라이언트(CAS·csql·PL)는 바인드 값을 **캐스트 없이 그대로** 보내고(`pt_set_host_variables` 의 `tp_value_cast_preserve_domain` 분기·CHAR 원 값 유지 분기 삭제; 참조 OID 검사와 복제만 유지), 서버 실행 게이트 G1 이 변환 계획에 따라 `val_pos` 마다 값을 바인드 도메인으로 1회 변환한 뒤 게이트 확정 슬롯과 파생 소비자(산술 결과·리스트 컬럼·누산기·정렬 키·비교 도메인·변환기·collation)를 게이트 표에 채운다. 변환된 값은 **XASL_STATE 가 소유하는 별도 배열**에 두고 입력 배열은 `resolved.in` 으로 `const` 로 남긴다(D-323-03) — SA_MODE 에서 입력 배열은 클라이언트 `parser->host_variables` 그 자체라 제자리 변환은 클라이언트 값을 바꾸고, 서브쿼리 결과 캐시 키·dblink 는 원 값 기준이어야 한다. 게이트 뒤 `vd.dbval_ptr` 는 변환값 배열을 가리키고, 같은 `?` 를 다른 도메인·정책으로 참조하는 regu 는 **참조 자리**를 따로 갖는다(D-323-04). 해제는 만든 스레드가 실행 종료 시에만; 워커는 자기 사본을 자기가 해제한다(ALLOC-08/A64). 결정 원문: #312 D-M4, #317 D-317-08·10, #318 D-318-03·06, #323 D-323-03·04·10·12, #325 D-325-07·08·10·11, #327 D-327-10.
+
+## Amendment (2026-09-23, #335 D-335-08, 사용자 승인)
+
+**바인드 값 캐스트는 클라이언트에 남고, 서버 게이트는 값을 바꾸지 않는다.** 클라이언트는 develop 호출 자리(`pt_set_host_variables`·`do_cast_host_variables_to_expected_domain`, auto-param 은 `pt_make_regu_hostvar` 꼬리 캐스트)에서 develop 규칙 그대로 캐스트하고(`tp_value_cast_preserve_domain` — dpin-03/04 이후 게이트와 같은 셀을 부른다, ADR 0022), 게이트 G1 은 참조마다 값을 복제하고 GATE 슬롯의 도메인만 값에서 기록한다. 이유(#335 2차 게이트):
+
+- **F-335-04 XASL 캐시 공유**: 계획 키는 해시 텍스트의 SHA-1 뿐이고 auto-param 과 사용자 `?` 는 같은 `?:N` 으로 찍혀, 리터럴 문장과 바인드 문장이 계획 하나를 쓴다. 캐스트 결정을 계획에 실으면 어느 형태가 먼저 컴파일했느냐로 답이 갈린다(`bind_misc`, `bug_bts_4966`, `zero_date_format`). 클라이언트는 자기 문장의 기대 도메인을 알므로 문장마다 캐스트하면 캐시와 무관하다.
+- **F-335-05 객체 바인드**: CS 모드에서 MOP 는 OID 로 전송되고, OBJECT 목표 변환(클래스 검사·뷰 객체 변환)은 클라이언트 전용 코드다(`tp_value_cast_internal` 의 OBJECT 분기가 `#if !defined (SERVER_MODE)`).
+
+아래 본문의 "클라이언트는 캐스트 없이 그대로 보낸다"·"게이트가 `val_pos` 마다 바인드 도메인으로 변환한다"·Consequences 첫 항목(반올림 소멸·문맥별 손실 정책)은 이 정정으로 대체된다. "클라이언트가 게이트 규칙을 흉내 내 미리 변환" 을 기각한 이유(규칙 두 벌, P6)는 같은 셀을 양쪽이 부르는 지금 구조에는 해당하지 않는다. 값 소유(XASL_STATE)·참조별 자리·해제 규칙은 그대로다. `char(n)_col = ?` 의 VARCHAR 원 값 유지는 `do_cast` 경로에도 적용한다(develop 의 `db_value_domain_init` 이 값을 NULL 로 만들던 B7 결함 소멸, D-327-01). 미러 슬롯(dpin-10)의 변환도 같은 자리(클라이언트, 공유 셀)를 기본으로 두되, 공유된 계획에서 "값 타입 = 계획 도메인" 이 깨질 수 있는 점은 dpin-10 이 다룬다.
 
 ## Considered Options
 

@@ -68,7 +68,7 @@
 - **컴파일이 새로 싣는 것(레이아웃 변경, 디스크 없음)**: `INDX_INFO.key_type`(인덱스 키 도메인, L-45(f)) — 로드 시 키 변환 계획 도출의 입력. 그 외 노드 레이아웃 변경 0.
 - **로드가 도출하는 것(비팩 필드)**: 슬롯 ID(트리 순회 순서로 결정적 부여 — 세 로드 경로가 같은 ID 를 얻는다), 피연산자 부류 K/R/S(regu 타입에서: `TYPE_POS_VALUE`/`TYPE_DBVAL`/상수 부분트리 = K, `TYPE_ATTR_ID`·`TYPE_POSITION` 하위 = R, 상관 `TYPE_CONSTANT`·외부 `TYPE_POSITION`·aptr 결과 = S — 현행 `FETCH_ALL_CONST` 지연 도출의 로드 시 버전), 비교·산술·키 원소·대입의 **변환기**(현행 서버 변환 표를 (원 도메인, 목표 도메인) → 함수 ID 로 옮긴 표에서 조회, D-317-16·19), **게이트 의존 노드 목록**(GATE 슬롯을 피연산자로 갖는 노드를 생산자 우선 순서로 모은 배열 — 게이트는 이 배열만 돈다), K 부류 상수 부분트리의 계획 슬롯(게이트가 1회 평가해 캐시할 자리). 저장 위치는 `original_domain`/`original_opr_dbtype` 이 있던 자리(필드 수·구조체 크기 증가 0, MEM-02).
 - **호스트 변수/auto-param 슬롯 인덱스와의 대응**: 슬롯 ID ≠ `val_pos`. `val_pos` 는 바인드 배열 인덱스(사용자 `?` + auto-param), 슬롯 ID 는 계획 항목 인덱스(게이트 표 인덱스). 한 `val_pos` 를 여러 regu 가 참조할 수 있으므로(키 range regu + 잔여 필터 regu 등) 바인드 값 변환은 `val_pos` 당 1회(바인드 도메인 = 그 `?` 의 미러 도메인, 참조 regu 간 도메인이 다르면 K 변환기가 게이트에서 1회 더 적용), 게이트 표 항목은 슬롯 ID 당 1개. 두 인덱스 공간의 대응은 로드 도출 결과에 저장한다. **한 `val_pos` 의 참조 regu 들이 서로 다른 바인드 도메인을 요구하는 경우가 실제로 있는지**는 #323 이 탐침으로 확인한다(있으면 바인드 도메인은 "가장 좁은 공통" 이 아니라 참조별 K 변환기로 푼다 — 결정 자체는 여기서: 슬롯 값은 1회 변환, 참조별 차이는 변환기).
-- **스트림 포맷·플랜 캐시·클론 호환**: 스트림 코덱 변경은 `INDX_INFO` 1곳 + `flags` 비트 → 클라이언트·서버 lockstep 은 현행 요구 그대로(같은 빌드), 디스크 호환 유지. 플랜 캐시 키·클론 풀 변경 없음. 로드 도출은 xcache 클론당 1회(클론 풀 재사용 시 재도출 0), PX 워커 unpack 당 1회.
+- **스트림 포맷·플랜 캐시·클론 호환**: 스트림 코덱 변경은 `INDX_INFO` 1곳 + `flags` 비트 → 클라이언트·서버 lockstep 은 현행 요구 그대로(같은 빌드), 디스크 호환 유지. 플랜 캐시 키·클론 풀 변경 없음. 로드 도출은 xcache 클론당 1회(클론 풀 재사용 시 재도출 0), PX 워커 unpack 당 1회. **기록(F-335-04, #335)**: 플랜 캐시 키(해시 텍스트 SHA-1)는 auto-param 과 사용자 `?` 를 구분하지 않아 리터럴 문장과 바인드 문장이 계획 하나를 쓴다 — 계획에 형태별 결정(캐스트·미러 도메인)을 실으면 컴파일 순서로 답이 갈린다. #335 는 캐스트를 클라이언트에 두어(D-335-08) 키를 바꾸지 않았고, 미러 도메인이 형태별로 다른 dpin-10 이 이 전제를 다시 다룬다.
 - **기각**: regu/arith/pred 레이아웃 변경(M3), 계획 표를 스트림에 별도 섹션으로(B), 슬롯 ID 를 컴파일이 부여해 팩(레이아웃 변경 + 세 로드 경로 동기화 문제 재현).
 
 ### 결정 2 — 서버 게이트
@@ -86,7 +86,7 @@
 
 ### 결정 4 — 클라이언트
 - **바인드 값은 그대로 보낸다**: `pt_set_host_variables` 의 `tp_value_cast_preserve_domain` 분기 삭제(복제만; 참조 OID 검사는 유지). CHAR 도메인의 VARCHAR 값 유지(pd:3128)는 게이트의 B7 규칙으로 옮긴다. `host_var_expected_domains[]` 는 남는다 — prepare 응답의 파라미터 메타·PL/CSQL 보고(mc:650~670, S6)·바인드 피크 재계획의 입력이다. 사용자 `?` 배열 vs auto-param 카운트 불변식은 assert 로 고정(L-30).
-- **플랜은 값에 종속되지 않는다**: `pt_make_regu_hostvar` 2단계(값 타입으로 도메인, xg:6418~6445) **삭제**. 바인드 피크 재계획(vdb:3496)은 값을 **비용 추정에만** 쓰고 도메인은 1·3·4 단계(형제 미러·expected_domain)로만 정한다 → 같은 sha1 캐시 항목이 어떤 바인드 타입에서도 같은 슬롯 도메인을 가진다(L-49 의 전제 회복). `hostvar_late_binding=yes` 의 값 치환 재컴파일(nr:3790) 은 파라미터 deprecated 처리(#320)와 함께 클라이언트에서 제거.
+- **플랜은 값에 종속되지 않는다**: `pt_make_regu_hostvar` 2단계(값 타입으로 도메인, xg:6418~6445) **삭제**. 바인드 피크 재계획(vdb:3496)은 값을 **비용 추정에만** 쓰고 도메인은 1·3·4 단계(형제 미러·expected_domain)로만 정한다 → 같은 sha1 캐시 항목이 어떤 바인드 타입에서도 같은 슬롯 도메인을 가진다(L-49 의 전제 회복). `hostvar_late_binding=yes` 의 값 치환 재컴파일(nr:3790) 은 파라미터 deprecated 처리(#320)와 함께 클라이언트에서 제거. **기록(F-335-04)**: 사용자 호스트 변수에 대해서는 성립하지만 auto-param 은 리터럴 도메인(B33)을 가져 같은 sha1 의 리터럴 문장과 바인드 문장은 슬롯 도메인이 다를 수 있다.
 - **결과 컬럼 메타데이터**: 컴파일 도메인이 prepare 응답에 실린다(현행 경로). 게이트 확정 슬롯이 결과 컬럼인 문장(`SELECT ?`, `SELECT ? UNION SELECT ?`, `SELECT sum(?)`)은 현행처럼 실행 응답의 `include_column_info` 로 갱신(L-31 재사용) — 이것이 "게이트 잔여" 의 전부이며 L-24 의 미실행 문장 메타는 후속(D-317-15) 그대로.
 - **기각**: 클라이언트가 게이트 규칙을 흉내 내 값을 미리 변환하는 이중 변환(D-M4 위반, L-30 사고 재현).
 
@@ -119,7 +119,7 @@
 
 ## 1.5 삭제 목록 초안 — 전략 A 에서 각 지점이 사라지는 축
 
-축: **CP** = 컴파일이 도메인을 채워 지점이 도달 불가 · **LD** = 로드 도출이 대체 · **G1/G2** = 게이트가 대체 · **KEEP** = 유지·결정적화(경계 assert 자리) · **X** = 실행 결정 잔존(F10).
+축: **CP** = 컴파일이 도메인을 채워 지점이 도달 불가 · **LD** = 로드 도출이 대체 · **G1/G2** = 게이트가 대체 · **KEEP** = 유지·결정적화(경계 assert 자리) · **X** = 실행 결정 잔존 — D-335-10(2026-09-24) 뒤 없음(F10 은 CP).
 
 | 축 | 지점 | 비고 |
 |---|---|---|
@@ -130,7 +130,7 @@
 | G1+G2 | S-12 S-30 S-31 S-32(키: K 는 G1, S 는 G2/range open) S-34 S-35(PX 상속) | |
 | KEEP | S-08(`qdata_*_dbval` 값 타입 dispatch — 게이트 뒤 결정적) S-10/S-12 의 함수 자체 | 경계 assert 위치 |
 | 경계 | S-42(필터/함수 인덱스 로드 거부 + 오류 삼킴 수정) S-43(파라미터, #320) | |
-| X | F10 `median(varchar_col)`·`percentile_cont … order by varchar_col` | 삭제 대상 아님(D-317-15) |
+| X | ~~F10~~ | D-335-10: F10 은 CP(컴파일 DOUBLE) — 잔존 X 없음 |
 | collation | #314 §4 26곳: 쌍 조건의 두 축이 함께 사라진다(LEAVE 0, D-322-01) — `qfile_unify_types` -1509 분기·`qexec_end_one_iteration` 플래그 분기 포함 | §6 귀결 (2) |
 
 ---
@@ -369,7 +369,7 @@ namespace cubquery::dres {
 typedef enum { XPLAN_K = 1, XPLAN_R = 2, XPLAN_S = 3 } XPLAN_CLASS;
 struct xgate_entry { TP_DOMAIN *domain; /* collation 포함, flag NORMAL */ dres::conv_fn conv[3]; dres::fail_policy fail[3]; TP_DOMAIN *setdomain; /* 키 range 항목만 */ };
 struct xplan_item  {
-  short cls;  short flags;   /* XPLAN_GATE 0x01 · KEY1 0x02 · KEY2 0x04 · ISS 0x08 · ALIAS 0x10(생산자 slot 공유) · KEEP_LAZY 0x20 · X_RESIDUAL 0x40(F10) */
+  short cls;  short flags;   /* XPLAN_GATE 0x01 · KEY1 0x02 · KEY2 0x04 · ISS 0x08 · ALIAS 0x10(생산자 slot 공유) · KEEP_LAZY 0x20 (X_RESIDUAL 0x40 은 D-335-10 으로 삭제) */
   int slot;                  /* 게이트 표 인덱스, -1 = 정적(답은 st) */
   int ref;                   /* K 참조의 값 인덱스(vd->dbval_ptr[ref]); TYPE_POS_VALUE·TYPE_DBVAL 외 -1 */
   int val_pos;               /* 바인드 배열 인덱스 또는 -1 (auto-param TYPE_DBVAL 은 -1, src = regu->value.dbvalptr) */
@@ -456,7 +456,7 @@ px_query_executor.cpp:48 / px_query_task.cpp:123 / pxt:648 → qexec_deep_copy_x
 | X-4 | `TYPE_LIST_ID`·`TYPE_ORDERBY_NUM`·`TYPE_INST_NUM` 등 값 없는 regu | 도메인 무의미 | 항목 없음 |
 | X-5 | `TYPE_FUNCTION` 집합 생성자(F_SEQUENCE/F_SET…) | 컬렉션 도메인은 원소에서 | 정적(원소 ALIAS) |
 | X-6 | `T_EVALUATE_VARIABLE` 세션변수 읽기 | S4 형제 있으면 미러 정적, 없으면 GATE(S5) — 컴파일이 비트를 단다 | GATE 비트 요구 |
-| X-7 | F10 `median(varchar_col)`·`percentile_* … order by varchar_col` 인자 | 실행 결정 잔존(D-317-15) | `X_RESIDUAL` 표시(덤프 'X'), 경계 검사 제외 |
+| X-7 | ~~F10 인자~~ | **폐기(D-335-10)**: 컴파일 DOUBLE | — |
 
 필터/함수 인덱스: `stx_map_stream_to_filter_pred`/`_func_pred` 가 `xplan_derive (…, XPLAN_KIND_PRED)` — GATE 비트 하나라도 있으면 거부. `fpcache_claim`(filter_pred_cache.c:355~416)의 `NO_ERROR + NULL` 삼킴(S-42)은 오류 전파로 수정.
 
@@ -489,7 +489,7 @@ px_query_executor.cpp:48 / px_query_task.cpp:123 / pxt:648 → qexec_deep_copy_x
 | G1+G2 | S-12 S-30 S-31 S-32 S-34 S-35 | §2.5 키 계획, `pair`, MRO 시딩; 워커는 `table` 사본만(역전파 삭제) |
 | KEEP | S-08 S-10/S-12 함수 자체 | I2 뒤 결정적; 경계 assert 위치 |
 | 경계 | S-42(PRED 거부 + `fpcache_claim` 전파) S-43(#320) | `XPLAN_KIND_PRED` |
-| X | F10 | `X_RESIDUAL` 항목(X-7) |
+| X | ~~F10~~ | 없음(D-335-10, X-7 폐기) |
 | collation | #314 §4 26곳(fe:4479 5226 5239 · lf:7082 qx:1362 21193 21249 21277 21405 23137 27787 sm:8231 8254 8287 8293 · qx:21328 21336 21440 21605 qa:1876 3343 qn:59 188 sm:8240 8264 · fe:5273 `qdata_agg_is_plain_sum_avg`) + `qfile_unify_types` -1509 분기·`qexec_end_one_iteration` 플래그 분기 | `xgate_entry.domain` 의 collation_flag 항상 NORMAL(C3 병합은 G1 ③) — 쌍 조건 두 축이 함께 |
 
 **테스트 표면 = 인터페이스.** (T1) 포트 단위(`unit_tests/query/test_domain_resolver.cpp`): 규칙표 행마다 케이스 1개 — §2 A-행(ARITH), §3 B-행(COMPARE/KEY_ELEM), §4 U/F/S/X 행, §6 C-행(coll_id) — 입력 (ctx, opcode, operand[], consumer_dom), 기대 (dom, coll, conv, fail, err); asis-matrix 셀 라벨을 케이스 이름으로 → 게이트 CTP diff 가 나면 같은 이름의 포트 테스트가 먼저 깨진다. `dres_vs_parser_grid`: 규칙표 C 행을 고정 데이터로 두고 서버 `resolve()` 와 asis-matrix 실측(파서 답)을 대조 — 파서를 서버 테스트에 링크하지 않는다. (T2) 로드 도출 결정성: 같은 스트림을 세 경로로 로드해 `items[]` 의 (cls, slot, ref, val_pos) 비교(I4 상시 assert + 단위). (T3) G1 단위: 합성 XPLAN + 값 배열 → `vals/table`(R1·R2, KEEP, NULL 정책, GATE collation 병합 -1150). (T4) 경계: VARIABLE 스트림 → -1382, PRED+GATE → -1382. (T5) 행동: 규칙 셀·§7·CTP sql 전수+medium(optdebug). (T6) 카운터 8종 = 0.
