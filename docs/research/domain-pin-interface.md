@@ -170,6 +170,8 @@ const char *domain_converter_name (DOMAIN_CONV_FUNC f);   /* 덤프 전용 */
 DB_TYPE domain_classify_value (DOMAIN_CTX ctx, int opcode, int arg_index, const DB_VALUE * value);
 ```
 
+- **AGG/ANALYTIC 읽기(#333, 2026-09-23 사용자 승인)**: 입력 — `consumer_domain` = 집계·분석 노드의 컴파일 도메인(`agg_p->domain`, 인자 값의 소비자), `operands[0]` = 인자(`domain` = 인자 컴파일 도메인 `opr_dbtype`, 게이트가 정하는 인자만 값 도메인; `is_gate_slot` = 게이트가 정하는 인자 = 현행 `opr_dbtype == VARIABLE`). 출력 — `domain` = 함수 도메인(늦은 바인딩 갱신 뒤 `agg_p->domain`, 결과가 캐스트되는 자리), `operand_domain[0]`/`conv[0]` = 누산 도메인(`value_dom`, 인자 값이 변환되는 목표 qa:645·713 — D-328-03 계약 그대로). `value2_dom` 은 함수가 정하는 상수(STDDEV/VAR = DOUBLE, 그 외 NULL)라 해석기 출력이 아니며 로드가 `domain_plan_acc` 항목에 넣는다(§1.1). ANALYTIC 은 `domain` = `operand_domain[0]` = 함수 도메인(현행 `tp_value_coerce (&dbval, func_p->domain)`).
+
 ### 1.4 헤더 계약 (R7)
 
 | 헤더 | 정의하는 것 | 포함해도 되는 것(허용 입력) | 포함 금지 |
