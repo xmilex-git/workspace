@@ -59,6 +59,22 @@ shell/HA의 설치 사본에서 활성 항목을 비운다. 원본 설치본, SQ
 변경하지 않는다. 이 초기화가 필요한 설치본의 `--overlay`는 사본 모드를 사용하도록 거부한다.
 CTP 코드와 entrypoint에 추가 패치를 넣지 않으며, locale 테스트의 명시적 생성 경로도 유지한다.
 
+**D7 — sql/medium의 DB 디렉터리는 volatile overlay로 둔다 (2026-09-24).**
+CTP는 `$CUBRID/databases`(`run.sh`의 `cubrid_root_dir=$CUBRID`) 아래에 `basic`/`mdb`를 만든다.
+autocommit 문장마다 로그 fsync를 기다린다. 이 DB는 샤드와 함께 버려진다. 서버가 죽어도
+쓴 내용은 page cache에 있어 잃지 않는다. 그래서 fsync가 지키는 것은 호스트 크래시뿐이다.
+컨테이너에 `--cap-add SYS_ADMIN`을 주고 `scripts/volatile_entry.sh`가 그 경로에
+overlayfs `volatile`(커널 5.10+)을 마운트한다. lower는 원래 경로, upper/work는 샤드의
+`volatile/`이다. 마운트 후 `setpriv`로 권한을 버리고 upstream entrypoint를 실행한다.
+cubrid-testkit의 `TESTKIT_SLOT_VOLATILE`과 같은 방식이다. rootful podman이나 podman
+업그레이드는 필요 없다. 이 호스트 측정에서 autocommit INSERT 5,000건이 9.08초에서
+5.73초로, 디바이스 flush가 5,642회에서 59회로 줄었다.
+- **대가:** 호스트가 run 중에 죽으면 그 run의 DB는 버려야 한다. 원래 다시 만드는 DB다.
+- **범위:** shell/ha_shell은 케이스마다 자기 디렉터리에 DB를 만들어 적용하지 않았다.
+  `--overlay`도 제외했다.
+- **되돌리기:** `CTP_VOLATILE=0` 또는 `--no-volatile`로 이전의 plain bind로 돌아간다.
+  entrypoint 포크는 여전히 HA 보완 두 건만 가진다(D2). 이 기능은 별도 래퍼다.
+
 초기 기록 정정: 상류 `test`는 원래도 checkout을 자동 호출하지 않았다. 포크의 해당 차이는
 누락 디렉터리 안내 문구였으므로 별도 skip-checkout 기능은 필요하지 않다. 또한 당시 기록의
 “실행 중 develop으로 바뀌었다”는 서술은 실행 전후 SHA로 입증한 관측이 아니라 설정과 CTP

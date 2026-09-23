@@ -88,6 +88,43 @@ Because shard copies do not include `.git`, git fields there can be `unknown`;
 the host `provenance.txt` / `provenance.tsv` records the selected source ref/SHA,
 CTP revision, install, image digest and exclusion option.
 
+## Volatile database dir (sql/medium)
+
+`ctp_run.sh` launches each sql/medium shard with `--cap-add SYS_ADMIN` and
+`--entrypoint /ctprun-volatile-entry.sh` (`scripts/volatile_entry.sh`, bind-mounted
+read-only). The wrapper runs this before the image's entrypoint:
+
+```bash
+mount -t overlay overlay \
+  -o volatile,lowerdir=/home/CUBRID/databases,upperdir=/ctprun-volatile/<name>/upper,workdir=/ctprun-volatile/<name>/work \
+  /home/CUBRID/databases
+```
+
+`/ctprun-volatile` is the host's `shard_N/volatile`. The wrapper then drops
+CAP_SYS_ADMIN with `setpriv --bounding-set=-sys_admin` and execs `/entrypoint.sh`.
+No podman upgrade and no rootful podman are needed. The `volatile` option is the
+kernel's (overlayfs, Linux 5.10+), and a rootless container may mount overlayfs
+inside its own user namespace (5.11+). Podman's own `-v src:dst:O` cannot pass
+`volatile`.
+
+Probe on this host (2026-09-24; kernel 6.9.4, podman 4.9.4, the pinned image):
+
+| | plain bind | volatile overlay |
+|---|---:|---:|
+| 5,000 autocommit INSERTs (csql, CS mode) | 9.08 s | 5.73 s |
+| device flushes during them | 5,642 | 59 |
+
+Two findings shape the code:
+
+- A mounted volatile workdir leaves `work/work/incompat/volatile`, and a second mount
+  on it is refused. Each shard therefore gets fresh dirs every run.
+- `work/work` is mode 000, which plain `rm -rf` cannot remove. Pruning falls back to
+  `podman unshare rm -rf`.
+
+`dd oflag=dsync` does not show the gain: an O_DSYNC write is synced by the upper
+filesystem itself. CUBRID calls fsync/fdatasync (`fileio_synchronize`), which is
+exactly what `volatile` skips.
+
 ## Shell/HA locale baseline
 
 CTP removes generated locale libraries before each shell/HA case. A build already

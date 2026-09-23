@@ -126,6 +126,11 @@ OPTIONS
   --overlay              mount the install via overlay instead of copying it
   --keep                 do not remove the containers afterwards
   --keep-copies          keep each shard's install/CTP/testcases/DB copies after the run
+  --volatile             mount sql/medium's database dir as a volatile overlay: its
+                         fsyncs return at once (default ON; CTP_VOLATILE=0 or
+                         --no-volatile turns it off). Not applied to shell/ha_shell
+                         or with --overlay
+  --no-volatile          keep the database dir on a plain bind mount
   --abort-on-core        stop every shard on the first real core dump (default ON)
   --no-abort-on-core     keep collecting cores; a shard still stops after
                          $CTP_CRASH_LOOP_CORES (5) cores with no passing case in
@@ -169,6 +174,7 @@ ARG_UNIT="auto"       # split-unit mode: auto (per-suite default) | category (to
 declare -a ARG_ONLY=()   # scenario-relative subset prefixes ("" = whole suite)
 ARG_KEEP=0
 ARG_KEEP_COPIES="${CTP_KEEP_COPIES:-0}"   # 1: keep shard working copies (see prune_shard_copies)
+ARG_VOLATILE="${CTP_VOLATILE:-1}"         # 1: volatile overlay on the suite's database dir (see resolve_volatile, D7)
 ARG_WEIGHTS="auto"   # "auto" = bundled baseline_weights.tsv (time-based) | <path> | "none" (count)
 ARG_LOCALE_DIR=""
 ARG_WEBCONSOLE=1
@@ -208,6 +214,8 @@ parse_args() {
       --by-case)     ARG_UNIT="case"; shift ;;
       --keep)        ARG_KEEP=1; shift ;;
       --keep-copies) ARG_KEEP_COPIES=1; shift ;;
+      --volatile)    ARG_VOLATILE=1; shift ;;
+      --no-volatile) ARG_VOLATILE=0; shift ;;
       --weights)     ARG_WEIGHTS="${2:-}"; shift 2 ;;
       --no-weights)  ARG_WEIGHTS="none"; shift ;;
       --locale-dir)  ARG_LOCALE_DIR="${2:-}"; shift 2 ;;
@@ -261,6 +269,7 @@ parse_args() {
   fi
 
   resolve_suite
+  resolve_volatile
   if [ -z "$ARG_OUT" ]; then
     ARG_OUT="$(bash "$SELF_DIR/artifact_root.sh")/$ARG_SUITE-$(date -u +%Y%m%dT%H%M%SZ)-$$"
   fi
@@ -343,6 +352,30 @@ resolve_suite() {
   # would make resolve_suite return 1 and, under set -e, kill the run silently.
   if [ "$ARG_UNIT" = "auto" ]; then
     ARG_UNIT="$SUITE_UNIT_DEFAULT"
+  fi
+}
+
+# Volatile database dir (D7): the dirs CTP creates its database in, mounted
+# inside the container as an overlayfs with the kernel's `volatile` option
+# (scripts/volatile_entry.sh), so every fsync there returns at once. sql/medium
+# create basic/mdb under $CUBRID/databases (run.sh: cubrid_root_dir=$CUBRID).
+# shell/ha_shell cases create databases in their own case dirs, so nothing is
+# applied there. With --overlay the install is podman's own overlay, so it is
+# skipped too.
+VOLATILE_TARGETS=""
+resolve_volatile() {
+  case "$ARG_VOLATILE" in
+    0|1) : ;;
+    *) die "CTP_VOLATILE must be 0 or 1 (got: '$ARG_VOLATILE')" ;;
+  esac
+  [ "$ARG_VOLATILE" -eq 1 ] || return 0
+  case "$ARG_SUITE" in
+    sql|medium) VOLATILE_TARGETS="$C_CUBRID/databases" ;;
+    *) return 0 ;;
+  esac
+  if [ "$ARG_OVERLAY" -eq 1 ]; then
+    warn "volatile: not applied with --overlay (the install is already podman's overlay)."
+    VOLATILE_TARGETS=""
   fi
 }
 
@@ -441,9 +474,10 @@ materialize_tc_worktree() {
 
 PROVENANCE=""
 build_provenance() {
-  PROVENANCE="$(printf 'install=%s image=%s ctp=%s testcases=%s@%s(%.12s) suite=%s shards=%s ref-src=%s' \
+  PROVENANCE="$(printf 'install=%s image=%s ctp=%s testcases=%s@%s(%.12s) suite=%s shards=%s ref-src=%s volatile=%s' \
     "${ARG_BUILD:-<none>}" "$ARG_IMAGE" "$(ctp_revision)" \
-    "$SUITE_TCREPO" "$TC_REF" "${TC_SHA:-unknown}" "$ARG_SUITE" "$NSHARDS" "${TC_REF_SRC:-n/a}")"
+    "$SUITE_TCREPO" "$TC_REF" "${TC_SHA:-unknown}" "$ARG_SUITE" "$NSHARDS" "${TC_REF_SRC:-n/a}" \
+    "${VOLATILE_TARGETS:-off}")"
 }
 ctp_revision() {
   git -C "$ARG_CTP" rev-parse --short HEAD 2>/dev/null || echo "unknown"
@@ -462,6 +496,7 @@ write_provenance() {
     printf 'testcases_ref_source\t%s\n' "${TC_REF_SRC:-}"
     printf 'shards\t%s\n' "$NSHARDS"
     printf 'conf\t%s\n' "${ARG_CONF:-<CTP default>}"
+    printf 'volatile\t%s\n' "${VOLATILE_TARGETS:-off}"
     if [ "$ARG_EXCLUDE_SET" -eq 1 ]; then
       printf 'exclude\t%s\n' "${ARG_EXCLUDE:-<none>}"
     else
@@ -1060,6 +1095,7 @@ print_plan_summary() {
   printf '  shards:             %d\n' "$NSHARDS"
   printf '  env passthrough (fixed): CUBRID CTP_HOME CUBRID_DATABASES WORKDIR TEST_REPORT TZ LC_ALL TEST_SCENARIO TEST_EXCLUDE\n'
   printf '  env passthrough (--env, %d): %s\n' "${#ARG_ENV[@]}" "${ARG_ENV[*]:-<none>}"
+  printf '  volatile:           %s\n' "${VOLATILE_TARGETS:-off}"
   printf '  %-7s %-10s %s\n' "shard" "sql" "weight$([ -n "$WEIGHTS_FILE" ] && echo '(s)')"
   local i
   for (( i=0; i<NSHARDS; i++ )); do
@@ -1198,6 +1234,12 @@ build_shard_workdir() {
   mkdir -p "$d/CUBRID_DB"
   : >"$d/CUBRID_DB/databases.txt"
   mkdir -p "$d/out" "$d/reports"
+  # Upper/work dirs of the volatile database overlay (D7). They must be fresh:
+  # a volatile workdir refuses a second mount.
+  if [ -n "$VOLATILE_TARGETS" ]; then
+    rm -rf "$d/volatile" 2>/dev/null || podman unshare rm -rf "$d/volatile"
+    mkdir -p "$d/volatile"
+  fi
 
   # HA runs a second container (the slave node) which needs its OWN install and
   # databases dir — see shard_mounts.
@@ -1285,6 +1327,12 @@ shard_mounts() {
   fi
   # HA nests the database mount under the install; mount the parent first.
   m+=( -v "$dbs:${C_DB}:rw" )
+  # Volatile database overlay (D7): the wrapper entrypoint mounts it inside the
+  # container, with its upper/work under this bind.
+  if [ -n "$VOLATILE_TARGETS" ]; then
+    m+=( -v "$d/volatile:/ctprun-volatile:rw"
+         -v "$SELF_DIR/volatile_entry.sh:/ctprun-volatile-entry.sh:ro" )
+  fi
   # Core capture: core_pattern is a global kernel knob but is resolved in the
   # crashing process's mount-ns, so for an absolute pattern we bind the shard's
   # cores/ over that directory and cores land on the host, outside $CUBRID and
@@ -1351,7 +1399,13 @@ launch_shard() {
   local -a args=(); mapfile -t args < <(shard_common_args)
   local -a mounts=(); mapfile -t mounts < <(shard_mounts "$d" master)
   local -a envs=(); mapfile -t envs < <(shard_envs)
-  local -a net=()
+  local -a net=() vol=()
+  # CAP_SYS_ADMIN only for the overlay mount; volatile_entry.sh drops it before
+  # the image's entrypoint runs.
+  if [ -n "$VOLATILE_TARGETS" ]; then
+    vol=( --cap-add SYS_ADMIN --entrypoint /ctprun-volatile-entry.sh
+          -e "CTPRUN_VOLATILE_TARGETS=$VOLATILE_TARGETS" )
+  fi
 
   if [ "$SUITE_HA" -eq 1 ]; then
     launch_ha_slave "$i"
@@ -1365,6 +1419,7 @@ launch_shard() {
     "${args[@]}" \
     "${envs[@]}" \
     "${mounts[@]}" \
+    "${vol[@]}" \
     "$ARG_IMAGE" test "$SUITE_CAT" >/dev/null
 }
 
@@ -1397,7 +1452,7 @@ WATCHDOG_PID=""
 declare -A CORE_SEEN=()
 count_shard_cores() {
   local d="$1" f n=0
-  for f in $(find "$d/cores/" "$d/CUBRID" "$d/CUBRID_DB" "$d/CTP" -type f -name 'core.*' 2>/dev/null); do
+  for f in $(find "$d/cores/" "$d/CUBRID" "$d/CUBRID_DB" "$d/CTP" "$d/volatile" -type f -name 'core.*' 2>/dev/null); do
     if [ -z "${CORE_SEEN[$f]+x}" ]; then
       if file -b "$f" 2>/dev/null | grep -q 'core file'; then CORE_SEEN[$f]=1; else CORE_SEEN[$f]=0; fi
     fi
@@ -1433,7 +1488,7 @@ start_core_watchdog() {
       if [ -n "$avail_gb" ] && [ "$avail_gb" -lt "$DISK_FLOOR_GB" ]; then
         reason="disk floor breached: ${avail_gb}GB available < ${DISK_FLOOR_GB}GB"
       elif [ "$ARG_ABORT_ON_CORE" -eq 1 ]; then
-        for f in $(find "$OUT"/shard_*/CUBRID "$OUT"/shard_*/CUBRID_DB "$OUT"/shard_*/CTP "$OUT"/shard_*/cores/ \
+        for f in $(find "$OUT"/shard_*/CUBRID "$OUT"/shard_*/CUBRID_DB "$OUT"/shard_*/CTP "$OUT"/shard_*/volatile "$OUT"/shard_*/cores/ \
                      -type f -name 'core.*' 2>/dev/null); do
           if file -b "$f" 2>/dev/null | grep -q 'core file'; then reason="core dump detected: $f"; break; fi
         done
@@ -1518,10 +1573,10 @@ collect_shards() {
     # Core dumps. path mode: already on the host in $d/cores via the bind-mount.
     # relative mode: cores landed in the server cwd inside the mounted CUBRID*/CTP
     # copies; sweep them into $d/cores before they are lost. (CTP only deletes cores
-    # under $CUBRID/$CTP_HOME, so sweep those plus CUBRID_DB.)
+    # under $CUBRID/$CTP_HOME, so sweep those plus CUBRID_DB and the volatile upper.)
     [ -e "$d/cores" ] || mkdir -p "$d/cores"
     if [ "$CORE_MODE" = "relative" ]; then
-      find "$d/CUBRID" "$d/CUBRID_DB" "$d/CTP" -type f -name 'core*' 2>/dev/null \
+      find "$d/CUBRID" "$d/CUBRID_DB" "$d/CTP" "$d/volatile" -type f -name 'core*' 2>/dev/null \
         -exec sh -c 'f="$1"; [ "$(file -b "$f" 2>/dev/null | grep -c core)" -gt 0 ] && mv "$f" "$2/" || :' _ {} "$d/cores" \; 2>/dev/null || :
     fi
     SHARD_CORES[i]=$(find "$d/cores/" -type f -name 'core*' 2>/dev/null | wc -l)
@@ -1857,6 +1912,11 @@ prune_shard_copies() {
     for sub in CUBRID CUBRID.slave CTP CTP.slave testcases CUBRID_DB CUBRID_DB.slave; do
       rm -rf "$d/$sub" 2>/dev/null || :
     done
+    # The volatile overlay's workdir keeps a mode-000 work/ owned by the
+    # container's root; only the rootless user namespace can remove it.
+    if [ -e "$d/volatile" ]; then
+      rm -rf "$d/volatile" 2>/dev/null || podman unshare rm -rf "$d/volatile" 2>/dev/null || :
+    fi
   done
   after="$(du -sh "$OUT" 2>/dev/null | cut -f1)"
   info "pruned shard working copies: $OUT $before -> $after (evidence kept: console.log, out/, reports/, cores/)."

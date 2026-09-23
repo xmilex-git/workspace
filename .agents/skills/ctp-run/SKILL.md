@@ -23,7 +23,7 @@ just ctp-rerun <PR | CircleCI job | gha-ci run URL>   # exactly what failed in C
 
 Env knobs: `PR=<n>` / `TC_REF=<ref>` (testcase ref), `SHARDS=<n>`, `BUILD=<install>`,
 `CONF=<file>`, `EXCLUDE=<file>`, `NO_ABORT_ON_CORE=1` (+ `CTP_CRASH_LOOP_CORES`, `CTP_MAX_SHARD_CORES`),
-`CTP_ARGS="…"`, `TESTCASES_ROOT=<dir>`.
+`CTP_VOLATILE=0` (see "Volatile databases"), `CTP_ARGS="…"`, `TESTCASES_ROOT=<dir>`.
 
 ## Non-negotiables
 
@@ -49,6 +49,7 @@ master+slave container pair. `SHARDS>1` is refused with the reason.
 | `scripts/ctp_run.sh` | the runner: split, mount, launch, aggregate, merge |
 | `scripts/ctp_rerun.sh` | CI failure extraction → subset run |
 | `scripts/entrypoint.sh` | current upstream entrypoint plus two local HA hooks, bind-mounted into the container |
+| `scripts/volatile_entry.sh` | sql/medium container entrypoint: mounts the volatile database overlay, then runs `/entrypoint.sh` |
 | `scripts/harvest_weights.sh` | turn a finished run into a timing table |
 | `baseline_weights.tsv` | measured per-case seconds (sql), for time-balanced splits |
 | `colocate.tsv` | order-sensitive dirs that must stay on one shard |
@@ -115,6 +116,32 @@ Upstream writes SQL, medium and shell overrides to `conf/<suite>_runtime.conf`.
 HA derives `conf/ha_shell_ci.conf` from `shell_ci.conf`. Inspect these generated
 files, not just the stock conf, when diagnosing scope. `CONF=` engine parameters
 are still merged into the shard's stock conf before upstream copies it.
+
+## Volatile databases (sql/medium, default on)
+
+CTP creates sql's `basic` and medium's `mdb` under `$CUBRID/databases`. Every autocommit
+statement then waits for the log fsync. By default that directory is an overlayfs mounted
+with the kernel's `volatile` option inside the shard container, so every fsync there
+returns at once. The database is thrown away with the shard, and a killed server loses
+nothing because its writes are in the page cache. Only a host crash mid-run could matter.
+This is the mechanism cubrid-testkit uses for `TESTKIT_SLOT_VOLATILE`
+([ADR 0017](../../../docs/adr/0017-ctp-runner-on-cubridci-image.md) D7).
+
+- The shard container gets `--cap-add SYS_ADMIN` for the mount only.
+  `scripts/volatile_entry.sh` mounts the overlay, checks `/proc/self/mountinfo` for
+  `volatile`, drops the capability with `setpriv`, then runs `/entrypoint.sh`. A failed
+  mount stops the shard. It never falls back silently.
+- Evidence: a `[volatile] /home/CUBRID/databases: overlayfs volatile` line at the top of
+  `shard_N/console.log`, and `volatile=` in `provenance.txt`/`.tsv`.
+- `CTP_VOLATILE=0` (or `--no-volatile` in `CTP_ARGS`) restores the plain bind. It is
+  read by the runner, so it applies to `just ctp` and `just ctp-rerun` alike.
+- Not applied to shell/ha_shell, whose cases create databases in their own case dirs,
+  or with `--overlay`.
+- Writes land in `shard_N/volatile/_home_CUBRID_databases/upper/`. That is where a
+  `--keep-copies` run's database files are.
+- A used volatile workdir keeps a mode-000 `work/` that plain `rm` cannot remove. The
+  runner's prune and `just ctp-prune` fall back to `podman unshare rm -rf`. It also
+  refuses a second mount, so every run makes fresh dirs.
 
 ## Shell/HA locale baseline
 

@@ -61,6 +61,7 @@ echo "=================================================================="
 echo; echo "## (a) static lint"
 if bash -n "$ORCH"; then ok "bash -n clean: ctp_run.sh"; else bad "bash -n FAILED: ctp_run.sh"; fi
 if bash -n "$ENTRY"; then ok "bash -n clean: entrypoint.sh"; else bad "bash -n FAILED: entrypoint.sh"; fi
+if bash -n "$SKILL/scripts/volatile_entry.sh"; then ok "bash -n clean: volatile_entry.sh"; else bad "bash -n FAILED: volatile_entry.sh"; fi
 if command -v shellcheck >/dev/null 2>&1; then
   if shellcheck -S warning "$ORCH" "$ENTRY"; then ok "shellcheck clean"; else bad "shellcheck reported issues"; fi
 else
@@ -439,6 +440,36 @@ else
   else
     bad "--env: malformed value rejection wrong (missing message or work dir leaked)"; cat "$SCRATCH/outebad.log" >&2
   fi
+fi
+
+#-------------------------------------------------------------------
+# (m) volatile database dir (D7): on by default for sql, off by flag or env,
+#     and a bad CTP_VOLATILE value is refused before any work dir exists.
+#-------------------------------------------------------------------
+echo; echo "## (m) volatile database dir"
+if grep -qF 'volatile:           /home/CUBRID/databases' "$OUTE0.log"; then
+  ok "volatile: sql default targets /home/CUBRID/databases"
+else
+  bad "volatile: sql default summary missing or wrong"; grep -i 'volatile' "$OUTE0.log" >&2
+fi
+OUTV="$SCRATCH/outv"; rm -rf "$OUTV"
+bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 3 --no-weights \
+  --no-volatile --out "$OUTV" >"$OUTV.log" 2>&1
+OUTV0="$SCRATCH/outv0"; rm -rf "$OUTV0"
+CTP_VOLATILE=0 bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 3 --no-weights \
+  --out "$OUTV0" >"$OUTV0.log" 2>&1
+if grep -qF 'volatile:           off' "$OUTV.log" && grep -qF 'volatile:           off' "$OUTV0.log"; then
+  ok "volatile: --no-volatile and CTP_VOLATILE=0 both turn it off"
+else
+  bad "volatile: off switch not honoured"; grep -i 'volatile' "$OUTV.log" "$OUTV0.log" >&2
+fi
+OUTVBAD="$SCRATCH/outvbad_should_not_exist"; rm -rf "$OUTVBAD"
+if CTP_VOLATILE=yes bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --out "$OUTVBAD" >"$SCRATCH/outvbad.log" 2>&1; then
+  bad "volatile: CTP_VOLATILE=yes was NOT rejected"
+elif grep -qF 'CTP_VOLATILE must be 0 or 1' "$SCRATCH/outvbad.log" && [ ! -e "$OUTVBAD" ]; then
+  ok "volatile: a bad CTP_VOLATILE value is rejected before any work dir is created"
+else
+  bad "volatile: bad-value rejection wrong"; cat "$SCRATCH/outvbad.log" >&2
 fi
 
 if bash "$HERE/image_contract_test.sh"; then

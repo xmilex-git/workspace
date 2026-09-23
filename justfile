@@ -266,6 +266,8 @@ ctest mode="debug":
 #                        stops after CTP_CRASH_LOOP_CORES=5 cores with no passing case, or CTP_MAX_SHARD_CORES=20
 #   CTP_ARTIFACT_MOUNT=<mount>  disk for runs (default /home = NVMe; must be mounted)
 #   CTP_KEEP_COPIES=1    keep shard install/CTP/testcases/DB copies after the run (default: pruned)
+#   CTP_VOLATILE=0       keep sql/medium's database dir on a plain bind mount. Default 1: it is a
+#                        volatile overlay whose fsyncs return at once (ADR 0017 D7); also for ctp-rerun
 #   CTP_CORE_STORE=<dir>  where shard cores go (default /bench/hdd/core/ctp; shard_N/cores is a symlink into it)
 #   CTP_ARGS="…"  extra ctp_run.sh flags, verbatim
 # ---------------------------------------------------------------------------
@@ -359,7 +361,8 @@ ctp-prune KEEP="3":
             echo "skip (container up): $n"; continue
         fi
         echo "delete: $n ($(du -sh "$d" 2>/dev/null | cut -f1))"
-        rm -rf "$d"
+        # A kept volatile overlay workdir has a mode-000 work/ only the rootless namespace can remove.
+        rm -rf "$d" 2>/dev/null || podman unshare rm -rf "$d"
     done
     echo "kept newest {{KEEP}} run(s) under $root"
 
