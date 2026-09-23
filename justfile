@@ -262,7 +262,8 @@ ctest mode="debug":
 #   CONF=<file>   cubrid.conf whose [<suite>/cubrid.conf] section CTP applies
 #   EXCLUDE=<file> host exclusion list (unset: suite default; empty: none)
 # Scope and exclusions become upstream TEST_SCENARIO / TEST_EXCLUDE in each shard.
-#   NO_ABORT_ON_CORE=1   keep running after a core dump (default: stop everything)
+#   NO_ABORT_ON_CORE=1   keep running after a core dump (default: stop everything); a shard still
+#                        stops after CTP_CRASH_LOOP_CORES=5 cores with no passing case, or CTP_MAX_SHARD_CORES=20
 #   CTP_ARTIFACT_MOUNT=<mount>  disk for runs (default /home = NVMe; must be mounted)
 #   CTP_KEEP_COPIES=1    keep shard install/CTP/testcases/DB copies after the run (default: pruned)
 #   CTP_CORE_STORE=<dir>  where shard cores go (default /bench/hdd/core/ctp; shard_N/cores is a symlink into it)

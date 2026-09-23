@@ -157,8 +157,8 @@ bash .agents/skills/ctp-run/test/run_tests.sh
 
 This includes split invariants, the image scope contract, runtime conf isolation,
 unset/empty/custom exclusion planning, invalid-option rejection, and the two HA
-hooks. `test/image_contract_test.sh`, `test/locale_staging_test.sh` and
-`test/ha_shell_test.sh` use fixtures and
+hooks. `test/image_contract_test.sh`, `test/locale_staging_test.sh`,
+`test/crash_loop_watchdog_test.sh` and `test/ha_shell_test.sh` use fixtures and
 never execute CTP. Scratch stays under `.git_ignored_dir/scratch/`.
 
 For an image update, also run small real SQL, shell and HA subsets via `just ctp`.

@@ -127,7 +127,10 @@ OPTIONS
   --keep                 do not remove the containers afterwards
   --keep-copies          keep each shard's install/CTP/testcases/DB copies after the run
   --abort-on-core        stop every shard on the first real core dump (default ON)
-  --no-abort-on-core     opt out
+  --no-abort-on-core     keep collecting cores; a shard still stops after
+                         $CTP_CRASH_LOOP_CORES (5) cores with no passing case in
+                         between or $CTP_MAX_SHARD_CORES (20) cores in total, and
+                         the disk floor still stops every shard
   --no-webconsole        skip the sql/medium merged report under <out>/webconsole
   --merge-only <dir>     merge a finished run into <dir>/webconsole and exit
   --label <text>         label for the merged run
@@ -1366,45 +1369,114 @@ launch_shard() {
 }
 
 #####################################################################
-# --abort-on-core watchdog: while shards run, poll the shard working copies
-# (bind-mounted host dirs, so cores are visible live even in relative
-# core_pattern mode) and the free disk at --out. On the first REAL core dump
-# (file(1)-verified, not just a core.* name) or a disk-floor breach, stop ALL
-# shard containers so a crash-looping server cannot fill the disk with cores
-# (2026-08-31 incident: 1.1T of cores on /home). The abort reason is left in
-# $OUT/.abort_reason for aggregate() to report; collection still runs.
+# Core watchdog: while shards run, poll the shard working copies (bind-mounted
+# host dirs, so cores are visible live even in relative core_pattern mode) and
+# the free disk at --out. It runs in both modes:
+#   - disk floor breach: stop ALL shard containers, whatever the mode.
+#   - --abort-on-core (default): the first REAL core dump (file(1)-verified,
+#     not just a core.* name) stops ALL shards, so a crash-looping server cannot
+#     fill the disk with cores (2026-08-31 incident: 1.1T of cores on /home).
+#   - --no-abort-on-core: keep collecting cores, but stop a shard whose server
+#     can no longer run cases — CRASH_LOOP_CORES cores with no passing case in
+#     between, or MAX_SHARD_CORES cores in total. The other shards keep running.
+#     2026-09-23: a crashed database crashed again in recovery on every restart;
+#     with the watchdog off the shard wrote 170 cores while every remaining case
+#     waited out a 3-minute connect timeout (~2000 cases left = days).
+# Reasons are left in $OUT/.abort_reason (whole run) and $OUT/.dead_shards (one
+# line per stopped shard) for aggregate() to report; collection still runs.
 #####################################################################
 CORE_POLL_SECS=5   # 2026-09-03 #199: a crash-looping shard produced 13 cores (16GB) inside one 30s poll; 5s bounds it to ~2 per shard
 DISK_FLOOR_GB=30
+CRASH_LOOP_CORES="${CTP_CRASH_LOOP_CORES:-5}"
+MAX_SHARD_CORES="${CTP_MAX_SHARD_CORES:-20}"
 WATCHDOG_PID=""
+
+# Verified core dumps of one shard; file(1) runs once per path (the cache lives
+# in the watchdog subshell). core_pattern names have no whitespace
+# (core.%e.%p.%h.%t), so word splitting the find output is safe. Sets SHARD_CORE_COUNT.
+declare -A CORE_SEEN=()
+count_shard_cores() {
+  local d="$1" f n=0
+  for f in $(find "$d/cores/" "$d/CUBRID" "$d/CUBRID_DB" "$d/CTP" -type f -name 'core.*' 2>/dev/null); do
+    if [ -z "${CORE_SEEN[$f]+x}" ]; then
+      if file -b "$f" 2>/dev/null | grep -q 'core file'; then CORE_SEEN[$f]=1; else CORE_SEEN[$f]=0; fi
+    fi
+    if [ "${CORE_SEEN[$f]}" = 1 ]; then n=$((n + 1)); fi
+  done
+  SHARD_CORE_COUNT=$n
+}
+
+# Cases one shard has passed so far: the sql/medium runner log and the shell
+# runners' feedback.log both mark a passing case with [OK]. Sets SHARD_PASS_COUNT.
+count_shard_passes() {
+  SHARD_PASS_COUNT="$(cat "$1"/CTP/sql/log/*.log "$1"/CTP/result/*/current_runtime_logs/feedback.log 2>/dev/null \
+    | grep -c '\[OK\]' || :)"
+}
+
+stop_shard_containers() {
+  local n
+  # kill, not stop: every second of a crash-looping server is another ~2.4GB core
+  for n in "$@"; do
+    [ -n "$n" ] || continue
+    podman kill "$n" >/dev/null 2>&1 || podman stop -t 2 "$n" >/dev/null 2>&1 || :
+  done
+}
+
 start_core_watchdog() {
-  rm -f "$OUT/.abort_reason"
+  rm -f "$OUT/.abort_reason" "$OUT/.dead_shards"
   (
+    declare -a cores_prev=() cores_mark=() pass_mark=() stopped=()
     while :; do
       sleep "$CORE_POLL_SECS"
       reason=""
       avail_gb="$(df -BG --output=avail "$OUT" 2>/dev/null | tail -1 | tr -dc '0-9')"
       if [ -n "$avail_gb" ] && [ "$avail_gb" -lt "$DISK_FLOOR_GB" ]; then
         reason="disk floor breached: ${avail_gb}GB available < ${DISK_FLOOR_GB}GB"
-      else
-        # core_pattern names have no whitespace (core.%e.%p.%h.%t), so word
-        # splitting the find output is safe here.
+      elif [ "$ARG_ABORT_ON_CORE" -eq 1 ]; then
         for f in $(find "$OUT"/shard_*/CUBRID "$OUT"/shard_*/CUBRID_DB "$OUT"/shard_*/CTP "$OUT"/shard_*/cores/ \
                      -type f -name 'core.*' 2>/dev/null); do
           if file -b "$f" 2>/dev/null | grep -q 'core file'; then reason="core dump detected: $f"; break; fi
+        done
+      else
+        for (( i=0; i<${#SHARD_NAMES[@]}; i++ )); do
+          [ "${stopped[i]:-0}" -eq 0 ] || continue
+          count_shard_cores "$OUT/shard_${i}"
+          [ "$SHARD_CORE_COUNT" -ne "${cores_prev[i]:-0}" ] || continue
+          # A case passed since the last new core: the server is alive, restart the count.
+          count_shard_passes "$OUT/shard_${i}"
+          if [ "$SHARD_PASS_COUNT" -gt "${pass_mark[i]:-0}" ]; then
+            pass_mark[i]=$SHARD_PASS_COUNT
+            cores_mark[i]=${cores_prev[i]:-0}
+          fi
+          cores_prev[i]=$SHARD_CORE_COUNT
+          why=""
+          if [ $(( SHARD_CORE_COUNT - ${cores_mark[i]:-0} )) -ge "$CRASH_LOOP_CORES" ]; then
+            why="crash loop: $(( SHARD_CORE_COUNT - ${cores_mark[i]:-0} )) core dumps with no passing case in between (CTP_CRASH_LOOP_CORES=$CRASH_LOOP_CORES)"
+          elif [ "$SHARD_CORE_COUNT" -ge "$MAX_SHARD_CORES" ]; then
+            why="core cap: $SHARD_CORE_COUNT core dumps (CTP_MAX_SHARD_CORES=$MAX_SHARD_CORES)"
+          fi
+          if [ -n "$why" ]; then
+            stopped[i]=1
+            printf 'shard %d: %s\n' "$i" "$why" >> "$OUT/.dead_shards"
+            echo "[ctp-run] CRASH-LOOP WATCHDOG: shard $i $why — stopping that shard; the others keep running." >&2
+            stop_shard_containers "${SHARD_NAMES[i]}" "${HA_SLAVE_NAMES[i]:-}"
+          fi
         done
       fi
       if [ -n "$reason" ]; then
         printf '%s\n' "$reason" > "$OUT/.abort_reason"
         echo "[ctp-run] ABORT-ON-CORE: $reason — stopping all shard containers." >&2
-        # kill, not stop: every second of a crash-looping server is another ~2.4GB core
-        for n in "${SHARD_NAMES[@]}"; do podman kill "$n" >/dev/null 2>&1 || podman stop -t 2 "$n" >/dev/null 2>&1 || :; done
+        stop_shard_containers "${SHARD_NAMES[@]}"
         exit 0
       fi
     done
   ) &
   WATCHDOG_PID=$!
-  info "abort-on-core watchdog started (pid $WATCHDOG_PID, poll ${CORE_POLL_SECS}s, disk floor ${DISK_FLOOR_GB}GB)."
+  if [ "$ARG_ABORT_ON_CORE" -eq 1 ]; then
+    info "abort-on-core watchdog started (pid $WATCHDOG_PID, poll ${CORE_POLL_SECS}s, disk floor ${DISK_FLOOR_GB}GB)."
+  else
+    info "crash-loop watchdog started (pid $WATCHDOG_PID, poll ${CORE_POLL_SECS}s, disk floor ${DISK_FLOOR_GB}GB; a shard stops after ${CRASH_LOOP_CORES} cores with no passing case or ${MAX_SHARD_CORES} cores in total)."
+  fi
 }
 stop_core_watchdog() {
   if [ -n "$WATCHDOG_PID" ]; then kill "$WATCHDOG_PID" 2>/dev/null || :; wait "$WATCHDOG_PID" 2>/dev/null || :; fi
@@ -1615,8 +1687,13 @@ aggregate() {
     fail=1
   fi
   if [ -s "$OUT/.abort_reason" ]; then
-    err "run ABORTED by --abort-on-core watchdog: $(cat "$OUT/.abort_reason")"
+    err "run ABORTED by the core watchdog: $(cat "$OUT/.abort_reason")"
     err "shard results below are PARTIAL (containers were stopped mid-run)."
+    fail=1
+  fi
+  if [ -s "$OUT/.dead_shards" ]; then
+    while IFS= read -r line; do err "STOPPED by the crash-loop watchdog: $line"; done < "$OUT/.dead_shards"
+    err "those shards' results are PARTIAL; rerun their remaining cases once the crash is fixed."
     fail=1
   fi
   [ "$any_crash" -ne 0 ] && { err "one or more shards crashed."; fail=1; }
@@ -1864,7 +1941,7 @@ main() {
   local i
   for (( i=0; i<NSHARDS; i++ )); do build_shard_workdir "$i"; done
   for (( i=0; i<NSHARDS; i++ )); do launch_shard "$i"; done
-  [ "$ARG_ABORT_ON_CORE" -eq 1 ] && start_core_watchdog
+  start_core_watchdog
   wait_shards
   stop_core_watchdog
   collect_shards

@@ -22,7 +22,8 @@ just ctp-rerun <PR | CircleCI job | gha-ci run URL>   # exactly what failed in C
 ```
 
 Env knobs: `PR=<n>` / `TC_REF=<ref>` (testcase ref), `SHARDS=<n>`, `BUILD=<install>`,
-`CONF=<file>`, `EXCLUDE=<file>`, `NO_ABORT_ON_CORE=1`, `CTP_ARGS="…"`, `TESTCASES_ROOT=<dir>`.
+`CONF=<file>`, `EXCLUDE=<file>`, `NO_ABORT_ON_CORE=1` (+ `CTP_CRASH_LOOP_CORES`, `CTP_MAX_SHARD_CORES`),
+`CTP_ARGS="…"`, `TESTCASES_ROOT=<dir>`.
 
 ## Non-negotiables
 
@@ -54,6 +55,7 @@ master+slave container pair. `SHARDS>1` is refused with the reason.
 | `test/run_tests.sh` | split, image-contract and HA regression checks; no CTP execution |
 | `test/image_contract_test.sh` | runtime conf isolation, scope migration and exclusion planning fixtures |
 | `test/locale_staging_test.sh` | real shard staging followed by CTP-style locale deletion |
+| `test/crash_loop_watchdog_test.sh` | core watchdog over stubbed podman: abort-on-core, crash-loop shard stop, core cap, disk floor |
 
 The image is `cubridci/cubridci:test_rl8.10`, digest-pinned in `ctp_run.sh`. It is
 never built locally; the CUBRID install is mounted in from the host (`just build`
@@ -192,8 +194,15 @@ fails for reasons that have nothing to do with the change.
 3. `shard_N/CTP/conf/<suite>*.conf` — the conf the entrypoint actually composed,
    preserved on the host.
 4. `shard_N/cores/` — real core dumps. By default the first one stops every
-   shard (`--no-abort-on-core` opts out); a crash-looping server once wrote 1.1T
-   of cores.
+   shard; a crash-looping server once wrote 1.1T of cores. `NO_ABORT_ON_CORE=1`
+   (`--no-abort-on-core`) keeps collecting cores but still stops a shard after
+   `CTP_CRASH_LOOP_CORES` (5) cores with no passing case in between or
+   `CTP_MAX_SHARD_CORES` (20) cores in total, and the disk floor still stops
+   every shard. A stopped shard is named in the aggregate
+   (`STOPPED by the crash-loop watchdog`) and in `<out>/.dead_shards`. Without
+   this, a database that crashed again in recovery on every restart kept its
+   shard running for hours: each remaining case waited out a 3-minute connect
+   timeout (2026-09-23).
 
 Run `bash .agents/skills/ctp-run/test/run_tests.sh` from the tooling repo after
 touching the runner. The fixtures cover split invariants, runtime conf isolation,

@@ -453,6 +453,12 @@ else
   bad "shell/HA locale staging survives CTP library reset"
 fi
 
+if bash "$HERE/crash_loop_watchdog_test.sh"; then
+  ok "core watchdog: abort-on-core, crash-loop shard stop, core cap and disk floor"
+else
+  bad "core watchdog: abort-on-core, crash-loop shard stop, core cap and disk floor"
+fi
+
 # HA setup regression: exercise the entrypoint functions with isolated fixtures.
 if bash "$HERE/ha_shell_test.sh"; then
   ok "HA csql port and slave broker setup regression"
