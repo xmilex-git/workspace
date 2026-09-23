@@ -155,7 +155,7 @@ struct domain_operand
   bool is_gate_slot;
 };
 
-/* 유일한 규칙 자리. 순수 함수(할당 0, er_set 0). 현행 서버 값 격자(#321 §1~§3: 산술 사전 캐스트, 비교 표, 집계 규칙, 함수 오버로드,
+/* 유일한 규칙 자리. 순수 함수(할당 0, er_set 0; "할당 0" = 호출자 소유 할당 0 — 결과 도메인은 tp_domain_cache 에 intern 된 캐시 도메인이어도 된다, #333 사용자 승인 2026-09-23). 현행 서버 값 격자(#321 §1~§3: 산술 사전 캐스트, 비교 표, 집계 규칙, 함수 오버로드,
  * LANG_RT_COMMON_COLL, ENUM 변환 표, NUMERIC p/s 공식)를 여기로 옮기고 원 자리는 지운다. 로드는 val_type 없이 불러 *needs_gate 로
  * 게이트 확정 자리를 판별하고, 게이트는 값 타입을 넣어 부른다. */
 int domain_resolve (DOMAIN_CTX ctx, int opcode, const DOMAIN_OPERAND * operands, int n_operands,
