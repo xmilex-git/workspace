@@ -1,5 +1,5 @@
 ---
-status: accepted (amended 2026-09-23 by #335 D-335-08 — see "Amendment")
+status: accepted (amended 2026-09-23 by #335 D-335-08 and 2026-09-24 by #336 D-336-B — see "Amendment")
 date: 2026-09-22
 locked-by: xmilex-git/workspace#320 (2026-09-22)
 ---
@@ -14,7 +14,9 @@ locked-by: xmilex-git/workspace#320 (2026-09-22)
 - **F-335-04 XASL 캐시 공유**: 계획 키는 해시 텍스트의 SHA-1 뿐이고 auto-param 과 사용자 `?` 는 같은 `?:N` 으로 찍혀, 리터럴 문장과 바인드 문장이 계획 하나를 쓴다. 캐스트 결정을 계획에 실으면 어느 형태가 먼저 컴파일했느냐로 답이 갈린다(`bind_misc`, `bug_bts_4966`, `zero_date_format`). 클라이언트는 자기 문장의 기대 도메인을 알므로 문장마다 캐스트하면 캐시와 무관하다.
 - **F-335-05 객체 바인드**: CS 모드에서 MOP 는 OID 로 전송되고, OBJECT 목표 변환(클래스 검사·뷰 객체 변환)은 클라이언트 전용 코드다(`tp_value_cast_internal` 의 OBJECT 분기가 `#if !defined (SERVER_MODE)`).
 
-아래 본문의 "클라이언트는 캐스트 없이 그대로 보낸다"·"게이트가 `val_pos` 마다 바인드 도메인으로 변환한다"·Consequences 첫 항목(반올림 소멸·문맥별 손실 정책)은 이 정정으로 대체된다. "클라이언트가 게이트 규칙을 흉내 내 미리 변환" 을 기각한 이유(규칙 두 벌, P6)는 같은 셀을 양쪽이 부르는 지금 구조에는 해당하지 않는다. 값 소유(XASL_STATE)·참조별 자리·해제 규칙은 그대로다. `char(n)_col = ?` 의 VARCHAR 원 값 유지는 `do_cast` 경로에도 적용한다(develop 의 `db_value_domain_init` 이 값을 NULL 로 만들던 B7 결함 소멸, D-327-01). 미러 슬롯(dpin-10)의 변환도 같은 자리(클라이언트, 공유 셀)를 기본으로 두되, 공유된 계획에서 "값 타입 = 계획 도메인" 이 깨질 수 있는 점은 dpin-10 이 다룬다.
+아래 본문의 "클라이언트는 캐스트 없이 그대로 보낸다"·"게이트가 `val_pos` 마다 바인드 도메인으로 변환한다"·Consequences 첫 항목(반올림 소멸·문맥별 손실 정책)은 이 정정으로 대체된다. "클라이언트가 게이트 규칙을 흉내 내 미리 변환" 을 기각한 이유(규칙 두 벌, P6)는 같은 셀을 양쪽이 부르는 지금 구조에는 해당하지 않는다. 값 소유(XASL_STATE)·참조별 자리·해제 규칙은 그대로다. `char(n)_col = ?` 의 VARCHAR 원 값 유지는 `do_cast` 경로에도 적용한다(develop 의 `db_value_domain_init` 이 값을 NULL 로 만들던 B7 결함 소멸, D-327-01). 미러 슬롯(dpin-10)의 변환도 같은 자리(클라이언트, 공유 셀)에서 하되 **모드는 슬롯의 문맥**을 따른다(#336): 대입 자리·CAST 아래·문자 함수 인자는 develop 의 캐스트(대입 셀), 컴파일 미러가 산술·공통값·TO_CHAR·UNION/VALUES 에 붙인 슬롯은 피연산자 셀(strict, 실패는 X1 대로 `return_null_on_function_errors`) — 파서가 슬롯마다 `host_var_convert_modes[]` 로 모드를 적고 `pt_convert_bind_value` 가 그 모드로 부른다. **계획 공유(F-335-04)는 캐시 키로 가른다**(#336 결정 ②): 사용자 `?` 가 하나라도 있는 문장은 해시 텍스트에 `;host_var_cnt=<u>` 를 덧붙여 리터럴 문장과 다른 계획을 쓴다(리터럴만 있는 문장의 키는 develop 과 같다). ENFORCE 플래그 도메인의 바인드 캐스트는 문자 값의 collation 만 바꾸고 타입은 그대로 두므로(`tp_value_cast_internal`), 그런 슬롯의 계획 도메인은 값 타입 = 게이트 슬롯이다(F-336-01).
+
+**정정 2 (2026-09-24, #336 D-336-A·B)**: 컴파일은 슬롯 타입을 만들지 않는다. 컴파일 도메인은 develop 의 클라이언트 캐스트 자리(비교·대입 기대 도메인)뿐이고, 그 밖의 슬롯(산술·함수·공통값·UNION/VALUES·TO_CHAR·LIMIT·세션변수, ENUM·ENFORCE collation 자리)은 GATE 로 게이트가 바인드 값의 도메인을 쓴다 — 미러 슬롯의 OPERAND 변환(위 "미러 슬롯(dpin-10)의 변환도 같은 자리" 문장)은 없다. 규칙표 §7 의 답안 변경은 전부 철회되고 답은 develop 과 같다(`docs/research/domain-pin-slot-gate-design.md`).
 
 ## Considered Options
 

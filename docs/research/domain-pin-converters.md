@@ -181,7 +181,7 @@ leaf 포인터 → 이름 정적 배열 `domain_convert_names[]`(`{fn, "string_t
 
 **게이트 의존 노드의 해석 완결성(#335, 2026-09-23 사용자 지적 — "애매한 경우는 실행에 맡긴다" 철회)**: G1 4단계는 게이트 의존 노드마다 셋 중 하나로 답한다 — 결과 도메인 / 실행 전 오류 / "값 없음". "실행에 맡김"은 답이 아니다(해석기는 모르는 연산자에 `ER_QPROC_DOMAIN_UNRESOLVED` 를 돌려주고 G1 은 optdebug assert + release 오류로 멈춘다 — 추측하지 않는다).
 - **대상**: 컴파일이 결과 타입을 VARIABLE 로 남긴 산술·함수 노드 — 늦은 바인딩 목록(`pt_is_op_hv_late_bind` 39개: 인자 하나라도 MAYBE 면 결과 MAYBE, tc:5999)과 GENERIC_ANY 복사(PRIOR·CONNECT_BY_ROOT·QPRIOR) — 중 모든 피연산자의 타입을 게이트가 아는 것(GATE 슬롯·게이트 의존 노드·컴파일 확정 도메인), 그리고 인자가 게이트 의존인 집계·분석 함수. 결과가 컴파일 확정인 노드는 게이트 노드가 아니다(CAST 등).
-- **피연산자 타입**: 값을 가진 피연산자(바인드·리터럴)는 **값의 타입**이다 — 실행이 값으로 계산하기 때문이다. 컴파일 도메인이 정해진 비-GATE 바인드(형제·기대 도메인을 받은 `?`, LIMIT 절의 NULL 도메인 `?`)는 클라이언트가 그 도메인으로 캐스트하지 않아 값 타입이 계획 도메인과 다를 수 있다(**F-335-06**, #335 진단 실행 224건 전부; develop 도 prepare 컴파일에서 같다). 계획 도메인이 값을 설명하게 하는 일(A3''·형제 미러 규칙대로 GATE 로 바꾸거나 캐스트)은 dpin-10(#336), 그 전에 계획 도메인을 읽는 소비자(dpin-14 이후)는 이 차이를 전제해야 한다.
+- **피연산자 타입**: 값을 가진 피연산자(바인드·리터럴)는 **값의 타입**이다 — 실행이 값으로 계산하기 때문이다. 컴파일 도메인이 정해진 비-GATE 바인드의 값 타입이 계획 도메인과 다르던 F-335-06(#335 진단 224건)은 #336 이 닫았다: 사용자 `?` 의 계획 도메인은 **클라이언트가 실제로 캐스트하는 도메인**(`host_var_expected_domains[]`)이고, 캐스트하지 않는 슬롯 — 기대 도메인 없음, ENUM 도메인(CUBRIDSUS-9007), 타입을 못 받은 LIMIT 사본, 그리고 **ENFORCE 플래그 도메인**(collation 축의 형제 collation: `tp_value_cast_internal` 은 문자 값의 collation 만 바꾸고 타입은 두므로 `str_col + ?`·`enum_col + ?`·`ifnull(char_col, ?)` 의 값은 원 타입으로 온다, F-336-01) — 는 GATE 슬롯이다(`pt_make_regu_hostvar`). 게이트 카운터 `Num_domain_bind_plan_mismatch` 가 이 불변식을 실행마다 세고(CHAR↔VARCHAR 는 D-327-01 의 원 값 유지라 같은 부류), optdebug 는 위반에 assert 한다.
 - **오류 시점**: 산술 문맥(ARITH)의 거부는 실행 전 오류(D-335-02, 0행·미선택 분기 포함). 함수·집계·분석의 오류(인자 타입·분류 실패)는 develop 처럼 계산할 때 나고, 슬롯에는 "값 없음"을 기록한다. 게이트가 보는 NULL 값(바인드·리터럴)은 산술 문맥에서 NULL 타입이다(연산자가 타입을 보기 전에 값 없음을 낸다).
 - **값 없는 문자 인자는 타입으로(D-335-10, 옛 X 폐기)**: 값으로 부류가 갈리는 인자(ADDTIME 왼쪽 문자, MEDIAN/PERCENTILE 문자 인자)가 게이트가 값을 갖지 않는 문자열(컬럼·계산식)이면 ADDTIME 은 VARCHAR(컴파일 시그니처 그대로, `db_add_time` 은 VARCHAR 도메인에서 존 결과를 문자열로), MEDIAN/PERCENTILE 은 DOUBLE(컴파일 `func_type.cpp` 문자 비상수 → DOUBLE; 게이트 의존 문자 식은 해석기가 DOUBLE, 변환기 문자→DOUBLE ASSIGN). 실행은 컴파일 도메인이 고정이면 캐스케이드를 돌지 않고(`qexec_resolve_domains_for_aggregation`·`qdata_evaluate_analytic_func` 첫값 `default:`, 분석 정렬 키 `cmp_dom`) 게이트 노드의 값 없는 피연산자에서는 DOUBLE 로 1회 캐스트한다. 규칙표 F10·F4'·F10'·§7.
 - **이관(명시)**: 세션변수 읽기(S5)에 의존하는 노드 → dpin-10(#336); 파생 소비자 — 값 포인터(`TYPE_CONSTANT`: 리스트 컬럼·상관 값)와 리스트 위치(`TYPE_POSITION`), VARIABLE 로 남은 서브쿼리 결과 — 에 의존하는 노드 → dpin-11(#337). 값 포인터는 생산자가 준 타입을 싣고 컴파일 도메인이 그것을 설명하지 못할 수 있다(**F-335-07**: 재귀 CTE 의 `x + ?` 에서 CTE 컬럼 `x` 는 첫 가지대로 INTEGER, 재귀 가지 값은 DOUBLE — #335 게이트 r3 의 유일한 그림자 불일치). 두 경우 모두 그 노드와 위 노드는 #335 에서 게이트 노드가 아니다(로드가 "모르는 피연산자"로 제외).
@@ -195,6 +195,8 @@ leaf 포인터 → 이름 정적 배열 `domain_convert_names[]`(`{fn, "string_t
 ---
 
 ## 5. 규칙표 S4/S5 "실행 중 세션변수 타입 변경" — 값 A/B (D-323-18 판정 입력)
+
+**철회(D-336-A·E, 2026-09-24)**: 아래 B 열의 -494/NULL 예측은 적용하지 않는다. 세션변수의 타입이 실행 중 바뀐 행은 develop 의 늦은 해석(값 타입)으로 계산해 답이 develop 과 같다(P-S2 = 4, P-S5 = (2,0), P-S8·S10 = develop 값). 게이트는 실행 시작 시 저장값 도메인으로 노드를 확정하고, 바뀐 뒤의 행만 `volatile_changed` 로 늦은 해석에 돌아간다(dpin-14 가 표 재조회로 대체).
 
 A = develop `cad27172b` optdebug 실측(2026-09-22, `dpin_probe`, `.git_ignored_dir/scratch/312-325/probe/out-optdebug.txt`·`out-optdebug-nullonerr.txt`, 코어·assert 0). B = 이 설계의 예측(§1 모드 + D-325-10·11). 테이블 `tv(i int)` 3행, 각 블록은 `SET @v` 뒤 SELECT 하나가 읽고 재대입한다. `yes` = `return_null_on_function_errors=yes`.
 
