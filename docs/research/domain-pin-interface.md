@@ -230,6 +230,13 @@ stx_build_domain_plan (root)
 - **변환기**: 피연산자 도메인이 전부 컴파일 확정이면 `domain_resolve (ctx, opcode, operands, …, &fixed, &needs_gate)` 로 `fixed` 를 채운다. `needs_gate` 면 `slot` 을 배정하고 `gate_nodes` 에 넣는다(방문 순서 = 생산자 우선).
 - **참조**: `TYPE_POS_VALUE` 는 (val_pos, 목표 도메인, 실패 정책) 삼중으로 중복 제거해 `ref` 를 준다 — 첫 참조는 `ref = val_pos`, 삼중이 다른 뒤 참조는 `ref = dbval_cnt + k`(§4).
 - **ALIAS**: 리스트 컬럼 pos_descr·정렬 키·누산기·BUILDVALUE 출력 regu·집합 연산 컬럼은 생산자 항목의 `slot` 을 공유하고 새 항목을 만들지 않는다(L-41).
+  **구현(#337)**: 파생 소비자는 걷기가 끝난 뒤 해석 단계에서 생산자를 읽는다 — 생산자가 게이트 칸이면 그 칸(ALIAS), 아니면 그 도메인. 생산자는 이렇게 정한다.
+  - 값 포인터(`TYPE_CONSTANT`)는 가리키는 값을 쓰는 레코드를 값 동일성으로 찾는다: val_list fetch(`vfetch_to`)·산술 결과·누산기·분석 결과(`value`·`out_value`)·단일 행 부질의가 `single_tuple` 에 복사하는 리스트 컬럼(쓰는 쪽이 다시 값 포인터면 그 생산자까지 따라간다). 값 포인터의 컴파일 도메인은 읽는 쪽의 것이라(INSERT…SELECT 는 대상 컬럼) 생산자의 도메인이 이긴다(F-335-07). 쓰는 레코드가 없는 값 포인터(실행 카운터)는 컴파일 도메인.
+  - 리스트 위치(`TYPE_POSITION`)는 읽는 리스트의 컬럼: 스펙의 리스트 XASL 출력, GROUP BY·분석 단계는 스캔 출력(`outptr_list`). 리스트 파일은 숨은 컬럼을 담지 않으므로 건너뛰고, 정렬 키는 숨은 컬럼까지 센다. 집합 연산·CTE 리스트 컬럼은 가지 컬럼을 묶는 합성 노드이고(가지가 컴파일 확정·같은 타입이면 그 타입, 그 밖은 게이트가 `qfile_unify_types` 의미로 정한다), 재귀 CTE 가지가 자기 컬럼을 읽으면 첫 반복이 읽는 비재귀 가지 컬럼이 생산자다. 집합 연산 블록의 ORDER BY 키는 그 합성 컬럼을 읽는다. 컴파일이 확정한 위치·다중 행 VALUES 열은 자기 도메인을 유지한다. 컴파일된 위치가 같은 타입의 리터럴·바인드를 나르면 게이트는 그 값을 분류에 쓴다(D-328-06).
+  - 집계 ORDER BY 키는 집계 피연산자 컬럼(CUME_DIST/PERCENT_RANK 는 X-1 포장 안의 값), MEDIAN/PERCENTILE 키는 집계 자신(값이 집계 도메인으로 캐스트된다).
+  - 집계·분석: 게이트는 develop 처럼 인자가 열려 있을 때(`opr_dbtype` VARIABLE)만 함수를 인자에서 늦은 바인딩하고, 인자가 컴파일돼 있으면 컴파일 함수 도메인을 답한다(`DOMAIN_GATE_LINK.argument`) — 값 타입은 develop 이 값을 읽는 자리(SUM/AVG 누산기, MEDIAN 부류)에만 쓴다. 컴파일 확정 집계·분석의 누산기 도메인은 인자 도메인에서 해석기로 1회 도출해 항목에 싣는다(`DOMAIN_PLAN_ACCUMULATOR`, L-43). 실행은 첫 행 전에 함수·누산기·인자 도메인(distinct/정렬 리스트 파일은 그 뒤 인자 도메인으로 열린다)을 계획에서 셋업한다(`qexec_setup_aggregate_domains`, 전부 아니면 전무).
+  - 파생 소비자를 읽는 실행 자리는 계획을 읽는다(`qexec_plan_domain`: 게이트 칸의 결정, 또는 로드가 생산자에서 실은 도메인 — collation 플래그가 NORMAL 일 때만; LEAVE·ENFORCE 도메인은 값의 타입을 보장하지 않는다, F-336-01). develop 의 늦은 해석 코드는 삭제 티켓까지 소스에 있지만 파생 소비자에서는 조건이 거짓이다. 값으로 정하는 자리는 다른 티켓 몫만 남는다: collation 축 — 식 결과, LEAVE·ENFORCE 플래그 도메인(위치·값 포인터·함수)(#338, X-11 — 칸 플래그 `DOMAIN_SLOT_TEXT_INEXACT`), MySQL 호환 모드·세션변수 타입 변경·CAST 노드(#340·D-336-E·F-336-03 — `EXPRESSION`·`VOLATILE`·`CAST`), 문자 컬럼·식의 MEDIAN/PERCENTILE 첫 값 캐스트(오류 코드 동치; #340 의 첫값 캐스케이드 삭제), fetch·비교의 슬롯 늦은 해석(#340).
+  - 해석은 생산자 우선 재귀라 게이트 노드 목록의 순서도 그 해석 순서다. 칸 플래그는 결정의 원천 칸에서 상속한다.
 - **키**: spec 의 key range 마다 `domain_plan_key` 를 만든다(§5).
 - 끝에서 경계 (a) 검사(§6).
 
@@ -345,6 +352,8 @@ struct domain_plan_key
 | X-7 | ~~F10 `median(varchar_col)`·`percentile_* … order by varchar_col` 인자~~ | **폐기(D-335-10, 2026-09-24)**: 컴파일이 DOUBLE 로 확정, 잔존 없음 | — |
 
 필터/함수 인덱스 스트림: GATE 비트 하나라도 있으면 거부. `fpcache_claim`(filter_pred_cache.c:355~416)의 오류 삼킴(S-42)은 전파로 수정.
+
+**#337 상태**: 코드의 예외 표(`domain_plan_load_exceptions[]`)는 X-1~X-5 와 X-11(식 결과의 `TP_DOMAIN_COLL_LEAVE`, #338 몫)이다. #336 이 두었던 X-8(값 포인터·위치를 피연산자로 가진 노드)·X-9(누산기·정렬 키·리스트 컬럼 VARIABLE)·X-10(`TYPE_FUNC` VARIABLE)은 파생 소비자가 생산자를 읽으면서 없어졌다(§2 구현(#337)). 합성 리스트 컬럼 항목은 그 읽는 쪽이 검사를 받는다.
 
 **(b) 실행** — 신설 `ER_QPROC_DOMAIN_UNRESOLVED = -1382`(`error_code.h`, `ER_LAST_ERROR` → -1383), `msg/*/cubrid.msg $set 5`: `1382 Domain of a query node is unresolved at %1$s (query %2$s, node %3$d, domain %4$s).` 인자 = phase("load"/"execute"), `xasl->query_alias`(없으면 `qp_xasl_line`), 항목 인덱스(`items_cold[i].name`), 도메인 이름. optdebug 는 같은 자리에 `assert`. 설치 자리 6곳: `qdata_get_valptr_type_list`, `fetch_peek_dbval_slow` 옛 VARIABLE 분기, `btree_compare_key` 폴백, `eval_value_rel_cmp` coercion 자리, 집계 첫값 대기 자리, `scan_dbvals_to_midxkey` 재추론 자리 — 각각 #324 perfmon 카운터와 1:1. **재컴파일 트리거에 넣지 않는다**(db_vdb.c:2277·1102·2174·2218·2314·2390·2537, cas_execute.c:1188·1502·2376, cas_common_execute.c:364, method_callback.cpp:276, trigger_manager.c:4971 목록 불변; `ER_QPROC_INVALID_XASLNODE` 는 조용한 재컴파일이라 재사용 금지, D-318-04).
 
