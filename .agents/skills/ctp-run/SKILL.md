@@ -122,7 +122,7 @@ order effects at dir granularity. `CTP_ARGS='--by-category'` restores the old bu
   - **An engine hang the placement triggers.** `_06_merge_statement/_20_adhoc_merge_1.sql`
     deadlocks (xmilex-git/workspace#350) whenever it runs on a fresh server.
   - `dirsplit_exclusions.txt` leaves both kinds out of dir-split runs only; `--by-category`
-    and CI keep them. It holds 6 cases today, each with its reason.
+    and CI keep them. It holds 8 cases today, each with its reason.
     `EXCLUDE=<file>` replaces that list with yours, and `EXCLUDE=''` drops it.
 - **The plan ignores dir-split exclusions.** Units and weights are computed over the pool
   before `dirsplit_exclusions.txt` is applied, and those cases are dropped from the shards

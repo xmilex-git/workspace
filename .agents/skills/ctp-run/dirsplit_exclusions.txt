@@ -41,3 +41,13 @@ _31_cherry/issue_22054_on_update/cases/create_view_data_type.sql
 #   reads the current user's groups. That query runs, and is traced, only while
 #   the authorization cache is cold, which depends on the cases before it.
 _36_guava/cbrd_26104/cases/cbrd_26104.sql
+
+# Reported by the dpin campaign session (2026-09-24, dpin-tc a225515f8253). Its
+# different case set gives a different 16-shard plan, which put other dirs in
+# front of these two. Both pass alone, in their dir, and in --by-category runs.
+# - _01_adhoc_update_stree.sql: two statements that should succeed get -494 (a
+#   leftover object from an earlier dir on the shard).
+_23_apricot_qa/_01_sql_extension3/_04_mutitable_update_delete/_01_multi_table_update/_03_adhoc/cases/_01_adhoc_update_stree.sql
+# - sleep_001.sql: two statements whose answer is -494 return a row instead. The
+#   state they fail on in CI order is not there.
+_27_banana_qa/issue_14217_sleep/cases/sleep_001.sql
