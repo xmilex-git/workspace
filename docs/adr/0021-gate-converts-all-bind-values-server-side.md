@@ -1,5 +1,5 @@
 ---
-status: accepted (amended 2026-09-23 by #335 D-335-08 and 2026-09-24 by #336 D-336-B — see "Amendment")
+status: accepted (amended 2026-09-23 by #335 D-335-08, 2026-09-24 by #336 D-336-B and 2026-09-24 by #339 — see "Amendment")
 date: 2026-09-22
 locked-by: xmilex-git/workspace#320 (2026-09-22)
 ---
@@ -18,6 +18,8 @@ locked-by: xmilex-git/workspace#320 (2026-09-22)
 
 **정정 2 (2026-09-24, #336 D-336-A·B)**: 컴파일은 슬롯 타입을 만들지 않는다. 컴파일 도메인은 develop 의 클라이언트 캐스트 자리(비교·대입 기대 도메인)뿐이고, 그 밖의 슬롯(산술·함수·공통값·UNION/VALUES·TO_CHAR·LIMIT·세션변수, ENUM·ENFORCE collation 자리)은 GATE 로 게이트가 바인드 값의 도메인을 쓴다 — 미러 슬롯의 OPERAND 변환(위 "미러 슬롯(dpin-10)의 변환도 같은 자리" 문장)은 없다. 규칙표 §7 의 답안 변경은 전부 철회되고 답은 develop 과 같다(`docs/research/domain-pin-slot-gate-design.md`).
 
+**정정 3 (2026-09-24, #339)**: Consequences 셋째 항목의 PL/CSQL 선언 타입 전달(`host_var_decl_domains[]`, 규칙표 S6·D-323-10)은 구현하지 않는다 — 정정 2 가 PL 정적 SQL 의 `?` 에도 그대로 적용된다(PL 인자는 슬롯, 규칙표 S7). PL 이 보내는 값은 선언 타입과 다르다(CHAR → VARCHAR, TIMESTAMP → DATETIME, NUMERIC → 값의 자릿수(p/s), NULL → 타입 없음; `DBType.getObjectDBtype`) — 선언 타입을 슬롯 도메인으로 쓰면 develop 답이 바뀐다. 실행 때 정적 SQL 의 바인드는 `query_handler::set_host_variables` → `db_push_values` 로 JDBC 와 같은 클라이언트 캐스트 자리를 지나므로 PL 전용 경로가 필요 없다. `host_var_expected_domains[]` 는 그대로 남는다.
+
 ## Considered Options
 
 - **클라이언트가 게이트 규칙을 흉내 내 미리 변환(이중 변환)**: 기각. 같은 규칙 두 벌(P6), 이전 캠페인의 `host_var_expected_domains[]` OOB → cub_cas SIGSEGV 사고(L-30)의 재현 경로.
@@ -29,6 +31,6 @@ locked-by: xmilex-git/workspace#320 (2026-09-22)
 
 - 클라이언트 바인드 캐스트의 **반올림**(DOUBLE/NUMERIC/'1.5' → 2, #319 F-2)이 사라지고 손실 정책은 문맥별 현행으로 게이트 변환기에 붙는다: 산술 인자 strict(-494 또는 파라미터에 따라 NULL), 대입·CAST 소비자 반올림(D-325-02), 비교 strict-or-keep. -494 는 prepare 뒤 바인드 시점에서 서버 게이트 시점으로 옮겨가고 코드는 같다(P7 ②). 정수 미러 비교 슬롯(`int_col = ?`)은 오늘 클라이언트 캐스트가 없었으므로(#319 F-1) 게이트 strict-or-keep 이 규칙표 그대로여야 답이 유지된다.
 - NULL 원 값은 변환기 밖에서 목표 도메인의 typed NULL 로(D-325-08). 휘발 피연산자(세션변수)의 값은 행마다 읽되 도메인·실패 정책은 게이트 1회, 행 값 타입이 바뀌면 그 행에서만 표 재조회, 비교 문맥 실패는 -494(D-325-10).
-- `host_var_expected_domains[]` 는 남는다 — prepare 응답의 파라미터 메타, PL/CSQL 보고(`method_callback.cpp`), 바인드 피크 재계획의 입력이다. PL/CSQL 은 선언 타입을 prepare 요청 배열 `host_var_decl_domains[]` 로 전달하고 파서는 이를 `?` 의 형제로 본다(S6, D-323-10; PG `param_types` 모델).
+- `host_var_expected_domains[]` 는 남는다 — prepare 응답의 파라미터 메타, PL/CSQL 보고(`method_callback.cpp`), 바인드 피크 재계획의 입력이다. PL/CSQL 은 선언 타입을 prepare 요청 배열 `host_var_decl_domains[]` 로 전달하고 파서는 이를 `?` 의 형제로 본다(S6, D-323-10; PG `param_types` 모델). — **정정 3 으로 구현하지 않음**(PL `?` 는 사용자 `?` 와 같은 슬롯).
 - 게이트 뒤 불변식 "값 타입 = 계획 도메인 또는 KEEP 기록" 이 성립해 `qdata_*_dbval` 값 타입 dispatch·`scan_check_user_given_keylimit_overflow` 같은 계획 신뢰 소비자가 결정적이 된다(L-49, #325 §7 5). 게이트 확정 결과 컬럼(`SELECT ?`)의 메타는 현행 실행 응답 `include_column_info` 경로로 갱신한다(L-31, wire 변경 0).
 - 되돌리는 길: 클라이언트 캐스트 삭제는 `pt_set_host_variables` 한 함수의 두 분기라 독립 커밋으로 되돌릴 수 있다. 되돌리면 게이트가 이미 변환된 값을 받으므로 답은 유지되고 반올림 행(§7)만 develop 답으로 돌아간다.

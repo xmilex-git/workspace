@@ -411,7 +411,7 @@ struct domain_plan_key
 - `pt_make_regu_hostvar`(xg:6391): 2단계(바인드 값 타입 → 도메인, xg:6418~6445)와 꼬리 `tp_value_cast (val, val, regu->domain)`(xg:6493~6500) 삭제. 순서 = data_type → expected_domain → type_enum → GATE 면 placeholder + `REGU_VARIABLE_GATE`. 형제 미러·소비자 도메인 우선은 첫 패스 확정 + 재평가 멱등(#319 F-3).
 - 카운트 불변식(L-30): `pt_to_xasl` 끝 `assert (parser->dbval_cnt == parser->host_var_count + parser->auto_param_count)`; 서버 `qexec_resolve_domains` 1.
 - 결과 컬럼 메타(L-31): prepare 응답은 컴파일 도메인. GATE 결과 컬럼(`SELECT ?`·`? UNION ?`·`sum(?)`)은 `list_id->type_list` 가 `RESOLVED (…)->domain` 으로 만들어지므로 실행 응답 `include_column_info`(cas_execute.c:1292·1637·1834) 현행 경로로 갱신 — wire 변경 0.
-- PL/CSQL 선언 타입(S6): PL 서버 → `method_callback.cpp:608` prepare **요청**에 마커별 (DB_TYPE, precision, scale, codeset, collation) 배열 추가(미지정 = DB_TYPE_NULL); 파서에 `parser->host_var_decl_domains[]`(JDBC 는 NULL)를 `db_compile_statement` 전에 주입; 타입 검사는 이를 `?` 의 **형제**로 본다. 보고 경로(mc:650~675 `semantics.hvs[idx]`)는 그대로.
+- PL/CSQL 선언 타입(S6): PL 서버 → `method_callback.cpp:608` prepare **요청**에 마커별 (DB_TYPE, precision, scale, codeset, collation) 배열 추가(미지정 = DB_TYPE_NULL); 파서에 `parser->host_var_decl_domains[]`(JDBC 는 NULL)를 `db_compile_statement` 전에 주입; 타입 검사는 이를 `?` 의 **형제**로 본다. 보고 경로(mc:650~675 `semantics.hvs[idx]`)는 그대로. **철회(#339, D-336-B)**: 구현하지 않는다 — PL `?` 는 사용자 `?` 와 같은 슬롯이다(develop 캐스트 자리는 기대 도메인, 나머지 GATE). 이 문단의 요청(`callback_handler::get_sql_semantics`)은 CREATE PROCEDURE 시점 컴파일에만 닿는다: 실행 때 정적 SQL 은 `callback_handler::prepare`(mc:188)로 따로 prepare 되고, 값은 `query_handler::set_host_variables` → `db_push_values` 로 JDBC 와 같은 클라이언트 캐스트 자리를 지난다. PL 컴파일러는 보고된 호스트 변수 타입을 쓰지 않는다(`ParseTreeConverter.checkAndConvertStaticSql` 의 `hostExprs.put(hostExpr, null)`). PL 이 보내는 값은 선언 타입과 다르므로(CHAR → VARCHAR, TIMESTAMP → DATETIME, NUMERIC → 값의 자릿수(p/s), NULL → 타입 없음; `DBType.getObjectDBtype`) 선언 타입을 슬롯 도메인으로 쓰면 develop 답이 바뀐다.
 - `hostvar_late_binding`(name_resolution.c:3805·query_rewrite.c:501·type_checking.c:19714)·`pt_is_op_hv_late_bind`(tc:20520) 는 #320 마무리.
 
 ---
@@ -469,7 +469,7 @@ struct domain_plan_key
 | D-323-07 | 술어 노드(`comp_eval_term` 등)는 항목 없음: 변환기는 피연산자 regu 항목, 비교 도메인은 KEEP_LAZY 슬롯/양 피연산자의 fixed |
 | D-323-08 | **G2·range 시점 결정 함수 없음**: 결정은 `qexec_execute_mainblock` 전 1회; mainblock 안은 읽기 전용 뷰 + 계획된 변환기 + 스코프 소유 실행 임시값(§3.4, 상관 값 스코프당 1회)과 혼합 setdomain 스크래치(§5, 결정·할당 0). 규칙표 P3 ③ "스코프당 1회" 는 §3.4 의 뜻 |
 | D-323-09 | `ER_QPROC_DOMAIN_UNRESOLVED = -1382`, 예외 표 X-1~X-7 |
-| D-323-10 | PL 선언 타입 = `host_var_decl_domains[]` + prepare 요청 배열 |
+| D-323-10 | PL 선언 타입 = `host_var_decl_domains[]` + prepare 요청 배열 — **대체(D-336-B, #339)**: 구현하지 않음, PL `?` = 사용자 `?`(§8) |
 | D-323-11 | 덤프 = qdump 만, `SHOW TRACE` 불변 |
 | D-323-12 | 실패 정책 3종; 대입 반올림은 `domain_lookup_converter (…, DOMAIN_CTX_ASSIGN)` 의 변환기 선택 |
 | D-323-13 | agg/analytic: `original_domain` → `domain_plan`, `original_opr_dbtype` → `int domain_plan_acc` |

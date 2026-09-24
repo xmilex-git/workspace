@@ -125,7 +125,7 @@
 | S3 | `@v := ?`, `@v := x` | 값 저장(현행; 날짜는 문자열로 저장되는 현행 유지) | — | — | 현행 | — |
 | S4 | `@v` 읽기 — 형제 있음(`@v + 1`, `c_int = @v`, `to_char(@v, fmt)`) | 형제 미러(슬롯 취급, L-32); 값은 휘발(행마다 읽음, `@v := @v + 1` 현행 의미 유지) — **실행 중 저장 타입이 바뀌면** 미러 도메인으로의 변환 실패 정책(X1) 적용 — **판정 완료(D-325-12)**: 값 A/B 는 `domain-pin-converters.md` §5, 변환이 실패하는 행은 오류/NULL(P-S2 조용한 오답 4 → -494/NULL, P-S5 비교 (2,0) → -494 — 휘발 값은 KEEP 불가 D-325-10, P-S10 `yes` 오버플로 오류 → NULL) → §7 → **게이트 확정(값 도메인, develop 격자) — D-336-B(2026-09-24)** | G | K 게이트 값→미러 도메인(문자 파싱; 실패 -494) | `@v := '1.0'; @v + 1` → **INTEGER 2**(현행 DOUBLE 2.0); `to_char(@v, 날짜 포맷)` 은 비날짜 문자열 통과 → 오류, 저장 문자열 재포맷('01/02/2024' → '2024-01-02') | **있음**(표기·to_char) (D-317-05·D-327-05) — **철회(D-336-A)**: 답 불변(develop) |
 | S5 | `@v` 읽기 — 형제 없음(`SELECT @v`, `sum(@v)`) | 게이트 확정(초기 저장값 타입); 값은 휘발 — 실행 중 저장 타입이 바뀌면 게이트 도메인으로 변환(실패 정책 X1; 타입이 바뀐 행에서만 표 재조회 D-325-10) — **판정 완료(D-325-12)**: P-S1·S6·S9 불변, P-S8 `sum(@v)` 은 `yes` 모드에서 오류 → 값(`domain-pin-converters.md` §5) | G | 게이트 | 현행 | **있음**(`yes` 모드 P-S8) |
-| S6 | PL/CSQL 정적 SQL 의 `?` | **선언 타입** = 알려진 형제(PG param_types); NULL 은 typed NULL | C | K 게이트 | 현행 값(이전 캠페인 33건 결함 해소) | — (D-317-06) |
+| S6 | PL/CSQL 정적 SQL 의 `?`(PL 변수·인자, PL 식의 내장 함수 인자) | **선언 타입** = 알려진 형제(PG param_types); NULL 은 typed NULL → **사용자 `?` 와 같은 슬롯 — D-336-B 적용(#339, 2026-09-24)**: develop 이 클라이언트에서 캐스트하는 자리(비교·대입 기대 도메인)는 그 도메인, 나머지는 GATE 로 게이트가 PL 이 보낸 값의 도메인을 쓴다. PL 은 CHAR 를 VARCHAR, TIMESTAMP 를 DATETIME, NUMERIC 을 값의 자릿수(p/s), NULL 을 타입 없이 보낸다(`DBType.getObjectDBtype`) — 선언 타입을 슬롯 도메인으로 쓰면 develop 답이 바뀐다. 선언 타입 전달(`host_var_decl_domains[]`)은 구현하지 않는다 | G | 게이트(값 도메인, develop 격자) | 현행 값(develop). 이전 캠페인 33건(L-16)은 맨 `?` 가 컴파일 기본형을 받지 않으므로 생기지 않는다 | — (D-317-06) — **대체(D-336-B, #339)**: 답 불변(develop), TC `_07_misc/domain_plcsql_slot` |
 | S7 | 세션변수·PL 인자·auto-param 을 "슬롯" 정의에 포함 | — | — | — | — | 게이트가 다루는 슬롯 = 사용자 `?` + auto-param + 세션변수 읽기 + PL 인자 |
 | X1 | 게이트 변환 **실패 정책**(`return_null_on_function_errors`) | 문맥별 현행: 산술·함수 인자(A·F·U7 등 현행이 `tp_value_auto_cast` 를 타던 자리)는 파라미터를 따름(yes → 슬롯 값 NULL, 오류 없음); 대입(U0)은 항상 -494(현행 바인드 시점 캐스트 `pt_set_host_variables` 는 파라미터를 안 본다); 비교(B)는 strict-or-keep 이라 오류 없음(휘발 값만 KEEP 불가 → -494, D-325-10); **리스트 컬럼**(`SELECT ?`·`SELECT @v` 결과 컬럼)은 산술·함수 인자와 같이 파라미터를 따름(D-325-11, 실측 P-S1: default -494 / `yes` NULL) | G/C | 계획 항목의 실패 정책 열(-494 / NULL / keep, D-325-07: leaf 는 상태만 반환, 정책은 호출자). 한 `?` 의 다중 참조는 참조별 계획 슬롯에만 NULL, 공유 `vd.dbval_ptr[]` 원 값 불변(#323) | 현행(CTP C5 `s1 / ?` cfg_null_on_errors NULL 유지) | — (D-327-10) — **삭제(D-336-B)**: 컴파일 미러가 없으므로 미러 실패 정책도 없다; 대입(U0) 캐스트 실패는 develop 그대로 |
 
@@ -155,7 +155,7 @@
 | C10 | 집계·분석 `group_concat(?)`, `min/max(?)`, `count(distinct ?)`, `lead/lag/first_value(?)`, `percentile_* … order by ?` | 누산기·distinct/정렬 리스트 collation 을 게이트 표에서; 바인드 전부 NULL 이면 결과 NULL(collation NULL) | G | F7; 프로브 B1·B2 release `NULL`/`'a' utf8_bin`. D2(optdebug 서버 assert qx:1375 = 누산 도메인 LEAVE 플래그)는 LEAVE 소멸로 자연 해소 | 결함 소멸(D2 서버 크래시 → NULL) |
 | C11 | `group_concat(col + ?)`, `group_concat(s1)`, `min(col)` 컬럼 형제 | 컬럼 collation | C | `_04_group_concat`(`i1 + ?` 는 타입 축 A5 INTEGER 미러 → 문자 바인드 -494 는 타입 축 답안 변경) | — |
 | C12 | 세션변수 `@v` 읽기(`SET @v = 'x' COLLATE c` 저장 collation 포함) | 형제 있으면 ENFORCE(게이트가 값 codeset 변환), 없으면 게이트 확정(저장 값 collation) | C/G | S4·S5·L-32; `_07_session_var`·`_12_like` 세션변수 블록 현행 유지 | 없음 |
-| C13 | PL/CSQL 정적 SQL 의 `?`(PL 이 만든 값) | 문자 형제 있으면 ENFORCE, 없으면 게이트 확정 | C/G | S6·L-32 — 탐침(#319)에서 PL 값 collation 확인 | — |
+| C13 | PL/CSQL 정적 SQL 의 `?`(PL 이 만든 값) | 문자 형제 있으면 ENFORCE, 없으면 게이트 확정 — 사용자 `?` 와 같다(S6, #339: 선언 collation 은 전달하지 않는다) | C/G | S6·L-32 — 탐침(#319)에서 PL 값 collation 확인 | — |
 | C14 | 보간 정렬 키 `percentile_cont … ORDER BY varchar_col`, `median(varchar_col)` | 정렬 키 collation = 컬럼 collation(컴파일). 타입은 F10 DOUBLE(D-335-10; 분석 정렬 키 `cmp_dom` 도 컴파일 도메인) | C | K13·L-21 | — |
 | C15 | 비문자 결과 도메인 — `COALESCE(CAST(? AS DATETIME), CAST(? AS DATETIME), ?)`, 산술·날짜 함수 결과, 비문자 게이트 슬롯 | **collation 0 + NORMAL, 플래그 없음**(게이트 표의 비문자 항목에 collation 칸 없음). `pt_upd_domain_info` 가 인자 플래그를 비문자 결과로 옮기는 경로는 이 PR 결함 수정 | C | K15·U13·L-19 | 결함 소멸(optdebug assert → 값) |
 | C16 | 인덱스 키 `varchar_col(A) = ?`, `LIKE ?` | 슬롯 A ENFORCE 이므로 키 collation = 인덱스 collation(strict 성공). 명시 `COLLATE` 로 다른 collation 을 바인드하면 현행 strict 실패 → 값 collation 키 + 공통 collation 비교(B30 계획된 변환기) | C/G | B30·#321 §4.2 | — |
@@ -202,7 +202,7 @@
 | L-14 | §6 원칙·C1~C5(도메인 축과 확정 지점 공유, 하향 전파 없음 D-322-02) |
 | L-15 | S3·S4·S5·§7 실행 중 타입 변경(D-325-10~12) |
 | L-32 | S7·§6 C12·C13 |
-| L-16 | S6 |
+| L-16 | S6(#339: 맨 `?` 가 컴파일 기본형을 받지 않으므로 — D-336-B — 이전 캠페인의 결함 경로가 없다) |
 | L-17 | F1·F1'·F2·F4 |
 | L-18 | U4·U3 |
 | L-19 | U13·§6 C15 |
