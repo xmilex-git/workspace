@@ -16,14 +16,36 @@ description: >-
 One entry point for every CTP suite. Two commands cover everything:
 
 ```bash
-just ctp <sql|medium|shell|ha_shell>              # whole suite
+just ctp <sql|medium|shell|ha_shell>              # whole suite (whole sql also runs whole medium beside it)
+just ctp sql+medium                               # the same sql + medium pair, explicitly
 just ctp <suite> <DIR> [<DIR> ...]                # subset (scenario-relative dirs)
 just ctp-rerun <PR | CircleCI job | gha-ci run URL>   # exactly what failed in CI
 ```
 
 Env knobs: `PR=<n>` / `TC_REF=<ref>` (testcase ref), `SHARDS=<n>`, `BUILD=<install>`,
 `CONF=<file>`, `EXCLUDE=<file>`, `NO_ABORT_ON_CORE=1` (+ `CTP_CRASH_LOOP_CORES`, `CTP_MAX_SHARD_CORES`),
-`CTP_VOLATILE=0` (see "Volatile databases"), `CTP_ARGS="…"`, `TESTCASES_ROOT=<dir>`.
+`CTP_VOLATILE=0` (see "Volatile databases"), `CTP_PIN_PARAMS=0` (see below),
+`CTP_HANG_SECS=<s>` (see "Diagnosing a bad run"), `CTP_ARGS="…"`, `TESTCASES_ROOT=<dir>`.
+
+**Every CTP server runs the engine's own defaults for `data_buffer_size=512M`, `parallelism=4`
+and `max_parallel_workers=100`** (ADR 0017 D8). `data_buffer_size=512M` is 32768 pages of 16K.
+Without the pin, the campaign cubrid.conf that `just conf` puts into installs would apply,
+with `parallelism=24`. sql/medium servers also get `max_clients=20`:
+- CQT holds one connection, and no sql/medium case mentions `max_clients`.
+- 16+ shards share this host's pids cgroup, whose `pids.max` is 8192.
+- shell/HA keep the install's `max_clients`: their cases open connections themselves, and
+  124 of them set it.
+
+Where the values go:
+- sql/medium: `[sql/cubrid.conf]` of the shard's CTP conf. CTP reads that section for
+  medium too.
+- shell/HA: `[common]` of the shard install's `conf/cubrid.conf`.
+
+The pin is applied before `CONF=`, so an explicit `CONF=` value wins, e.g. `parallelism=24`
+for a PX stress run. `CTP_PIN_PARAMS=0` keeps the install's values. Provenance records
+`pinned=`.
+`CONF=` for medium now reaches the server too: it used to merge into a
+`[medium/cubrid.conf]` section that CTP never reads.
 
 ## Non-negotiables
 
@@ -53,6 +75,8 @@ master+slave container pair. `SHARDS>1` is refused with the reason.
 | `scripts/harvest_weights.sh` | turn a finished run into a timing table |
 | `baseline_weights.tsv` | measured per-case seconds (sql), for time-balanced splits |
 | `colocate.tsv` | order-sensitive dirs that must stay on one shard |
+| `split.tsv` | sql cases dirs too slow for one shard, cut into contiguous weight chunks |
+| `dirsplit_exclusions.txt` | sql cases left out of dir-split runs only (answers need CI's whole order) |
 | `test/run_tests.sh` | split, image-contract and HA regression checks; no CTP execution |
 | `test/image_contract_test.sh` | runtime conf isolation, scope migration and exclusion planning fixtures |
 | `test/locale_staging_test.sh` | real shard staging followed by CTP-style locale deletion |
@@ -72,7 +96,7 @@ Only the HA thin-csql port and slave broker startup remain local. See
 
 | suite | testcases repo | scenario | whole-suite shards | result style |
 |---|---|---|---|---|
-| `sql` | cubrid-testcases | `sql/` | 7 (bulk + measured time) | schedule `summary.xml` |
+| `sql` | cubrid-testcases | `sql/` | 16 (cases dir + measured time + `split.tsv`) | schedule `summary.xml` |
 | `medium` | cubrid-testcases | `medium/` | always 1 | schedule `summary.xml` |
 | `shell` | cubrid-testcases-private-ex | `shell/` | 7 (per test dir) | `test_status.data` + JUnit |
 | `ha_shell` | cubrid-testcases-private | `HA/shell/` | always 1 (2 containers) | `test_status.data` + JUnit |
@@ -80,6 +104,62 @@ Only the HA thin-csql port and slave broker startup remain local. See
 A **subset defaults to 1 shard** whatever the suite: each shard costs a full copy
 of the install and a container, which pays for itself over 17k cases and not over
 a handful of dirs. `SHARDS=N` splits a big subset anyway.
+
+**sql splits by cases dir** (ADR 0017 D9). The user confirmed that no case fails from
+order effects at dir granularity. `CTP_ARGS='--by-category'` restores the old bulk split.
+- The 16-shard default comes from the measured weights: 2,668s of cases / 16 ≈ 167s per
+  shard.
+- `split.tsv` cuts a dir longer than that into contiguous chunks of equal weight. Today
+  that is only `_005_reorganization` (203s). `--no-split` keeps it whole.
+- A dir enters `split.tsv` only after its chunks passed on their own.
+- Some cases depend on what the cases before them in the shard left behind. Two kinds
+  have turned up:
+  - **Session state.** `last_insert_id()` reads the last AUTO_INCREMENT insert on CQT's
+    one connection. `colocate.tsv` pins the dir together with its CI predecessor, so the
+    predecessor runs just before it.
+  - **Catalog order without ORDER BY.** For example `_001_db_class/1003.sql` needs 481s
+    of CI's `_01_object` order to pass, which no colocation can buy.
+  - **An engine hang the placement triggers.** `_06_merge_statement/_20_adhoc_merge_1.sql`
+    deadlocks (xmilex-git/workspace#350) whenever it runs on a fresh server.
+  - `dirsplit_exclusions.txt` leaves both kinds out of dir-split runs only; `--by-category`
+    and CI keep them. It holds 6 cases today, each with its reason.
+    `EXCLUDE=<file>` replaces that list with yours, and `EXCLUDE=''` drops it.
+- **The plan ignores dir-split exclusions.** Units and weights are computed over the pool
+  before `dirsplit_exclusions.txt` is applied, and those cases are dropped from the shards
+  only afterwards.
+  - So adding an entry never moves another dir to another shard.
+  - Why this matters: LPT is sensitive, and a 4s weight change once reassigned almost every
+    dir.
+  - A verified plan keeps its order when an exclusion is added, and the fix converges in one
+    more run.
+- **Any change to the plan's inputs needs two verification runs.** The inputs are
+  `baseline_weights.tsv`, `split.tsv`, colocate groups, the shard count and the set of
+  cases.
+  - Each plan puts different dirs in front of each dir, and has exposed order-dependent
+    cases of its own.
+  - Such a case fails the same way on every run of that plan, and then goes into
+    `colocate.tsv` or `dirsplit_exclusions.txt`.
+- **Expected balance.** Against another run's measured case times, the current plan puts
+  every shard at 171–196s of cases (mean 181s). The last shard to finish ends ~10–25s
+  after the first.
+- **pids cgroup short of room.** The runner waits up to `CTP_PIDS_WAIT_SECS` (900) for
+  other runs to finish instead of running fewer shards. Only after that does it cap the
+  count.
+- The default shard count is also capped by free RAM (~3GB a shard) and bounded by the
+  pids cgroup (~400 processes+threads a shard).
+
+**A whole `just ctp sql` also runs the whole medium suite** (its single shard) beside the
+16 sql shards. `just ctp sql+medium` is the same thing, spelled out.
+- Measured: medium takes 151–193s (38–39s setup, 102–143s of cases), sql ~5 min. So the
+  pair costs the sql run's time.
+- Both use the same testcase ref.
+- `CTP_WITH_MEDIUM=0` runs sql alone.
+- Medium is not attached to a subset (DIRS), to `ctp-rerun`, or when `EXCLUDE` is set,
+  because an exclusion list is per suite.
+Worktree creation takes a per-repo lock, because two runs creating worktrees at once died
+on git's `index.lock`. medium's runner output goes to
+`<artifact root>/medium-beside-sql-*.log`, and the recipe prints both results at the end.
+`just ctp sql+medium` refuses DIRS and EXCLUDE, since they are per suite.
 
 `sql`/`medium` split by case FILE (two-pass materialization); `shell`/`ha_shell`
 split by test DIRECTORY, because a shell case's directory also carries the
@@ -195,6 +275,13 @@ Every run writes, under its `--out` dir:
   `assigned_cases.txt`, `exclusions.txt`, `reports/` (JUnit), `cores/`, and the
   per-shard `CUBRID` / `CTP` / `testcases` / `CUBRID_DB` copies.
 - `failed.list` — failing cases in the exact shape `--only` accepts.
+- `timing.txt` / `timing.tsv` — where the wall clock went.
+  - Host marks, in seconds from start: `planned`, `workdirs_built`, `launched`,
+    `shards_done`, `pruned`.
+  - Per shard, from `shard_N/console.ts.log` (`podman logs --timestamps`): when each CTP
+    stage started (CTP start, locale, createdb, SP load, server start), `setup` (container
+    up → first case) and `tc` (first → last case).
+  - The runner prints one `timing:` summary line.
 
 ## Reproducing CI failures
 
@@ -220,7 +307,18 @@ fails for reasons that have nothing to do with the change.
    shard copies omit `.git`; the host `provenance.tsv` records the source refs.
 3. `shard_N/CTP/conf/<suite>*.conf` — the conf the entrypoint actually composed,
    preserved on the host.
-4. `shard_N/cores/` — real core dumps. By default the first one stops every
+4. `shard_N/hang/` — present when the **hang watchdog** fired.
+   - The watchdog treats a sql/medium shard that printed nothing for `CTP_HANG_SECS`
+     (default 300; the longest sql case is 69s) as hung.
+   - Before stopping only that shard, it saves the full `cub_server` stacks
+     (`gdb thread apply all bt`), the CQT JVM's jstack, `tranlist` and `lockdb`.
+   - CTP's sql/medium have no per-case timeout: without the watchdog, one engine hang held a
+     whole run for 35 minutes (2026-09-24, a PX sort worker ↔ leader mutex deadlock).
+   - shell/HA cases may legitimately run silent for long, so the watchdog is off there
+     unless `CTP_HANG_SECS` is set.
+   - The stopped shard is named in the aggregate (`STOPPED by a watchdog`).
+5. `timing.txt` — whether the wall clock went to setup or to cases, shard by shard.
+6. `shard_N/cores/` — real core dumps. By default the first one stops every
    shard; a crash-looping server once wrote 1.1T of cores. `NO_ABORT_ON_CORE=1`
    (`--no-abort-on-core`) keeps collecting cores but still stops a shard after
    `CTP_CRASH_LOOP_CORES` (5) cores with no passing case in between or

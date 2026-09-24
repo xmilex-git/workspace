@@ -247,11 +247,13 @@ ctest mode="debug":
 # install mounted in, and the testcases materialized from the ref this run is
 # supposed to verify.
 #
-#   just ctp <suite>                     whole suite (sql/shell parallel, medium/ha_shell single)
+#   just ctp <suite>                     whole suite (sql 16 shards by dir, shell 7, medium/ha_shell single)
+#                                        a whole sql run also runs whole medium beside it (CTP_WITH_MEDIUM=0: sql alone)
+#   just ctp sql+medium                  the same pair, explicitly
 #   just ctp <suite> <DIRS...>           subset: those scenario-relative dirs
 #   just ctp-rerun <CI URL>              re-run exactly what failed in CI
 #
-# Suites: sql | medium | shell | ha_shell.
+# Suites: sql | medium | sql+medium | shell | ha_shell.
 # HA derives thin csql ports from CTP broker2 config for both SSH nodes and
 # starts the folded slave broker after HA setup; no manual port export is needed.
 # Env knobs (all optional):
@@ -268,23 +270,57 @@ ctest mode="debug":
 #   CTP_KEEP_COPIES=1    keep shard install/CTP/testcases/DB copies after the run (default: pruned)
 #   CTP_VOLATILE=0       keep sql/medium's database dir on a plain bind mount. Default 1: it is a
 #                        volatile overlay whose fsyncs return at once (ADR 0017 D7); also for ctp-rerun
+#   CTP_WITH_MEDIUM=0    a whole `just ctp sql` runs sql alone (default: medium's 1 shard runs beside it)
+#   CTP_PIN_PARAMS=0     keep the install's server params. Default: every CTP server runs the engine
+#                        defaults data_buffer_size=512M parallelism=4 max_parallel_workers=100, plus
+#                        max_clients=20 for sql/medium (ADR 0017 D8); an explicit CONF= still wins
 #   CTP_CORE_STORE=<dir>  where shard cores go (default /bench/hdd/core/ctp; shard_N/cores is a symlink into it)
 #   CTP_ARGS="…"  extra ctp_run.sh flags, verbatim
 # ---------------------------------------------------------------------------
 
 # Run a CTP suite (whole, or just the given scenario-relative dirs) in podman.
-[doc("Run a CTP suite in isolated podman: just ctp <sql|medium|shell|ha_shell> [DIRS...]")]
+[doc("Run a CTP suite in isolated podman: just ctp <sql|medium|sql+medium|shell|ha_shell> [DIRS...]")]
 ctp SUITE *DIRS:
     #!/usr/bin/env bash
     set -euo pipefail
     runner="{{justfile_directory()}}/.agents/skills/ctp-run/scripts/ctp_run.sh"
     [ -x "$runner" ] || { echo "ERROR: ctp-run runner missing: $runner" >&2; exit 1; }
+    # A whole sql run brings the whole medium suite along (D9): medium's single
+    # shard (~2.5-3.2 min) runs beside the sql shards (~5 min) and ends well inside
+    # them, so the pair costs the sql run's time. `just ctp sql+medium` is the same.
+    # Both take the same testcase ref; the runner serializes worktree creation.
+    # Not attached: a subset (DIRS), CTP_WITH_MEDIUM=0, or an EXCLUDE list (its
+    # paths are per suite, so it is kept for sql alone).
+    with_medium=0
+    if [ "{{SUITE}}" = "sql+medium" ]; then
+        [ -z "{{DIRS}}" ] || { echo "ERROR: sql+medium runs both whole suites; pass DIRS to 'just ctp sql' or 'just ctp medium'." >&2; exit 1; }
+        [ -z "${EXCLUDE+x}" ] || { echo "ERROR: an EXCLUDE list is per suite (sql/ vs medium/ paths); run the suites separately to use one." >&2; exit 1; }
+        with_medium=1
+    elif [ "{{SUITE}}" = "sql" ] && [ -z "{{DIRS}}" ] && [ "${CTP_WITH_MEDIUM:-1}" != 0 ]; then
+        if [ -n "${EXCLUDE+x}" ]; then
+            echo "[ctp] EXCLUDE is set: running sql alone (the list is per suite); run 'just ctp medium' separately."
+        else
+            with_medium=1
+        fi
+    fi
+    if [ "$with_medium" = 1 ]; then
+        out_root="$(bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/artifact_root.sh")"
+        mlog="$out_root/medium-beside-sql-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
+        SHARDS= CTP_WITH_MEDIUM=0 just --justfile "{{justfile()}}" workspace="{{workspace}}" ctp medium > "$mlog" 2>&1 &
+        mpid=$!
+        echo "[ctp] medium started beside sql (pid $mpid); its runner output: $mlog"
+        src=0; CTP_WITH_MEDIUM=0 just --justfile "{{justfile()}}" workspace="{{workspace}}" ctp sql || src=$?
+        mrc=0; wait "$mpid" || mrc=$?
+        echo "[ctp] sql exit=$src; medium exit=$mrc -> $(grep -m1 'RESULT:' "$mlog" || echo 'no RESULT line') (log: $mlog)"
+        [ "$src" -eq 0 ] && [ "$mrc" -eq 0 ]
+        exit $?
+    fi
     case "{{SUITE}}" in
         sql)      repo=dev/cubrid-tc-worktree/develop ;;
         medium)   repo=dev/cubrid-tc-worktree/develop ;;
         shell)    repo=dev/cubrid-tc-ex-worktree/develop ;;
         ha_shell) repo=dev/cubrid-testcases-private ;;
-        *) echo "ERROR: suite must be sql | medium | shell | ha_shell (got '{{SUITE}}')" >&2; exit 1 ;;
+        *) echo "ERROR: suite must be sql | medium | sql+medium | shell | ha_shell (got '{{SUITE}}')" >&2; exit 1 ;;
     esac
     tc="${TESTCASES_ROOT:-$HOME}/$repo"
     [ -d "$tc" ] || { echo "ERROR: testcases checkout not found: $tc" >&2; exit 1; }

@@ -12,7 +12,8 @@
 # IS real shard wall-time, so attributing it to that case is what we want for
 # balancing. Limitations (documented, not hidden):
 #   * 1s resolution: sub-second cases read as 0 (fine — they sum within a dir).
-#   * the last case in each log has no following timestamp (dropped).
+#   * the last case in each log has no following timestamp: it is derived from
+#     CQT's closing "Elapse Time:<ms>" (dropped when the log has none).
 #   * a long IDLE gap (paused run, concatenated runs) inflates one case; use --cap.
 #   * best signal = the per-SHARD console.log of a real parallel run (cases run
 #     back-to-back there); a stale serial log mixes setup gaps in.
@@ -76,10 +77,26 @@ awk -v scn="$SCN" -v cap="$CAP" '
     else sub(/^.*\/sql\//, "", r)
     return r
   }
-  FNR==1 { have=0; pt=0; pp="" }                 # reset per input file
+  FNR==1 { have=0; pt=0; pp=""; t0=-1 }          # reset per input file
+  # The last case of a log has no next Testing line. CQT closes the run with
+  # "Elapse Time:<ms>" (first case start .. end), so the last case is that span
+  # minus first..last Testing. Dropping it hid one case that ends the suite in
+  # sorted order and takes ~74s (_36_guava/cbrd_26707): always last on its
+  # shard, always weighed at nothing, so its shard always finished last.
+  /^Elapse Time:[0-9]+/ && have {
+    v=$0; sub(/^Elapse Time:/, "", v); el=int((v+0)/1000)
+    span=pt-t0; if (span<0) span+=86400
+    dt=el-span; if (dt<0) dt=0
+    if (cap>0 && dt>cap) dt=cap
+    r=rel(pp)
+    if (!(r in mx) || dt>mx[r]) mx[r]=dt
+    have=0
+    next
+  }
   (substr($0,1,1)=="[" && substr($0,10,9)=="] Testing") {
     hh=substr($0,2,2)+0; mm=substr($0,5,2)+0; ss=substr($0,8,2)+0
     t=hh*3600+mm*60+ss
+    if (t0<0) t0=t
     rest=substr($0,20)
     ix=index(rest," (")
     if (ix<=0) next

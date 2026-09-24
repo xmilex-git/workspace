@@ -76,7 +76,8 @@ dryrun() { # <N> <outdir>  -> writes log to <outdir>.log
   # independent of the bundled time table (auto-weights is covered separately in (j)).
   local n="$1" out="$2"
   rm -rf "$out"
-  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards "$n" --no-weights --out "$out" >"$out.log" 2>&1
+  # --by-category: (b)-(f) test the bulk partitioning, which is no longer sql's default (D9).
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards "$n" --no-weights --by-category --out "$out" >"$out.log" 2>&1
   return $?
 }
 
@@ -87,7 +88,7 @@ echo; echo "## (b) unit discovery"
 OUT10="$SCRATCH/out10"
 if dryrun 10 "$OUT10"; then
   units_plan="$(wc -l < "$OUT10/units.tsv")"
-  # DEFAULT unit = top-level _* "bulk" (CI's sql unit). Recompute independently:
+  # --by-category unit = top-level _* "bulk" (CI's sql unit). Recompute independently:
   # the first path component of every */cases/*.sql.
   units_find="$(find "$SCN" -type f -name '*.sql' -path '*/cases/*' \
                   | sed "s#^${SCN}/##" | sed -E 's#/.*##' | sort -u | wc -l)"
@@ -170,9 +171,9 @@ else
 fi
 
 #-------------------------------------------------------------------
-# (f) Balance sanity (--by-dir: fine units balance well) + bulk atomicity (default)
+# (f) Balance sanity (--by-dir: fine units balance well) + bulk atomicity (--by-category)
 #-------------------------------------------------------------------
-echo; echo "## (f) balance (--by-dir, N=10) + bulk atomicity (default)"
+echo; echo "## (f) balance (--by-dir, N=10) + bulk atomicity (--by-category)"
 # Balance is measured with --by-dir: the default bulk(_*) unit is intentionally coarse
 # (a bulk is atomic, so the heaviest bulk bounds the slowest shard); fine units show the
 # greedy-LPT quality. Real bulk runs balance by TIME via --weights.
@@ -184,7 +185,7 @@ read -r mx mean ratio_ok < <(awk -F'\t' '
 ' "$OUTF/plan.tsv")
 note "by-dir max-shard=$mx mean=$mean  (max <= 1.5*mean ? $ratio_ok)"
 if [ "$ratio_ok" -eq 1 ]; then ok "balanced (--by-dir): max-shard $mx <= 1.5 x mean $mean"; else bad "imbalanced (--by-dir): max-shard $mx > 1.5 x mean $mean"; fi
-# Bulk atomicity: in the default plan, each top-level _* bulk lands on exactly ONE shard.
+# Bulk atomicity: in a --by-category plan, each top-level _* bulk lands on exactly ONE shard.
 splitn="$(awk 'FNR==1{ match(FILENAME,/shard_([0-9]+)/,m); sid=m[1] }
                { b=$0; sub(/\/.*/,"",b); seen[b"\t"sid]=1; bulks[b]=1 }
                END{ for(k in seen){split(k,a,"\t"); c[a[1]]++} s=0; for(b in bulks) if(c[b]>1) s++; print s+0 }' \
@@ -243,7 +244,8 @@ if [ -r "$CTP/conf/sql.conf" ]; then
     info(){ :; }; die(){ echo "DIE: $*" >&2; exit 1; }
     ARG_CONF="$CM/user.conf"; ARG_OVERLAY=0
     SUITE_STYLE=sqlresult; SUITE_CONF=conf/sql.conf; SUITE_CAT=sql; ARG_SUITE=sql
-    eval "$(sed -n '/^install_suite_conf() {/,/^}/p' "$ORCH")"
+    eval "$(grep '^readonly SQL_CONF_SECTION=' "$ORCH")"
+    eval "$(sed -n '/^install_suite_conf() {/,/^}/p;/^merge_params_into_section() {/,/^}/p' "$ORCH")"
     install_suite_conf "$CM" ) >/dev/null 2>&1
   sec="$(sed -n '/^\[sql\/cubrid.conf\]/,/^\[sql\/cubrid_ha/p' "$CM/CTP/conf/sql.conf")"
   ok1=0; printf '%s' "$sec" | grep -qx 'cubrid_port_id=1755' && ok1=1
@@ -256,6 +258,49 @@ if [ -r "$CTP/conf/sql.conf" ]; then
   fi
 else
   note "--conf test skipped: $CTP/conf/sql.conf not readable"
+fi
+
+# (g4b) medium reads its server parameters from [sql/cubrid.conf] too: CTP's
+# run.sh does `ini -s "sql/cubrid.conf"` for both, and medium_dev.conf has no
+# [medium/cubrid.conf]. A merge into [medium/cubrid.conf] reached no server.
+# (g4c) Pinned engine defaults (D8) go in first, then --conf, which must win.
+if [ -r "$CTP/conf/medium_dev.conf" ] && [ -r "$CTP/conf/sql.conf" ]; then
+  CMM="$SCRATCH/confmerge_medium"; rm -rf "$CMM"; mkdir -p "$CMM/CTP/conf"
+  cp "$CTP/conf/medium_dev.conf" "$CMM/CTP/conf/"
+  CMP="$SCRATCH/confmerge_pin"; rm -rf "$CMP"; mkdir -p "$CMP/CTP/conf"
+  cp "$CTP/conf/sql.conf" "$CMP/CTP/conf/"
+  printf 'new_param_xyz=42\n' > "$CMM/user.conf"
+  printf 'parallelism=24\n' > "$CMP/user.conf"
+  run_conf() { # $1 = shard dir, $2 = suite conf, $3 = suite, $4 = user conf
+    ( set -e
+      info(){ :; }; warn(){ :; }; die(){ echo "DIE: $*" >&2; exit 1; }
+      ARG_CONF="$4"; ARG_OVERLAY=0; PIN_PARAMS=1; WORK="$1"
+      SUITE_STYLE=sqlresult; SUITE_CONF="$2"; SUITE_CAT="$3"; ARG_SUITE="$3"
+      eval "$(grep -E '^readonly (SQL_CONF_SECTION|PINNED_ALL|PINNED_SQL)=' "$ORCH")"
+      eval "$(sed -n '/^install_suite_conf() {/,/^}/p;/^merge_params_into_section() {/,/^}/p;/^pinned_params() {/,/^}/p;/^pin_server_params() {/,/^}/p' "$ORCH")"
+      pin_server_params "$1"
+      install_suite_conf "$1" ) >/dev/null 2>&1
+  }
+  run_conf "$CMM" conf/medium_dev.conf medium "$CMM/user.conf"
+  run_conf "$CMP" conf/sql.conf sql "$CMP/user.conf"
+  secm="$(sed -n '/^\[sql\/cubrid.conf\]/,/^\[sql\/cubrid_ha/p' "$CMM/CTP/conf/medium_dev.conf")"
+  secp="$(sed -n '/^\[sql\/cubrid.conf\]/,/^\[sql\/cubrid_ha/p' "$CMP/CTP/conf/sql.conf")"
+  if printf '%s' "$secm" | grep -qx 'new_param_xyz=42' && printf '%s' "$secm" | grep -qx 'data_buffer_size=512M'; then
+    ok "--conf and pinned params land in medium's [sql/cubrid.conf]"
+  else
+    bad "medium conf merge missed [sql/cubrid.conf]"
+  fi
+  if printf '%s' "$secp" | grep -qx 'parallelism=24' \
+     && printf '%s' "$secp" | grep -qx 'max_parallel_workers=100' \
+     && printf '%s' "$secp" | grep -qx 'data_buffer_size=512M' \
+     && printf '%s' "$secp" | grep -qx 'max_clients=20' \
+     && ! printf '%s' "$secp" | grep -qx 'parallelism=4'; then
+    ok "pinned engine defaults applied first, an explicit --conf value wins over them"
+  else
+    bad "pin/--conf order wrong"; printf '%s\n' "$secp" >&2
+  fi
+else
+  note "medium/pin conf tests skipped: CTP confs not readable"
 fi
 
 # (g5) failed.list extraction, both result styles. This has been wrong twice:
@@ -351,7 +396,8 @@ if [ -r "$COLO" ]; then
   d2="$(awk -F'\t' 'NR==2{print $1}' "$OUT10/units.tsv")"
   GRP="$SCRATCH/grp.tsv"; printf '%s %s\n' "$d1" "$d2" > "$GRP"
   OUTG="$SCRATCH/outg"; rm -rf "$OUTG"
-  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 10 --colocate "$GRP" --out "$OUTG" >"$OUTG.log" 2>&1
+  # --by-category: d1/d2 are bulk units from OUT10, so the grouped run must use bulks too.
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 10 --by-category --colocate "$GRP" --out "$OUTG" >"$OUTG.log" 2>&1
   s1="$(awk -F'\t' -v d="$d1" '$1==d{print $2}' "$OUTG/assignment.tsv")"
   s2="$(awk -F'\t' -v d="$d2" '$1==d{print $2}' "$OUTG/assignment.tsv")"
   if [ -n "$s1" ] && [ "$s1" = "$s2" ]; then
@@ -395,17 +441,60 @@ else
 fi
 
 #-------------------------------------------------------------------
-# (k) default shard count = 7 (workload-optimal; no --shards given)
+# (k) default sql shard count = 16 (D9: by cases dir, measured time; no --shards)
 #-------------------------------------------------------------------
 echo; echo "## (k) default shard count"
 OUTK="$SCRATCH/outk"; rm -rf "$OUTK"
 bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --out "$OUTK" >"$OUTK.log" 2>&1
 def_n="$(awk -F'\t' 'NR>1{n++} END{print n+0}' "$OUTK/plan.tsv" 2>/dev/null)"
-if [ "$def_n" -eq 7 ]; then
-  ok "default shard count = 7 (no --shards)"
+if [ "$def_n" -eq 16 ]; then
+  ok "default sql shard count = 16 (no --shards)"
 else
-  note "default shards=$def_n (7 unless RAM-capped on this host)"
-  grep -q 'capping to' "$OUTK.log" && ok "default 7 capped by RAM guard (expected on low-memory host)" || bad "default shards=$def_n, expected 7"
+  note "default shards=$def_n (16 unless RAM- or pids-capped on this host)"
+  grep -q 'capping to' "$OUTK.log" && ok "default 16 capped by the RAM/pids guard (expected on a small host)" || bad "default shards=$def_n, expected 16"
+fi
+if grep -q 'split by dir' "$OUTK.log"; then ok "default sql unit is the cases dir"; else bad "default sql unit is not dir"; grep 'shard count' "$OUTK.log" >&2; fi
+
+#-------------------------------------------------------------------
+# (o) split registry (split.tsv, D9): a registered dir becomes contiguous chunk
+#     units, whose assignment is expanded to one row per .sql; --no-split undoes it.
+#-------------------------------------------------------------------
+echo; echo "## (o) split registry"
+SPD="_01_object/_09_partition/_005_reorganization/cases"
+if grep -q "^${SPD}"$'\t' "$SKILL/split.tsv" 2>/dev/null && [ -d "$SCN/$SPD" ]; then
+  nchunk="$(grep -c "^${SPD}#" "$OUTK/units.tsv" 2>/dev/null || :)"
+  nfiles="$(grep -c "^${SPD}/" "$OUTK/assignment.tsv" 2>/dev/null || :)"
+  ndir="$(find "$SCN/$SPD" -maxdepth 1 -name '*.sql' | wc -l)"
+  shards_used="$(grep "^${SPD}/" "$OUTK/assignment.tsv" | cut -f2 | sort -u | wc -l)"
+  # contiguity: in sorted order, the shard id changes at most parts-1 times
+  changes="$(grep "^${SPD}/" "$OUTK/assignment.tsv" | LC_ALL=C sort | awk -F'\t' 'NR>1 && $2!=prev{c++} {prev=$2} END{print c+0}')"
+  if [ "${nchunk:-0}" -ge 2 ] && [ "${nfiles:-0}" -gt 0 ] && [ "$nfiles" -le "$ndir" ] && [ "$shards_used" -ge 2 ] && [ "$changes" -lt "$nchunk" ]; then
+    ok "split: $SPD -> $nchunk contiguous chunks on $shards_used shards, $nfiles per-.sql rows"
+  else
+    bad "split: chunks=$nchunk rows=$nfiles dir=$ndir shards=$shards_used changes=$changes"
+  fi
+  OUTNS="$SCRATCH/outns"; rm -rf "$OUTNS"
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --no-split --out "$OUTNS" >"$OUTNS.log" 2>&1
+  if ! grep -q '#' "$OUTNS/units.tsv" && grep -q "^${SPD}"$'\t' "$OUTNS/assignment.tsv"; then
+    ok "split: --no-split keeps $SPD whole"
+  else
+    bad "split: --no-split did not keep the dir whole"
+  fi
+else
+  note "split registry test skipped: $SPD not registered or not in this scenario"
+fi
+# dirsplit_exclusions.txt (D9): dropped from the default dir split, kept by --by-category.
+DXC="_01_object/_10_system_table/_001_db_class/cases/1003.sql"
+if [ -f "$SCN/$DXC" ] && grep -qxF "$DXC" "$SKILL/dirsplit_exclusions.txt" 2>/dev/null; then
+  in_dir="$(cat "$OUTK"/shard_*/assigned_cases.txt 2>/dev/null | grep -cxF "$DXC" || :)"
+  in_cat="$(cat "$OUT10"/shard_*/assigned_cases.txt 2>/dev/null | grep -cxF "$DXC" || :)"
+  if [ "${in_dir:-0}" -eq 0 ] && [ "${in_cat:-0}" -eq 1 ] && grep -q 'dir-split entr' "$OUTK.log"; then
+    ok "dir-split exclusions: $DXC left out of the dir split, kept by --by-category"
+  else
+    bad "dir-split exclusions wrong (dir=$in_dir category=$in_cat)"
+  fi
+else
+  note "dir-split exclusion test skipped: $DXC not listed or not in this scenario"
 fi
 
 #-------------------------------------------------------------------
@@ -470,6 +559,33 @@ elif grep -qF 'CTP_VOLATILE must be 0 or 1' "$SCRATCH/outvbad.log" && [ ! -e "$O
   ok "volatile: a bad CTP_VOLATILE value is rejected before any work dir is created"
 else
   bad "volatile: bad-value rejection wrong"; cat "$SCRATCH/outvbad.log" >&2
+fi
+
+#-------------------------------------------------------------------
+# (n) pinned server parameters (D8): engine defaults plus sql's max_clients by
+#     default, CTP_PIN_PARAMS=0 turns them off, a bad value is refused.
+#-------------------------------------------------------------------
+echo; echo "## (n) pinned server parameters"
+if grep -qF 'pinned params:      data_buffer_size=512M parallelism=4 max_parallel_workers=100 max_clients=20' "$OUTE0.log"; then
+  ok "pinned params: sql default is the engine defaults plus max_clients=20"
+else
+  bad "pinned params: default summary missing or wrong"; grep -i 'pinned' "$OUTE0.log" >&2
+fi
+OUTP0="$SCRATCH/outp0"; rm -rf "$OUTP0"
+CTP_PIN_PARAMS=0 bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 3 --no-weights \
+  --out "$OUTP0" >"$OUTP0.log" 2>&1
+if grep -qF 'pinned params:      off' "$OUTP0.log"; then
+  ok "pinned params: CTP_PIN_PARAMS=0 leaves the install's values"
+else
+  bad "pinned params: CTP_PIN_PARAMS=0 not honoured"; grep -i 'pinned' "$OUTP0.log" >&2
+fi
+OUTPBAD="$SCRATCH/outpbad_should_not_exist"; rm -rf "$OUTPBAD"
+if CTP_PIN_PARAMS=yes bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --out "$OUTPBAD" >"$SCRATCH/outpbad.log" 2>&1; then
+  bad "pinned params: CTP_PIN_PARAMS=yes was NOT rejected"
+elif grep -qF 'CTP_PIN_PARAMS must be 0 or 1' "$SCRATCH/outpbad.log" && [ ! -e "$OUTPBAD" ]; then
+  ok "pinned params: a bad CTP_PIN_PARAMS is rejected before any work dir is created"
+else
+  bad "pinned params: bad-value rejection wrong"; cat "$SCRATCH/outpbad.log" >&2
 fi
 
 if bash "$HERE/image_contract_test.sh"; then

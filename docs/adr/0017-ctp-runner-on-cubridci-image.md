@@ -75,6 +75,95 @@ cubrid-testkit의 `TESTKIT_SLOT_VOLATILE`과 같은 방식이다. rootful podman
 - **되돌리기:** `CTP_VOLATILE=0` 또는 `--no-volatile`로 이전의 plain bind로 돌아간다.
   entrypoint 포크는 여전히 HA 보완 두 건만 가진다(D2). 이 기능은 별도 래퍼다.
 
+**D8 — CTP 서버 파라미터는 엔진 기본값으로 고정한다 (2026-09-24).** `just conf`는 캠페인 conf를
+모든 설치본에 넣는다. 거기에는 `parallelism=24`(엔진 기본 4) 같은 튜닝값이 있다. CTP conf에는 이
+키들이 없어서, 그동안 CTP 서버는 캠페인 값으로 돌았다. 그래서 CTP run은 엔진 기본값을 고정한다.
+- **모든 스위트:** `data_buffer_size=512M`, `parallelism=4`, `max_parallel_workers=100`. 모두
+  `system_parameter.c`의 기본값이다. `data_buffer_size`는 32768페이지 × 기본 16K 페이지다.
+- **sql/medium만:** `max_clients=20`을 더한다. 샤드를 16개 이상 띄우면 호스트의 pids cgroup 하나를
+  나눠 쓴다. 이 호스트는 `pids.max`가 8192이고, 16샤드 측정에서 7,637까지 찼다. CQT는 연결을 하나만
+  쓰고, sql/medium 케이스 중 `max_clients`를 언급하는 것은 없다. shell/HA는 케이스가 직접 연결을 열고
+  124개가 `max_clients`를 다루므로 설치본 값을 둔다.
+- **넣는 곳:** sql/medium은 샤드 CTP conf의 `[sql/cubrid.conf]`에 넣는다. CTP는 medium도 이 섹션에서
+  읽는다. shell/HA는 설치본 사본 `conf/cubrid.conf`의 `[common]`에 넣는다.
+- **`--conf`와의 순서:** 고정값을 먼저 넣고 `--conf`를 적용한다. 명시한 `--conf`가 이긴다. PX 부하
+  시험은 `CONF=`로 `parallelism=24`를 준다.
+- **계기:** 16샤드 측정에서 parallelism 24로 돈 샤드 하나가 PX 정렬 워커와 리더 사이의 뮤텍스 교착으로
+  멈췄다. 엔진 결함으로 별도 이슈에 기록했다.
+- **함께 고친 것:** 기존 `--conf` 병합은 medium에서 존재하지 않는 `[medium/cubrid.conf]`에 넣어
+  효과가 없었다.
+- **정정:** 처음 요청은 `data_buffer_size` 256M이었다. 기본값이 512M인 것을 확인한 뒤 정정했다.
+- **되돌리기:** `CTP_PIN_PARAMS=0`이면 설치본 값을 그대로 쓴다.
+
+**D9 — sql은 cases 디렉터리 단위, 16샤드로 나누고, medium을 곁에 띄운다 (2026-09-24).**
+카테고리 단위 분할은 가장 무거운 카테고리(`_05_plcsql` 약 323초)가 상한이라 7샤드에서 멈췄다.
+디렉터리 단위로는 순서 의존 실패가 없음을 사용자가 확인했다. 그래서 sql의 기본 단위를 cases
+디렉터리로 바꾸고 기본 샤드 수를 16으로 올린다.
+- **측정:** develop `c63a3b993`, volatile, 16샤드. 케이스 합계는 2,668초였다. 16으로 나누면 샤드당
+  약 167초다. 이보다 긴 디렉터리는 `_01_object/_09_partition/_005_reorganization`(203초) 하나뿐이다.
+- **`split.tsv`:** 너무 긴 디렉터리를 측정 가중치가 같은 **연속 구간** K개로 자른다. 구간 안에서는 CQT
+  순서를 지키고, 각 구간은 샤드 하나에 간다. colocate의 keep-whole과 겹치면 거부한다. 항목은 구간
+  단독 실행에서 통과한 뒤에만 올린다.
+- **가중치:** `baseline_weights.tsv`를 같은 run의 측정값으로 갱신했다. 측정에 빠진 케이스는 이전
+  값으로 채웠다.
+- **pid 상한:** 샤드당 약 400으로 잡고 cgroup `pids.max`에 맞춰 샤드 수를 줄인다. RAM 상한과 같은
+  방식이다.
+- **hang 감시:** sql/medium 샤드가 300초 동안 아무것도 출력하지 않으면, 서버 전체 스택·CQT jstack·
+  tranlist·lockdb를 `shard_N/hang/`에 남기고 그 샤드만 멈춘다. CTP sql/medium에는 케이스 타임아웃이
+  없어서, hang 하나가 run 전체를 무한정 붙잡았다(35분). 측정된 가장 긴 단일 케이스는 69초였다.
+- **medium 동행 (사용자 결정 2026-09-24):** `just ctp sql`로 전체 sql을 돌리면 medium 전체(항상 1샤드)를
+  sql 샤드 곁에 함께 띄운다. `just ctp sql+medium`도 같은 동작이다.
+  - 측정: medium 151–193초(준비 38–39초, 케이스 102–143초), sql 약 5분. 그래서 둘을 합쳐도 sql 시간으로
+    끝난다.
+  - `CTP_WITH_MEDIUM=0`이면 sql만 돈다.
+  - 부분 실행(DIRS)이나 `EXCLUDE`가 있으면 medium을 붙이지 않는다. 제외 목록의 경로 기준이 스위트마다
+    다르기 때문이다.
+- **testcase worktree 락:** 저장소 단위 flock으로 순서대로 만든다. 동시에 시작한 medium이 git
+  `index.lock` 충돌로 죽었기 때문이다.
+- **설치본 복사:** `cp --reflink=auto`로 바꿨다. 16개를 일반 복사하면 37초가 걸렸다.
+- **시간 기록:** 모든 run이 `timing.txt`/`timing.tsv`에 호스트 단계와 샤드별 CTP 단계의 시작 시각을
+  남긴다. 샤드별 단계는 `podman logs --timestamps`로 읽는다.
+- **순서 의존 케이스 (첫 16샤드 run 두 번에서 확인):**
+  - **세션 상태:** `_02_function_based_index`의 `last_insert_id()` 케이스는 CQT 연결 하나에 남은 마지막
+    AUTO_INCREMENT 값을 읽는다. 그래서 CI 순서의 바로 앞 디렉터리 `_01_filtered_index`와 colocate로
+    묶는다. 두 디렉터리는 정렬상 붙어 있어서 한 샤드에 두면 사이에 다른 디렉터리가 끼지 않는다.
+  - **ORDER BY 없는 카탈로그 목록:** `_001_db_class/1003.sql`은 CI 순서의 `_01_object` 481초가 앞에
+    있어야만 통과한다. 이런 묶음을 두면 run이 7샤드 카테고리 분할보다 느려진다. 그래서
+    `dirsplit_exclusions.txt`로 디렉터리 분할 run에서만 뺀다(사용자 결정 2026-09-24).
+    `--by-category`와 CI는 그대로 돌리고, upstream에서 ORDER BY를 넣으면 항목을 지운다.
+  - **관찰 중:** `alter_03.sql`(인덱스 목록 순서)은 parallelism 24에서 한 번 실패했고 그 뒤 재현되지
+    않았다.
+  - **배치를 바꿀 때마다 새 순서 의존 케이스가 나온다.** 조정한 16샤드 배치의 첫 run들에서 네 건이 더
+    나왔다.
+    - `example.sql`: 이름이 겹친 잔존 테이블 `t4`
+    - `comment_on_table_index_01.sql`: ORDER BY 없는 인덱스 주석 목록
+    - `create_view_data_type.sql`: 정답이 CI 선행 케이스가 남긴 객체의 `-494`를 기대함
+    - `cbrd_26104.sql`: 권한 캐시가 차가울 때만 찍히는 내부 쿼리의 Query Plan
+
+    한 배치 안에서는 매 run 같은 식으로 실패하고, CI 순서에서는 통과한다. 모두
+    `dirsplit_exclusions.txt`에 넣었다.
+- **배치는 디렉터리 분할 제외 전 케이스 전체로 계산한다.** 제외 목록을 적용하기 전 케이스로 단위와
+  가중치를 정하고, 제외 케이스는 배정 뒤에 샤드에서 뺀다. LPT는 민감해서 가중치 4초 차이에도 거의 모든
+  디렉터리의 샤드가 바뀌었다. 이렇게 하면 제외 항목을 더해도 검증된 배치의 앞뒤 관계가 그대로라, 수정이
+  run 한 번으로 수렴한다. 대신 가중치·split·colocate·샤드 수·케이스 구성 중 하나라도 바뀌면 배치가 달라지므로
+  2회 검증을 거친다.
+- **가중치 추출 수정:** `harvest_weights.sh`는 로그의 마지막 케이스를 버렸다. 스위트 끝 근처의
+  `_36_guava/cbrd_26707.sql`은 약 74초가 걸리는데 늘 어느 샤드의 마지막이라 0초로 잡혔다. 그 샤드가
+  늘 꼴찌였던 이유다. 이제 CQT의 `Elapse Time:`에서 마지막 케이스 시간을 되살린다. `timing.txt`의
+  tc도 `Testing End!`까지로 잰다.
+- **사본 준비:** 샤드 사본 준비를 병렬로 돌린다. 순서대로 16개를 만들면 reflink로도 26초였다.
+- **#350 hang 케이스 제외 (사용자 결정 2026-09-24):** `_06_merge_statement/_20_adhoc_merge_1.sql`은 서버를
+  새로 띄운 상태에서 돌면 항상 PX 정렬 교착으로 멈췄다(parallelism 24에서 2/2, 기본 4에서 1/1). 그래서
+  #350이 develop에 고쳐질 때까지 `dirsplit_exclusions.txt`에 둔다. hang 감시는 그대로 둔다.
+- **pid 여유가 부족할 때 (사용자 결정 2026-09-24):** 샤드 수를 줄이지 않고 최대 900초 기다린다. 부족한 이유는
+  대개 다른 세션의 CTP run이기 때문이다. 호스트 `pids.max`는 32,000 이상으로 올린다.
+- **유지하는 것:** 샤드 수는 16이다. medium을 함께 띄우므로 더 늘리지 않는다. `ha_mode=yes`와 이번에 잰
+  가중치도 그대로 쓴다.
+- **예상 균형:** 다른 run의 실측 케이스 시간을 현재 배치에 대입하면 샤드당 171–196초(평균 181초)다. 첫
+  샤드와 마지막 샤드가 끝나는 시각은 10–25초쯤 차이 날 것으로 본다.
+- **되돌리기:** `CTP_ARGS='--by-category'`와 `SHARDS=7`로 이전 분할이 된다. `--no-split`은 분할을
+  끈다. `CTP_HANG_SECS=0`은 hang 감시를 끈다.
+
 초기 기록 정정: 상류 `test`는 원래도 checkout을 자동 호출하지 않았다. 포크의 해당 차이는
 누락 디렉터리 안내 문구였으므로 별도 skip-checkout 기능은 필요하지 않다. 또한 당시 기록의
 “실행 중 develop으로 바뀌었다”는 서술은 실행 전후 SHA로 입증한 관측이 아니라 설정과 CTP

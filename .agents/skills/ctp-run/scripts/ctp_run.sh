@@ -123,6 +123,7 @@ OPTIONS
   --by-category|--by-dir|--by-case   split unit (default: per suite)
   --weights <f>|--no-weights         time-balance source
   --colocate <f>|--no-colocate       order-sensitivity registry
+  --split <f>|--no-split             slow cases dirs cut into contiguous chunks (dir mode)
   --overlay              mount the install via overlay instead of copying it
   --keep                 do not remove the containers afterwards
   --keep-copies          keep each shard's install/CTP/testcases/DB copies after the run
@@ -179,6 +180,7 @@ ARG_WEIGHTS="auto"   # "auto" = bundled baseline_weights.tsv (time-based) | <pat
 ARG_LOCALE_DIR=""
 ARG_WEBCONSOLE=1
 ARG_COLOCATE="auto"   # "auto" = bundled colocate.tsv if present; a path = that file; "" = disabled
+ARG_SPLIT="auto"      # "auto" = bundled split.tsv (sql, dir mode); a path = that file; "" = disabled
 ARG_ABORT_ON_CORE=1   # default ON (2026-09-03): stop every shard as soon as a core dump / disk-floor breach is seen; --no-abort-on-core opts out
 ARG_MERGE_ONLY=""     # path to a finished --out dir to merge into webconsole, then exit
 ARG_LABEL=""          # human tag for the merged run (webconsole 'machine' field)
@@ -221,6 +223,8 @@ parse_args() {
       --locale-dir)  ARG_LOCALE_DIR="${2:-}"; shift 2 ;;
       --colocate)    ARG_COLOCATE="${2:-}"; shift 2 ;;
       --no-colocate) ARG_COLOCATE=""; shift ;;
+      --split)       ARG_SPLIT="${2:-}"; shift 2 ;;
+      --no-split)    ARG_SPLIT=""; shift ;;
       --abort-on-core) ARG_ABORT_ON_CORE=1; shift ;;
       --no-abort-on-core) ARG_ABORT_ON_CORE=0; shift ;;
       --no-webconsole) ARG_WEBCONSOLE=0; shift ;;
@@ -270,6 +274,15 @@ parse_args() {
 
   resolve_suite
   resolve_volatile
+  resolve_server_params
+  case "$HANG_SECS" in
+    ''|*[!0-9]*) die "CTP_HANG_SECS must be a whole number of seconds, 0 to disable (got: '$HANG_SECS')" ;;
+  esac
+  # shell/HA cases can run silently for many minutes and CTP's shell runner has its
+  # own per-case timeout, so the hang watchdog is on there only when asked for.
+  if [ -z "${CTP_HANG_SECS:-}" ] && [ "$SUITE_STYLE" = "status" ]; then
+    HANG_SECS=0
+  fi
   if [ -z "$ARG_OUT" ]; then
     ARG_OUT="$(bash "$SELF_DIR/artifact_root.sh")/$ARG_SUITE-$(date -u +%Y%m%dT%H%M%SZ)-$$"
   fi
@@ -326,7 +339,7 @@ resolve_suite() {
   case "$ARG_SUITE" in
     sql)
       SUITE_TCREPO="cubrid-testcases";            SUITE_SUBPATH="sql"
-      SUITE_CAT="sql";      SUITE_EXT="sql";      SUITE_UNIT_DEFAULT="category"
+      SUITE_CAT="sql";      SUITE_EXT="sql";      SUITE_UNIT_DEFAULT="dir"
       SUITE_SHARDABLE=1;    SUITE_STYLE="sqlresult";  SUITE_CONF="conf/sql.conf" ;;
     medium)
       SUITE_TCREPO="cubrid-testcases";            SUITE_SUBPATH="medium"
@@ -430,12 +443,29 @@ infer_pr_from_workspace() {
 # Materialize TC_REF as a worktree we own, so the host checkout's branch and its
 # uncommitted edits are never touched (and two sessions on different refs cannot
 # fight over one working tree). Reused across runs; refreshed to the remote tip.
+# Concurrent runs share a testcases repo: sql and medium started together, or
+# another session. Two git worktree operations on one repo at once fail on its
+# index.lock ("Unable to create .../index.lock: File exists"), which killed a
+# medium run started beside sql. So the fetch/worktree steps take the repo's own
+# lock file, which serializes every runner on this host that uses that repo.
 materialize_tc_worktree() {
+  local repo_dir="$1" common lock fd
+  git -C "$repo_dir" rev-parse --git-dir >/dev/null 2>&1 \
+    || die "not a git checkout: $repo_dir"
+  common="$(cd "$repo_dir" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+  lock="$common/ctprun-materialize.lock"
+  exec {fd}>"$lock" || die "cannot open $lock"
+  flock -w 900 "$fd" || die "timed out after 900s waiting for $lock (another run is materializing testcases)"
+  # Called bare so set -e still stops the run on a failed git step; exiting
+  # releases the lock with the process.
+  materialize_tc_worktree_unlocked "$@"
+  exec {fd}>&-
+}
+
+materialize_tc_worktree_unlocked() {
   local repo_dir="$1" ref="$2" wt_root="$3"
   local safe; safe="$(printf '%s' "$ref" | tr -c 'A-Za-z0-9._-' '_')"
   local wt="$wt_root/$(basename "$repo_dir")/$safe"
-  git -C "$repo_dir" rev-parse --git-dir >/dev/null 2>&1 \
-    || die "not a git checkout: $repo_dir"
 
   if git -C "$repo_dir" fetch --quiet origin "$ref" 2>/dev/null; then
     TC_SHA="$(git -C "$repo_dir" rev-parse FETCH_HEAD)"
@@ -451,7 +481,7 @@ materialize_tc_worktree() {
       if [ "$ref" != "develop" ]; then
         warn "$(basename "$repo_dir"): ref '$ref' not on origin -> falling back to develop."
         TC_REF="develop"; TC_REF_SRC="$TC_REF_SRC + fallback (no $ref on origin)"
-        materialize_tc_worktree "$repo_dir" develop "$wt_root"
+        materialize_tc_worktree_unlocked "$repo_dir" develop "$wt_root"
         return
       fi
       die "$(basename "$repo_dir"): cannot fetch origin develop"
@@ -474,10 +504,10 @@ materialize_tc_worktree() {
 
 PROVENANCE=""
 build_provenance() {
-  PROVENANCE="$(printf 'install=%s image=%s ctp=%s testcases=%s@%s(%.12s) suite=%s shards=%s ref-src=%s volatile=%s' \
+  PROVENANCE="$(printf 'install=%s image=%s ctp=%s testcases=%s@%s(%.12s) suite=%s shards=%s ref-src=%s volatile=%s pinned=%s' \
     "${ARG_BUILD:-<none>}" "$ARG_IMAGE" "$(ctp_revision)" \
     "$SUITE_TCREPO" "$TC_REF" "${TC_SHA:-unknown}" "$ARG_SUITE" "$NSHARDS" "${TC_REF_SRC:-n/a}" \
-    "${VOLATILE_TARGETS:-off}")"
+    "${VOLATILE_TARGETS:-off}" "$(pinned_label | tr ' ' ',')")"
 }
 ctp_revision() {
   git -C "$ARG_CTP" rev-parse --short HEAD 2>/dev/null || echo "unknown"
@@ -497,10 +527,11 @@ write_provenance() {
     printf 'shards\t%s\n' "$NSHARDS"
     printf 'conf\t%s\n' "${ARG_CONF:-<CTP default>}"
     printf 'volatile\t%s\n' "${VOLATILE_TARGETS:-off}"
+    printf 'pinned_params\t%s\n' "$(pinned_label)"
     if [ "$ARG_EXCLUDE_SET" -eq 1 ]; then
       printf 'exclude\t%s\n' "${ARG_EXCLUDE:-<none>}"
     else
-      printf 'exclude\t%s\n' '<suite default>'
+      printf 'exclude\t%s\n' "<suite default>$([ -n "$(dirsplit_exclusions_file)" ] && echo ' + dirsplit_exclusions.txt')"
     fi
     printf 'started\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } > "$OUT/provenance.tsv"
@@ -542,7 +573,13 @@ host_preflight() {
 #   if free RAM can't hold 7 shards, to avoid OOM; pass --shards to override.
 #####################################################################
 readonly DEFAULT_SHARDS=7
+# sql (D9): split by cases dir with measured weights, the knee moves to
+# total / longest unit = 2,668s / ~167s (longest dir, once split.tsv cuts the
+# 203s _005_reorganization in two) = 16. Every shard also costs this host's
+# pids cgroup (pids.max 8192) about PER_SHARD_PIDS processes+threads.
+readonly DEFAULT_SQL_SHARDS=16
 PER_SHARD_GB=3
+PER_SHARD_PIDS=400
 shard_refusal_reason() {
   case "$ARG_SUITE" in
     medium)   printf 'one mdb dataset is loaded from a single data_file tarball and the cases mutate it in place' ;;
@@ -575,15 +612,40 @@ choose_shards() {
     info "shard count: 1 (subset run; pass --shards N to split a large subset)"
     return
   fi
-  NSHARDS=$DEFAULT_SHARDS
-  local free_gb mem_cap
-  free_gb="$(free -g 2>/dev/null | awk '/^Mem:/{print $7}')"; [ -z "${free_gb:-}" ] && free_gb=$(( DEFAULT_SHARDS * PER_SHARD_GB ))
+  local def=$DEFAULT_SHARDS
+  [ "$ARG_SUITE" = "sql" ] && def=$DEFAULT_SQL_SHARDS
+  NSHARDS=$def
+  local free_gb mem_cap pmax pcur pid_cap
+  free_gb="$(free -g 2>/dev/null | awk '/^Mem:/{print $7}')"; [ -z "${free_gb:-}" ] && free_gb=$(( def * PER_SHARD_GB ))
   mem_cap=$(( free_gb / PER_SHARD_GB )); [ "$mem_cap" -lt 1 ] && mem_cap=1
   if [ "$mem_cap" -lt "$NSHARDS" ]; then
-    warn "default $DEFAULT_SHARDS shards needs ~$(( DEFAULT_SHARDS * PER_SHARD_GB ))GB; only ${free_gb}GB free -> capping to $mem_cap (override with --shards)."
+    warn "default $def shards needs ~$(( def * PER_SHARD_GB ))GB; only ${free_gb}GB free -> capping to $mem_cap (override with --shards)."
     NSHARDS=$mem_cap
   fi
-  info "shard count: $NSHARDS (default; workload-optimal for the bulk + measured-time split)"
+  # pids cgroup: a container host like this one caps processes+threads for the
+  # whole user (pids.max 8192 here). Forks failing mid-run turn into random NOKs.
+  pmax="$(cat /sys/fs/cgroup/pids/pids.max 2>/dev/null || cat /sys/fs/cgroup/pids.max 2>/dev/null || echo max)"
+  pcur="$(cat /sys/fs/cgroup/pids/pids.current 2>/dev/null || cat /sys/fs/cgroup/pids.current 2>/dev/null || echo 0)"
+  # Short of room, wait for it rather than run fewer shards: the room is usually
+  # another session's CTP run, which ends within minutes (user decision
+  # 2026-09-24). Only after CTP_PIDS_WAIT_SECS (default 900) is the count capped.
+  case "$pmax" in
+    ''|max|*[!0-9]*) : ;;
+    *) local waited=0 wait_max="${CTP_PIDS_WAIT_SECS:-900}"
+       while pid_cap=$(( (pmax - pcur) / PER_SHARD_PIDS )); [ "$pid_cap" -lt "$NSHARDS" ] && [ "$waited" -lt "$wait_max" ]; do
+         [ "$waited" -eq 0 ] && warn "pids cgroup: ${pcur}/${pmax} in use and a shard takes ~${PER_SHARD_PIDS}; room for $pid_cap of $NSHARDS shards. Waiting up to ${wait_max}s (CTP_PIDS_WAIT_SECS) for other runs to finish ..."
+         sleep 15; waited=$(( waited + 15 ))
+         pcur="$(cat /sys/fs/cgroup/pids/pids.current 2>/dev/null || cat /sys/fs/cgroup/pids.current 2>/dev/null || echo 0)"
+       done
+       [ "$pid_cap" -lt 1 ] && pid_cap=1
+       if [ "$pid_cap" -lt "$NSHARDS" ]; then
+         warn "pids cgroup: still ${pcur}/${pmax} after ${waited}s -> capping to $pid_cap shards (override with --shards)."
+         NSHARDS=$pid_cap
+       elif [ "$waited" -gt 0 ]; then
+         info "pids cgroup: room for $NSHARDS shards after ${waited}s (${pcur}/${pmax})."
+       fi ;;
+  esac
+  info "shard count: $NSHARDS (default for $ARG_SUITE: $def, split by ${ARG_UNIT} with measured time)"
 }
 
 #####################################################################
@@ -632,6 +694,38 @@ resolve_colocate() {
   ndirs=$(grep -c . "$COLO_KEEPWHOLE" 2>/dev/null || echo 0)
   ngroups=$(cut -f2 "$COLO_GIDS" 2>/dev/null | LC_ALL=C sort -u | grep -c . || echo 0)
   info "colocate: $ndirs dir(s) in $ngroups group(s) from $(basename "$src") — keep-whole applies to --by-case only; multi-dir groups pinned to one shard$([ "$missing" -gt 0 ] && echo "; $missing missing")."
+}
+
+#####################################################################
+# Split registry (split.tsv): cases dirs too slow to sit whole on one shard.
+# "<cases dir>\t<parts>" per line (# comments). Applies to dir mode only; see
+# discover_units. A dir that is also keep-whole in colocate.tsv is a contradiction
+# and refused. Produces $SPLIT_FILE ("<dir>\t<parts>").
+#   auto (default) -> bundled split.tsv for sql; <path> -> that file; "" -> none.
+#####################################################################
+SPLIT_FILE=""
+resolve_split() {
+  SPLIT_FILE="$WORK/split.txt"
+  : >"$SPLIT_FILE"
+  local src="" d k
+  case "$ARG_SPLIT" in
+    "")   return 0 ;;
+    auto) [ "$ARG_SUITE" = "sql" ] && [ -r "$SELF_DIR/../split.tsv" ] && src="$SELF_DIR/../split.tsv" ;;
+    *)    [ -r "$ARG_SPLIT" ] || die "--split file not readable: $ARG_SPLIT"; src="$ARG_SPLIT" ;;
+  esac
+  [ -n "$src" ] || return 0
+  while IFS=$'\t' read -r d k; do
+    case "$d" in ''|\#*) continue ;; esac
+    d="${d%/}"
+    case "$k" in ''|*[!0-9]*) die "split.tsv: '$d' needs a whole number of parts >= 2 (got: '$k')" ;; esac
+    [ "$k" -ge 2 ] || die "split.tsv: '$d' needs at least 2 parts (got: $k)"
+    grep -qxF "$d" "$COLO_KEEPWHOLE" 2>/dev/null \
+      && die "split.tsv: '$d' is keep-whole in colocate.tsv; it cannot also be split"
+    [ -d "$SCN/$d" ] || { warn "split: registered dir not in scenario (ignored): $d"; continue; }
+    printf '%s\t%s\n' "$d" "$k" >> "$SPLIT_FILE"
+  done < "$src"
+  [ "$ARG_UNIT" = "dir" ] || { [ -s "$SPLIT_FILE" ] && info "split: registry ignored in '$ARG_UNIT' mode (dir mode only)."; : >"$SPLIT_FILE"; }
+  [ -s "$SPLIT_FILE" ] && info "split: $(wc -l < "$SPLIT_FILE") dir(s) cut into contiguous weight chunks ($(basename "$src"))." || :
 }
 
 #####################################################################
@@ -684,6 +778,7 @@ resolve_weights() {
 #####################################################################
 UNITS_FILE=""      # tmp: unit \t sqlcount
 SQL_LIST=""        # tmp: surviving .sql relpaths (post base exclusion)
+PLAN_LIST=""       # tmp: the pool the plan is computed over (SQL_LIST plus dir-split exclusions)
 SQL_ALL=""         # tmp: all .sql relpaths
 BASE_FILE=""       # the original CTP exclusions.txt (verbatim base list)
 
@@ -697,6 +792,15 @@ suite_base_exclusion_file() {
   esac
 }
 
+# The dir-split exclusion list when it applies (sql, split by cases dir, suite
+# default exclusions), else nothing.
+dirsplit_exclusions_file() {
+  local f="$SELF_DIR/../dirsplit_exclusions.txt"
+  if [ "$ARG_SUITE" = "sql" ] && [ "$ARG_UNIT" = "dir" ] && [ "$ARG_EXCLUDE_SET" -eq 0 ] && [ -r "$f" ]; then
+    printf '%s' "$f"
+  fi
+}
+
 discover_units() {
   BASE_FILE="$(suite_base_exclusion_file)"
   if [ "$ARG_EXCLUDE_SET" -eq 1 ]; then
@@ -704,7 +808,16 @@ discover_units() {
   fi
   [ -r "$BASE_FILE" ] || die "exclusion list unreadable: $BASE_FILE (use --exclude '' for no exclusions)"
   # Snapshot the exact list used for planning; every shard receives these bytes.
-  cp -f "$BASE_FILE" "$WORK/exclusions.txt"
+  # Split by cases dir, the default sql list also takes dirsplit_exclusions.txt:
+  # cases whose answers need CI's whole serial order before them (D9).
+  local dx; dx="$(dirsplit_exclusions_file)"
+  if [ -n "$dx" ]; then
+    { cat "$BASE_FILE"; echo; grep -v -E '^[[:space:]]*(#|$)' "$dx"; } > "$WORK/exclusions.txt"
+    cp -f "$BASE_FILE" "$WORK/exclusions.plan.txt"
+    info "exclusions: suite default + $(grep -c -v -E '^[[:space:]]*(#|$)' "$dx") dir-split entr(y/ies) from $(basename "$dx")."
+  else
+    cp -f "$BASE_FILE" "$WORK/exclusions.txt"
+  fi
   BASE_FILE="$WORK/exclusions.txt"
   SQL_ALL="$WORK/sql_all.txt"
   SQL_LIST="$WORK/sql_surviving.txt"
@@ -742,6 +855,18 @@ discover_units() {
 
   # Apply base exclusions (F4 containPath) to get the surviving pool.
   apply_base_exclusions "$SQL_ALL" "$SQL_LIST"
+  # The plan is computed over the pool BEFORE the dir-split exclusions, so that
+  # adding or removing one never moves any other dir to another shard: every
+  # verified shard keeps the same dirs in front of each of its dirs. Order-
+  # dependent failures show up exactly when that changes.
+  PLAN_LIST="$SQL_LIST"
+  if [ -n "$dx" ]; then
+    PLAN_LIST="$WORK/sql_plan.txt"
+    local keep_base="$BASE_FILE"
+    BASE_FILE="$WORK/exclusions.plan.txt"
+    apply_base_exclusions "$SQL_ALL" "$PLAN_LIST"
+    BASE_FILE="$keep_base"
+  fi
 
   GLOBAL_SQL=$total
   SURVIVING_SQL=$(wc -l < "$SQL_LIST")
@@ -754,25 +879,52 @@ discover_units() {
   # the cases dir by default, the top-level _* dir with --by-category, or the .sql
   # itself with --by-case.
   local wfile="${WEIGHTS_FILE:-/dev/null}"
-  awk -F'\t' -v mode="$ARG_UNIT" -v wf="$wfile" -v kw="$COLO_KEEPWHOLE" '
-    function unitkey(p,   u, c) {
+  # A cases dir in the split registry (split.tsv, dir mode only) becomes <parts>
+  # CONTIGUOUS chunks "<dir>#<k>" cut at equal measured weight, so each chunk keeps
+  # CQT's order within itself. $WORK/split_map.tsv records "<.sql>\t<chunk>";
+  # expand_split_assignment turns the chunk rows back into per-.sql rows.
+  : >"$WORK/split_map.tsv"
+  awk -F'\t' -v mode="$ARG_UNIT" -v wf="$wfile" -v kw="$COLO_KEEPWHOLE" \
+      -v sp="$SPLIT_FILE" -v smap="$WORK/split_map.tsv" '
+    function casedir(p,   c) { c=p; if (match(c,/\/cases\//)) c=substr(c,1,RSTART+RLENGTH-2); return c }
+    function unitkey(p,   u, c, k) {
       # category (DEFAULT): top-level _* "bulk" — atomic, never split across shards.
       if (mode=="category") { u=p; sub(/\/.*/,"",u); return u }
       # outermost cases dir of p (also the keep-whole lookup key).
-      c=p; if (match(c,/\/cases\//)) c=substr(c,1,RSTART+RLENGTH-2)
+      c=casedir(p)
       # keep-whole registry applies ONLY to --by-case (the only mode finer than a cases dir);
       # in dir/category the cases dir / bulk is already whole, so the registry must not pull a
       # cases dir out of its atomic bulk.
       if (mode=="case") return (c in KW) ? c : p
+      if (c in K) {                    # dir mode, registered split: contiguous weight chunk
+        k=int(cum[c] * K[c] / (tot[c] > 0 ? tot[c] : 1)); if (k >= K[c]) k=K[c]-1
+        cum[c]+=wt
+        return c "#" k
+      }
       return c                         # dir: outermost cases dir
     }
     BEGIN {
       while ((getline l < kw) > 0) if (l!="") KW[l]=1
       while ((getline l < wf) > 0) { m=split(l,a,"\t"); if (m>=2) w[a[1]]=a[2]+0 }
+      while ((getline l < sp) > 0) { m=split(l,a,"\t"); if (m>=2 && mode=="dir") K[a[1]]=a[2]+0 }
     }
-    { p=$0; wt=(p in w)?w[p]:1; agg[unitkey(p)]+=wt }
+    FNR==NR { if (mode=="dir") { c=casedir($0); if (c in K) tot[c]+=(($0 in w)?w[$0]:1) }; next }
+    { p=$0; wt=(p in w)?w[p]:1; u=unitkey(p); agg[u]+=wt; if (index(u,"#")) print p "\t" u > smap }
     END { for (u in agg) printf "%s\t%d\n", u, (agg[u]<1?1:agg[u]) }
-  ' "$SQL_LIST" | LC_ALL=C sort > "$UNITS_FILE"
+  ' "$PLAN_LIST" "$PLAN_LIST" | LC_ALL=C sort > "$UNITS_FILE"
+}
+
+# Replace each split chunk's assignment row "<dir>#<k>\t<shard>" by one row per
+# .sql of that chunk, so validate_split's containment proof (a unit claims an .sql
+# that equals it or lies under it) and expand_shard_sets see ordinary per-.sql
+# units. A no-op without split units.
+expand_split_assignment() {
+  [ -s "$WORK/split_map.tsv" ] || return 0
+  awk -F'\t' '
+    FNR==NR { members[$2]=members[$2] $1 "\n"; next }
+    index($1,"#") && ($1 in members) { n=split(members[$1], m, "\n"); for (i=1;i<=n;i++) if (m[i]!="") print m[i] "\t" $2; next }
+    { print }
+  ' "$WORK/split_map.tsv" "$ASSIGN_FILE" > "$ASSIGN_FILE.split" && mv -f "$ASSIGN_FILE.split" "$ASSIGN_FILE"
 }
 
 # shell_helper_dirs <scenario_root>
@@ -917,14 +1069,18 @@ expand_shard_sets() {
     SHARD_NSQL[i]=0
     cp -f "$BASE_FILE" "$WORK/shard_${i}.exclusions.txt"
   done
-  awk -F'\t' -v mode="$ARG_UNIT" -v work="$WORK" -v kw="$COLO_KEEPWHOLE" '
+  awk -F'\t' -v mode="$ARG_UNIT" -v work="$WORK" -v kw="$COLO_KEEPWHOLE" -v sp="$SPLIT_FILE" '
     function unitkey(p,   u, c) {
       if (mode=="category") { u=p; sub(/\/.*/,"",u); return u }
       c=p; if (match(c,/\/cases\//)) c=substr(c,1,RSTART+RLENGTH-2)
       if (mode=="case") return (c in KW) ? c : p
+      if (c in K) return p             # split dir: assigned per .sql (expand_split_assignment)
       return c
     }
-    BEGIN { while ((getline l < kw) > 0) if (l!="") KW[l]=1 }
+    BEGIN {
+      while ((getline l < kw) > 0) if (l!="") KW[l]=1
+      while ((getline l < sp) > 0) { m=split(l,a,"\t"); if (m>=2 && mode=="dir") K[a[1]]=a[2]+0 }
+    }
     FNR==NR { sh[$1]=$2; next }                      # ASSIGN: unit -> shard
     {
       p=$0; u=unitkey(p); s=sh[u]
@@ -1023,9 +1179,22 @@ install_suite_conf() {
     return
   fi
 
-  local target="$d/CTP/$SUITE_CONF" section="[${SUITE_CAT}/cubrid.conf]"
+  local target="$d/CTP/$SUITE_CONF"
   [ -f "$target" ] || die "--conf: cannot find the shard's CTP conf to merge into: $target"
-  awk -v userconf="$ARG_CONF" -v section="$section" '
+  merge_params_into_section "$target" "$SQL_CONF_SECTION" "$ARG_CONF"
+  info "conf: merged $(basename "$ARG_CONF") into $SUITE_CONF ${SQL_CONF_SECTION}"
+}
+
+# The section CTP's run.sh reads server parameters from, for sql AND medium
+# (ini -s "sql/cubrid.conf"; medium_dev.conf has no [medium/cubrid.conf]).
+readonly SQL_CONF_SECTION="[sql/cubrid.conf]"
+
+# Set the KEY=VALUE lines of $3 inside section $2 of the ini-style conf $1.
+# Keys already in the section are replaced. New keys go at the end of the
+# section. A missing section is appended together with them.
+merge_params_into_section() {
+  local target="$1" section="$2" params="$3"
+  awk -v userconf="$params" -v section="$section" '
     function flushnew() {
       for (k in u) if (!(k in done)) { print k "=" u[k]; done[k]=1 }
     }
@@ -1039,7 +1208,7 @@ install_suite_conf() {
         }
       }
     }
-    $0 == section { insec = 1; print; next }
+    $0 == section { insec = 1; seen = 1; print; next }
     /^[ \t]*\[/ && insec { flushnew(); insec = 0; print; next }
     insec && match($0, /^[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*=/) {
       k = $0; sub(/=.*/, "", k); gsub(/[ \t]/, "", k)
@@ -1047,9 +1216,73 @@ install_suite_conf() {
       print; next
     }
     { print }
-    END { if (insec) flushnew() }
+    END { if (insec) flushnew(); else if (!seen) { print section; flushnew() } }
   ' "$target" > "$target.merged" && mv -f "$target.merged" "$target"
-  info "conf: merged $(basename "$ARG_CONF") into $SUITE_CONF ${section}"
+}
+
+# Server parameters pinned for CTP runs (D8), so a run tests the engine as shipped
+# and not whatever an install's conf/cubrid.conf was tuned to (`just conf` copies
+# this repo's campaign cubrid.conf, parallelism=24 included, into every install).
+#   every suite : the engine's own defaults (system_parameter.c):
+#                 data_buffer_size=512M (32768 pages of the default 16K page),
+#                 parallelism=4, max_parallel_workers=100
+#   sql/medium  : also max_clients=20. CQT holds one connection and no sql/medium
+#                 case mentions max_clients, while 16+ shards share this host's
+#                 pids cgroup (pids.max 8192). shell/HA cases open connections of
+#                 their own and 124 of them set max_clients, so they keep the
+#                 install's value.
+# Pinned BEFORE --conf is applied, so an explicit --conf still wins.
+# CTP_PIN_PARAMS=0 leaves the install's values alone.
+#   sql/medium : into [sql/cubrid.conf] of the shard's CTP conf, which CTP writes
+#                into the server conf.
+#   shell/HA   : into [common] of the shard install's conf/cubrid.conf, which the
+#                cases start their servers from.
+PIN_PARAMS="${CTP_PIN_PARAMS:-1}"
+readonly PINNED_ALL="data_buffer_size=512M parallelism=4 max_parallel_workers=100"
+readonly PINNED_SQL="max_clients=20"
+resolve_server_params() {
+  case "$PIN_PARAMS" in
+    0|1) : ;;
+    *) die "CTP_PIN_PARAMS must be 0 or 1 (got: '$PIN_PARAMS')" ;;
+  esac
+}
+# The KEY=VALUE list pinned for this suite; empty when pinning is off.
+pinned_params() {
+  [ "$PIN_PARAMS" -eq 1 ] || return 0
+  if [ "$SUITE_STYLE" = "status" ]; then
+    printf '%s\n' "$PINNED_ALL"
+  else
+    printf '%s\n' "$PINNED_ALL $PINNED_SQL"
+  fi
+}
+# What provenance and the plan summary show: the pinned list, or "off".
+pinned_label() {
+  local l; l="$(pinned_params)"
+  printf '%s' "${l:-off}"
+}
+pin_server_params() {
+  local d="$1" params="$WORK/pinned_params.$(basename "$1").conf" list kv
+  list="$(pinned_params)"
+  [ -n "$list" ] || return 0
+  : > "$params"
+  for kv in $list; do printf '%s\n' "$kv" >> "$params"; done
+  if [ "$SUITE_STYLE" = "status" ]; then
+    if [ "$ARG_OVERLAY" -eq 1 ]; then
+      warn "server params: not pinned for '$ARG_SUITE' with --overlay (the install is not copied)."
+      return 0
+    fi
+    if [ ! -f "$d/CUBRID/conf/cubrid.conf" ]; then
+      warn "server params: $d/CUBRID/conf/cubrid.conf is missing; not pinned."
+      return 0
+    fi
+    merge_params_into_section "$d/CUBRID/conf/cubrid.conf" "[common]" "$params"
+  else
+    if [ -z "$SUITE_CONF" ] || [ ! -f "$d/CTP/$SUITE_CONF" ]; then
+      warn "server params: the shard's CTP suite conf ($d/CTP/${SUITE_CONF:-<unset>}) is missing; not pinned."
+      return 0
+    fi
+    merge_params_into_section "$d/CTP/$SUITE_CONF" "$SQL_CONF_SECTION" "$params"
+  fi
 }
 
 #####################################################################
@@ -1096,6 +1329,7 @@ print_plan_summary() {
   printf '  env passthrough (fixed): CUBRID CTP_HOME CUBRID_DATABASES WORKDIR TEST_REPORT TZ LC_ALL TEST_SCENARIO TEST_EXCLUDE\n'
   printf '  env passthrough (--env, %d): %s\n' "${#ARG_ENV[@]}" "${ARG_ENV[*]:-<none>}"
   printf '  volatile:           %s\n' "${VOLATILE_TARGETS:-off}"
+  printf '  pinned params:      %s\n' "$(pinned_label)"
   printf '  %-7s %-10s %s\n' "shard" "sql" "weight$([ -n "$WEIGHTS_FILE" ] && echo '(s)')"
   local i
   for (( i=0; i<NSHARDS; i++ )); do
@@ -1134,7 +1368,10 @@ build_shard_workdir() {
     prepare_shell_locale_conf "$ARG_BUILD"
     info "shard $i: --overlay set; build mounted via podman :O overlay (no copy)."
   else
-    cp -a "$ARG_BUILD" "$d/CUBRID"
+    # --reflink=auto: on a CoW filesystem (this host's /home is XFS reflink=1) the
+    # 1.2G install copy costs no time or space until a shard writes to it; elsewhere
+    # it is an ordinary copy. 16 plain copies took 37s of a run's setup.
+    cp -a --reflink=auto "$ARG_BUILD" "$d/CUBRID"
     prepare_shell_locale_conf "$d/CUBRID"
     # Locale speedup (D6): CTP keeps need_make_locale=yes, but make_locale is the
     # single slowest startup step (~60-90s of gcc, repeated in EVERY shard). Ship a
@@ -1228,6 +1465,7 @@ build_shard_workdir() {
            "$d/CTP"/result/* "$d/CTP"/log/* 2>/dev/null || :
   fi
   cp -f "$WORK/shard_${i}.exclusions.txt" "$d/CTP/conf/ctprun_exclusions.txt"
+  pin_server_params "$d"
   install_suite_conf "$d"
 
   # fresh per-shard CUBRID_DATABASES + report dir
@@ -1245,7 +1483,7 @@ build_shard_workdir() {
   # databases dir — see shard_mounts.
   if [ "$SUITE_HA" -eq 1 ] && [ "$ARG_OVERLAY" -eq 0 ]; then
     info "shard $i: copying a second install for the HA slave node ..."
-    cp -a "$d/CUBRID" "$d/CUBRID.slave"
+    cp -a --reflink=auto "$d/CUBRID" "$d/CUBRID.slave"
     mkdir -p "$d/CUBRID_DB.slave"
     : >"$d/CUBRID_DB.slave/databases.txt"
   fi
@@ -1444,7 +1682,42 @@ CORE_POLL_SECS=5   # 2026-09-03 #199: a crash-looping shard produced 13 cores (1
 DISK_FLOOR_GB=30
 CRASH_LOOP_CORES="${CTP_CRASH_LOOP_CORES:-5}"
 MAX_SHARD_CORES="${CTP_MAX_SHARD_CORES:-20}"
+# Hang watchdog: a shard whose container printed nothing for HANG_SECS is hung.
+# CTP's sql/medium have no per-case timeout, so without this a hang stops the
+# whole run forever (2026-09-24: one of 16 shards sat 35 minutes in a PX sort
+# worker <-> leader mutex deadlock, xmilex-git/workspace issue). The longest
+# single sql case measured is 69s, so 300s is far outside normal. On by default
+# for sql/medium only (see parse_args); CTP_HANG_SECS=<s> sets it for any suite,
+# CTP_HANG_SECS=0 turns it off.
+HANG_SECS="${CTP_HANG_SECS:-300}"
+HANG_POLL_SECS=30
 WATCHDOG_PID=""
+
+# Evidence from a hung shard, taken before it is stopped: its processes go with
+# the container, so this is the only chance. Saved under shard_N/hang/.
+capture_hang_evidence() {
+  local i="$1" name="${SHARD_NAMES[$1]}" h="$OUT/shard_$1/hang" db=""
+  case "$ARG_SUITE" in sql) db=basic ;; medium) db=mdb ;; esac
+  mkdir -p "$h"
+  podman logs --timestamps --tail 40 "$name" > "$h/console.tail.txt" 2>&1 || :
+  podman exec -e DB="$db" "$name" bash -c '
+    export CUBRID=/home/CUBRID PATH=/home/CUBRID/bin:$PATH LD_LIBRARY_PATH=/home/CUBRID/lib:${LD_LIBRARY_PATH:-}
+    for pid in $(pgrep -x cub_server); do
+      echo "=== cub_server pid $pid: $(tr "\0" " " < /proc/$pid/cmdline)"
+      grep -E "^(Threads|VmRSS)" /proc/$pid/status
+      timeout 180 gdb -p "$pid" -batch -ex "thread apply all bt" 2>&1
+    done' > "$h/cub_server.stacks.txt" 2>&1 || :
+  podman exec "$name" bash -c '
+    for pid in $(pgrep -f "java .*-Xms1024m"); do
+      echo "=== java pid $pid"; timeout 60 jstack "$pid" 2>&1
+    done' > "$h/cqt.jstack.txt" 2>&1 || :
+  if [ -n "$db" ]; then
+    podman exec -e DB="$db" "$name" bash -c '
+      export CUBRID=/home/CUBRID PATH=/home/CUBRID/bin:$PATH LD_LIBRARY_PATH=/home/CUBRID/lib:${LD_LIBRARY_PATH:-}
+      echo "=== tranlist"; timeout 60 cubrid tranlist "$DB" 2>&1
+      echo "=== lockdb";   timeout 120 cubrid lockdb "$DB" 2>&1' > "$h/tran_lock.txt" 2>&1 || :
+  fi
+}
 
 # Verified core dumps of one shard; file(1) runs once per path (the cache lives
 # in the watchdog subshell). core_pattern names have no whitespace
@@ -1481,6 +1754,7 @@ start_core_watchdog() {
   rm -f "$OUT/.abort_reason" "$OUT/.dead_shards"
   (
     declare -a cores_prev=() cores_mark=() pass_mark=() stopped=()
+    hang_checked=$SECONDS
     while :; do
       sleep "$CORE_POLL_SECS"
       reason=""
@@ -1518,6 +1792,24 @@ start_core_watchdog() {
           fi
         done
       fi
+      if [ "$HANG_SECS" -gt 0 ] && [ $(( SECONDS - hang_checked )) -ge "$HANG_POLL_SECS" ]; then
+        hang_checked=$SECONDS
+        now="$(date +%s)"
+        for (( i=0; i<${#SHARD_NAMES[@]}; i++ )); do
+          [ "${stopped[i]:-0}" -eq 0 ] || continue
+          [ "$(podman inspect -f '{{.State.Running}}' "${SHARD_NAMES[i]}" 2>/dev/null)" = true ] || continue
+          last="$(podman logs --tail 1 --timestamps "${SHARD_NAMES[i]}" 2>/dev/null | awk '{print $1; exit}')"
+          [ -n "$last" ] || continue
+          last_s="$(date -d "$last" +%s 2>/dev/null || echo "$now")"
+          [ $(( now - last_s )) -ge "$HANG_SECS" ] || continue
+          stopped[i]=1
+          why="hang: no output for $(( now - last_s ))s (CTP_HANG_SECS=$HANG_SECS); stacks in shard_${i}/hang/"
+          printf 'shard %d: %s\n' "$i" "$why" >> "$OUT/.dead_shards"
+          echo "[ctp-run] HANG WATCHDOG: shard $i $why — capturing evidence, then stopping that shard; the others keep running." >&2
+          capture_hang_evidence "$i" || :
+          stop_shard_containers "${SHARD_NAMES[i]}" "${HA_SLAVE_NAMES[i]:-}"
+        done
+      fi
       if [ -n "$reason" ]; then
         printf '%s\n' "$reason" > "$OUT/.abort_reason"
         echo "[ctp-run] ABORT-ON-CORE: $reason — stopping all shard containers." >&2
@@ -1527,6 +1819,9 @@ start_core_watchdog() {
     done
   ) &
   WATCHDOG_PID=$!
+  if [ "$HANG_SECS" -gt 0 ]; then
+    info "hang watchdog on: a shard silent for ${HANG_SECS}s is stopped after its stacks are saved (CTP_HANG_SECS)."
+  fi
   if [ "$ARG_ABORT_ON_CORE" -eq 1 ]; then
     info "abort-on-core watchdog started (pid $WATCHDOG_PID, poll ${CORE_POLL_SECS}s, disk floor ${DISK_FLOOR_GB}GB)."
   else
@@ -1550,6 +1845,9 @@ wait_shards() {
     info "waiting on shard $i ($name) ..."
     SHARD_RC[i]="$(podman wait "$name" 2>/dev/null || echo 255)"
     podman logs "$name" > "$d/console.log" 2>&1 || :
+    # The same output with podman's own per-line timestamps: the only record of
+    # where a shard's setup time goes (see write_timing).
+    podman logs --timestamps "$name" > "$d/console.ts.log" 2>&1 || :
     if [ "$SUITE_HA" -eq 1 ] && [ -n "${HA_SLAVE_NAMES[i]:-}" ]; then
       podman logs "${HA_SLAVE_NAMES[i]}" > "$d/console.slave.log" 2>&1 || :
       podman stop -t 5 "${HA_SLAVE_NAMES[i]}" >/dev/null 2>&1 || :
@@ -1747,7 +2045,7 @@ aggregate() {
     fail=1
   fi
   if [ -s "$OUT/.dead_shards" ]; then
-    while IFS= read -r line; do err "STOPPED by the crash-loop watchdog: $line"; done < "$OUT/.dead_shards"
+    while IFS= read -r line; do err "STOPPED by a watchdog: $line"; done < "$OUT/.dead_shards"
     err "those shards' results are PARTIAL; rerun their remaining cases once the crash is fixed."
     fail=1
   fi
@@ -1922,6 +2220,69 @@ prune_shard_copies() {
   info "pruned shard working copies: $OUT $before -> $after (evidence kept: console.log, out/, reports/, cores/)."
 }
 
+#####################################################################
+# Phase timing: where a run's wall clock goes, recorded for every run.
+#   <out>/timing.tsv : host phase marks (epoch seconds), then per-shard container
+#                      phases read from shard_N/console.ts.log.
+#   <out>/timing.txt : the same as durations, one line per shard.
+# Container phases are the first line matching each CTP stage banner. A suite
+# without one (shell/HA print no "[SQL] TEST STARTED") shows "-" there.
+#####################################################################
+mark_phase() { printf 'host\t%s\t%s\n' "$1" "$(date +%s)" >> "$OUT/timing.tsv"; }
+
+write_timing() {
+  local i f t0 p v line up first last n
+  declare -A at
+  t0="$(awk -F'\t' '$1=="host" && $2=="start" {print $3; exit}' "$OUT/timing.tsv")"
+  {
+    printf '# run: host marks (seconds from start)\n'
+    awk -F'\t' -v t0="$t0" '$1=="host" {printf "  %-15s +%ds\n", $2, $3-t0}' "$OUT/timing.tsv"
+    printf '# shard: stage starts in s from the container'"'"'s first log line; setup = first line..first case; tc = first case..Testing End\n'
+  } > "$OUT/timing.txt"
+  for (( i=0; i<NSHARDS; i++ )); do
+    f="$OUT/shard_${i}/console.ts.log"
+    [ -s "$f" ] || continue
+    # One "<phase> <RFC3339 timestamp>" line per phase found.
+    while read -r p v; do
+      at[$p]="$(date -d "$v" +%s.%N 2>/dev/null || echo)"
+      printf 'shard%d\t%s\t%s\n' "$i" "$p" "${at[$p]}" >> "$OUT/timing.tsv"
+    done < <(awk '
+      function mark(name) { if (!(name in seen)) { seen[name] = 1; print name, $1 } }
+      NR == 1 { mark("container_up") }
+      /\[SQL\] TEST STARTED/ { mark("ctp_start") }
+      /make locale now/ { mark("locale") }
+      / MAKE [^ ]+ DATABASE/ { mark("createdb") }
+      /Load Java Stored Procedure Classes/ { mark("sp_load") }
+      / start database / { mark("server_start") }
+      / Testing .* \(1\/[0-9]+ / { mark("first_case") }
+      / Testing .* \([0-9]+\/[0-9]+ / { last = $1 }
+      /Testing End!/ { mark("tc_end") }
+      { end = $1 }
+      END { if (last != "") print "last_case", last; if (end != "") print "container_end", end }
+    ' "$f")
+    # A Testing line is printed as its case starts, so the last case runs until
+    # CQT's "Testing End!" (one case near the end of the suite takes ~74s).
+    up="${at[container_up]:-}"; first="${at[first_case]:-}"; last="${at[tc_end]:-${at[last_case]:-}}"
+    line="$(printf 'shard %-2d' "$i")"
+    for n in ctp_start locale createdb sp_load server_start; do
+      if [ -n "${at[$n]:-}" ] && [ -n "$up" ]; then
+        line+="$(awk -v a="$up" -v b="${at[$n]}" -v k="$n" 'BEGIN{printf "  %s +%.0fs", k, b-a}')"
+      else
+        line+="  $n -"
+      fi
+    done
+    if [ -n "$up" ] && [ -n "$first" ]; then
+      line+="$(awk -v a="$up" -v b="$first" 'BEGIN{printf "  | setup %.0fs", b-a}')"
+    fi
+    if [ -n "$first" ] && [ -n "$last" ]; then
+      line+="$(awk -v a="$first" -v b="$last" 'BEGIN{printf "  | tc %.0fs", b-a}')"
+    fi
+    printf '%s\n' "$line" >> "$OUT/timing.txt"
+    unset at; declare -A at
+  done
+  info "timing: $(awk '/\| setup/ {s=$0; sub(/.*\| setup /,"",s); sub(/s.*/,"",s); s+=0; t=$0; sub(/.*\| tc /,"",t); sub(/s.*/,"",t); t+=0; if (n==0||s<smin) smin=s; if (s>smax) smax=s; if (n==0||t<tmin) tmin=t; if (t>tmax) tmax=t; n++} END{if (n) printf "container setup %d-%ds, tc %d-%ds over %d shard(s)", smin, smax, tmin, tmax, n; else printf "no shard timing"}' "$OUT/timing.txt") (details: $OUT/timing.txt)"
+}
+
 cleanup() {
   stop_core_watchdog 2>/dev/null || :
   [ -n "${WORK:-}" ] && rm -rf "$WORK" 2>/dev/null || :
@@ -1964,6 +2325,7 @@ main() {
   OUT="$(cd "$OUT" && pwd)"
   WORK="$(mktemp -d "${OUT}/.work.XXXXXX")"
   trap cleanup EXIT
+  mark_phase start
 
   # Which testcases ref, materialized as a worktree we own (host checkout untouched).
   if [ "$ARG_TC_ASIS" -eq 1 ]; then
@@ -1981,10 +2343,12 @@ main() {
   write_provenance
 
   resolve_colocate
+  resolve_split
   resolve_weights
   info "discovering units under $SCN ..."
   discover_units
   balance_units
+  expand_split_assignment
   expand_shard_sets
   validate_split
   emit_plan
@@ -1995,20 +2359,31 @@ main() {
     return 0
   fi
 
+  mark_phase planned
   setup_core_capture
   resolve_locale
   declare -ga SHARD_NAMES SHARD_RC
   local i
-  for (( i=0; i<NSHARDS; i++ )); do build_shard_workdir "$i"; done
+  # In parallel: each shard's copies are its own files, and 16 in a row took 26s.
+  local -a build_pids=()
+  for (( i=0; i<NSHARDS; i++ )); do build_shard_workdir "$i" & build_pids+=( $! ); done
+  for (( i=0; i<NSHARDS; i++ )); do
+    wait "${build_pids[i]}" || die "shard $i: building its working copies failed (see the messages above)."
+  done
+  mark_phase workdirs_built
   for (( i=0; i<NSHARDS; i++ )); do launch_shard "$i"; done
+  mark_phase launched
   start_core_watchdog
   wait_shards
+  mark_phase shards_done
   stop_core_watchdog
   collect_shards
   local agg_rc=0
   aggregate || agg_rc=$?
   merge_results || :
   prune_shard_copies || :
+  mark_phase pruned
+  write_timing || :
   return "$agg_rc"
 }
 
