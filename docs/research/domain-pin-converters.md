@@ -196,7 +196,7 @@ leaf 포인터 → 이름 정적 배열 `domain_convert_names[]`(`{fn, "string_t
 
 ## 5. 규칙표 S4/S5 "실행 중 세션변수 타입 변경" — 값 A/B (D-323-18 판정 입력)
 
-**철회(D-336-A·E, 2026-09-24)**: 아래 B 열의 -494/NULL 예측은 적용하지 않는다. 세션변수의 타입이 실행 중 바뀐 행은 develop 의 늦은 해석(값 타입)으로 계산해 답이 develop 과 같다(P-S2 = 4, P-S5 = (2,0), P-S8·S10 = develop 값). 게이트는 실행 시작 시 저장값 도메인으로 노드를 확정하고, 바뀐 뒤의 행만 `volatile_changed` 로 늦은 해석에 돌아간다(dpin-14 가 표 재조회로 대체).
+**철회(D-336-A·E, 2026-09-24)**: 아래 B 열의 -494/NULL 예측은 적용하지 않는다. 세션변수의 타입이 실행 중 바뀐 행은 develop 의 늦은 해석(값 타입)으로 계산해 답이 develop 과 같다(P-S2 = 4, P-S5 = (2,0), P-S8·S10 = develop 값). 게이트는 실행 시작 시 저장값 도메인으로 노드를 확정하고, 바뀐 뒤의 행만 늦은 해석에 돌아간다(#336 은 `volatile_changed`, #340 은 바뀐 읽기에 기대는 결정만 — 읽기별 마스크; 표 재조회는 쓰지 않는다).
 
 A = develop `cad27172b` optdebug 실측(2026-09-22, `dpin_probe`, `.git_ignored_dir/scratch/312-325/probe/out-optdebug.txt`·`out-optdebug-nullonerr.txt`, 코어·assert 0). B = 이 설계의 예측(§1 모드 + D-325-10·11). 테이블 `tv(i int)` 3행, 각 블록은 `SET @v` 뒤 SELECT 하나가 읽고 재대입한다. `yes` = `return_null_on_function_errors=yes`.
 

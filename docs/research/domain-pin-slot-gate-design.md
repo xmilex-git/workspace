@@ -76,7 +76,7 @@ fetch                게이트 의존 노드는 G1 의 결정을 읽는다(문�
 
 - G1: `@v` 읽기 노드는 게이트 노드 — 실행 시작 시 `session_get_variable` 의 값 도메인(미정의면 NULL 도메인, 오류는 develop 처럼 행 읽기에서).
 - 그 위 노드(`@v + 1`, `abs(@v)`, `sum(@v)`): 게이트 의존 노드로 G1 이 격자로 확정.
-- fetch(구현): `@v` 읽기 노드가 행 값을 읽었을 때 그 타입이 G1 의 결정과 다르면(`@v := '2.5'` 가 문장 중간에 타입을 바꿈) `xasl_state->resolved.volatile_changed` 를 켜고 그 읽기부터 **VOLATILE 부류 노드 전부가 남은 실행 동안 develop 의 늦은 해석**으로 계산한다(카운터 +1씩). 바뀌기 전 행은 결정을 읽는다(카운터 0). 값·오류 모두 develop 과 같다. 행마다 피연산자 도메인을 대조하는 정밀한 형태(바뀐 노드만)는 dpin-14 의 표 재조회와 함께.
+- fetch(구현): `@v` 읽기 노드가 행 값을 읽었을 때 그 타입이 G1 의 결정과 다르면(`@v := '2.5'` 가 문장 중간에 타입을 바꿈) `xasl_state->resolved.volatile_changed` 를 켜고 그 읽기부터 **VOLATILE 부류 노드 전부가 남은 실행 동안 develop 의 늦은 해석**으로 계산한다(카운터 +1씩). 바뀌기 전 행은 결정을 읽는다(카운터 0). 값·오류 모두 develop 과 같다. 행마다 피연산자 도메인을 대조하는 정밀한 형태(바뀐 노드만)는 dpin-14 의 표 재조회와 함께. **#340**: 정밀한 형태가 들어갔다 — 전역 `volatile_changed` 대신 읽기별 마스크(`changed_reads` × 칸의 `slot_volatile_reads`)라, 바뀐 읽기에 기대는 결정만 develop 의 늦은 해석을 받고 다른 VOLATILE 노드는 계속 결정을 읽는다. 내용으로 분류하는 노드(ADDTIME 왼쪽 문자열, STR_TO_DATE 포맷)는 타입이 같아도 부류가 바뀌면 같은 표시를 한다(`fetch_volatile_class_holds`). 표 재조회는 쓰지 않는다(D-336-A·E).
 - 문자 세션변수(`@b` CHAR(8) 이 concat 으로 자라는 bug_bts_4562): #338 부터 문자 결정도 읽고, 행 값의 타입뿐 아니라 precision·codeset·collation 이 결정과 다르면 같은 폴백(`volatile_changed`)이 켜진다(`fetch_value_leaves_domain`).
 - 종료 조건 2 의 표현을 "타입이 바뀌지 않는 세션변수 셀에서 0" 으로 고친다.
 
