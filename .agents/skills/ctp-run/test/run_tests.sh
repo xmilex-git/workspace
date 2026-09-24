@@ -498,6 +498,66 @@ else
 fi
 
 #-------------------------------------------------------------------
+# (p) plan pin (plan_pin.tsv, D9): a whole-suite sql run keeps every pinned unit
+#     on its pinned shard; LPT places only what the pin does not know.
+#-------------------------------------------------------------------
+echo; echo "## (p) plan pin"
+PIN="$SKILL/plan_pin.tsv"
+if [ -r "$PIN" ] && [ -r "$OUTK/plan_pin.tsv" ] && [ "$def_n" -eq 16 ]; then
+  # (p1) the default run is pinned, and every unit it shares with the pin sits on the pinned shard.
+  moved="$(awk -F'\t' '/^#/{next} FNR==NR{p[$1]=$2; next} ($1 in p) && p[$1]!=$2 {c++} END{print c+0}' "$PIN" "$OUTK/plan_pin.tsv")"
+  common="$(awk -F'\t' '/^#/{next} FNR==NR{p[$1]; next} ($1 in p){c++} END{print c+0}' "$PIN" "$OUTK/plan_pin.tsv")"
+  if grep -q 'plan: *pinned:plan_pin.tsv' "$OUTK.log" && [ "$moved" -eq 0 ] && [ "$common" -gt 0 ]; then
+    ok "pin: default sql run pinned; $common unit(s) shared with plan_pin.tsv, none moved"
+  else
+    bad "pin: default run label/moves wrong (moved=$moved common=$common)"; grep -E 'plan( pin)?:' "$OUTK.log" >&2
+  fi
+  # (p2) a unit missing from the pin is placed; a new member of a pinned group follows
+  # the group; a group whose pinned units disagree is placed as one.
+  base="$SCRATCH/pin_base.tsv"; grep -v '^#' "$OUTK/plan_pin.tsv" | grep -v '#' > "$base"
+  X="$(awk -F'\t' 'NR==1{print $1}' "$base")"
+  read -r d1 s1 d2 s2 d3 s3 d4 s4 < <(awk -F'\t' -v x="$X" '$1!=x { if (!n || $2!=ls) { u[++n]=$1; s[n]=$2; ls=$2 } } n==4 {exit} END{print u[1],s[1],u[2],s[2],u[3],s[3],u[4],s[4]}' "$base")
+  FPIN="$SCRATCH/pin_fixture.tsv"; FCOL="$SCRATCH/pin_colocate.tsv"
+  { printf '# shards=16 unit=dir suite=sql run=fixture\n'
+    awk -F'\t' -v x="$X" -v d2="$d2" '$1!=x && $1!=d2' "$OUTK/plan_pin.tsv" | grep -v '^#'; } > "$FPIN"
+  printf '%s %s\n%s %s\n' "$d1" "$d2" "$d3" "$d4" > "$FCOL"
+  OUTP="$SCRATCH/outp"; rm -rf "$OUTP"
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --plan-pin "$FPIN" --colocate "$FCOL" --out "$OUTP" >"$OUTP.log" 2>&1; rcP=$?
+  shard_of() { awk -F'\t' -v u="$1" '$1==u{print $2}' "$OUTP/assignment.tsv"; }
+  if [ "$rcP" -eq 0 ] && [ -n "$(shard_of "$X")" ] && [ "$(shard_of "$d2")" = "$s1" ] && [ "$(shard_of "$d1")" = "$s1" ] \
+       && [ "$(shard_of "$d3")" = "$(shard_of "$d4")" ] && grep -q 'colocated from different pinned shards' "$OUTP.log"; then
+    ok "pin: new unit placed (shard $(shard_of "$X")), new group member follows its pinned group ($s1), split group placed as one ($(shard_of "$d3"))"
+  else
+    bad "pin: rc=$rcP X=$(shard_of "$X") d1=$(shard_of "$d1")/$s1 d2=$(shard_of "$d2") d3=$(shard_of "$d3") d4=$(shard_of "$d4")"; grep 'plan pin' "$OUTP.log" >&2
+  fi
+  # (p3) --no-plan-pin plans by LPT alone; (p4) so does a run with another shard count, with a warning.
+  OUTNP="$SCRATCH/outnp"; rm -rf "$OUTNP"
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --no-plan-pin --out "$OUTNP" >"$OUTNP.log" 2>&1
+  if grep -q 'plan: *lpt (--no-plan-pin)' "$OUTNP.log" && ! grep -q 'plan pin:' "$OUTNP.log"; then ok "pin: --no-plan-pin plans by LPT"; else bad "pin: --no-plan-pin label wrong"; fi
+  OUTP8="$SCRATCH/outp8"; rm -rf "$OUTP8"
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --shards 8 --out "$OUTP8" >"$OUTP8.log" 2>&1
+  if grep -q 'is for 16 shards and this run has 8' "$OUTP8.log" && grep -q 'plan: *lpt (pin is for 16 shards)' "$OUTP8.log"; then
+    ok "pin: an 8-shard run warns and plans by LPT"
+  else
+    bad "pin: 8-shard run did not fall back"; grep -E 'plan( pin)?:' "$OUTP8.log" >&2
+  fi
+  # (p5) a subset run is not pinned, silently; (p6) a pin for another unit mode is refused.
+  OUTPS="$SCRATCH/outps"; rm -rf "$OUTPS"
+  bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --only "${X%/cases}" --out "$OUTPS" >"$OUTPS.log" 2>&1
+  if grep -q 'plan: *lpt$' "$OUTPS.log" && ! grep -q 'plan pin' "$OUTPS.log"; then ok "pin: a subset run is not pinned"; else bad "pin: subset run pinned or warned"; grep -E 'plan( pin)?:' "$OUTPS.log" >&2; fi
+  CPIN="$SCRATCH/pin_category.tsv"; sed '1s/unit=dir/unit=category/' "$FPIN" > "$CPIN"
+  OUTPC="$SCRATCH/outpc"; rm -rf "$OUTPC"
+  if ! bash "$ORCH" --dry-run --testcases "$TC" --testcases-as-is --ctp "$CTP" --plan-pin "$CPIN" --out "$OUTPC" >"$OUTPC.log" 2>&1 \
+       && grep -q 'unit=category; this run is suite=sql unit=dir' "$OUTPC.log"; then
+    ok "pin: a pin written for another unit mode is refused"
+  else
+    bad "pin: category pin accepted by a dir run"; tail -3 "$OUTPC.log" >&2
+  fi
+else
+  note "plan pin test skipped: no bundled plan_pin.tsv, no plan_pin.tsv in the default run, or default shards != 16"
+fi
+
+#-------------------------------------------------------------------
 # (l) --env passthrough (#108): parsed values reach the launch-plan summary
 #     (mechanical proof without podman; real container/environ check is
 #     manual e2e QA — see README.md).

@@ -163,14 +163,17 @@ Network, IPC, mount and cgroup namespaces are private; the common flags include
 `--cgroupns=private` for this Rocky 8 host. Raw podman probes without that flag
 can fail even when the runner works.
 
-SQL splits by top-level category by default, with measured per-case weights
-(`baseline_weights.tsv`) and greedy LPT balancing. `--by-dir` and `--by-case`
-provide finer opt-ins; `colocate.tsv` keeps registered case directories together.
+SQL splits by cases directory by default (ADR 0017 D9), with measured per-case
+weights (`baseline_weights.tsv`) and greedy LPT balancing. A whole-suite run keeps
+the verified plan in `plan_pin.tsv` and places by LPT only the directories that
+plan does not know. `--by-category` restores the bulk split and `--by-case` is
+finer; `colocate.tsv` keeps registered case directories together and `split.tsv`
+cuts slow ones into contiguous chunks.
 Shell splits by test directory and copies shared helper directories alongside
 it. SQL/medium copy only assigned case files; shell/HA copy whole test directories
 with their answer files, helpers and source files.
 
-Default whole-suite concurrency is 7 for SQL/shell, 1 for subsets. Medium and
+Default whole-suite concurrency is 16 for SQL, 7 for shell, 1 for subsets. Medium and
 HA always use one shard: medium mutates a shared dataset, and an HA shard is
 already a master/slave pair. The offline validator proves each planned case is
 assigned exactly once. SQL/medium executed totals must match the plan; shell/HA

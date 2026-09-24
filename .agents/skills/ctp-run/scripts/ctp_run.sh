@@ -124,6 +124,7 @@ OPTIONS
   --weights <f>|--no-weights         time-balance source
   --colocate <f>|--no-colocate       order-sensitivity registry
   --split <f>|--no-split             slow cases dirs cut into contiguous chunks (dir mode)
+  --plan-pin <f>|--no-plan-pin       keep units on a verified run's shards (plan_pin.tsv)
   --overlay              mount the install via overlay instead of copying it
   --keep                 do not remove the containers afterwards
   --keep-copies          keep each shard's install/CTP/testcases/DB copies after the run
@@ -146,7 +147,7 @@ OPTIONS
 
 OUTPUT
   <out>/provenance.txt|tsv   install / image / CTP / testcases ref+sha of this run
-  <out>/plan.tsv, assignment.tsv, units.tsv
+  <out>/plan.tsv, assignment.tsv, units.tsv, plan_pin.tsv
   <out>/shard_N/{console.log,exclusions.txt,assigned_cases.txt,reports/,cores/}
   <out>/failed.list          failing cases, in the shape --only takes
 EOF
@@ -181,6 +182,7 @@ ARG_LOCALE_DIR=""
 ARG_WEBCONSOLE=1
 ARG_COLOCATE="auto"   # "auto" = bundled colocate.tsv if present; a path = that file; "" = disabled
 ARG_SPLIT="auto"      # "auto" = bundled split.tsv (sql, dir mode); a path = that file; "" = disabled
+ARG_PIN="auto"        # "auto" = bundled plan_pin.tsv (sql, dir mode, same shard count); a path; "" = none
 ARG_ABORT_ON_CORE=1   # default ON (2026-09-03): stop every shard as soon as a core dump / disk-floor breach is seen; --no-abort-on-core opts out
 ARG_MERGE_ONLY=""     # path to a finished --out dir to merge into webconsole, then exit
 ARG_LABEL=""          # human tag for the merged run (webconsole 'machine' field)
@@ -225,6 +227,8 @@ parse_args() {
       --no-colocate) ARG_COLOCATE=""; shift ;;
       --split)       ARG_SPLIT="${2:-}"; shift 2 ;;
       --no-split)    ARG_SPLIT=""; shift ;;
+      --plan-pin)    ARG_PIN="${2:-}"; shift 2 ;;
+      --no-plan-pin) ARG_PIN=""; shift ;;
       --abort-on-core) ARG_ABORT_ON_CORE=1; shift ;;
       --no-abort-on-core) ARG_ABORT_ON_CORE=0; shift ;;
       --no-webconsole) ARG_WEBCONSOLE=0; shift ;;
@@ -504,10 +508,10 @@ materialize_tc_worktree_unlocked() {
 
 PROVENANCE=""
 build_provenance() {
-  PROVENANCE="$(printf 'install=%s image=%s ctp=%s testcases=%s@%s(%.12s) suite=%s shards=%s ref-src=%s volatile=%s pinned=%s' \
+  PROVENANCE="$(printf 'install=%s image=%s ctp=%s testcases=%s@%s(%.12s) suite=%s shards=%s ref-src=%s volatile=%s pinned=%s plan=%s' \
     "${ARG_BUILD:-<none>}" "$ARG_IMAGE" "$(ctp_revision)" \
     "$SUITE_TCREPO" "$TC_REF" "${TC_SHA:-unknown}" "$ARG_SUITE" "$NSHARDS" "${TC_REF_SRC:-n/a}" \
-    "${VOLATILE_TARGETS:-off}" "$(pinned_label | tr ' ' ',')")"
+    "${VOLATILE_TARGETS:-off}" "$(pinned_label | tr ' ' ',')" "$(printf '%s' "$PLAN_LABEL" | tr ' ' '_')")"
 }
 ctp_revision() {
   git -C "$ARG_CTP" rev-parse --short HEAD 2>/dev/null || echo "unknown"
@@ -528,6 +532,7 @@ write_provenance() {
     printf 'conf\t%s\n' "${ARG_CONF:-<CTP default>}"
     printf 'volatile\t%s\n' "${VOLATILE_TARGETS:-off}"
     printf 'pinned_params\t%s\n' "$(pinned_label)"
+    printf 'plan\t%s\n' "$PLAN_LABEL"
     if [ "$ARG_EXCLUDE_SET" -eq 1 ]; then
       printf 'exclude\t%s\n' "${ARG_EXCLUDE:-<none>}"
     else
@@ -694,6 +699,79 @@ resolve_colocate() {
   ndirs=$(grep -c . "$COLO_KEEPWHOLE" 2>/dev/null || echo 0)
   ngroups=$(cut -f2 "$COLO_GIDS" 2>/dev/null | LC_ALL=C sort -u | grep -c . || echo 0)
   info "colocate: $ndirs dir(s) in $ngroups group(s) from $(basename "$src") — keep-whole applies to --by-case only; multi-dir groups pinned to one shard$([ "$missing" -gt 0 ] && echo "; $missing missing")."
+}
+
+#####################################################################
+# Plan pin (plan_pin.tsv, D9): the unit -> shard assignment of a verified run.
+# A dir-split plan is only as clean as the dirs that run in front of each dir,
+# and LPT reshuffles almost everything when one weight or one case changes, so
+# a PR branch's cases or a weight refresh would otherwise bring a new plan with
+# new order-dependent failures. With the pin, every unit it knows keeps its
+# shard and only the units it does not know are placed, by LPT around the
+# pinned load (balance_units).
+#   auto (default) -> the bundled plan_pin.tsv, for a whole-suite sql run split
+#                     by cases dir; <path> -> that file; "" -> no pin.
+# A pin written for another shard count is not used (warned): the shards are
+# only the same shards when there are as many of them.
+# Every sharded run writes its own plan as <out>/plan_pin.tsv; copying a
+# verified run's file over the bundled one re-pins.
+#####################################################################
+PIN_FILE=""
+PLAN_LABEL="lpt"
+pin_header() {                     # pin_header <file> <key>: a key=value of its "# shards=" line
+  awk -v k="$2" '/^# shards=/ { for (i=2;i<=NF;i++) { split($i,kv,"="); if (kv[1]==k) { print kv[2]; exit } } }' "$1"
+}
+resolve_pin() {
+  local src="" bundled="$SELF_DIR/../plan_pin.tsv" n
+  case "$ARG_PIN" in
+    "")   PLAN_LABEL="lpt (--no-plan-pin)"; return 0 ;;
+    auto) [ "$ARG_SUITE" = "sql" ] && [ "$ARG_UNIT" = "dir" ] && [ "${#ARG_ONLY[@]}" -eq 0 ] \
+            && [ -r "$bundled" ] && src="$bundled" ;;
+    *)    [ -r "$ARG_PIN" ] || die "--plan-pin file not readable: $ARG_PIN"; src="$ARG_PIN" ;;
+  esac
+  [ -n "$src" ] || return 0
+  [ "$(pin_header "$src" suite)" = "$ARG_SUITE" ] && [ "$(pin_header "$src" unit)" = "$ARG_UNIT" ] \
+    || die "plan pin $src is for suite=$(pin_header "$src" suite) unit=$(pin_header "$src" unit); this run is suite=$ARG_SUITE unit=$ARG_UNIT."
+  n="$(pin_header "$src" shards)"
+  if [ "$n" != "$NSHARDS" ]; then
+    warn "plan pin: $(basename "$src") is for ${n:-?} shards and this run has $NSHARDS; planning by LPT alone."
+    PLAN_LABEL="lpt (pin is for ${n:-?} shards)"
+    return 0
+  fi
+  PIN_FILE="$src"
+  PLAN_LABEL="pinned:$(basename "$src")"
+}
+
+# After balance_units: what the pin kept, and a warning once the pinned plan has
+# drifted out of balance (new units piled up, or weights moved), meaning the
+# heaviest shard is more than 10% over the mean.
+report_pin() {
+  [ -n "$PIN_FILE" ] || return 0
+  local kept placed conflict gone i mx=0 sum=0 mean
+  kept="$(awk -F'\t' '$1=="kept"{print $2}' "$WORK/pin_stats.tsv")"
+  placed="$(awk -F'\t' '$1=="placed"{print $2}' "$WORK/pin_stats.tsv")"
+  conflict="$(awk -F'\t' '$1=="conflict"{print $2}' "$WORK/pin_stats.tsv")"
+  gone="$(awk -F'\t' '$1=="gone"{print $2}' "$WORK/pin_stats.tsv")"
+  info "plan pin: $kept unit group(s) on their pinned shard, $placed placed by LPT (not in the pin$([ "${conflict:-0}" -gt 0 ] && echo ", $conflict of them colocated from different pinned shards")); $gone pinned unit(s) not in this pool."
+  for (( i=0; i<NSHARDS; i++ )); do
+    sum=$(( sum + ${SHARD_LOAD[i]:-0} )); [ "${SHARD_LOAD[i]:-0}" -gt "$mx" ] && mx=${SHARD_LOAD[i]}
+  done
+  mean=$(( sum / NSHARDS ))
+  if [ "$mean" -gt 0 ] && [ $(( mx * 100 )) -gt $(( mean * 110 )) ]; then
+    warn "plan pin: the heaviest shard (${mx}) is over 110% of the mean (${mean}). To re-pin: run with --no-plan-pin, verify that plan twice, then copy its plan_pin.tsv over the bundled one."
+  fi
+}
+
+# This run's plan in the pin's format. Called before expand_split_assignment,
+# while the assignment still has one row per unit (a split chunk is "<dir>#<k>").
+write_run_pin() {
+  [ "$NSHARDS" -gt 1 ] || return 0
+  {
+    printf '# shards=%d unit=%s suite=%s testcases=%s@%.12s run=%s\n' "$NSHARDS" "$ARG_UNIT" "$ARG_SUITE" \
+      "$TC_REF" "${TC_SHA:-unknown}" "$(basename "$OUT")"
+    printf '# unit -> shard of this run'"'"'s plan (%s). Copy it over .agents/skills/ctp-run/plan_pin.tsv to pin it.\n' "$PLAN_LABEL"
+    LC_ALL=C sort "$ASSIGN_FILE"
+  } > "$OUT/plan_pin.tsv"
 }
 
 #####################################################################
@@ -1033,11 +1111,37 @@ balance_units() {
   ' "$UNITS_FILE"
 
   # (2) LPT over groups (weight desc, group-id asc) -> group -> shard + #LOAD.
+  # With a plan pin (resolve_pin), a group whose pinned units share a shard goes
+  # there first, whatever its weight is now, and takes its new units with it;
+  # LPT then places only the groups the pin does not know, around that load.
+  local pin="${PIN_FILE:-/dev/null}"
   LC_ALL=C sort -t"$(printf '\t')" -k2,2nr -k1,1 "$WORK/group_w.tsv" \
-    | awk -F'\t' -v n="$NSHARDS" '
-        BEGIN { for (i=0;i<n;i++) load[i]=0 }
-        { g=$1; w=$2+0; best=0; for (i=1;i<n;i++) if (load[i]<load[best]) best=i; load[best]+=w; print g "\t" best }
-        END { for (i=0;i<n;i++) printf "#LOAD\t%d\t%d\n", i, load[i] }
+    | awk -F'\t' -v n="$NSHARDS" -v pinf="$pin" -v ugf="$WORK/unit_gid.tsv" -v st="$WORK/pin_stats.tsv" '
+        BEGIN {
+          for (i=0;i<n;i++) load[i]=0
+          while ((getline l < pinf) > 0) {
+            if (l ~ /^#/) continue
+            m=split(l,a,"\t"); if (m>=2 && a[2] ~ /^[0-9]+$/ && a[2]+0 < n) ps[a[1]]=a[2]+0
+          }
+          # group -> the shard its pinned units share (-1: they disagree, which a
+          # colocate.tsv change can do). A group without pinned units is new.
+          while ((getline l < ugf) > 0) {
+            m=split(l,a,"\t"); u=a[1]; g=a[2]; seen[u]=1
+            if (!(u in ps)) continue
+            if (!(g in gp)) gp[g]=ps[u]; else if (gp[g]!=ps[u]) gp[g]=-1
+          }
+          for (u in ps) if (!(u in seen)) gone++
+        }
+        { g=$1; w=$2+0; order[++ng]=g; gw[g]=w
+          if ((g in gp) && gp[g]>=0) { load[gp[g]]+=w; out[g]=gp[g]; kept++ } }
+        END {
+          for (k=1;k<=ng;k++) { g=order[k]; if (g in out) continue
+            best=0; for (i=1;i<n;i++) if (load[i]<load[best]) best=i
+            load[best]+=gw[g]; out[g]=best; placed++; if (g in gp) conflict++ }
+          for (k=1;k<=ng;k++) print order[k] "\t" out[order[k]]
+          for (i=0;i<n;i++) printf "#LOAD\t%d\t%d\n", i, load[i]
+          printf "kept\t%d\nplaced\t%d\nconflict\t%d\ngone\t%d\n", kept+0, placed+0, conflict+0, gone+0 > st
+        }
       ' > "$WORK/group_shard_raw.tsv"
   grep -v '^#LOAD' "$WORK/group_shard_raw.tsv" > "$WORK/group_shard.tsv"
 
@@ -1330,6 +1434,7 @@ print_plan_summary() {
   printf '  env passthrough (--env, %d): %s\n' "${#ARG_ENV[@]}" "${ARG_ENV[*]:-<none>}"
   printf '  volatile:           %s\n' "${VOLATILE_TARGETS:-off}"
   printf '  pinned params:      %s\n' "$(pinned_label)"
+  printf '  plan:               %s\n' "$PLAN_LABEL"
   printf '  %-7s %-10s %s\n' "shard" "sql" "weight$([ -n "$WEIGHTS_FILE" ] && echo '(s)')"
   local i
   for (( i=0; i<NSHARDS; i++ )); do
@@ -2339,6 +2444,7 @@ main() {
     [ -d "$SCN" ] || die "scenario dir missing in the worktree: $SCN"
     SCN="$(cd "$SCN" && pwd)"
   fi
+  resolve_pin
   build_provenance
   write_provenance
 
@@ -2348,6 +2454,8 @@ main() {
   info "discovering units under $SCN ..."
   discover_units
   balance_units
+  report_pin
+  write_run_pin
   expand_split_assignment
   expand_shard_sets
   validate_split

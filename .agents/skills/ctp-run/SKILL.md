@@ -77,6 +77,7 @@ master+slave container pair. `SHARDS>1` is refused with the reason.
 | `colocate.tsv` | order-sensitive dirs that must stay on one shard |
 | `split.tsv` | sql cases dirs too slow for one shard, cut into contiguous weight chunks |
 | `dirsplit_exclusions.txt` | sql cases left out of dir-split runs only (answers need CI's whole order) |
+| `plan_pin.tsv` | the verified 16-shard sql plan (cases dir → shard) that whole-suite runs keep |
 | `test/run_tests.sh` | split, image-contract and HA regression checks; no CTP execution |
 | `test/image_contract_test.sh` | runtime conf isolation, scope migration and exclusion planning fixtures |
 | `test/locale_staging_test.sh` | real shard staging followed by CTP-style locale deletion |
@@ -132,9 +133,20 @@ order effects at dir granularity. `CTP_ARGS='--by-category'` restores the old bu
     dir.
   - A verified plan keeps its order when an exclusion is added, and the fix converges in one
     more run.
-- **Any change to the plan's inputs needs two verification runs.** The inputs are
-  `baseline_weights.tsv`, `split.tsv`, colocate groups, the shard count and the set of
-  cases.
+- **The plan is pinned** (`plan_pin.tsv`, user decision 2026-09-24). A whole-suite sql run
+  over 16 shards puts every cases dir the pin knows on its pinned shard, whatever its weight
+  is now. LPT places only the dirs the pin does not know, around that load.
+  - So a PR branch's cases, a campaign testcases branch or a weight refresh leaves every
+    verified dir behind the same dirs as before. On `dpin-tc`, LPT alone moved 621 of 1,422
+    assignment rows; the pin moves none and places its 2 new dirs.
+  - A new dir in a colocate group goes to the group's pinned shard. A group whose pinned dirs
+    sit on different shards (after a `colocate.tsv` change) is placed as one.
+  - Not pinned: subsets, `--by-category`/`--by-case`, and `CTP_ARGS=--no-plan-pin`. Another
+    shard count is not pinned either, with a warning.
+  - The runner warns once the heaviest shard is over 110% of the mean.
+  - Every sharded run writes its own plan as `<out>/plan_pin.tsv`.
+- **Re-pinning needs two verification runs.** Run with `CTP_ARGS=--no-plan-pin`, verify that
+  plan with two full runs, then copy its `<out>/plan_pin.tsv` over the bundled one.
   - Each plan puts different dirs in front of each dir, and has exposed order-dependent
     cases of its own.
   - Such a case fails the same way on every run of that plan, and then goes into
