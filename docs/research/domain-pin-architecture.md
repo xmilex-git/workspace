@@ -142,9 +142,9 @@
 | `coalesce(enum_col, ?)` collation 래핑 assert(tc:22826, D1) | — | **후속 #326**(D-322-04). 이 PR 은 건드리지 않음 |
 | `group_concat(?)` NULL LEAVE 플래그 assert(qx:1375, D2) | CP+G1 | 누산기 도메인이 게이트 표에서 확정, LEAVE 소멸(C10) — **소멸 확인(#340 A/B)**: develop optdebug 만 멈춘다 |
 | `group_concat(s + ?)` 리스트 기록/판독 불일치 assert(op:10996, D3) | CP | `s + ?` 는 VARCHAR 미러(C11) → 리스트 컬럼 도메인 = 값 타입 불변식 — **소멸 확인(#340)**: dpin optdebug 는 `'ax,bx'` 와 develop 의 변환 오류 |
-| `sum(?) over` 날짜 assert(qx:23654, D4) | G1 | 분석 누산기 도메인을 게이트가 값 타입으로 확정(F7), 첫값 블록 삭제 |
+| `sum(?) over` 날짜 assert(qx:23654, D4) | G1 | 분석 누산기 도메인을 게이트가 값 타입으로 확정(F7), 첫값 블록 삭제 — **소멸 확인(#341 A/B)**: develop optdebug(a0c1b6c)는 `qexec_analytic_add_tuple` 에서 멈추고, dpin 은 변환 오류(-181, #337 의 D4 수정)를 낸다. `count(distinct ?) over (…)` 의 문자 바인드도 같은 부류다(develop 은 COUNT 의 BIGINT 로 피연산자를 변환하다 오류 코드 없이 실패) |
 | `to_char(col, ?)` BIGINT assert(string_opfunc.c:25792, D5) | G1 | 포맷 슬롯이 게이트 확정(F2) → 오류로 |
-| `? UNION ALL ?`·재귀 CTE NULL·NULL assert(lf:913, D6) | G1 | 리스트 컬럼 도메인이 게이트 표(U3: NULL·NULL 은 VARCHAR NULL), `qfile_unify_types` VARIABLE 분기 삭제 |
+| `? UNION ALL ?`·재귀 CTE NULL·NULL assert(lf:913, D6) | G1 | 리스트 컬럼 도메인이 게이트 표(U3: NULL·NULL 은 VARCHAR NULL), `qfile_unify_types` VARIABLE 분기 삭제 — **소멸 확인(#341 A/B)**: develop optdebug 는 `qfile_unify_types` 에서 멈추고, dpin 은 답한다(빈 쪽은 값을 주지 않는다, S-15) |
 | `enum IN (NULL, NULL)` assert(dbtype_function.i:678, D7) | CP | B13 컬렉션 원소 미러 → NULL 원소도 ENUM 도메인 typed NULL — **남는다(#340)**: 미러가 D-336-B 로 철회됐고 자리는 파서 상수 접기다. develop·dpin 이 같은 백트레이스로 멈추는 develop 결함 → 캠페인 밖 [#353](https://github.com/xmilex-git/workspace/issues/353) |
 | `INSERT int_col ← ?` DATE 0행 | G1 | U0 대입 캐스트가 게이트에서 -494 |
 | `char(n)_col = ?` VARCHAR 값 NULL | CP+G1 | B7: 슬롯 VARCHAR 미러 + 게이트 문자화, 클라이언트 캐스트 삭제 |
