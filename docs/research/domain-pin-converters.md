@@ -190,7 +190,7 @@ leaf 포인터 → 이름 정적 배열 `domain_convert_names[]`(`{fn, "string_t
 
 ## 4. 상관 복합 키 원소 `strict_conv` (인터페이스 §5)
 
-`domain_plan_key_elem.strict_conv = domain_lookup_converter (원소 regu 의 계획 도메인 타입, index_elem, DOMAIN_CTX_KEY_ELEM)` = COMPARE 모드 leaf. range open 마다 원소별로 호출해 성공이면 `index_elem`, 실패면 `keep_elem` 을 고른다(결정 0). 단일 컬럼 키(B30)도 같은 leaf 를 스캔 준비에서 1회 부른다 — 현행 "단일 컬럼은 변환 없음, 인덱스 쪽이 매 비교 변환"(#321 §4.2)이 "값 쪽 1회 strict, 실패 시 값 도메인 키 + 계획된 원소 변환기" 로 바뀌며 답은 같다(B30 실측).
+`domain_plan_key_elem.strict_conv = domain_lookup_converter (원소 regu 의 계획 도메인 타입, index_elem, DOMAIN_CTX_KEY_ELEM)` = COMPARE 모드 leaf. range open 마다 원소별로 호출해 성공이면 `index_elem`, 실패면 `keep_elem` 을 고른다(결정 0). 단일 컬럼 키(B30)도 같은 leaf 를 스캔 준비에서 1회 부른다 — 현행 "단일 컬럼은 변환 없음, 인덱스 쪽이 매 비교 변환"(#321 §4.2)이 "값 쪽 1회 strict, 실패 시 값 도메인 키 + 계획된 원소 변환기" 로 바뀌며 답은 같다(B30 실측). **#342 정정(F-342-01)**: 단일 컬럼 키는 값 그대로다(#321 §4.2 의 develop 규칙) — 스캔 준비의 1회 strict 는 FLOAT·DOUBLE 값의 INT·BIGINT 인덱스 검색에서 정밀도 끝에서 develop 답과 갈라지므로 쓰지 않고, 비교는 스캔의 키 비교 표가 정한다(인터페이스 §5 #342 상태). 복합 키 원소의 `strict_conv` 는 위와 같다.
 
 ---
 

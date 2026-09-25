@@ -91,7 +91,7 @@
 - **기각**: 클라이언트가 게이트 규칙을 흉내 내 값을 미리 변환하는 이중 변환(D-M4 위반, L-30 사고 재현).
 
 ### 결정 5 — 인덱스 키 변환
-- **계획 표기**: 키 range 원소마다 로드 도출이 (인덱스 컬럼 도메인 ← `INDX_INFO.key_type`, 키 regu 부류 K/S, 변환기) 를 고정한다. **K 키**(바인드·auto-param·상수식): G1 이 strict-or-keep 을 1회 적용 — strict 성공이면 인덱스 도메인 값, 실패면 값 도메인 + 비교 변환기(B30·B31; midxkey `setdomain` 도 이때 1회 조립 → `need_new_setdomain`/`prebuilt_midxkey_domains` 삭제). **S 키**(상관·조인·skip-scan): range open 마다 같은 변환기를 값에만 적용(전략 재추론 0). key1/key2 는 계획 항목을 분리(L-45(c)); ISS 내림차순 bound 이동은 fetch 범위용 계획 쌍(L-45(d)); ISS 첫 컬럼·MRO 정렬 컬럼 도메인은 `key_type` 오름차순 사본(L-44·L-45(e)); `prebuilt_midxkey_domains` 해제 누수(L-45(g))는 필드 자체가 사라져 해소.
+- **계획 표기**: 키 range 원소마다 로드 도출이 (인덱스 컬럼 도메인 ← `INDX_INFO.key_type`, 키 regu 부류 K/S, 변환기) 를 고정한다. **K 키**(바인드·auto-param·상수식): G1 이 strict-or-keep 을 1회 적용 — strict 성공이면 인덱스 도메인 값, 실패면 값 도메인 + 비교 변환기(B30·B31; midxkey `setdomain` 도 이때 1회 조립 → `need_new_setdomain`/`prebuilt_midxkey_domains` 삭제). **S 키**(상관·조인·skip-scan): range open 마다 같은 변환기를 값에만 적용(전략 재추론 0). key1/key2 는 계획 항목을 분리(L-45(c)); ISS 내림차순 bound 이동은 fetch 범위용 계획 쌍(L-45(d)); ISS 첫 컬럼·MRO 정렬 컬럼 도메인은 `key_type` 오름차순 사본(L-44·L-45(e)); `prebuilt_midxkey_domains` 해제 누수(L-45(g))는 필드 자체가 사라져 해소. 구현(#342): 단일 컬럼 키는 값 그대로이고 비교가 키 비교 표를 읽는다(F-342-01) — 인터페이스 §5 #342 상태.
 - **기각**: 카탈로그에서 로드 시 `key_type` 재계산(unpack 중 페이지 접근) — `INDX_INFO` 에 싣는다.
 
 ---
