@@ -375,7 +375,7 @@ _Avoid_: execute 직전 잔여 확정(이전 캠페인 용어), 세 번째 결�
 _Avoid_: 늦은 바인딩(행마다 결정)과 혼용, 타입만 게이트에서 정하고 collation 은 실행에 남기는 서술
 
 **collation 병합 (collation merge)**:
-문자 피연산자들의 collation 에서 하나의 공통 collation 을 고르는 규칙. 컴파일에서는 coercibility 레벨로(컬럼 > 식 > 리터럴 > 슬롯), 게이트에서는 피연산자 결정(바인드 값·게이트 칸·컴파일 도메인)의 collation 으로 현행 `LANG_RT_COMMON_COLL`(같으면 그것, 한쪽만 coercible 이면 다른 쪽, 둘 다 coercible 이면 ISO 바이너리, 둘 다 비-coercible 이면 충돌) 규칙대로 병합한다. 규칙 자체는 현행이다. 게이트가 정하는 것은 결과의 도메인 라벨(실행당 1회)이고, 문자 함수는 여전히 값끼리 병합하며 충돌 오류(-1150/-622)도 develop 처럼 행 계산이 낸다 — 병합이 실패한 노드는 결정 없음이다(D-338-02).
+문자 피연산자들의 collation 에서 하나의 공통 collation 을 고르는 규칙. 컴파일에서는 coercibility 레벨로(컬럼 > 식 > 리터럴 > 슬롯), 게이트에서는 피연산자 결정(바인드 값·게이트 칸·컴파일 도메인)의 collation 으로 현행 `LANG_RT_COMMON_COLL`(같으면 그것, 한쪽만 coercible 이면 다른 쪽, 둘 다 coercible 이면 ISO 바이너리, 둘 다 비-coercible 이면 충돌) 규칙대로 병합한다. 규칙 자체는 현행이다. 게이트가 정하는 것은 결과의 도메인 라벨(실행당 1회)이고, 문자 함수는 여전히 값끼리 병합하며 충돌 오류(-1150/-622)도 develop 처럼 행 계산이 낸다 — 병합이 실패한 노드는 값 없음이다(오류가 값보다 먼저 난다, #343). 행이 고르는 ELT 가지의 collation 이 서로 다르면 게이트가 이 규칙으로 가지들을 합쳐 문장에 하나로 정하고, 행은 고른 값을 그 도메인으로 바꾼다 — 합칠 수 없으면 실행 전 -1150(D-343-01, 사용자 결정, MySQL 의 ELT 와 같은 뜻).
 _Avoid_: LEAVE 계약(실행이 값을 보고 도메인을 정하는 현행 기법 — 제거 대상), 세션 collation 을 컴파일에 고정하는 서술(PG/MySQL 모델, 이 캠페인은 채택하지 않음), 충돌 오류를 게이트로 앞당긴다는 서술(D-322-01 의 초기 안 — Q2 로 대체)
 
 **형제 ENFORCE (sibling enforce)**:
@@ -383,7 +383,7 @@ _Avoid_: LEAVE 계약(실행이 값을 보고 도메인을 정하는 현행 기�
 _Avoid_: 하향 전파(previous-campaign 용어), 형제 미러와 혼용(타입 축), "컴파일 ENFORCE 로 슬롯 collation 이 확정된다"(값은 클라이언트가 보낸 그대로라 게이트가 값의 도메인을 기록한다, F-336-01)
 
 **collation 게이트 노드 (collation gate node)**:
-컴파일이 타입을 정했지만 collation 을 값에 맡긴(LEAVE) 또는 타입을 모르는 피연산자에 ENFORCE 한 문자 식 노드(`concat(?, ?)`, `upper(?)`, `to_char(dt, ?)`, CAST 래퍼, 문자 결과 함수). 로드 도출이 게이트 칸을 주고(`GATE | COLLATION_GATE`), 실행 게이트(G1)가 피연산자의 결정 도메인에 그 연산자가 값에 하는 규칙(병합·첫 문자 인자·서식 인자·LANG_SYS·분기, CAST LEAVE/ENFORCE)을 실행당 1회 적용해 타입·codeset·collation 을 정한다. precision 은 값이 정한다(floating, D-338-03). 병합이 실패하거나 행이 고르는 분기의 도메인이 다르면 결정 없음이고 행이 develop 대로 읽는다(D-338-02).
+컴파일이 타입을 정했지만 collation 을 값에 맡긴(LEAVE) 또는 타입을 모르는 피연산자에 ENFORCE 한 문자 식 노드(`concat(?, ?)`, `upper(?)`, `to_char(dt, ?)`, CAST 래퍼, 문자 결과 함수). 로드 도출이 게이트 칸을 주고(`GATE | COLLATION_GATE`), 실행 게이트(G1)가 피연산자의 결정 도메인에 그 연산자가 값에 하는 규칙(병합·첫 문자 인자·서식 인자·LANG_SYS·분기, CAST LEAVE/ENFORCE)을 실행당 1회 적용해 타입·codeset·collation 을 정한다. precision 은 값이 정한다(floating, D-338-03). 병합이 실패하면 값 없음이고 행 계산이 develop 처럼 오류를 낸다. 행이 고르는 분기의 도메인이 다르면, ELT 의 인덱스가 게이트에서 값(바인드·리터럴)일 때는 그 가지의 도메인이고 그 밖에는 가지 collation 을 합친 도메인이다(D-343-01) — 결정 없음은 없다(#343, D-338-02 대체).
 _Avoid_: 게이트 의존 노드(타입이 열린 노드 — 타입 축)와 혼용, 컴파일이 LEAVE 를 없앤다는 서술(컴파일은 develop 그대로, Q2), 실행이 첫 값으로 라벨을 정한다는 서술(S-02 는 결정을 읽는다)
 
 **피연산자 부류 (operand class)**:
