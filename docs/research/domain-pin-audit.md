@@ -23,8 +23,8 @@
 | S-06 | REGUVAL_LIST 행 도메인 확정 | 읽기 · 경계 | #340 | 행마다 자기 항목의 결정을 S-05 처럼 읽는다 | 게이트 `sql-20260924T145139Z-1311656` 17462/17462 · `medium-20260924T145139Z-1311657` 975/975 | S-05 와 같음 |
 | S-07 | 세션변수 읽기(`T_EVALUATE_VARIABLE`) | 읽기(게이트 노드, #336 S5) · X(D-336-E) | #336·#340 | 읽기가 결정을 벗어나면 그 읽기 비트를 켜고, 그 비트에 기대는 결정만 늦은 해석(읽기별 마스크 `slot_volatile_reads` × `changed_reads`). 표 재조회(D-325-10)는 쓰지 않는다 | 진단 전수 `sql-20260924T121845Z-1064659`·`medium-20260924T121845Z-1064660`: 29줄 전부 `bug_bts_4562` · 카운터 셀 [N-sv-change] 2, 그 밖 0 | — |
 | S-08 | `qdata_*_dbval` 값 타입 dispatch | 유지 | — | 연산 구현(결정 아님) | — | — |
-| S-09 | `eval_value_rel_cmp` rhs 제자리 coerce | 대기 | #352 | | | |
-| S-10 | `tp_value_compare_with_error (do_coercion=1)` 술어 호출 | 대기 | #352 | | | |
+| S-09 | `eval_value_rel_cmp` rhs 제자리 coerce | 삭제 | #352 | 비교 항마다 비교 기록(D-352-01): 로드 또는 G1 이 방향·목표·collation·실패 결과를 정하고, 상수 쪽은 G1 이 자기 값으로 1회 변환하거나 복사한다(공유 값은 그대로). 제자리 coerce 와 그 힙 전환 코드는 없다. 공유 바인드를 제자리에서 바꾸던 다른 읽기 두 곳(키 상한 리밋·ORDER BY LIMIT, F-352-14)도 지역 값으로 | 진단 전수 `sql-20260925T013259Z-2171250`·`medium-20260925T013259Z-2171251`(C2): 기록 있는 항의 develop 비교 0 · C3 진단 전수 `sql-20260925T021813Z-2287455`·`medium-20260925T021813Z-2287454`: 경계·그림자 불일치 0 · 게이트 `sql-20260925T023041Z-2398071` 17465/17465 · `medium-20260925T023041Z-2398072` 975/975(고정 배치, 코어 0) · 카운터 P1·P9-range-heap `Num_domain_coerce_compare` 0(p0·p24) | 기록 없는 XASL 항·게이트 상태 없는 게이트 칸 → `eval_value_rel_cmp` 경계 (b) assert + -1382 |
+| S-10 | `tp_value_compare_with_error (do_coercion=1)` 술어 호출 | 읽기 · 경계 · X(D-338-02 → #343, D-336-E, S-42 → #343) | #352 | 비교 kernel(DIRECT·CONVERT·COLLATIONS·OBJECT)을 기록에서 읽는다(D-352-02). IN/SOME/ALL 원소 비교도 계획한다(D-352-03): 리스트 열·스칼라 = 비교 기록, 상수 집합 = G1 이 원소 위치마다 결정·1회 변환, 행이 계산하는 컬렉션 = 원소 키 표(집합 함수는 피연산자 키, 집합 속성은 원소 도메인, 그 밖은 전 키, D-352-07). develop 비교는 지도 예외(게이트 미결정 D-338-02, 세션변수 D-336-E, 술어 스트림 S-42, set/list 비교 내부)에만 남고 셈이 붙는다 | C3 진단 전수 `sql-20260925T021813Z-2287455`·`medium-20260925T021813Z-2287454`: 남은 develop 비교 22줄 전부 술어 스트림(filtered index 술어, S-42), 경계·그림자 불일치 0 · 게이트 `sql-20260925T023041Z-2398071` 17465/17465 · `medium-20260925T023041Z-2398072` 975/975(고정 배치, 코어 0) · 카운터 P1·P9-range-heap·P7 `Num_domain_coerce_compare` 0, P6-in(IN 부분질의) 9,955,000 → 0 · `Num_planned_convert` 9,955,000(행 × 리스트 값 × 변환 1); P6-cte·P6-in L·P9-range-index 에 남은 셈은 B-tree 키 비교(`btree_compare_key`·`pr_midxkey_compare_element`, 셀마다 `Num_domain_key_coerce` 와 같음 → #342) | `eval_value_rel_cmp`: 사유 NULL/OPEN/UNPLANNED 에서 develop 이 값으로 정할 것이 있으면(형·문자열 collation 이 다름) assert + -1382 |
 | S-11 | `qexec_topn_cmpval` VARIABLE 폴백 | 읽기 · X(D-336-E) | #340 | 정렬 키마다 계획 도메인을 top-N 준비 때 1회 읽어 `cmpval` 을 직접 부른다(`qexec_topn_sort_domains`). 세션변수 읽기에 기대는 키는 값이 도메인을 벗어난 비교에서만 값 타입으로 비교 | 카운터 P4-topn `Num_domain_coerce_compare` 실행당 1,004,600 → 1(남은 1 = LIMIT 절 `qexec_check_limit_clause`, #352 인계) | — |
 | S-12 | `btree_compare_key` 비교 불가 폴백 | 대기(경계) | #342 | | | |
 | S-13 | `qfile_update_domains_on_type_list` | 대기 | #341 | | | |
@@ -53,7 +53,7 @@
 | S-36 | PX 행당 누산기 폴백 | 대기 | #343 | | | |
 | S-37 | `update_domains_on_type_list_by_val_list` | 대기 | #343 | | | |
 | S-38 | `qexec_clear_*` 원복 + `original_domain` 필드 | 대기 | #343 | | | |
-| S-39 | 힙 전환(qe 쪽 · qx 집계 쪽) | 대기 | #352(qe) · #341(qx) | | | |
+| S-39 | 힙 전환(qe 쪽 · qx 집계 쪽) | qe 삭제 · qx 대기 | #352(qe) · #341(qx) | qe: S-09 와 함께 없어졌다(상수는 G1 의 자기 값). qx 집계 쪽은 #341 | S-09 와 같음 | — |
 | S-40 | `db_to_char` 결과 도메인(INSERT 기본식) | 대기 | #343 | | | |
 | S-41 | PL/CSQL 바인드 선언 타입 | 해당 없음 | #339 | PL `?` = 사용자 `?`(D-339-01) | — | — |
 | S-42 | 필터·함수 인덱스 스트림 | 대기(경계) | #343 | | | |
