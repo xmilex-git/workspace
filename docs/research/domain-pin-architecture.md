@@ -149,7 +149,7 @@
 | `INSERT int_col ← ?` DATE 0행 | G1 | U0 대입 캐스트가 게이트에서 -494 — **결함 아님(#358)**: develop 도 클라이언트 캐스트가 -494 로 멈춘다(csql·JDBC). 0행은 #317 탐침 파서가 EXECUTE 오류를 놓친 측정 오류 |
 | `char(n)_col = ?` VARCHAR 값 NULL | CP+G1 | B7: 슬롯 VARCHAR 미러 + 게이트 문자화, 클라이언트 캐스트 삭제 |
 | `enum_col < ?` TIME 2행 | G1 | B14: 게이트 ENUM 변환 표 → 범위 밖 -494(값 A/B 뒤) — **슬롯 결함 아님(#358)**: 리터럴 `enum_col < time'…'` 과 같은 답(ENUM 라벨을 TIME 으로 바꿔 견준다) → 후속 [#360](https://github.com/xmilex-git/workspace/issues/360) |
-| `coalesce(cast(? as datetime), cast(? as datetime), ?)` 결과 도메인의 collation 플래그(L-19, 규칙표 C15·U13) | — | **develop 에 없음(#358)**: 이전 캠페인 변경의 산물이었다. 같은 문장에서 dpin 의 G1 공통값 결정이 NULL 인 상수 피연산자를 계획 도메인으로 읽어 develop 과 다르다 → [dpin-17g #364](https://github.com/xmilex-git/workspace/issues/364) |
+| `coalesce(cast(? as datetime), cast(? as datetime), ?)` 결과 도메인의 collation 플래그(L-19, 규칙표 C15·U13) | — | **develop 에 없음(#358)**: 이전 캠페인 변경의 산물이었다. 같은 문장에서 dpin 의 G1 공통값 결정이 NULL 인 상수 피연산자를 계획 도메인으로 읽어 develop 과 다르다 → [dpin-17g #364](https://github.com/xmilex-git/workspace/issues/364) 가 고쳤다(상수 부분트리의 값 도메인, G1 7단계) |
 
 ---
 
