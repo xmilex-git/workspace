@@ -388,6 +388,9 @@ ctp-runs:
 ctp-prune KEEP="3":
     #!/usr/bin/env bash
     set -eu
+    # A KEEP that is not a number (`just ctp-prune KEEP=3` passes the text "KEEP=3") fails the test below inside an
+    # `&&` list, which set -e does not stop, and every run would be deleted (2026-09-27).
+    case "{{KEEP}}" in ''|*[!0-9]*) echo "ERROR: KEEP must be a number: just ctp-prune 3 (got '{{KEEP}}')" >&2; exit 2 ;; esac
     root="$(bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/artifact_root.sh")"
     i=0
     for d in $(ls -dt "$root"/*-*Z-* 2>/dev/null); do
