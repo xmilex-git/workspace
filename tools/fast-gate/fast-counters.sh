@@ -34,6 +34,10 @@ SRC_BASE="$REPO/.git_ignored_dir/scratch/312-330/baseline-runtime"	# DomainBench
 DBNAME=dpin330bench
 DBPATH="$SRC_BASE/db/bench"		# the path databases.txt and the volume info record; each stack mounts over it
 BASE="$REPO/.git_ignored_dir/scratch/fast-gate/base"	# reflink snapshot of $DBPATH, every stack's database lower
+# The bench database carries a system metadata version (CBRD-26459): an engine with another SYSTEM_METADATA_VERSION
+# refuses to boot it (-1381). #357 recreated it from $SRC_BASE/bench/setup.sql with develop c63a3b993 and kept the
+# pre-version database and snapshot as db/bench.sysmeta0 and fast-gate/base.sysmeta0; after a version bump, run
+# `cubrid upgradedb` on $DBPATH (version 1 and later are upgradable) and move $BASE aside so the next run re-snapshots.
 URL="jdbc:cubrid:localhost:30000:$DBNAME:dba::"
 
 # ---------------------------------------------------------------------------------------------------------------
