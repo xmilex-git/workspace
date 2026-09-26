@@ -52,7 +52,7 @@
 | S-35 | PX 루트 역전파 | 삭제 | #343 | 리더는 스캔 전에, 워커는 상속한 결정으로 첫 행 전에 집계를 셋업한다(`qexec_setup_aggregate_domains`·`qexec_setup_parallel_aggregates`, #341). 워커가 행에서 정하던 집계는 D-338-02 뿐이었고(세션변수 읽기는 PX 가 막는다, `px_scan_checker`) #343 이 없앴으므로 워커가 넘길 도메인이 없다. 리더의 수집 뒤 첫 값 단계(`qexec_parallel_aggregate_first_values`, 워커 표본값 `dbvals_for_domain_resolve`)는 남는다 — 문자 MEDIAN/PERCENTILE 첫 값과 분류 못한 리터럴·바인드의 -1118(develop 답)만 확인하고 도메인을 정하지 않는다 | 게이트 `sql-20260925T172458Z-3882109` · `medium-20260925T172458Z-3882110`(고정 배치, 코어 0) · 카운터 t343-c1: `Num_domain_px_resolve` 전 셀 0(p0·p24) | 병합 자리 `assert` (리더 VARIABLE·워커 결정 조합 없음) |
 | S-36 | PX 행당 누산기 폴백 | 삭제 → 경계 | #343 | 셋업이 값을 보는 모든 함수에 첫 행 전에 누산기 도메인을 준다(COUNT·COUNT_STAR BIGINT, MIN/MAX/BIT/GROUP_CONCAT 함수 도메인, SUM/AVG 해석기 누산기, STDDEV/VARIANCE DOUBLE, JSON 집계 JSON — `qexec_setup_aggregate_domains`·`qexec_setup_aggregate_accumulators`). 도메인이 없는 함수는 NULL 만 보고(값 없는 결정) NULL 은 누산 전에 걸러진다 — 폴백 아홉 곳은 닿지 않는다 | 게이트 `sql-20260925T172458Z-3882109` · `medium-20260925T172458Z-3882110`(고정 배치, 코어 0) · 카운터 t343-c1: `Num_domain_px_resolve` 0 | `accumulator_domain_unresolved` → assert + -1383 |
 | S-37 | `update_domains_on_type_list_by_val_list` | 삭제 → 경계 | #343 | 함수와 두 호출 자리가 없다. XASL_SNAPSHOT 리스트는 val_list 도메인(`valp->dom`, 로드 `stream_to_xasl.c` 와 스포너만 쓴다)으로 열리므로 그 함수가 넣던 값은 열 때의 것과 같았다 — 튜플마다의 재대입과 닫을 때의 원자 재저장도 없다(열 때 1회 저장만). MERGEABLE_LIST 워커 리스트는 열 때 계획 도메인으로 타입을 받고(`qdata_get_valptr_type_list`) 첫 튜플 타입 지정(`qexec_type_open_list_columns`, `is_list_id_domain_resolved`)이 없다 — 행이 타입을 주는 열은 세션변수 읽기(D-336-E)뿐인데 PX 가 막는다 | 게이트 `sql-20260925T172458Z-3882109` · `medium-20260925T172458Z-3882110`(고정 배치, 코어 0) | 워커 리스트 열기 `list_columns_unresolved` → assert + -1383 |
-| S-38 | `qexec_clear_*` 원복 + `original_domain` 필드 | 대기 | [dpin-17c #355](https://github.com/xmilex-git/workspace/issues/355) (#343 범위 분리: 실행이 결정을 노드 필드에 쓰는 동안은 원복이 필요하다) | | | |
+| S-38 | `qexec_clear_*` 원복 + `original_domain` 필드 | 삭제 | [dpin-17c #355](https://github.com/xmilex-git/workspace/issues/355) | 실행은 플랜 노드의 도메인·연산자 타입에 쓰지 않는다. develop 이 노드에 쓰고 clear 에서 되돌리던 답(D-336-E 행 바인딩, 문자 LEAVE 노드의 첫 계산, 셋업이 주는 집계·분석·위치·출력 열 도메인)은 실행 상태의 노드 칸에 있고(D-355-01), 칸은 실행이 끝날 때까지 남아 develop 의 쓰기·원복 이력과 같다. 정렬 키는 실행이 소유한 사본이 계획 도메인을 받는다(D-355-02). 원복 5곳·`qexec_clear_pos_desc`·`qexec_clear_sort_list`, 로드 원본 저장·스포너 3곳·connect by 프로브 원본, `original_domain`/`original_opr_dbtype` 필드가 없다(D-355-08). 크기(develop → 지금): arith 72 · regu 104 · pos_descr 24 · agg 200 · analytic 368 로 모두 develop 과 같다. 항목 80B, `RESOLVED_DOMAIN` 64 → 56B | 진단(clear 가 스트림과 다른 노드 도메인을 만나면 한 줄) 전수 `sql-20260926T082150Z-1096762` · `medium-20260926T082150Z-1096763`: 0줄(그 전수의 실패 3건은 값 포인터가 집계의 칸을 공유한 탓이고 D-355-09 로 고쳤다) · 카운터 t355-c2 `Num_domain_restore_clone` 0(p0·p24) · 게이트 `sql-20260926T091558Z-1311661` 17475/17475 · `medium-20260926T091558Z-1311660` 975/975(고정 배치, #356 런과 같은 판정, 코어 0) · 카운터 `t355-g2` 가 `t356-c1` 과 모든 셀에서 같다(`Num_domain_restore_clone` 0) | — |
 | S-39 | 힙 전환(qe 쪽 · qx 집계 쪽) | 삭제 | #352(qe) · #341(qx) | qe: S-09 와 함께 없어졌다(상수는 G1 의 자기 값). qx: MEDIAN 첫 값의 캐스트는 전용 값에 한다 — 공유 바인드·캐시 열 값을 제자리에서 바꾸지 않음, `REGU_VARIABLE_CLEAR_AT_CLONE_DECACHE` 힙 전환 없음(#352 인계) | S-09 와 같음 · 게이트 `sql-20260925T055519Z-2824080` 17465/17465 · `medium-20260925T055519Z-2824079` 975/975(커밋 B, 고정 배치, 코어 0) | — |
 | S-40 | `db_to_char` 결과 도메인(INSERT 기본식) | 읽기(타입) | #343 | 포맷은 스키마가 든 리터럴이고 `db_make_string` 이 만든다 — 시스템 codeset·collation 의 VARCHAR. 그 타입이 결과 도메인이다(`qexec_default_format_domain`, 내용과 무관 — 로드가 리터럴을 타입으로 정하는 것과 같다). 값에서 도메인을 얻지 않는다 | 게이트 `sql-20260925T172458Z-3882109` · `medium-20260925T172458Z-3882110`(고정 배치, 코어 0) · optdebug 그림자 assert(값의 도메인과 같음) 0 — 기본식 TO_CHAR 를 쓰는 CTP 21 케이스(`issue_20399_default_ext` 16 등) | optdebug 그림자 assert |
 | S-41 | PL/CSQL 바인드 선언 타입 | 해당 없음 | #339 | PL `?` = 사용자 `?`(D-339-01) | — | — |
@@ -63,34 +63,36 @@
 
 26곳의 삭제는 [dpin-17c #355](https://github.com/xmilex-git/workspace/issues/355)의 몫이다(#343 범위 분리, 2026-09-26 — 쌍 조건은 실행이 결정을 노드 필드에 쓰는 동안 "이 실행에서 아직 열려 있음"을 가르므로 플랜 불변과 함께 지운다). #343 은 조건 안의 D-338-02 행 읽기를 없앴다 — 게이트가 모든 문자열을 정한다(D-343-01). 아래 "이 티켓 자리" 는 조건을 지우지 않고 그 안의 값 판정만 바꾼 티켓이다.
 
+**#355 결과.** "이 실행에서 아직 열려 있음" 은 적재가 답한 열림 비트와 이 실행의 노드 칸이 답한다(D-355-06): `qexec_node_open` = `DOMAIN_PLAN_OPEN` 이고 칸이 아직 도메인을 받지 않음, 리스트 위치의 값 서술자는 `DOMAIN_PLAN_OPEN_POSITION`(`qexec_position_open`). develop 이 묻던 필드가 어느 쪽인지 그대로 따른다 — S-18 은 regu, S-19 는 값 서술자, S-20 은 둘 중 하나. 컴파일 도메인을 묻는 조건(C-06·C-11), 노드나 함수의 이 실행 도메인(칸)을 묻는 조건(C-01 의 collation 쪽, C-19·C-20·C-22·C-23, C-04 의 리스트 타입 절반)은 실행이 쓰지 않는 값이나 실행 상태를 읽으므로 남는다(읽기).
+
 | # | 자리 | 부류 | 이 티켓 자리 | 판정 | 티켓 |
 |---|---|---|---|---|---|
-| C-01 | fe:4479 (S-02) | 연산자 결과 | #340 — 조건 안의 값 판정은 결정 읽기 | 대기 | #355 |
-| C-02 | fe:5226 (S-05) | 연산자 결과 | #340 — 조건 안의 값 판정은 결정 읽기 | 대기 | #355 |
-| C-03 | fe:5239 (S-06) | REGUVAL_LIST | #340 — 조건 안의 값 판정은 결정 읽기 | 대기 | #355 |
-| C-04 | lf:7082 (S-13) | 리스트 컬럼 | #341 — S-13 함수 삭제; 쌍 조건은 행이 주는 열의 검사로 `qexec_type_open_list_columns` 에 | 대기 | #355 |
-| C-05 | qx:1362 (S-24) | 리스트 컬럼 | #341 — 행마다가 아니라 셋업에서 1회(`qexec_type_accumulator_outputs`), 계획의 함수 도메인을 준다; 행이 정하는 집계만 결정이 날 때(#341 후속) | 대기 | #355 |
-| C-06 | qx:21193 (S-17) | 위치 서술자 | #341 — `qexec_plan_sort_list_domains`: 조건은 `qexec_consumer_domain` 의 컴파일 도메인 검사, 안은 계획 읽기 | 대기 | #355 |
-| C-07 | qx:21249 (S-18) | 위치 서술자 | #341 — `qexec_plan_group_by_domains` 의 위치·해시 키·출력 열 검사, 안은 계획 읽기 | 대기 | #355 |
+| C-01 | fe:4479 (S-02) | 연산자 결과 | #340 — 조건 안의 값 판정은 결정 읽기 | 읽기 — 노드의 이 실행 도메인(칸 ?: 컴파일)의 collation 쪽만 묻는다(타입이 열린 노드는 이 블록이 아니다) | #355 |
+| C-02 | fe:5226 (S-05) | 연산자 결과 | #340 — 조건 안의 값 판정은 결정 읽기 | 삭제 — `qexec_node_open` | #355 |
+| C-03 | fe:5239 (S-06) | REGUVAL_LIST | #340 — 조건 안의 값 판정은 결정 읽기 | 삭제 — `qexec_node_open` | #355 |
+| C-04 | lf:7082 (S-13) | 리스트 컬럼 | #341 — S-13 함수 삭제; 쌍 조건은 행이 주는 열의 검사로 `qexec_type_open_list_columns` 에 | 삭제(열 regu — `qexec_node_open`) · 읽기(리스트 타입 — 실행이 연 리스트의 열) | #355 |
+| C-05 | qx:1362 (S-24) | 리스트 컬럼 | #341 — 행마다가 아니라 셋업에서 1회(`qexec_type_accumulator_outputs`), 계획의 함수 도메인을 준다; 행이 정하는 집계만 결정이 날 때(#341 후속) | 삭제 — 출력 열 항목의 `DOMAIN_PLAN_OPEN` | #355 |
+| C-06 | qx:21193 (S-17) | 위치 서술자 | #341 — `qexec_plan_sort_list_domains`: 조건은 `qexec_consumer_domain` 의 컴파일 도메인 검사, 안은 계획 읽기 | 읽기 — 컴파일 도메인(키는 실행 소유 사본에 받는다, D-355-02) | #355 |
+| C-07 | qx:21249 (S-18) | 위치 서술자 | #341 — `qexec_plan_group_by_domains` 의 위치·해시 키·출력 열 검사, 안은 계획 읽기 | 삭제 — `qexec_node_open` | #355 |
 | C-08 | qx:21277 (S-18) | 위치 서술자 | #341 — S-18 함수와 함께 삭제(참조 열 도메인 검사) | 삭제 | #341 |
-| C-09 | qx:21405 (S-18) | 위치 서술자 | #341 — `qexec_plan_group_by_domains` 의 출력 열 검사(C-07 과 한 루프) | 대기 | #355 |
-| C-10 | qx:23137 (S-19) | 위치 서술자 | #341 — 조건 안의 판정은 계획 읽기 | 대기 | #355 |
-| C-11 | qx:27787 (S-11) | 정렬 키 | #340 — 계획 도메인 읽기 | 대기 | #355 |
-| C-12 | sm:8231 (S-20) | 리스트 스캔 | #341 — `scan_plan_list_scan_domains` 의 위치 검사, 안은 계획 읽기 | 대기 | #355 |
-| C-13 | sm:8254 (S-20) | 리스트 스캔 | #341 — C-12 와 한 루프(술어·나머지 regu 리스트) | 대기 | #355 |
+| C-09 | qx:21405 (S-18) | 위치 서술자 | #341 — `qexec_plan_group_by_domains` 의 출력 열 검사(C-07 과 한 루프) | 삭제 — `qexec_node_open` | #355 |
+| C-10 | qx:23137 (S-19) | 위치 서술자 | #341 — 조건 안의 판정은 계획 읽기 | 삭제 — `qexec_position_open` | #355 |
+| C-11 | qx:27787 (S-11) | 정렬 키 | #340 — 계획 도메인 읽기 | 읽기 — 플랜 정렬 목록의 컴파일 도메인 | #355 |
+| C-12 | sm:8231 (S-20) | 리스트 스캔 | #341 — `scan_plan_list_scan_domains` 의 위치 검사, 안은 계획 읽기 | 삭제 — `qexec_node_open` · `qexec_position_open` | #355 |
+| C-13 | sm:8254 (S-20) | 리스트 스캔 | #341 — C-12 와 한 루프(술어·나머지 regu 리스트) | 삭제 — `qexec_node_open` | #355 |
 | C-14 | sm:8287 (S-20) | 리스트 스캔 | #341 — `resolve_domains_on_list_scan` 과 함께 삭제(술어 피연산자는 비교 기록을 읽는다, #352) | 삭제 | #341 |
 | C-15 | sm:8293 (S-20) | 리스트 스캔 | #341 — C-14 와 같음 | 삭제 | #341 |
 | C-16 | qx:21328 (S-18) | 집계 | #341 — S-18 함수와 함께 삭제(집계는 스캔 전 셋업, S-23) | 삭제 | #341 |
 | C-17 | qx:21336 (S-18) | 집계 | #341 — C-16 과 같음 | 삭제 | #341 |
 | C-18 | qx:21440 (S-18) | 집계 | #341 — C-16 과 같음 | 삭제 | #341 |
-| C-19 | qx:21605 (S-23) | 집계 | #341 — S-23 함수 삭제; 같은 조건은 게이트 적용(`qexec_apply_aggregate_gate_domain`)과 행이 정하는 집계(`qexec_aggregate_row_first_value`)에 | 대기 | #355 |
-| C-20 | qa:1876 (S-25) | 집계 | #341 — 조건 안은 리스트 열 도메인 읽기 | 대기 | #355 |
+| C-19 | qx:21605 (S-23) | 집계 | #341 — S-23 함수 삭제; 같은 조건은 게이트 적용(`qexec_apply_aggregate_gate_domain`)과 행이 정하는 집계(`qexec_aggregate_row_first_value`)에 | 읽기 — 함수의 이 실행 도메인·연산자 타입(칸) | #355 |
+| C-20 | qa:1876 (S-25) | 집계 | #341 — 조건 안은 리스트 열 도메인 읽기 | 읽기 — 리스트 열 도메인(실행 소유 정렬 목록 사본) | #355 |
 | C-21 | qa:3343 (S-26) | 집계 | #341 — 늦은 바인딩 삭제, 함수 도메인의 분류·collation 경계 검사로 | 삭제 | #341 |
-| C-22 | qn:59 (S-29) | 분석·빠른 경로 차단 | #341 — 조건 안은 게이트 결정 읽기(차단 셈 제거) | 대기 | #355 |
-| C-23 | qn:188 (S-27) | 분석 | #341 — 조건 안은 게이트 결정; 행이 정하는 함수만 develop 바인딩(셈) | 대기 | #355 |
+| C-22 | qn:59 (S-29) | 분석·빠른 경로 차단 | #341 — 조건 안은 게이트 결정 읽기(차단 셈 제거) | 읽기 — 함수의 이 실행 도메인(칸) | #355 |
+| C-23 | qn:188 (S-27) | 분석 | #341 — 조건 안은 게이트 결정; 행이 정하는 함수만 develop 바인딩(셈) | 읽기 — 함수의 이 실행 도메인(칸) | #355 |
 | C-24 | sm:8240 (S-20 하위) | 집계 | #341 — `resolve_domain_on_regu_operand` 와 함께 삭제 | 삭제 | #341 |
 | C-25 | sm:8264 (S-20 하위) | 집계 | #341 — C-24 와 같음 | 삭제 | #341 |
-| C-26 | fe:5273 (S-05 FAST_PEEK) | 빠른 경로 차단 | #340 — S-05 가 결정을 읽은 뒤 빠른 경로가 켜진다 | 대기 | #355 |
+| C-26 | fe:5273 (S-05 FAST_PEEK) | 빠른 경로 차단 | #340 — S-05 가 결정을 읽은 뒤 빠른 경로가 켜진다 | 삭제 — FAST_PEEK 은 적재가 정하고, 열린 regu 는 칸이 도메인을 받은 뒤 인라인 경로를 탄다(`qexec_node_took_domain`, D-355-03) | #355 |
 
 좌표(fe/qx/lf/sm/qa/qn)는 `domain-pin-exec-sites.md` 작성 기준(develop `cad27172b`)이다. 지금 소스의 줄 번호는 다르다.
 
@@ -128,7 +130,7 @@ S 번호가 없는 develop 비교, 곧 `tp_value_compare_with_error` 가 타입�
 - 지금: 스캔이 첫 빌드 행 전에 키마다 규칙 하나를 정하고(`qdata_plan_hscan_keys`, D-356-01~03), 행은 그 규칙만 돌린다.
   - 규칙은 다섯이다. 복사, 계획된 변환기(`domain_lookup_coerce_converter` — `tp_value_coerce` 가 돌리는 셀, 컬렉션은 암묵 셀, D-356-04), `tp_value_coerce`(JSON 값, LEAVE·ENFORCE 문자 목표), 실패(열린 프로브 도메인: develop 과 같은 -181), 행(D-336-E 세션변수 식 키, `Num_domain_resolve_list` 셈).
   - 값 도메인은 계획의 것이다. 값 포인터 키는 S-20 이 연 생산자 위치의 도메인을 읽고, 그 밖의 키는 `qexec_consumer_domain` 을 읽는다.
-  - 프로브 도메인과 `need_coerce_type` 은 develop 이 읽던 regu 도메인이다. 첫 계산 전에는 컴파일 도메인이고, 뒤에는 게이트 결정이다. 그래서 재오픈 이력까지 develop 과 같다. 이 두 독자는 실행이 쓴 필드를 읽으므로, 쓰기를 멈추는 #355 가 넘겨받는다.
+  - 프로브 도메인과 `need_coerce_type` 은 develop 이 읽던 regu 도메인이다. 첫 계산 전에는 컴파일 도메인이고, 뒤에는 게이트 결정이다. 그래서 재오픈 이력까지 develop 과 같다. #355 뒤로 두 독자는 노드의 이 실행 칸을 읽는다(칸이 없으면 컴파일 도메인, D-355-01) — 이력은 그대로다(#356 인계, develop 답 유지).
   - 호출자 없던 `qdata_copy_hscan_key` 는 지웠다.
 - 경계 위치: 계획이 도메인을 주지 않는 빌드 키 → -1383(`qexec_domain_unresolved`).
 - 증거: 이 자리는 원래 셈이 없었다. 진단(DPIN356)으로 develop 의 판정 입력을 실측했다. TC `hash_scan_build_keys` 는 develop 과 바이트 단위로 같다. optdebug 그림자 검사(값 타입 == 계획 타입, 계획 변환의 결과·해시 == develop `tp_value_coerce`)는 게이트 전수에서 assert 0 이다(CTP `sql-20260926T055422Z-877680` 17475/17475 · `medium-20260926T055422Z-877679` 975/975).
@@ -153,3 +155,18 @@ S 번호가 없는 develop 비교, 곧 `tp_value_compare_with_error` 가 타입�
 **vd 없는 fetch(#341 인계 6).** 분석 PERCENTILE 비율(query_analytic.cpp 두 곳, query_executor.c 한 곳)은 실행의 vd 로 읽는다. 로드는 분석 비율 regu 를 걷는다. 보간 임시 regu(`qdata_get_interpolation_function_result`)는 타입이 정해진 리스트 열 도메인을 읽는다. 셋업이 그 리스트를 계획 도메인으로 열었고, D-336-E 열은 첫 튜플이 타입을 주었다. 그래서 fetch 가 도메인을 정할 일이 없다. `fetch_arith_gate_reading` 과 `fetch_row_reads_string_domain` 의 `vd == NULL` 가지는 경계 (b)(UNRESOLVED / false)가 됐다. 착수 진단 전수에서 vd 없는 fetch 셈은 0줄이었다.
 
 **종료 진단.** 같은 계측을 #354 트리에 얹은 전수(`sql-20260926T020322Z-112727` 17469/17469 · `medium-20260926T020322Z-112726` 975/975, 코어 0)에서 `Num_domain_coerce_compare` 셈은 0줄이다. D-336-E 줄도 0줄이다. 키 쌍 표와 비교 기록의 그림자 불일치·경계 assert 도 0건이다. 게이트: `sql-20260926T023234Z-247586` 17470/17470 · `medium-20260926T023234Z-247585` 975/975(고정 배치, 코어 0).
+
+## 4. 플랜 불변 — 실행 쓰기 중단 (#355, dpin-17c)
+
+판정: **삭제**(S-38, 쌍 조건 C 행 10곳 — C-04 는 열 regu 절반) · **읽기**(노드 칸, C 행 7곳과 C-04 의 리스트 타입 절반). 감사표의 대기는 S-43(#344)과 §3 훑기의 분석 보간 정렬 키(#362, #356 이 #355 뒤·#344 앞에 둔 티켓)만 남는다.
+
+- **노드 칸(D-355-01).** 실행 상태(`RESOLVED_DOMAIN_TABLE`)의 `taken`(도메인)·`taken_list`(MEDIAN/PERCENTILE 리스트 도메인)·`taken_type`(집계·분석 연산자 타입)에 노드마다 칸이 있다. 적재가 열린 컴파일 도메인의 regu·산술 노드·위치와 모든 집계·분석에 번호를 준다(항목의 `cell`). develop 의 쓰기 자리는 칸에 받고, 읽는 곳은 칸 ?: 컴파일 도메인을 읽는다(`qexec_node_domain` 등). 칸은 실행 동안 남아 develop 이 노드에 쓰고 마지막 clear 에서 되돌리던 이력과 같다. 실행의 주인 스레드만 쓴다.
+- **노드마다 자기 칸(D-355-09).** 값 포인터는 같은 컴파일 도메인의 생산자 항목을 공유해 그 결정을 읽는다. 그러나 develop 은 노드마다 따로 썼다 — 늦은 바인딩 AVG 는 피연산자 도메인(INTEGER)을 받았고 그 누산기 위 출력 열은 컴파일 DOUBLE 로 남았다. 한쪽이라도 칸이 있으면 소비자는 생산자 항목의 사본과 자기 칸을 받는다(`domain_publish_item_copies`). 첫 진단 전수의 실패 3건(`list_aggregate_probes`·`bug_2878_bit_group`·`agg_group_by`)이 이 공유였다.
+- **정렬 키(D-355-02).** 키의 계획 도메인은 실행이 소유한 정렬 목록 사본이 받는다(ORDER BY·GROUP BY·분석·S-25). 플랜의 목록은 바뀌지 않는다. 한 실행에서 다시 도는 정렬(상관 부질의)은 키를 다시 계획한다 — develop 은 첫 번이 쓴 키 도메인을 읽었다. 답은 같고, D-336-E 키의 `Num_domain_resolve_list` 만 다시 셀 수 있다.
+- **FAST_PEEK(D-355-03).** 적재가 정한다(스트림 적재: 고정 도메인의 안정 regu, 계획 적재: 바인드 참조와 열린 안정 regu). 열린 regu 는 칸이 도메인을 받은 뒤에만 인라인 경로를 탄다. 실행은 이 비트를 켜지도 끄지도 않는다.
+- **비교 기록(D-355-04)·항목(D-355-05).** FIELD·NULLIF·LEAST·GREATEST 의 비교 기록은 산술 노드가 아니라 항목에 있다(`compares`, 쓰이지 않던 `RESOLVED_DOMAIN.setdomain` 자리). 스트림 노드는 빈 항목을 받는다. `fail[3]` 은 `fail` 하나다(읽힌 것은 [0] 뿐). 항목은 80B 그대로다.
+- **PX(D-355-07).** 리더의 노드로 도는 워커는 칸을 복사하고, 자기 트리를 적재한 워커는 빈 칸에서 시작한다.
+- **읽는 곳 전수.** 필드 7개의 이름을 바꿔 1214 개 번역 단위를 문법 검사만으로 컴파일했다(493곳, 24 파일). 실행 쪽 독자는 모두 칸을 거치고, 나머지는 적재·컴파일·덤프·경계 메시지·고정 도메인이다. 첫 진단이 놓친 독자(출력 튜플 빌더, 테이블→집합, BIT 문자열 검사 셋, CUME_DIST 둘, 분석 DISTINCT 리스트 타입)는 이 전수로 찾았다.
+- **범위 밖 발견.** TO_NUMBER 는 도메인 객체의 precision·scale 을 바꾼다(develop, 노드 필드가 아님). `accumulator_domain`·`accumulator.shared_from`·집계 `option` 은 develop 그대로의 실행 상태 필드다(D-340-09 초기화 유지).
+- **재결정 셈 전수(티켓 게이트 "행당 결정 0").** 재결정 카운터 7종이 올라가는 26곳마다 한 줄을 찍는 빌드(추적과 무관, 커밋하지 않음)로 CTP 전수를 돌렸다: `sql-20260926T092526Z-1416694` 17475/17475 · `medium-20260926T092526Z-1416693` 975/975. 질의 실행의 셈은 D-336-E 케이스 여섯에만 있다 — `bug_bts_4562` 80 · `list_aggregate_probes` 37 · `hash_scan_build_keys` 15 · `fetch_gate_counters` 3 · `bug_bts_6605` 3 · `_02_addmonths` 3(한 SELECT 안에서 `@x1_year := …` 를 넣고 읽는다). 모두 세션변수 읽기가 문장 안에서 게이트 결정을 벗어나는 자리다. `Num_domain_key_coerce`·PX·원복 셈은 0 이다. `Num_domain_coerce_compare` 는 medium 의 첫 케이스 전 DB 적재 단계(develop 비교, 1074줄)에서만 셌다.
+- **증거.** 진단 전수 `sql-20260926T082150Z-1096762` · `medium-20260926T082150Z-1096763` 원복 줄 0 · 카운터 t355-c2 GATE PASS · 게이트 `sql-20260926T091558Z-1311661` 17475/17475 · `medium-20260926T091558Z-1311660` 975/975(고정 배치, #356 런과 같은 판정, 코어 0) · 카운터 `t355-g2` 가 `t356-c1` 과 모든 셀에서 같다(`Num_domain_restore_clone` 0) · 엔진 `f4b8b5e72`(fork/dpin).
