@@ -27,7 +27,7 @@
                      (나) 그 밖의 전부 → REGU_VARIABLE_GATE (계획 도메인 VARIABLE)
                      노드: 피연산자에 (나) 가 있으면 게이트 의존 노드(pt_is_op_gate_dependent, 컴파일 타입 VARIABLE)
 로드(서버)           domain_plan: (가) 는 고정 항목, (나) 는 슬롯 항목, 게이트 의존 노드는 gate_nodes 목록.
-                     경계 (a): 그 밖에 VARIABLE 이 남으면 -1382 (예외 X-1~X-5 만; X-8~X-10 은 #337, X-11 은 #338 이 없앰)
+                     경계 (a): 그 밖에 VARIABLE 이 남으면 -1383 (예외 X-1~X-5 만; X-8~X-10 은 #337, X-11 은 #338 이 없앰)
 게이트(G1)           슬롯 도메인 = 바인드 값의 도메인(tp_domain_resolve_value)
                      게이트 의존 노드 = domain_resolve(문맥, opcode, 피연산자 도메인들) — develop 의 값 격자 그대로
                      세션변수 읽기 = 실행 시작 시 저장값의 도메인
@@ -64,7 +64,7 @@ fetch                게이트 의존 노드는 G1 의 결정을 읽는다(문�
 | `parser/parse_tree_cl.c` | 캐시 키 `;host_var_cnt=N`(F-335-04 ②) | — |
 | `base/perf_monitor.h/.c`·`parser_support.c` | `Num_domain_bind_plan_mismatch` | — |
 | `query/query_executor.c/.h` | S5 게이트 노드(`qexec_resolve_gate_node` 의 `T_EVALUATE_VARIABLE`), 상수 참조 순회의 GATE/COLLATION_GATE 기록·불일치 카운터·assert, `RESOLVED_GATE_NODE` release 컴파일 | — |
-| `query/domain_plan.h/.c` | 플래그 확장·`DERIVED`·`COLLATION_GATE`, `domain_plan_check_load = true`, 예외표 X-1~X-5·X-8~X-11, `T_EVALUATE_VARIABLE` 게이트 노드, 검증·-1382 | — |
+| `query/domain_plan.h/.c` | 플래그 확장·`DERIVED`·`COLLATION_GATE`, `domain_plan_check_load = true`, 예외표 X-1~X-5·X-8~X-11, `T_EVALUATE_VARIABLE` 게이트 노드, 검증·-1383 | — |
 | `query/stream_to_xasl.c` | 로드 거부 해제 순서(`stx_free_visited_ptrs` 뒤 해제, SA 전역 NULL), VALUES 전-슬롯 행 GATE 복원 | — |
 | `query/fetch.c` | 게이트 의존 노드의 G1 결정 읽기(비문자·비 MySQL 호환), 그림자 assert 의 문자·NULL 결정 제외 | `fetch_convert_session_variable` 과 `T_EVALUATE_VARIABLE` 의 행 값 변환 → D-336-E 의 "타입이 다르면 늦은 해석" 으로 교체(`operand_class == OPERAND_VOLATILE` 노드는 피연산자 값 타입이 G1 결정과 같을 때만 결정을 읽는다; 다르면 develop 경로) |
 | `query/query_dump.c` | 플래그 `%03x` | — |

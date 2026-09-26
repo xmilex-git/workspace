@@ -273,9 +273,9 @@ struct dpin_key_plan
 ### 5.2 경계 (b) — 실행
 
 ```c
-#define ER_QPROC_DOMAIN_NOT_PLANNED                 -1382     /* error_code.h; ER_LAST_ERROR → -1383 */
+#define ER_QPROC_DOMAIN_NOT_PLANNED                 -1383     /* error_code.h; ER_LAST_ERROR → -1384 */
 /* cubrid.msg $set 5 */
-1382 Query domain was not fixed by the plan or the gate (query "%1$s", plan slot %2$d, node %3$s, domain %4$s).
+1383 Query domain was not fixed by the plan or the gate (query "%1$s", plan slot %2$d, node %3$s, domain %4$s).
 ```
 인자: `query_alias`(xasl_node) / 슬롯 ID 또는 -1 / `plan->slot_name[slot]`(없으면 kind 문자열) / `pr_type_name`. optdebug 는 같은 자리에 `assert (false)` 를 먼저 둔다(`#define DPIN_BOUNDARY(cond, xs, slot, node) do { if (!(cond)) { assert (false); er_set (…ER_QPROC_DOMAIN_NOT_PLANNED…); return ER_QPROC_DOMAIN_NOT_PLANNED; } } while (0)`).
 

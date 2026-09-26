@@ -263,7 +263,7 @@ row:    fetch/compare/key: node.derived → converter 직접 호출, 타입 판�
 
 ## 2.1 세 안 (병렬 설계, 각 안의 정본은 `domain-pin-interface-candidates/`)
 
-세 안 모두 전략 A 의 잠긴 결정(K1~K11) 안에서 만들어졌고, 다음은 **세 안이 독립적으로 같은 답에 이른 것**이라 사실상 확정으로 본다: `original_domain`/`original_opr_dbtype` 자리를 로드 도출 결과로 재사용(구조체 크기 불변) · 스트림 변경은 `REGU_VARIABLE_GATE = 0x4000` 비트 + `INDX_INFO.key_type`(`func_idx_col_id` 다음) 뿐 · 로드 도출 결과는 unpack arena 소유(트리와 같은 수명, 클론 풀 재사용 시 재도출 0) · 슬롯 ID 는 후위 트리 순회 1회로 부여(생산자 우선이 순회 순서에서 따라 나옴) · 바인드 값은 **참조(regu)마다** 변환값 자리를 갖고 공유 원 값은 불변(K9) · 게이트 표는 XASL_STATE 확장 · `qexec_deep_copy_xasl_state` 하나로 상속(pxt:648 경로 삭제) · 신설 오류 코드 -1382 · 클라이언트 캐스트·`pt_make_regu_hostvar` 2단계 삭제 · 도메인 해석기는 `query/` 전용.
+세 안 모두 전략 A 의 잠긴 결정(K1~K11) 안에서 만들어졌고, 다음은 **세 안이 독립적으로 같은 답에 이른 것**이라 사실상 확정으로 본다: `original_domain`/`original_opr_dbtype` 자리를 로드 도출 결과로 재사용(구조체 크기 불변) · 스트림 변경은 `REGU_VARIABLE_GATE = 0x4000` 비트 + `INDX_INFO.key_type`(`func_idx_col_id` 다음) 뿐 · 로드 도출 결과는 unpack arena 소유(트리와 같은 수명, 클론 풀 재사용 시 재도출 0) · 슬롯 ID 는 후위 트리 순회 1회로 부여(생산자 우선이 순회 순서에서 따라 나옴) · 바인드 값은 **참조(regu)마다** 변환값 자리를 갖고 공유 원 값은 불변(K9) · 게이트 표는 XASL_STATE 확장 · `qexec_deep_copy_xasl_state` 하나로 상속(pxt:648 경로 삭제) · 신설 오류 코드 -1383 · 클라이언트 캐스트·`pt_make_regu_hostvar` 2단계 삭제 · 도메인 해석기는 `query/` 전용.
 
 | | **α 최소 진입점** ([정본](domain-pin-interface-candidates/alpha-minimal-entry-points.md)) | **β 데이터 지향** ([정본](domain-pin-interface-candidates/beta-data-oriented.md)) | **γ 해석기 포트·어댑터** ([정본](domain-pin-interface-candidates/gamma-resolver-port.md)) |
 |---|---|---|---|
@@ -460,7 +460,7 @@ px_query_executor.cpp:48 / px_query_task.cpp:123 / pxt:648 → qexec_deep_copy_x
 
 필터/함수 인덱스: `stx_map_stream_to_filter_pred`/`_func_pred` 가 `xplan_derive (…, XPLAN_KIND_PRED)` — GATE 비트 하나라도 있으면 거부. `fpcache_claim`(filter_pred_cache.c:355~416)의 `NO_ERROR + NULL` 삼킴(S-42)은 오류 전파로 수정.
 
-**(b) 실행.** `ER_QPROC_DOMAIN_UNRESOLVED = -1382`(`error_code.h`, `ER_LAST_ERROR` → -1383), `msg/*/cubrid.msg` `$set 5`: `1382 Domain of a query node is unresolved at %1$s (query %2$s, node %3$d, domain %4$s).` 인자 = phase("load"/"execute"), `xasl->query_alias`(없으면 `qp_xasl_line`), 항목 인덱스(`item_name`), 도메인 이름. optdebug 는 같은 자리에 `assert`. 설치 자리: `qdata_get_valptr_type_list`, `fetch_peek_dbval_slow` 옛 VARIABLE 분기, `btree_compare_key` 폴백, `eval_value_rel_cmp` coercion 자리, 집계 첫값 대기 자리, `scan_dbvals_to_midxkey` 재추론 자리 + I2 assert. 각 자리는 #324 카운터와 1:1. **재컴파일 트리거 제외**: db_vdb.c:2277(·1102·2174·2218·2314·2390·2537), cas_execute.c:1188·1502·2376, cas_common_execute.c:364, method_callback.cpp:276, trigger_manager.c:4971 — 어디에도 넣지 않는다(D-318-04).
+**(b) 실행.** `ER_QPROC_DOMAIN_UNRESOLVED = -1383`(`error_code.h`, `ER_LAST_ERROR` → -1384), `msg/*/cubrid.msg` `$set 5`: `1383 Domain of a query node is unresolved at %1$s (query %2$s, node %3$d, domain %4$s).` 인자 = phase("load"/"execute"), `xasl->query_alias`(없으면 `qp_xasl_line`), 항목 인덱스(`item_name`), 도메인 이름. optdebug 는 같은 자리에 `assert`. 설치 자리: `qdata_get_valptr_type_list`, `fetch_peek_dbval_slow` 옛 VARIABLE 분기, `btree_compare_key` 폴백, `eval_value_rel_cmp` coercion 자리, 집계 첫값 대기 자리, `scan_dbvals_to_midxkey` 재추론 자리 + I2 assert. 각 자리는 #324 카운터와 1:1. **재컴파일 트리거 제외**: db_vdb.c:2277(·1102·2174·2218·2314·2390·2537), cas_execute.c:1188·1502·2376, cas_common_execute.c:364, method_callback.cpp:276, trigger_manager.c:4971 — 어디에도 넣지 않는다(D-318-04).
 
 ## 2.7 클라이언트 경로
 
@@ -492,7 +492,7 @@ px_query_executor.cpp:48 / px_query_task.cpp:123 / pxt:648 → qexec_deep_copy_x
 | X | ~~F10~~ | 없음(D-335-10, X-7 폐기) |
 | collation | #314 §4 26곳(fe:4479 5226 5239 · lf:7082 qx:1362 21193 21249 21277 21405 23137 27787 sm:8231 8254 8287 8293 · qx:21328 21336 21440 21605 qa:1876 3343 qn:59 188 sm:8240 8264 · fe:5273 `qdata_agg_is_plain_sum_avg`) + `qfile_unify_types` -1509 분기·`qexec_end_one_iteration` 플래그 분기 | `xgate_entry.domain` 의 collation_flag 항상 NORMAL(C3 병합은 G1 ③) — 쌍 조건 두 축이 함께 |
 
-**테스트 표면 = 인터페이스.** (T1) 포트 단위(`unit_tests/query/test_domain_resolver.cpp`): 규칙표 행마다 케이스 1개 — §2 A-행(ARITH), §3 B-행(COMPARE/KEY_ELEM), §4 U/F/S/X 행, §6 C-행(coll_id) — 입력 (ctx, opcode, operand[], consumer_dom), 기대 (dom, coll, conv, fail, err); asis-matrix 셀 라벨을 케이스 이름으로 → 게이트 CTP diff 가 나면 같은 이름의 포트 테스트가 먼저 깨진다. `dres_vs_parser_grid`: 규칙표 C 행을 고정 데이터로 두고 서버 `resolve()` 와 asis-matrix 실측(파서 답)을 대조 — 파서를 서버 테스트에 링크하지 않는다. (T2) 로드 도출 결정성: 같은 스트림을 세 경로로 로드해 `items[]` 의 (cls, slot, ref, val_pos) 비교(I4 상시 assert + 단위). (T3) G1 단위: 합성 XPLAN + 값 배열 → `vals/table`(R1·R2, KEEP, NULL 정책, GATE collation 병합 -1150). (T4) 경계: VARIABLE 스트림 → -1382, PRED+GATE → -1382. (T5) 행동: 규칙 셀·§7·CTP sql 전수+medium(optdebug). (T6) 카운터 8종 = 0.
+**테스트 표면 = 인터페이스.** (T1) 포트 단위(`unit_tests/query/test_domain_resolver.cpp`): 규칙표 행마다 케이스 1개 — §2 A-행(ARITH), §3 B-행(COMPARE/KEY_ELEM), §4 U/F/S/X 행, §6 C-행(coll_id) — 입력 (ctx, opcode, operand[], consumer_dom), 기대 (dom, coll, conv, fail, err); asis-matrix 셀 라벨을 케이스 이름으로 → 게이트 CTP diff 가 나면 같은 이름의 포트 테스트가 먼저 깨진다. `dres_vs_parser_grid`: 규칙표 C 행을 고정 데이터로 두고 서버 `resolve()` 와 asis-matrix 실측(파서 답)을 대조 — 파서를 서버 테스트에 링크하지 않는다. (T2) 로드 도출 결정성: 같은 스트림을 세 경로로 로드해 `items[]` 의 (cls, slot, ref, val_pos) 비교(I4 상시 assert + 단위). (T3) G1 단위: 합성 XPLAN + 값 배열 → `vals/table`(R1·R2, KEEP, NULL 정책, GATE collation 병합 -1150). (T4) 경계: VARIABLE 스트림 → -1383, PRED+GATE → -1383. (T5) 행동: 규칙 셀·§7·CTP sql 전수+medium(optdebug). (T6) 카운터 8종 = 0.
 
 ## 2.10 렛저 대응표
 
@@ -505,7 +505,7 @@ px_query_executor.cpp:48 / px_query_task.cpp:123 / pxt:648 → qexec_deep_copy_x
 | L-43 | 누산기·분석 = `xplan_acc` 항목(ALIAS/GATE, ctx AGG/ANALYTIC), 첫값 블록 삭제 |
 | L-45 | §2.5 (a) 로드/G1 1회 (b) K=EXEC·S=RANGE (c) elems1/elems2 (d) pair (e)(f) `asc_key_type`←`INDX_INFO.key_type` (g) setdomain 은 게이트 표 소유 |
 | L-46 | `gate.owner`, 값·표 깊은 복사 하나(pxt:648 교체), 워커 결정 0(EXEC 스코프 호출 assert), S-39 힙 전환 소멸 |
-| L-48 | X-1~X-7 를 도출 코드 옆에, `fpcache_claim` 삼킴 수정, -1382 + 재컴파일 트리거 제외 |
+| L-48 | X-1~X-7 를 도출 코드 옆에, `fpcache_claim` 삼킴 수정, -1383 + 재컴파일 트리거 제외 |
 | L-49 | I2(값 타입 = 계획 도메인, KEEP 은 표에 기록), S-33 KEEP, B33 auto-param 은 K 참조로 실제 변환 |
 
 ## 2.11 cpp-perf-rules 인용
@@ -524,7 +524,7 @@ BR-04·A59·A62(불변 도출을 루프 밖·로드 1회로: cls·FETCH_ALL_CONS
 | D-323-06 | PX 상속 = 값·표 **깊은 복사**(D-318-06 문자 그대로), 한 블록 64B 정렬, `owner` assert, 워커의 EXEC 스코프 호출 assert | α 의 표 읽기 전용 공유는 루트 해제 순서에 계약을 하나 더 만든다(L-46 부류) |
 | D-323-07 | 술어 노드는 항목 없음(I6): 변환기는 피연산자 regu 항목 `conv[0]`, 비교 도메인은 K regu 의 KEEP_LAZY 슬롯 / 정적 답 | `comp_eval_term` 24B union·디스크 포맷이라 자리 없음(F-323-17) |
 | D-323-08 | G2·range = `xgate_apply(BLOCK|RANGE)` 스코프; S 키 keep 경로 setdomain 은 로드가 arena 에 미리 | 별도 진입점(β/γ)은 호출자가 잊는 사고 부류 |
-| D-323-09 | 경계 오류 `ER_QPROC_DOMAIN_UNRESOLVED = -1382`(phase·query·node·domain), 예외 표 X-1~X-7 | 이름 후보 `DOMAIN_NOT_PLANNED`·`UNRESOLVED_DOMAIN` |
+| D-323-09 | 경계 오류 `ER_QPROC_DOMAIN_UNRESOLVED = -1383`(phase·query·node·domain), 예외 표 X-1~X-7 | 이름 후보 `DOMAIN_NOT_PLANNED`·`UNRESOLVED_DOMAIN` |
 | D-323-10 | PL 선언 타입 = `parser->host_var_decl_domains[]` 별도 배열(형제 취급) + prepare 요청 wire 배열 | expected_domains 선점(β)은 tc:8617 이 덮어씀; hvs 재사용(γ)은 mode 의미 혼용 |
 | D-323-11 | 트레이스 = qdump 전부 + trace JSON **변경 없음**(관찰은 #324 카운터) | (b)/(c) 는 트레이스 TC expected 갱신 |
 | D-323-12 | 실패 정책 3종(ERROR_494/NULL_IF_PRM/KEEP); 대입 반올림은 `lookup(…, ASSIGN)` 의 변환기 선택 | α 의 ROUND 정책 |

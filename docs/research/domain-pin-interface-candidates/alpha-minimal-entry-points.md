@@ -174,7 +174,7 @@ pxt:648                                              → 위 함수로 교체
 
 필터/함수 인덱스: `stx_map_stream_to_filter_pred`/`_func_pred` 가 `xplan_derive (…, XPLAN_KIND_PRED)` 를 부르고, GATE 비트가 하나라도 있으면 거부. `fpcache_claim`(filter_pred_cache.c:355~416)은 `stx_map_stream_to_filter_pred` 오류를 `NO_ERROR + NULL` 로 삼키지 않고 그대로 반환하도록 고친다(S-42).
 
-**(b) 실행 경계.** 신설 코드 **`ER_QPROC_DOMAIN_UNRESOLVED = -1382`**(`ER_LAST_ERROR` → -1383), `cubrid.msg $set 5`: `1382 Domain of a query node is unresolved at %1$s (query %2$s, node %3$d, domain %4$s).` 인자 = phase("load"/"execute"), `xasl->query_alias`(없으면 `qp_xasl_line`), 항목 인덱스, 도메인 이름. optdebug 는 같은 자리에 `assert`. 설치 자리(D-318 결정 3): `qdata_get_valptr_type_list`, `fetch_peek_dbval_slow` 의 옛 VARIABLE 분기 자리, `btree_compare_key` 폴백 자리, `eval_value_rel_cmp` coercion 자리, 집계 첫값 대기 자리, `scan_dbvals_to_midxkey` 전략 재추론 자리 + I2 assert(`xgate_apply` 끝). 재컴파일 트리거 목록 — vdb:2277(`RECOMPILE_REQUESTED | INVALID_XASLNODE | RESULT_CACHE_INVALID`), vdb:1102·2174·2314·2390·2537, cas_execute.c:1188·1502·2376, cas_common_execute.c:364, trigger_manager.c:4971, mc:276 — 어디에도 **넣지 않는다**(조용한 재컴파일 금지, D-318-04). 클라이언트는 이 코드를 일반 오류로 사용자에게 올린다.
+**(b) 실행 경계.** 신설 코드 **`ER_QPROC_DOMAIN_UNRESOLVED = -1383`**(`ER_LAST_ERROR` → -1384), `cubrid.msg $set 5`: `1383 Domain of a query node is unresolved at %1$s (query %2$s, node %3$d, domain %4$s).` 인자 = phase("load"/"execute"), `xasl->query_alias`(없으면 `qp_xasl_line`), 항목 인덱스, 도메인 이름. optdebug 는 같은 자리에 `assert`. 설치 자리(D-318 결정 3): `qdata_get_valptr_type_list`, `fetch_peek_dbval_slow` 의 옛 VARIABLE 분기 자리, `btree_compare_key` 폴백 자리, `eval_value_rel_cmp` coercion 자리, 집계 첫값 대기 자리, `scan_dbvals_to_midxkey` 전략 재추론 자리 + I2 assert(`xgate_apply` 끝). 재컴파일 트리거 목록 — vdb:2277(`RECOMPILE_REQUESTED | INVALID_XASLNODE | RESULT_CACHE_INVALID`), vdb:1102·2174·2314·2390·2537, cas_execute.c:1188·1502·2376, cas_common_execute.c:364, trigger_manager.c:4971, mc:276 — 어디에도 **넣지 않는다**(조용한 재컴파일 금지, D-318-04). 클라이언트는 이 코드를 일반 오류로 사용자에게 올린다.
 
 ---
 
@@ -225,7 +225,7 @@ XCONV_FN xconv_lookup (DB_TYPE src, const TP_DOMAIN *dst, XFAIL_POLICY fail);   
 | X | F10 `median(varchar_col)` | 항목 정적(DOUBLE 시도 캐스트는 실행 결정 잔존으로 명시, 경계 예외 목록에 처음부터) |
 | collation | #314 §4 26곳(fe:4479 5226 5239 · lf:7082 qx:1362 21193 21249 21277 21405 23137 27787 sm:8231 8254 8287 8293 · qx:21328 21336 21440 21605 qa:1876 3343 qn:59 188 sm:8240 8264 · fe:5273 qn:59 `qdata_agg_is_plain_sum_avg`) | 쌍 조건의 두 축이 함께 사라진다: `XGATE_ENTRY.domain` 의 collation_flag 는 항상 NORMAL(C3 병합은 G1 ③) |
 
-**테스트 표면 = 인터페이스.** (T1) 로드 도출 결정성: 같은 스트림을 xcache 클론·비캐시·PX 워커 경로로 로드해 `items[]` 의 (cls, slot, ref, val_pos) 를 비교 — 워커 진입 assert(I4)를 상시 검사로 두고, 단위 테스트는 `stx_map_stream_to_xasl` 에 캡처한 스트림(CTP 셀 5종)을 두 번 로드해 동치 확인. (T2) G1 단위: 합성 XPLAN + 바인드 배열 → `vals/table` 기대값(다중 참조 R1·R2, KEEP, NULL 정책, GATE 슬롯 collation 병합 -1150). (T3) 경계: VARIABLE 노드가 든 스트림 → -1382; PRED 종류 + GATE 비트 → -1382. (T4) 행동 표면: #317 규칙 셀(17타입×6상황×5경로)·§7 답안 변경 목록·CTP sql 전수+medium(optdebug). (T5) 도달 0: #324 카운터 8종 = 0(경계 위치와 1:1).
+**테스트 표면 = 인터페이스.** (T1) 로드 도출 결정성: 같은 스트림을 xcache 클론·비캐시·PX 워커 경로로 로드해 `items[]` 의 (cls, slot, ref, val_pos) 를 비교 — 워커 진입 assert(I4)를 상시 검사로 두고, 단위 테스트는 `stx_map_stream_to_xasl` 에 캡처한 스트림(CTP 셀 5종)을 두 번 로드해 동치 확인. (T2) G1 단위: 합성 XPLAN + 바인드 배열 → `vals/table` 기대값(다중 참조 R1·R2, KEEP, NULL 정책, GATE 슬롯 collation 병합 -1150). (T3) 경계: VARIABLE 노드가 든 스트림 → -1383; PRED 종류 + GATE 비트 → -1383. (T4) 행동 표면: #317 규칙 셀(17타입×6상황×5경로)·§7 답안 변경 목록·CTP sql 전수+medium(optdebug). (T5) 도달 0: #324 카운터 8종 = 0(경계 위치와 1:1).
 
 ---
 
@@ -249,5 +249,5 @@ XCONV_FN xconv_lookup (DB_TYPE src, const TP_DOMAIN *dst, XFAIL_POLICY fail);   
 | L-43 | 누산기·분석 = `xplan_acc` 항목(ALIAS/GATE), 첫값 블록 삭제(S-23·S-27·S-28·S-36), 경계 (b) |
 | L-45 | §4 (a) 전략은 로드/G1 1회 (b) K=EXEC·S=RANGE (c) KEY1/KEY2 항목 분리 (d) `pair` (e)(f) `key_type` 스트림 (g) setdomain 은 게이트 표 소유 |
 | L-46 | §1.5 소유 스레드·해제 시점, `qexec_deep_copy_xasl_state` 하나(pxt:648 교체), 워커 결정 0(표 읽기 전용), S-39 힙 전환 소멸 |
-| L-48 | §5 예외 표 X-1~X-6 를 도출 코드 옆에, `fpcache_claim` 삼킴 수정, 실행 경계 = 신설 코드 -1382 |
+| L-48 | §5 예외 표 X-1~X-6 를 도출 코드 옆에, `fpcache_claim` 삼킴 수정, 실행 경계 = 신설 코드 -1383 |
 | L-49 | I2 불변식(값 타입 = 계획 도메인, KEEP 은 표에 기록), S-33 KEEP, B33 auto-param 은 K 참조로 실제 변환 |

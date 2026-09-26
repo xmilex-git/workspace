@@ -1,5 +1,5 @@
 ---
-status: accepted (amended 2026-09-24 by #335 D-335-10 — see "Amendment")
+status: accepted (amended 2026-09-24 by #335 D-335-10 — see "Amendment"; error number reassigned 2026-09-26 by #357)
 date: 2026-09-22
 locked-by: xmilex-git/workspace#320 (2026-09-22)
 ---
@@ -19,7 +19,8 @@ locked-by: xmilex-git/workspace#320 (2026-09-22)
 
 - `original_domain`/`original_opr_dbtype` 필드와 클론 원복 5곳·PX 스폰 원본 저장 3곳·워커→루트 역전파가 통째로 사라진다(G-02·G-06). 그 자리는 `domain_plan` 포인터가 재사용한다(D-323-13, 구조체 크기 불변 MEM-02). **구현 순서상** 이 필드 제거는 실행 지점이 플랜 도메인에 쓰기를 멈춘 뒤(삭제 티켓 마지막)에만 가능하다 — 그 전에 원복을 지우면 플랜 캐시 클론이 오염된다.
 - `pt_make_regu_hostvar` 의 2단계(바인드 값 타입을 도메인으로)와 바인드 피크 재계획의 값 타입 도메인은 삭제된다 — 클라이언트에 숨어 있던 세 번째 결정 지점(D-318-05). 재계획은 값을 비용 추정에만 쓴다.
-- 미확정 도메인에 닿으면 전용 오류 `ER_QPROC_DOMAIN_UNRESOLVED = -1382`(로드 경계 (a): `stx_build_domain_plan` 끝, 예외 표 X-1~X-7 정적 배열; 실행 경계 (b): 설치 자리 6곳 = #324 카운터와 1:1) + optdebug assert. `ER_QPROC_INVALID_XASLNODE` 재사용은 기각 — 클라이언트가 그 코드를 받으면 조용히 재컴파일·재실행해 위반을 숨긴다(db_vdb.c:2277, D-318-04, D-323-09). 재컴파일 트리거 목록에 넣지 않는다. 필터/함수 인덱스 스트림은 GATE 비트가 하나라도 있으면 로드 거부, `fpcache_claim` 오류 삼킴은 전파로.
+- 미확정 도메인에 닿으면 전용 오류 `ER_QPROC_DOMAIN_UNRESOLVED = -1383`(로드 경계 (a): `stx_build_domain_plan` 끝, 예외 표 X-1~X-7 정적 배열; 실행 경계 (b): 설치 자리 6곳 = #324 카운터와 1:1) + optdebug assert. `ER_QPROC_INVALID_XASLNODE` 재사용은 기각 — 클라이언트가 그 코드를 받으면 조용히 재컴파일·재실행해 위반을 숨긴다(db_vdb.c:2277, D-318-04, D-323-09). 재컴파일 트리거 목록에 넣지 않는다. 필터/함수 인덱스 스트림은 GATE 비트가 하나라도 있으면 로드 거부, `fpcache_claim` 오류 삼킴은 전파로.
+- **번호 재배정(2026-09-26, #357)**: develop `9ee8bac8b`(CBRD-26459 upgradedb)가 -1381·-1382 를 먼저 써서, develop 재기반 때 `ER_QPROC_DOMAIN_UNRESOLVED` 를 -1383 으로 옮겼다(`ER_LAST_ERROR` -1384). 이름·설치 자리·메시지 인자는 그대로이고, 엔진 코드는 이름으로만 쓴다.
 - ~~실행 결정 잔존 X(`median(varchar_col)`·`percentile_* … order by varchar_col`)는 예외 표 X-7 에 RESIDUAL 로 둔다(D-317-15).~~ **Amendment(2026-09-24, #335 D-335-10, 사용자 선택)**: 잔존 X 는 없다 — 게이트가 값을 갖지 않는 문자 인자는 타입으로 정한다(MEDIAN/PERCENTILE 문자 컬럼·식 → 컴파일 DOUBLE, ADDTIME 문자 → 컴파일 VARCHAR, 게이트 의존 문자 식은 해석기가 같은 답), RESIDUAL 표시와 X-7 은 삭제. 답안 변경은 규칙표 §7 D-335-10 행(날짜·시간 문자열 컬럼의 MEDIAN/PERCENTILE → -1118). 결정 원문: [#335 D-335-10](https://github.com/xmilex-git/workspace/issues/335#issuecomment-5797393992).
 - **구현 주석(2026-09-24, #337)**: 파생 소비자(값 포인터·리스트 위치·정렬 키·집합 연산/CTE 리스트 컬럼·누산기·distinct/정렬 리스트)의 도메인은 로드 도출이 생산자에서 싣는다 — 생산자가 게이트 확정이면 그 칸(ALIAS), 컴파일 확정이면 그 도메인. 누산기와 리스트 type_list 는 스트림 필드가 아니어서 로드 도출과 실행 시작 셋업의 몫이고(L-41·L-43), 결정 지점은 그대로 둘이다. 로드 예외 표는 X-1~X-5·X-11(인터페이스 §6).
 - **구현 주석(2026-09-24, #338 — 사용자 결정 Q2 "답은 develop, collation 도 게이트가 값에서 정한다")**: collation 축에서는 본문의 "컴파일이 `TP_DOMAIN_COLL_LEAVE` 0" 을 쓰지 않는다. 컴파일은 develop 의 collation 추론을 그대로 두어 스트림에 LEAVE·ENFORCE 가 남고(VARIABLE 이 GATE 비트와 함께 남는 것과 같은 자리), 로드 도출이 그 문자 항목을 모두 게이트 칸으로 덮는다 — 바인드 슬롯은 값 도메인을 기록하는 `COLLATION_GATE` 슬롯, 문자 식 노드는 G1 이 피연산자 결정과 연산자의 실행 규칙으로 정하는 collation 게이트 노드, 파생 소비자는 생산자 칸(D-338-01). 결정 지점은 그대로 둘이다. 경계 (a) 는 두 축 모두 엄격하다(X-11 삭제, 예외 표 X-1~X-5). 병합 실패·행이 고르는 분기는 결정 없음이라 행이 develop 대로 오류를 내거나 읽고(D-338-02), 문자 결과의 precision 은 값이 정한다(D-338-03, 사용자 승인 — 답 변화는 리스트 파일을 거친 컬럼의 `typeof()` precision 표시뿐). 결정 원문: [#338 해소](https://github.com/xmilex-git/workspace/issues/338).

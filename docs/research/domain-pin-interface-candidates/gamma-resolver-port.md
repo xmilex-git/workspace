@@ -168,7 +168,7 @@ xasl_state *qexec_deep_copy_xasl_state (THREAD_ENTRY *, xasl_state *);   // 기�
 qexec_execute_query (qx:17456)
   xasl_state.vd.dbval_ptr = dbval_ptr (const 유지) … sys_datetime 형성        qx:17578~17595
   ★ dgate_run_g1 (thread_p, xasl, &xasl_state)     ← 유일한 결정 지점 (G-01: aptr 실행·PX clone·sq_get 전)
-      실패: -494 계열/-1150/-622/-1382 → query_error (행 중간 오류 없음)
+      실패: -494 계열/-1150/-622/-1383 → query_error (행 중간 오류 없음)
   qexec_execute_mainblock (…)
     qexec_execute_mainblock_internal (qx:16150)
       aptr_list 실행 (qx:16538~)  — 하위 블록도 같은 xasl_state → 같은 게이트 표를 읽는다
@@ -219,7 +219,7 @@ SA_MODE: `dbval_ptr` 가 `parser->host_variables` 자체(qm:1441)여도 G1 은 �
 
 필터/함수 인덱스 스트림(`stx_map_stream_to_filter_pred`/`_func_pred`): GATE 비트가 하나라도 있으면 `ER_QPROC_UNRESOLVED_DOMAIN` 로 로드 거부; `fpcache_claim`(filter_pred_cache.c:408~416)이 `stx_map_stream_to_filter_pred` 오류를 `NO_ERROR` 로 삼키는 것(S-42)을 오류 전파로 수정.
 
-**(b) 실행 경계** — 신설 오류 코드 **`ER_QPROC_UNRESOLVED_DOMAIN = -1382`**(`error_code.h`, `ER_LAST_ERROR` → -1383), `cubrid.msg` `$set 5` `1382 Domain of XASL node is unresolved at execution (query %1$s, node %2$s, slot %3$d, domain %4$s).` 인자 = query_id 또는 xasl id 문자열, `DPLAN_SLOT.node_kind`+SHOW PLAN 위치, slot_id, 도메인 이름. 재컴파일 트리거에 넣지 않는다: db_vdb.c:2277·2174·1102, cas_execute.c:1188·1502·2376, cas_common_execute.c:364, method_callback.cpp:276, trigger_manager.c:4971 목록 불변(코드가 다르므로 자동). optdebug 는 `assert_release` 가 아니라 `assert` + 같은 코드 반환. 경계 자리: `qdata_get_valptr_type_list`(qo:6799, 리스트 컬럼 VARIABLE), `fetch_peek_dbval_slow` VARIABLE 분기 자리(fe:5225), `btree_compare_key` 폴백(bt:22095), `eval_value_rel_cmp` coercion 자리(qe:227), 집계 첫값 대기(qx:21504), `scan_dbvals_to_midxkey` 전략 재추론 자리(sm:2024). 각 자리에 perfmon 카운터(#324) 짝.
+**(b) 실행 경계** — 신설 오류 코드 **`ER_QPROC_UNRESOLVED_DOMAIN = -1383`**(`error_code.h`, `ER_LAST_ERROR` → -1384), `cubrid.msg` `$set 5` `1383 Domain of XASL node is unresolved at execution (query %1$s, node %2$s, slot %3$d, domain %4$s).` 인자 = query_id 또는 xasl id 문자열, `DPLAN_SLOT.node_kind`+SHOW PLAN 위치, slot_id, 도메인 이름. 재컴파일 트리거에 넣지 않는다: db_vdb.c:2277·2174·1102, cas_execute.c:1188·1502·2376, cas_common_execute.c:364, method_callback.cpp:276, trigger_manager.c:4971 목록 불변(코드가 다르므로 자동). optdebug 는 `assert_release` 가 아니라 `assert` + 같은 코드 반환. 경계 자리: `qdata_get_valptr_type_list`(qo:6799, 리스트 컬럼 VARIABLE), `fetch_peek_dbval_slow` VARIABLE 분기 자리(fe:5225), `btree_compare_key` 폴백(bt:22095), `eval_value_rel_cmp` coercion 자리(qe:227), 집계 첫값 대기(qx:21504), `scan_dbvals_to_midxkey` 전략 재추론 자리(sm:2024). 각 자리에 perfmon 카운터(#324) 짝.
 
 ## 6. 클라이언트 경로
 
@@ -276,5 +276,5 @@ SA_MODE: `dbval_ptr` 가 `parser->host_variables` 자체(qm:1441)여도 G1 은 �
 | L-43 | AGG/ANALYTIC ctx: 누산기 도메인은 G1 이 피연산자 도메인에서 계산(첫값 대기 qx:21504·qn:188/683 삭제); `opr_dbtype` 은 entries[].dom 의 타입 |
 | L-45 | §4 (a) 전략 G1 1회 (b) K/S 분리 (c) key1/key2 항목 분리 (d) iss_pair (e) key_type->setdomain 시딩 (f) INDX_INFO.key_type 스트림 (g) midx_setdomain 은 XASL_STATE 소유·dgate_free |
 | L-46 | §1.3 DGATE.owner/is_copy; 워커는 `qexec_deep_copy_xasl_state` 사본만, G1 호출 금지 assert; 값 변환은 연결 스레드 `gate.vals` 에 1회(qe:227 힙 전환 삭제) |
-| L-48 | §5 예외 표 E1~E5 를 코드 옆 배열로; fpcache 삼킴 수정; 실행 경계 자리 6곳 + 새 코드 -1382 |
+| L-48 | §5 예외 표 E1~E5 를 코드 옆 배열로; fpcache 삼킴 수정; 실행 경계 자리 6곳 + 새 코드 -1383 |
 | L-49 | 게이트 뒤 불변식 "값 타입 = entries[].dom" 을 `dgate_run_g1` 끝의 assert 로; S-33 은 이 불변식 아래 KEEP; auto-param 넓은 도메인(L-22)은 B33 규칙(리터럴 도메인)으로 G1 이 값을 좁힌다 |
