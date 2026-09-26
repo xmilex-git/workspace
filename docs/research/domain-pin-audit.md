@@ -1,4 +1,4 @@
-# 실행 하위 삭제 감사표 — S-01~S-43 + collation 쌍 조건 26곳 + S 목록 밖 비교 (D-320-04)
+# 실행 하위 삭제 감사표 — S-01~S-43 + collation 쌍 조건 26곳 + S 목록 밖 비교·행 시점 변환 (D-320-04)
 
 지도: xmilex-git/workspace#312 · 신설: #340(dpin-14, 2026-09-24) · 확정: #344(dpin-18)
 지점 정본: `domain-pin-exec-sites.md` §1(S-01~S-43)·§4(collation 26곳) · 삭제 축: `domain-pin-architecture.md` §1.5
@@ -94,7 +94,7 @@
 
 좌표(fe/qx/lf/sm/qa/qn)는 `domain-pin-exec-sites.md` 작성 기준(develop `cad27172b`)이다. 지금 소스의 줄 번호는 다르다.
 
-## 3. S 목록 밖 비교 (#354, dpin-17b)
+## 3. S 목록 밖 비교 (#354, dpin-17b) · 행 시점 변환 (#356, dpin-17d)
 
 S 번호가 없는 develop 비교, 곧 `tp_value_compare_with_error` 가 타입이 다른 두 값을 받아 `Num_domain_coerce_compare` 를 올리던 호출자다. 착수 진단 전수(a7f2f1ea1 의 진단 빌드, `sql-20260926T010104Z-4064435`·`medium-20260926T010104Z-4064434`)에서 이 셈은 2,151줄이었다. 줄마다 호출 스택을 기호화해 호출자를 가렸다.
 
@@ -119,10 +119,36 @@ S 번호가 없는 develop 비교, 곧 `tp_value_compare_with_error` 가 타입�
 
 **남은 develop 비교.** S 목록 밖에서 develop `tp_value_compare` 를 그대로 부르는 자리는 두 값의 타입이 같게 만들어지는 자리이거나, 다른 티켓이 계획을 준 자리다. 착수 진단에서도 0줄이었다.
 - 한 열의 두 값: rollup 그룹 경계(`qexec_groupby` 의 `list_dbvals` 대 현재 튜플, 같은 regu 열 도메인), 분석 함수 그룹 경계(`current_values` 대 `temp_values`, 같은 정렬 열), 클래스 계층 MIN/MAX(`qdata_evaluate_aggregate_hierarchy`, 하위 클래스가 물려받은 같은 속성), 인덱스 통계 키(`btree.c` 의 `pkeys` 대 다음 키 원소, 같은 키 열).
-- 한 도메인으로 맞춘 해시 키: 해시 리스트 스캔 키(`qdata_hscan_key_compare`, 빌드 키를 표에 넣을 때 프로브 regu 도메인으로 바꾼다 — 아래 인계), 해시 조인 키(`query_hash_join.c`, 두 키를 같은 `domains[]` 로 읽는다, #341 셋업이 키 도메인을 정한다), `mht_compare_dbvalues_are_equal`(`memory_hash.c`).
+- 한 도메인으로 맞춘 해시 키: 해시 리스트 스캔 키(`qdata_hscan_key_compare`, 빌드 키를 표에 넣을 때 프로브 regu 도메인으로 바꾼다 — 아래 #356 이 첫 빌드 행 전에 정한다), 해시 조인 키(`query_hash_join.c`, 두 키를 같은 `domains[]` 로 읽는다, #341 셋업이 키 도메인을 정한다), `mht_compare_dbvalues_are_equal`(`memory_hash.c`).
 - 다른 티켓의 몫: top-N 정렬 키의 D-336-E 가지(`qexec_topn_cmpval`, 셈), 키 변환이 실패한 뒤 develop 의 순위 답(`scan_manager.c`, #342).
 
-**비교가 아닌 행 시점 변환(인계).** 해시 리스트 스캔은 빌드 키를 해시 표에 복사할 때(`qdata_copy_hscan_key`·`qdata_copy_hscan_key_without_alloc`) 값의 타입이 프로브 regu 의 타입과 다르면 그 도메인으로 강제 변환한다(`vtype1 != vtype2` → `tp_value_coerce`). 값의 타입을 보고 행에서 변환을 정하는 자리이지만 비교가 아니라서 `Num_domain_coerce_compare` 에 잡히지 않고, S 목록에도 없다. #354 의 범위(비교) 밖이라 [dpin-17d #356](https://github.com/xmilex-git/workspace/issues/356) 으로 넘긴다.
+**비교가 아닌 행 시점 변환 — 해시 리스트 스캔 빌드 키 (#356, dpin-17d).** 판정: **읽기(스캔 셋업 1회)**.
+- 자리: 해시 리스트 스캔은 키 쌍의 컴파일 타입이 하나라도 다르면(`check_hash_list_scan` 의 `need_coerce_type`) 빌드 값을 프로브 키 도메인으로 바꿔 해시한다. develop 은 행마다 값의 타입을 프로브 regu 도메인과 견줘 복사나 `tp_value_coerce` 를 골랐다(`qdata_copy_hscan_key_without_alloc`).
+- 경계 (b) 가 아닌 이유: 두 타입은 평범한 조인에서도 다르다(INT 대 BIGINT, 문자열 쪽 `cast (… as double)` 대 수, DATE 대 `cast (… as datetime)`, #356 F-356-01).
+- 지금: 스캔이 첫 빌드 행 전에 키마다 규칙 하나를 정하고(`qdata_plan_hscan_keys`, D-356-01~03), 행은 그 규칙만 돌린다.
+  - 규칙은 다섯이다. 복사, 계획된 변환기(`domain_lookup_coerce_converter` — `tp_value_coerce` 가 돌리는 셀, 컬렉션은 암묵 셀, D-356-04), `tp_value_coerce`(JSON 값, LEAVE·ENFORCE 문자 목표), 실패(열린 프로브 도메인: develop 과 같은 -181), 행(D-336-E 세션변수 식 키, `Num_domain_resolve_list` 셈).
+  - 값 도메인은 계획의 것이다. 값 포인터 키는 S-20 이 연 생산자 위치의 도메인을 읽고, 그 밖의 키는 `qexec_consumer_domain` 을 읽는다.
+  - 프로브 도메인과 `need_coerce_type` 은 develop 이 읽던 regu 도메인이다. 첫 계산 전에는 컴파일 도메인이고, 뒤에는 게이트 결정이다. 그래서 재오픈 이력까지 develop 과 같다. 이 두 독자는 실행이 쓴 필드를 읽으므로, 쓰기를 멈추는 #355 가 넘겨받는다.
+  - 호출자 없던 `qdata_copy_hscan_key` 는 지웠다.
+- 경계 위치: 계획이 도메인을 주지 않는 빌드 키 → -1383(`qexec_domain_unresolved`).
+- 증거: 이 자리는 원래 셈이 없었다. 진단(DPIN356)으로 develop 의 판정 입력을 실측했다. TC `hash_scan_build_keys` 는 develop 과 바이트 단위로 같다. optdebug 그림자 검사(값 타입 == 계획 타입, 계획 변환의 결과·해시 == develop `tp_value_coerce`)는 게이트 전수에서 assert 0 이다(CTP `sql-20260926T055422Z-877680` 17475/17475 · `medium-20260926T055422Z-877679` 975/975).
+- develop 결함(P0 로 보존): 늦은 바인딩 프로브 키 -181, 거부되는 빌드 값의 해시 경로 -181, 양쪽 늦은 바인딩 키의 재오픈 이력 → [#361](https://github.com/xmilex-git/workspace/issues/361).
+
+**S 목록 밖 행 시점 변환 훑기 (#356).** 값의 타입이 변환 목표나 변환 여부를 정하는 `tp_value_coerce`·`tp_value_cast` 호출 자리다.
+
+| 자리 | 판정 | 근거 |
+|---|---|---|
+| `qdata_copy_hscan_key*`(query_hash_scan.c) | 읽기(셋업 1회) — #356 | 위 |
+| fetch.c CAST(`T_CAST`·`T_CAST_WRAP`)·공통값(COALESCE·NVL·NVL2·NULLIF·LEAST·GREATEST 결과) | 기존 판정 S-01·S-04(#340) | 목표는 노드의 결정 도메인 |
+| 집계·분석의 첫 값·MEDIAN/PERCENTILE 값·DISTINCT 리스트·LEAD/LAG 기본값·PX 누산기 | 기존 판정 S-23·S-26~S-29(#341)·S-36(#343) | 목표는 셋업이 정한 함수·누산기·리스트 도메인 |
+| 해시 조인 키(query_hash_join.c) | 기존 판정 S-22(#341) | 셋업이 두 리스트의 계획 도메인으로 공통 도메인을 정한다 |
+| `btree_coerce_key` | 기존 판정 S-30(#342) | 호출자는 다중 컬럼 키 조립뿐 |
+| 키 리밋·LIMIT·ORDERBY_NUM 상한·PX instnum 한계 → INT/BIGINT, NTILE·NTH_VALUE·LEAD/LAG 오프셋 | 유지(연산 구현) | 연산이 정한 고정 목표 |
+| 파티션 가지치기 값 → 파티션 키 도메인(partition.c 4곳) | 유지 | 목표는 카탈로그 도메인이다. 스캔 open 마다 한 번이고 행마다가 아니다(§3 파티션 행과 같은 근거) |
+| 문자열·날짜 함수 인자 캐스트(fetch.c 길이·TO_* 류, string_opfunc.c, arithmetic.c, query_opfunc.c) | 유지(연산 구현, S-08 부류) | 연산이 요구하는 고정 타입 |
+| INSERT 기본값·JSON_TABLE 열·타입 있는 컬렉션 원소·DBLink 원격 값 | 유지(대입) | 선언된 도메인으로 넣는다 |
+| heap ALTER·btree 적재·overflow 키, 클라이언트 쪽 | 범위 밖 | 질의 실행 하위가 아니다 |
+| 분석 보간 정렬 키 `cmp_dom`(`qfile_compare_with_interpolation_domain`) | 대기 — [#362](https://github.com/xmilex-git/workspace/issues/362) | 게이트가 분류하는 문자 값 인자의 비교 도메인을 첫 값 쌍이 정한다(#341 인계 8, 셈 없음) |
 
 **vd 없는 fetch(#341 인계 6).** 분석 PERCENTILE 비율(query_analytic.cpp 두 곳, query_executor.c 한 곳)은 실행의 vd 로 읽는다. 로드는 분석 비율 regu 를 걷는다. 보간 임시 regu(`qdata_get_interpolation_function_result`)는 타입이 정해진 리스트 열 도메인을 읽는다. 셋업이 그 리스트를 계획 도메인으로 열었고, D-336-E 열은 첫 튜플이 타입을 주었다. 그래서 fetch 가 도메인을 정할 일이 없다. `fetch_arith_gate_reading` 과 `fetch_row_reads_string_domain` 의 `vd == NULL` 가지는 경계 (b)(UNRESOLVED / false)가 됐다. 착수 진단 전수에서 vd 없는 fetch 셈은 0줄이었다.
 
