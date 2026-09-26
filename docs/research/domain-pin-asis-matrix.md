@@ -20,7 +20,7 @@
 3. **리터럴 종류에 따라 규칙이 다르다.** `str_col = 1`(정수 리터럴) 은 리터럴을 VARCHAR 로 캐스트해 문자 비교(거짓, 인덱스 사용), `str_col = 1.00 / 1.0e0 / 1.0f` 는 양쪽을 DOUBLE 로 캐스트해 수치 비교(참, **인덱스 포기 → 순차 스캔**). 호스트 변수는 어느 타입이든 컬럼 미러(거짓, 인덱스 사용)(§3.4).
 4. **auto-param 과 호스트 변수는 인덱스 키 경로에서 같은 모양(`c = ?:0`)이지만 슬롯 도메인이 다르다**: auto-param 은 리터럴 규칙을 거친 뒤의 값 도메인, 호스트 변수는 컬럼 미러 도메인. 캐스트가 붙은 리터럴(`cast(1.00 as numeric)`, 함수 결과)은 auto-param 대상이 아니라 식으로 남는다. 인덱스 스캔과 순차 스캔의 답이 갈리는 셀은 **없었다**(§3.4).
 5. **정수 컬럼 미러 캐스트는 손실 시 반올림하지 않는다(비교)**: `int_col = ?` 에 1.5 → 0행(2 가 아님), `<` 1.5 → 1행. 반면 **대입은 반올림**: `INSERT int_col ← 1.5` → 2 (리터럴·호스트 변수 동일)(§3.5).
-6. **값 타입에 따라 오류/NULL/값이 갈리는 현행 사례**: `int_col + ?` 에 BIT·SET·시간 바인드 → 오류 아닌 **NULL**(컬럼×컬럼은 오류); `INSERT int_col ← ?`(DATE 바인드) → csql SA 에서 오류 없이 **0행**(리터럴은 컴파일 오류); `coalesce(?, 1)` 은 바인드 부류가 다르면 결과가 VARCHAR 로 바뀜(§3.6).
+6. **값 타입에 따라 오류/NULL/값이 갈리는 현행 사례**: `int_col + ?` 에 BIT·SET·시간 바인드 → 오류 아닌 **NULL**(컬럼×컬럼은 오류); `INSERT int_col ← ?`(DATE 바인드) → csql SA 에서 오류 없이 **0행**(리터럴은 컴파일 오류) — **정정(#358)**: 실제는 -494(`Cannot coerce host var to type integer`, csql·JDBC). 이 탐침 파서가 EXECUTE 의 stderr 오류를 라벨에 붙이지 못했다; `coalesce(?, 1)` 은 바인드 부류가 다르면 결과가 VARCHAR 로 바뀜(§3.6).
 7. **집계·분석 슬롯은 전부 첫 값 타입**: `sum(?)`·`min(?)`·`max(?) over()`·`lead(?)`·`median(?)` 결과 타입 = 바인드 타입; `sum(?)` 에 DATE → 오류, TIME → TIME 누산(10:00:01 그대로)(§3.7). GROUP BY `?`·ORDER BY `?` 는 문법 오류(컴파일 거부, 자유 문맥 아님).
 8. **세션변수는 쓰기 타입을 기억하고 읽기는 값 타입으로 산술한다**: `@v := 1` 뒤 `@v + 1` = INTEGER 2, `@v := '1.0'` 뒤 = DOUBLE 2.0, `@v := date` 뒤 `@v + 1` → 오류(`'01/02/2024'` 문자열로 저장됨 — `SET @v = date'…'` 가 **VARCHAR 로 저장**)(§3.9).
 9. **`str_to_date(s, ?)`·`to_char(?, fmt)`·`addtime(?,?)`·`from_tz(?,…)` 는 값 부류로 오버로드가 정해진다**: `to_char(?, 'YYYY-MM-DD')` 는 문자·날짜 바인드만 성공, 숫자 바인드 → "Invalid format"; `to_char(?, '9,999.99')` 는 반대. `from_tz(?, …)` 는 DATETIME 바인드만 성공(§3.8).
@@ -36,7 +36,7 @@
 | D2 | `group_concat(?)` NULL 바인드 | `query_executor.c:1375 qexec_end_one_iteration: TP_DOMAIN_COLLATION_FLAG(agg_node->domain) == NORMAL` | L-47 LEAVE 플래그가 누산 도메인에 남음 |
 | D3 | `group_concat(s + ? order by 1)` 문자·숫자·날짜 바인드(9종) | `object_primitive.c:10996 mr_readval_string_internal: false` | 리스트 컬럼 도메인 ≠ 기록 값 타입(L-22·#321 §3.3) |
 | D4 | `sum(?) over (partition by g)` 문자날짜·DATE·DATETIME·TIME 바인드 | `query_executor.c:23654 qexec_analytic_add_tuple: er_errid() != NO_ERROR` | 분석 누산 오류가 오류 코드 없이 실패(L-43) |
-| D5 | `to_char(dtt_col, ?)` BIGINT 바인드 | `string_opfunc.c:25792 db_check_or_create_null_term_string: QSTR_IS_ANY_CHAR` | 포맷 슬롯이 문자 아닌 값을 받음(L-17) |
+| D5 | `to_char(dtt_col, ?)` BIGINT 바인드 | `string_opfunc.c:25792 db_check_or_create_null_term_string: QSTR_IS_ANY_CHAR` | 포맷 슬롯이 문자 아닌 값을 받음(L-17). #358: release 는 csql·cub_server SIGSEGV, dpin 도 같다 → [#363](https://github.com/xmilex-git/workspace/issues/363) |
 | D6 | `select ? union all select ?` NULL·NULL, 재귀 CTE 시드 `?` NULL | `list_file.c:913 qfile_unify_types: list_id1_p->tuple_cnt == 0` | 양쪽 VARIABLE 리스트 통일(L-18·L-48) |
 | D7 | `enum_col IN (NULL, NULL)` | `dbtype_function.i:678 db_get_enum_short: type == DB_TYPE_ENUMERATION` | ENUM 비교에 NULL 상수(L-10) |
 
@@ -50,6 +50,7 @@
 - 경로: 컬럼×컬럼(`c_a op c_b`), 컬럼×리터럴(캐스트 식 리터럴), 컬럼×`?`(`PREPARE … EXECUTE USING :h_b`; `:h_b` 는 `SELECT CAST(...) INTO :h_b` 로 만든 타입 값), `?`×`?`, 리터럴×리터럴(상수 폴딩). 인덱스 키는 `SET OPTIMIZATION LEVEL 513` 으로 재작성 질의·스캔 종류를 함께 기록.
 - 비교 셀은 `= / <` 진리값. 값이 "변환되면 같고 문자로는 다른" 쌍(`1` vs `'1.0'`, date vs datetime 00:00 등)을 골라 **어느 쪽으로 변환됐는지** 진리값으로 읽는다.
 - 한계: SQL-level `PREPARE/EXECUTE`(csql) 경로 = CAS 경로와 같은 `pt_set_host_variables` 캐스트를 탄다(#313 §2.4). JDBC 메타데이터·PL/CSQL·collation `SET NAMES` 후 재컴파일은 미측정.
+- 한계(#358 정정): 파서(`parse.py`)가 EXECUTE 의 stderr 오류를 그 라벨에 붙이지 못한 곳이 있다 — T28·T29 의 "오류 없이 0행" 은 실제로 -494·-181 이었다. 이 표의 `∅`·"오류 없이" 셀은 재현으로 확인하고 쓴다.
 
 ---
 
@@ -120,7 +121,7 @@
 
 | 컬럼 \ 값 | `'1.0'` | 1 | 1.5 | date | time | bit |
 |---|---|---|---|---|---|---|
-| int/bigint/numeric/double | 1 / 1.00 | 1 | **2 (반올림)** | 리터럴 ERR / **`?` 는 오류 없이 0행**(csql SA) | 같음 | 같음 |
+| int/bigint/numeric/double | 1 / 1.00 | 1 | **2 (반올림)** | 리터럴 ERR / **`?` 는 오류 없이 0행**(csql SA) → 정정(#358): `?` 도 -494 | 같음 | 같음 |
 | string | `'1.0'` | `'1'` | `'1.5'` | `'01/02/2024'` | `'10:00:01 AM'` | `'8'` |
 | date | 리터럴 ERR(파싱) / `?` 0행 | ERR / 0행 | | 값 | ERR | |
 | time | `12:00:01 AM`(정수 1 → 1초) | 같음 | | ERR / 0행 | 값 | |
@@ -278,7 +279,7 @@
 | T9 | `int_col = ?` 1.5 → 0행, `<` 1.5 → 1행 (3.3) | 미러(INTEGER) + 게이트 변환: **strict** 면 -494(현행 0행에서 오류로), **현행 캐스트(ROUND)** 면 `= 2` 로 1행(조용한 오답) | **둘 다 답안 변경** — 2라운드 Q(손실 정책). 현행 CAS 캐스트는 실패 시 값 유지(keep) 라 0행 |
 | T10 | `char(5)_col = ?` VARCHAR 값 → NULL(!)/리터럴 → 참 (3.3) | VARCHAR 미러 + 컬럼 collation, 패딩 안 함 → trailing space 구분 | 현행 CHAR 컬럼 `= ?` 의 NULL 은 결함 후보(별건); 규칙표 Q4 |
 | T11 | `enum_col + ?` 문자 → 이름 접합, 정수 → `'2'`(varchar) (3.2) | 서수 승격 → SMALLINT 형제 → 정수 미러; 문자 바인드 → -494 | 깨짐: `late_binding_001`(`e1 + '-a'` → `Cancel-a` 접합 → -494), `prepare_002`(`e1 + ?` 5열 → -494), `trac_344_02/03`(-494) — 이전 캠페인 diff 그대로 |
-| T12 | `enum_col = ?` 정수=서수/문자=이름/1.5=floor (3.3) | ENUM 도메인 유지 + 게이트 `tp_value_cast` 표(§1.6): 정수→서수, 문자→이름, 실수→floor | 변화 없음(값 타입 갈림은 변환 함수의 입력 규칙이라 허용할지 **Q7-2라운드**); `enum_col < ?` TIME 바인드 2행은 결함 후보 |
+| T12 | `enum_col = ?` 정수=서수/문자=이름/1.5=floor (3.3) | ENUM 도메인 유지 + 게이트 `tp_value_cast` 표(§1.6): 정수→서수, 문자→이름, 실수→floor | 변화 없음(값 타입 갈림은 변환 함수의 입력 규칙이라 허용할지 **Q7-2라운드**); `enum_col < ?` TIME 바인드 2행은 결함 후보 — 정정(#358): 리터럴 `enum_col < time'…'` 도 2행(ENUM 라벨 → TIME, 부록 A3 `cast(c_enum as time)` 2/2) — 슬롯 결함 아님, [#360](https://github.com/xmilex-git/workspace/issues/360) |
 | T13 | `coalesce(int_col, ?)` 문자 바인드 → varchar `'1'` (3.6) | 형제 미러 → INTEGER, `'a'` 바인드 → -494 | 깨짐: `bug_3256`(`ifnull(?, 1)` DATE 바인드 → -494 4블록), `bug_bts_9953`(`trunc(?, 'default')`), `cbrd_24598`(`decode(?, '', c, null, c, -1)` -181 → 값) |
 | T14 | `case ? when ? …` (3.8) | 조건 슬롯끼리 VARCHAR 비교 | `_01_case_hostvar`·`_02_decode_hostvar` `first`→`else` |
 | T15 | `sum(?)` = 바인드 타입, TIME 누산까지 (3.7) | P2: `sum(?)` DOUBLE, `min/max(?)` VARCHAR, `median(?)` DOUBLE | 깨짐: `bug_bts_13653`·`bug_bts_13916`·`bug_bts_16039`(median/percentile 문자열 입력 -494 — 이전 캠페인은 CAST 요구), `_18_host_vars`(분석함수 표기 `5.700000000000002`→`5.7`) |
@@ -294,8 +295,8 @@
 | T25 | PL/CSQL 맨 `?` (SA 미측정) | Q6(a) 선언 타입 전달 | 이전 캠페인 diff: `bfn_type_cast2`(-889 → NULL 값), `bfn_string_field`(3→0 조용한 오답), `bfn_type_format`(NUMERIC scale 절단), `to_char/to_date/…`(`The argument specifying the language must be a string literal` — 리터럴을 `?` 로 넘긴 탓), `check_add_func_return`("string does not fit"), `test_tcl`(CAS 사망) — 선언 타입 전달로 전부 해소 대상 |
 | T26 | HV collation 19건(`_28_features_930/issue_12129_HV_collation`) | 짝 티켓 #322 | 참고만: 이전 캠페인은 `-1150/-622` 오류가 값으로 바뀌거나(개선) collation 표기가 `utf8_bin`→`iso88591_bin` 으로 바뀜(회귀) |
 | T27 | `int_col = ?` 에 `'1.0'` → 1(참) (3.3) | 미러 + 게이트 문자→INT 파싱: `'1.0'` → 1 (현행 `tp_atobi` 반올림 규칙) | 변화 없음 |
-| T28 | `INSERT int_col ← ?` DATE → 오류 없이 0행 (3.5) | 게이트 변환 실패 → -494 | **오류로 바뀜**(개선, 결함 후보) |
-| T29 | `insert ta(c_int) select ?` 날짜 → 0행 (3.11) | 대상 컬럼 미러 → -494 | 같음 |
+| T28 | `INSERT int_col ← ?` DATE → 오류 없이 0행 (3.5) | 게이트 변환 실패 → -494 | **오류로 바뀜**(개선, 결함 후보) — 정정(#358): 현행이 이미 -494, 변화 없음 |
+| T29 | `insert ta(c_int) select ?` 날짜 → 0행 (3.11) | 대상 컬럼 미러 → -494 | 같음 — 정정(#358): 현행이 이미 -181(`Cannot coerce value of domain "date" to domain "integer"`) |
 | T30 | `LIMIT ?` 문자 `'1.0'` → 1행 | BIGINT 미러(현행) | 변화 없음 |
 
 정리: P1(형제 미러) 만으로 바뀌는 셀은 **산술·함수 인자·공통값·집계 자리의 슬롯**이고, 바뀌는 방향은 두 가지뿐이다 — (i) 값 타입이 형제와 다른 부류(문자·날짜)일 때 **오류(-494)로**, (ii) 형제가 정수인데 소수를 바인드할 때 **손실 정책**(strict 오류 / 반올림 / 값 유지) 이 답을 정한다. P2(DOUBLE/VARCHAR 폴백) 가 바뀌는 셀은 `? op ?`·`select ?`·`? = ?`·`sum/min/max/median(?)`·`coalesce(?, ?)`·`case ? when ?` 이고 이전 캠페인 diff 에서 R7(46건)·R8(2건) 이 이 부류다. 이전 캠페인 483건 중 R1(153)·R2(60) 는 (i) 의 "오류로" 이고, R4/R6/R9/R14/R5/R10(213건) 은 프로토타입 결함이라 이번 규칙과 무관하다.
