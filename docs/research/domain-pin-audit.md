@@ -96,7 +96,7 @@
 
 좌표(fe/qx/lf/sm/qa/qn)는 `domain-pin-exec-sites.md` 작성 기준(develop `cad27172b`)이다. 지금 소스의 줄 번호는 다르다.
 
-## 3. S 목록 밖 비교 (#354, dpin-17b) · 행 시점 변환 (#356, dpin-17d)
+## 3. S 목록 밖 비교 (#354, dpin-17b) · 행 시점 변환 (#356, dpin-17d) · 분석 보간 정렬 키 (#362, dpin-17f)
 
 S 번호가 없는 develop 비교, 곧 `tp_value_compare_with_error` 가 타입이 다른 두 값을 받아 `Num_domain_coerce_compare` 를 올리던 호출자다. 착수 진단 전수(a7f2f1ea1 의 진단 빌드, `sql-20260926T010104Z-4064435`·`medium-20260926T010104Z-4064434`)에서 이 셈은 2,151줄이었다. 줄마다 호출 스택을 기호화해 호출자를 가렸다.
 
@@ -150,7 +150,18 @@ S 번호가 없는 develop 비교, 곧 `tp_value_compare_with_error` 가 타입�
 | 문자열·날짜 함수 인자 캐스트(fetch.c 길이·TO_* 류, string_opfunc.c, arithmetic.c, query_opfunc.c) | 유지(연산 구현, S-08 부류) | 연산이 요구하는 고정 타입 |
 | INSERT 기본값·JSON_TABLE 열·타입 있는 컬렉션 원소·DBLink 원격 값 | 유지(대입) | 선언된 도메인으로 넣는다 |
 | heap ALTER·btree 적재·overflow 키, 클라이언트 쪽 | 범위 밖 | 질의 실행 하위가 아니다 |
-| 분석 보간 정렬 키 `cmp_dom`(`qfile_compare_with_interpolation_domain`) | 대기 — [#362](https://github.com/xmilex-git/workspace/issues/362) | 게이트가 분류하는 문자 값 인자의 비교 도메인을 첫 값 쌍이 정한다(#341 인계 8, 셈 없음) |
+| 분석 보간 정렬 키 `cmp_dom`(`qfile_compare_with_interpolation_domain`) | 읽기(분석 셋업 1회) · X(D-336-E) — [#362](https://github.com/xmilex-git/workspace/issues/362) | 셋업이 피연산자 키의 부류를 정렬 전에 준다. 세션변수 읽기 위 부류만 첫 비교 쌍이 확인한다. 아래 "분석 보간 정렬 키" |
+
+**분석 보간 정렬 키 (#362, dpin-17f).** 판정: **읽기(분석 셋업 1회)** · X(D-336-E). 이로써 감사표의 대기는 S-43(#344)뿐이다.
+- 자리: 분석 MEDIAN·PERCENTILE 은 문자 피연산자를 함수의 부류(DOUBLE·DATETIME·TIME)로 정렬한다(`SUBKEY_INFO.cmp_dom`). develop 은 비교기가 첫 비교 쌍의 첫 값으로 DOUBLE→DATETIME→TIME 캐스케이드를 돌려 정했다(`qdata_update_interpolation_func_value_and_domain`). dpin 은 #335 부터 컴파일 문자 피연산자(D-335-10 DOUBLE)만 셋업에서 주었다.
+- 지금: 셋업(`qexec_plan_interpolation_sort_key`)이 정렬 전에 피연산자 키(보간 함수의 PARTITION BY 뒤 키)의 부류를 준다 — 컴파일 함수 도메인, 또는 게이트 결정(값 인자의 분류 D-328-06, 게이트 의존 문자의 DOUBLE D-335-10). 병렬 정렬 워커는 공유 키를 읽기만 한다(develop 은 워커가 첫 값으로 `cmp_dom` 을 썼다).
+- 값 인자가 닿는 모양: 바인드·리터럴을 직접 주면 정렬 키가 없다(파서가 상수 ORDER BY 를 지운다, `pt_remove_unusable_sort_specs`). 파생 테이블 열·집합 연산 열로 보면 키가 있다. JDBC 에서 CTE 선택 목록의 타입 없는 바인드는 prepare 가 -494 다(develop·dpin 같음).
+- 분류하지 못한 값 인자(`'abc'`)는 부류가 없다. 비교기는 캐스케이드 없이 develop 과 같은 오류(-1118)를 기록한다.
+- 세션변수 읽기 위 부류는 첫 비교 쌍이 확인한다(D-336-E). 파생 테이블이 행 전에 변수를 바꾸면(`set @m = '1.5'` 뒤 `from (select (@m := '01:00:00') x from db_root) d, t`) 모든 행이 TIME 이고 develop 답은 TIME 이다 — develop 탐침이 전제를 확인했다. 부류가 벗어나면 develop 부류를 받고 `Num_domain_resolve_list` 를 센다. 같은 SELECT 안의 대입(`(@v := s) a, median(@v)`)은 시작 값을 읽는다. 이 확인만 공유 키에 쓴다(develop 의 첫 쌍과 같은 자리).
+- 피연산자가 아닌 키: 숫자·상수 인자 MEDIAN·PERCENTILE 과 정렬을 공유하는 다른 함수의 문자 ORDER BY 키(`pt_metadomains_compatible` 은 문자 인자 보간 함수만 막는다)는 develop 에서 첫 값 부류로 비교됐다(`median(1) over (), row_number () over (order by y)` 가 'b' 에서 -1118, `order by s` 는 '10' 이 '9' 뒤). 사용자 결정 D-362-01 로 자기 도메인으로 비교한다 — MEDIAN 이 없을 때와 같은 답(답안 변경, #344 스펙 변경 목록).
+- develop 결함(dpin 은 #341·#355 부터 답한다): 세션변수 숫자 값·파생 열의 DOUBLE/DATE 바인드에서 develop 비교기는 키를 CHAR 로 읽어(쓰레기 바이트) 정렬 오류를 내고, 같은 문장을 다른 바인드 타입으로 다시 실행하면 optdebug `or_advance` assert 로 멈춘다(`data_readval`, 탐침 코어).
+- 경계·검사: 셋업의 부류가 숫자·날짜 부류가 아니면 optdebug assert. optdebug 그림자 검사(`qfile_check_interpolation_class`): 휘발이 아닌 키의 모든 값은 develop 첫 값 부류이거나 계획 부류가 거부한다(D-335-10). 게이트 전수에서 0 건.
+- 증거: 엔진 `7b97a84bd`(fork/dpin) · develop 탐침(`scratch/312-362/probe`·`probe2`, develop·dpin optdebug·release, gdb 첫 값 기록) · TC `analytic_interpolation_keys`(fork/dpin-tc `6a8468825`, [SHARED] 외 develop 답) · 게이트 `sql-20260926T121232Z-1607504` 17476/17476 · `medium-20260926T121232Z-1607503` 975/975(고정 배치, 코어 0) · 카운터 `t362-g1` 가 `t355-g2` 와 모든 셀에서 같다.
 
 **vd 없는 fetch(#341 인계 6).** 분석 PERCENTILE 비율(query_analytic.cpp 두 곳, query_executor.c 한 곳)은 실행의 vd 로 읽는다. 로드는 분석 비율 regu 를 걷는다. 보간 임시 regu(`qdata_get_interpolation_function_result`)는 타입이 정해진 리스트 열 도메인을 읽는다. 셋업이 그 리스트를 계획 도메인으로 열었고, D-336-E 열은 첫 튜플이 타입을 주었다. 그래서 fetch 가 도메인을 정할 일이 없다. `fetch_arith_gate_reading` 과 `fetch_row_reads_string_domain` 의 `vd == NULL` 가지는 경계 (b)(UNRESOLVED / false)가 됐다. 착수 진단 전수에서 vd 없는 fetch 셈은 0줄이었다.
 
