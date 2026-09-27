@@ -315,6 +315,15 @@ static inline const RESOLVED_DOMAIN *RESOLVED (const VAL_DESCR * vd, const DOMAI
 
 외부 행 N 개 × 내부 후보 M 개 루프에서 외부 값은 내부 루프 동안 고정이다. 계약: **스코프 진입(내부 scan open · range open · 그룹 시작)에서 계획된 변환기를 1회 적용해 스코프 소유 실행 임시값에 두고, 내부 루프는 그 값을 읽는다** — 호출 수 N 회(N×M 이 아님). 비상관 aptr 결과·precompute 값은 실행당 1회로 더 오래 고정된다. 이것은 결정이 아니다(변환기·도메인은 이미 표에 있다)이고 `domain_plan`·`resolved.table` 은 계속 읽기 전용이다. 자리: `SCAN_ID` 의 스캔별 값(상관 `TYPE_CONSTANT` 피연산자용 DB_VALUE 스크래치, scan open 에 할당·scan close 에 해제, 스캔 스레드 소유), 집계는 `accumulator`. 규칙표 P3 ③ 의 "스코프당 1회" 는 이 계약을 뜻한다(D-323-08).
 
+**구현(#368 C5, D-368-01·07 — 위 자리를 대체한다)**: 바꾼 값은 스캔이 아니라 실행 상태가 붙잡는다. `resolved.held[n_held]` 의 한 칸(`DOMAIN_HELD_VALUE`)은 값·epoch·변환기·목표 도메인·실패를 든다. 상수 피연산자도 같은 장치다(P3 ①, D-368-07).
+- **스코프**: 상수(리터럴·바인드·상수 부분트리)의 스코프는 실행 전체다(`DOMAIN_SCOPE_EXECUTION`). 상관 값의 스코프는 그 값을 읽는 블록이고, 블록의 값 목록이 스코프 번호를 든다(`VAL_LIST.domain_scope`, 0 = 없음).
+- **진입**: 그 값 목록을 채우는 스캔의 시작·재시작(`scan_start_scan`·`scan_reset_scan_block` — 외부 행마다 도는 내부 스캔)과 블록의 실행 시작(`qexec_execute_mainblock` — 상관 부분질의)이다. 진입마다 스코프의 epoch 가 오른다(`qexec_enter_domain_scope`).
+- **읽기**: epoch 안의 첫 읽기가 계획된 변환기로 바꾸고 뒤의 읽기는 그 값을 쓴다(`qexec_held_value`; `Num_planned_convert` 는 바꿀 때 한 번 센다). 변환이 실패하면 붙잡지 않는다. 행이 다시 바꿔 develop 의 결과(오류, `return_null_on_function_errors` 면 NULL, 또는 순위)를 낸다. NULL 은 바꾸지 않는다.
+- **붙잡는 자리(로드가 정한다)**: 비교 항의 한쪽(`DOMAIN_COMPARE_PLAN.held`), 산술 피연산자, SUM/AVG 가 더하는 값(계획 항목의 `held`)이다. 결정이 바꿀 수 있는 쪽과 사전 캐스트가 바꿀 수 있는 피연산자만 붙잡는다. 로드는 걷는 자리를 둘러싼 블록 목록으로 상관 값을 가린다. 바깥 블록의 값이어야 이 블록의 스캔 동안 고정이다. 두 스코프에서 만난 항·노드는 붙잡지 않는다.
+- **PX**: 워커 복사본은 바꾼 값 없이, 실행 스코프만 들어간 상태로 시작한다. 블록 스코프는 워커 자신의 스캔이 연다.
+- 플랜(`domain_plan`)은 그대로 읽기 전용이다(P5).
+- 셀 `f1-correlated`(INT 외부 100행 × BIGINT 내부 1000·2000행, 상관 부분질의): 외부 값 변환이 100·100·100 이다. 리뷰 측정은 N×M(100,000·200,000·200,000)이었다.
+
 ---
 
 ## 4. 한 `?` 의 다중 참조 (탐침 실측)

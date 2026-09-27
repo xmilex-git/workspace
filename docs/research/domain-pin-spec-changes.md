@@ -2,6 +2,7 @@
 
 지도: xmilex-git/workspace#312 · 티켓: #344(dpin-18) · 작성 2026-09-27
 비교: develop `c63a3b993` 대 dpin `4b55eaaf9`(#367 까지). #344 의 커밋 A(`949578827`)는 서식만 바꾸고, 커밋 B(`e4f86135a`, D-344-02)는 §3a 의 한 자리를 develop 오류 코드로 되돌린다.
+#368(dpin-18b, 리뷰 해결)이 답에 닿은 곳은 셋이다. §10 의 중첩 상수 조건은 develop 답으로 되돌렸다(C1). 세션변수 조건이 막는 가지는 #366·#367 부터 실행 전 오류이고, 사용자가 그대로 두기로 했다(D-368-03, §10). ALTER 뒤 필터 술어는 새 타입으로 다시 컴파일한다(§11, #359, D-368-05). 그 밖의 #368 커밋은 답을 바꾸지 않는다.
 실측: csql -S(SA) — 캠페인 TC 14개, 답이 바뀐 upstream TC 16개, 추가 문장 1파일을 develop·dpin 의 optdebug·release 로 돌렸다(`.git_ignored_dir/scratch/312-344/probe/sc`, 124작업). develop 과 다른 곳은 아래 목록의 자리뿐이다. optdebug 와 release 는 같은 답이고, 달랐던 것은 develop optdebug 가 assert 로 멈춘 세 파일(§11)과 optdebug 파서의 모호 구문 덤프뿐이다. CTP 는 오류 코드만 비교하므로, 오류 문구만 다른 자리(§13)는 CTP 답에 나타나지 않는다.
 
 이 문서는 JIRA 글과 매뉴얼 개정의 입력이다. 매뉴얼 PR 은 지도 밖이다(사용자 2026-09-26). 각 절의 "매뉴얼" 줄이 적어야 할 문장이다.
@@ -21,8 +22,8 @@
 | 7 | MEDIAN 과 정렬을 공유하는 다른 분석 함수의 문자 정렬 키는 자기 도메인으로 비교한다 | [D-362-01](https://github.com/xmilex-git/workspace/issues/362#issuecomment-5846234354) | 0(캠페인 TC) |
 | 8 | 공통값 노드의 행 의존 피연산자는 힙 순서와 무관하게 계획 도메인이다 | [D-364-05](https://github.com/xmilex-git/workspace/issues/364#issuecomment-5846701545)(사용자 확인 (가)) | 0(캠페인 TC) |
 | 9 | 문장이 읽는 세션변수는 문장 동안 한 타입이다. 다른 타입은 실행 전 -1384 다 | [#366](https://github.com/xmilex-git/workspace/issues/366#issuecomment-5847984723) U1~U4 | 1 케이스(`bug_bts_6605`) |
-| 10 | 상수의 계산·변환 실패는 행과 무관하게 실행 전 오류다. 데이터로 닿지 않는 상수는 develop 답이다 | [#367](https://github.com/xmilex-git/workspace/issues/367#issuecomment-5852725558) (가)·D-367-07 | 0(캠페인 TC) |
-| 11 | develop 결함이 없어진다: 분석 첫 값 변환 실패의 조용한 0행, 정렬 키를 CHAR 로 읽기, optdebug assert 셋 | D-337-06·#362·F-341-06 | 0 |
+| 10 | 상수의 계산·변환 실패는 행과 무관하게 실행 전 오류다. 데이터로 닿지 않는 상수는 develop 답이다. 세션변수 조건이 막는 가지는 예외가 아니다 | [#367](https://github.com/xmilex-git/workspace/issues/367#issuecomment-5852725558) (가)·D-367-07 · #368 D-368-03 | 0(캠페인 TC) |
+| 11 | develop 결함이 없어진다: 분석 첫 값 변환 실패의 조용한 0행, 정렬 키를 CHAR 로 읽기, optdebug assert 셋, ALTER 뒤 옛 타입의 필터 술어(카탈로그 `filter_expression` 이 새 타입의 모양) | D-337-06·#362·F-341-06 · #368 D-368-05(#359) | 0 |
 
 바뀌지 않는 것은 §14 에 적었다. 파라미터는 바뀌지 않는다. `hostvar_late_binding` 은 그대로 동작한다([D-344-01](https://github.com/xmilex-git/workspace/issues/344#issuecomment-5853038619)). 새 오류 코드와 통계는 §15, 매뉴얼 개정 목록은 §16 이다.
 
@@ -293,15 +294,30 @@ execute q using 'abc';
   - AND/OR 의 상수 앞 항
   - 블록의 상수 조건
   - 최상위 블록의 상수 LIMIT
+- 상수 조건은 행이 값을 바꾸지 못하는 조건이다. 상수 부분트리, 그리고 그런 피연산자 위의 CASE·IF·DECODE·술어·캐시 함수·컬렉션 생성자도 든다(#368 C1, develop 답으로 되돌림). 예: `case when if(? = 0, 0, 1) = 0 then 0 else 100 / (? - ?) end` 에 (0, 1, 1) → `0`, (1, 1, 1) → -539. develop 도 같다.
 - 가드 예:
   - `case when ? = 0 then 0 else 100 / ? end` 에 (0, 0) → `0`
   - `order by a limit ?, ?+?` 에 `''` 셋 → 0행
   - upstream timezone 4파일의 `if(utc_time()-current_time>0, timediff(…), timediff(…))`
   - SA 실측에서 이 5파일은 develop 과 같다.
+- **세션변수를 읽는 조건은 상수 조건이 아니다([D-368-03](https://github.com/xmilex-git/workspace/issues/368), 사용자 결정 "지금처럼 실행 전 오류").** 문장이나 그 문장이 부르는 저장 프로시저가 세션변수에 대입할 수 있기 때문이다. 그래서 세션변수 조건이 막는 가지의 상수 실패도 실행 전 오류다(#366·#367 부터의 동작).
+  ```sql
+  -- ce_t: a = 1, 2, 3
+  set @ce_g = 0;
+  prepare q from 'select a, case when @ce_g = 0 then a else cast(concat(?, '''') as int) end from ce_t order by a';
+  execute q using 'abc';
+  set @g = 0;
+  prepare q from 'select case when @g = 0 then 0 else 100 / (? - ?) end from db_root';
+  execute q using 1, 1;
+  ```
+  | 문장 | develop | 새 답 |
+  |---|---|---|
+  | `case when @ce_g = 0 then a else cast(concat(?, '') as int) end` 에 `'abc'` | `1`, `2`, `3` | -181 |
+  | `case when @g = 0 then 0 else 100 / (? - ?) end` 에 (1, 1) | `0` | -539 |
 - 도메인이 열린 COALESCE·NVL2(`coalesce(?, cast(concat(?, '') as int), a)`)는 가드가 아니다. develop 이 첫 행에서 모든 피연산자를 읽기 때문이다. 그래서 0행에서만 develop 무오류 → -181 이다.
 - 행이 계산하는 실패는 develop 시점 그대로다(D-367-05). 해당하는 것은 DML 대입, LEAD/LAG 기본값·오프셋, 열 값이 원인인 오류, 항 밖 비교(FIELD·NULLIF·LEAST·GREATEST·LIMIT)의 순위 답이다.
-- CTP 답 변경: upstream 0. 캠페인 TC `list_aggregate_probes` [UNCLASS] 1문장(`median('abc') … where i > 5` NULL → -1118), 새 TC `constant_errors`(develop 과 다른 21문장).
-- 매뉴얼: "상수(리터럴·호스트 변수·그 식)의 계산이나 변환이 실패하면 질의를 실행하기 전에 오류가 난다. 결과 행이 없거나 그 식이 선택되지 않는 가지에 있어도 그렇다. 다만 상수 조건 때문에 어떤 데이터로도 계산되지 않는 식(예: `CASE WHEN 1 = 0 THEN …`)은 오류를 내지 않는다."
+- CTP 답 변경: upstream 0. 캠페인 TC `list_aggregate_probes` [UNCLASS] 1문장(`median('abc') … where i > 5` NULL → -1118), 새 TC `constant_errors`(develop 과 다른 22문장 — #368 이 더한 [VOLATILE] 1문장 포함. #368 이 더한 [GUARD-NESTED] 8문장은 develop 과 같다).
+- 매뉴얼: "상수(리터럴·호스트 변수·그 식)의 계산이나 변환이 실패하면 질의를 실행하기 전에 오류가 난다. 결과 행이 없거나 그 식이 선택되지 않는 가지에 있어도 그렇다. 다만 상수 조건 때문에 어떤 데이터로도 계산되지 않는 식(예: `CASE WHEN 1 = 0 THEN …`)은 오류를 내지 않는다. 세션변수를 읽는 조건은 상수 조건이 아니다."
 
 ## 11. develop 결함이 없어지는 자리 (P0 예외 — 크래시·조용한 오답)
 
@@ -312,8 +328,19 @@ execute q using 'abc';
 | `select ? union all select ?` 에 NULL·NULL, 재귀 CTE 시드 NULL | optdebug `qfile_unify_types` assert(release 는 답) | NULL·값 | D6, D-337-07 |
 | 세션변수 숫자 값·파생 열 DOUBLE/DATE 바인드 위 분석 MEDIAN 의 정렬 키(`set @v = 1.5; select median(@v) over (partition by p) …`) | 정렬 키를 CHAR 로 읽어 -1118, 같은 문장을 다른 바인드 타입으로 다시 실행하면 optdebug `or_advance` assert | 값 | #362 ②(dpin 은 #341·#355 부터) |
 | PX 워커가 클론 풀의 앞 실행 누산기 도메인으로 누적(정수 바인드 뒤 문자 바인드) | 결과 타입이 틀림 | 맞는 타입 | D-340-09(CBRD-27484 와 같은 풀) |
+| 필터 인덱스 술어만 읽는 컬럼을 `ALTER … MODIFY/CHANGE` 로 바꿀 때 | 술어 스트림이 옛 타입으로 남는다. 카탈로그의 `filter_expression` 도 옛 모양이다 | 술어를 새 타입으로 다시 컴파일하고 인덱스를 재구축한다. `filter_expression` 이 새 모양이다 | D-368-05([#359](https://github.com/xmilex-git/workspace/issues/359)) |
 
 - develop optdebug 는 SA 실측에서 `collation_gate_probes`(D2)·`list_aggregate_probes` [SETOP](D6)·D4 문장에서 멈췄다. 코어는 원인을 적고 지웠다.
+- #359 의 모양(최종 HEAD SA 실측, develop `c63a3b993`·dpin `326352009` release):
+  ```sql
+  create table fr_t (id int not null, c int);
+  create index i_fr_t on fr_t (id) where c + 1 = 1;
+  alter table fr_t modify c varchar(10);
+  select index_name, filter_expression from db_index where class_name = 'fr_t';
+  -- develop: [dba.fr_t].c+1=1
+  -- 새 답  :  cast([dba.fr_t].c as double)+ cast(1 as double)=1
+  ```
+  develop 도 키 컬럼을 바꿀 때는 이미 이렇게 다시 컴파일한다. 행 답은 같다(TC `alter_filter_index_recompile`).
 - 매뉴얼: 없음.
 
 ## 12. develop 결함으로 남는 것 (지도 밖, P0 로 보존)
@@ -323,10 +350,10 @@ execute q using 'abc';
 - [#349](https://github.com/xmilex-git/workspace/issues/349) 바인드 경로 오답 4곳.
 - [#351](https://github.com/xmilex-git/workspace/issues/351) PL/CSQL 정적 SQL 재작성 2곳(-889).
 - [#353](https://github.com/xmilex-git/workspace/issues/353) `enum_col IN (NULL, NULL)` optdebug assert.
-- [#359](https://github.com/xmilex-git/workspace/issues/359) 필터 인덱스 술어 스트림이 ALTER 뒤 옛 타입이다.
 - [#361](https://github.com/xmilex-git/workspace/issues/361) 해시 리스트 스캔 빌드 키 셋.
 - [#363](https://github.com/xmilex-git/workspace/issues/363) `to_char(날짜, ?)` 에 문자열 아닌 포맷 바인드가 오면 서버가 죽는다.
 - [#365](https://github.com/xmilex-git/workspace/issues/365) `median(@u := s) over ()` 에서 XASL 생성이 assert/SIGSEGV 로 멈춘다.
+- [#370](https://github.com/xmilex-git/workspace/issues/370) `SUM/AVG(DISTINCT x)` 의 인자가 문자열 값을 내는 열린 식이면 plus_as_concat 에서 서로 다른 값을 이어 붙인다.
 - [#326](https://github.com/xmilex-git/workspace/issues/326) ENUM 형제 collation.
 - [#360](https://github.com/xmilex-git/workspace/issues/360) 비직관 규칙 10가지.
 
@@ -381,7 +408,8 @@ CTP 는 오류 코드만 비교하므로 답 파일에는 드러나지 않는다
 | `Num_domain_bind_plan_mismatch` | 바인드 값 타입 ≠ 계획 도메인 | 0 |
 | `Num_planned_convert` | 행에서 계획된 변환기를 부른 횟수 | 행 × 변환 |
 
-- 매뉴얼(통계 목록): 위 10개를 추가한다. 앞의 7개는 "0 이어야 정상"인 진단 통계다.
+- `Num_planned_convert` 는 상수 피연산자를 실행당, 상관 값을 스코프당 한 번 센다(#368, D-368-01·07).
+- 이 10개는 캠페인 계측이다. #345 측정이 끝나면 최종 PR(#346)에서 모두 지운다([D-368-09](https://github.com/xmilex-git/workspace/issues/368#issuecomment-5855677452)). 매뉴얼에 적지 않는다.
 
 ## 16. 매뉴얼에 적을 곳 (요약)
 
@@ -391,6 +419,5 @@ CTP 는 오류 코드만 비교하므로 답 파일에는 드러나지 않는다
 | 문자열 함수 ELT | 행마다 달라지는 선택의 결과 collation 병합, 병합 불가 오류 | §6 |
 | 세션변수(SET, `@v :=`) | 문장 안 한 타입, 다른 타입 대입은 실행 전 오류, 같은 문자셋·collation 문자열은 한 타입 | §9 |
 | 집합 연산·CTE | 가지 타입 불일치는 빈 가지여도 오류, 문자열 결과 정밀도 표시 | §5·§4 |
-| 오류 처리(연산자·형변환) | 타입 조합 거부와 상수 계산·변환 실패는 실행 전 오류, 상수 조건으로 닿지 않는 식은 예외 | §1·§10 |
+| 오류 처리(연산자·형변환) | 타입 조합 거부와 상수 계산·변환 실패는 실행 전 오류, 상수 조건으로 닿지 않는 식은 예외(세션변수 조건은 상수 조건이 아니다) | §1·§10 |
 | 오류 코드 목록 | -1383, -1384 | §15 |
-| 통계 목록 | `Num_domain_*` 9개 + `Num_planned_convert` | §15 |
