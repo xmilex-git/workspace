@@ -418,6 +418,14 @@ _Avoid_: 절단을 OVERFLOW 실패로만 서술, 사용자 CAST 를 명시 모�
 변환기 표의 원소 — (원 타입, 목표 타입, 변환 모드)가 고정된 함수 하나. `tp_value_cast_internal`·`tp_value_coerce_strict` 의 안쪽 case 본문을 뽑은 것으로, 안에서 값 타입을 다시 판정하지 않고 상태(`TP_DOMAIN_STATUS`)만 돌려준다. 실패 정책은 항목을 읽은 호출자가 적용한다(D-325-03·04·07).
 _Avoid_: `tp_value_cast` 를 다시 부르는 래퍼를 셀이라 부르는 것, 셀 안의 `er_set`(셀이 부르는 파서도 상태만 돌려주는 코어여야 한다, D-328-07), 셀 한 단계 아래의 타입 switch(검수 범위는 호출 경로 전체, D-328-01)
 
+**비교 leaf (comparison leaf)**:
+결정된 비교 기록(`DOMAIN_COMPARE`)이 커널마다 드는 연산자별 함수 표(`leaves`)의 한 원소 — 비교 항의 행이 현재 연산자로 인덱싱해 한 번 부른다(DIRECT 커널: 두 쪽 값 선택·NULL 규칙·`cmpval`·결과 읽기, #371 D3). 셀 함수(변환기)와 다르다.
+_Avoid_: 로드 시 연산자를 고정한 leaf(`qexec_eval_instnum_pred` 가 항의 연산자를 바꾼다), leaf 안의 perfmon·er_*·thread entry 호출
+
+**검색 키 비교기 (search compare)**:
+인덱스 스캔이 open 때 한 번 고르는 B-tree 검색 키 비교 방식(`BTID_INT.search_compare`: DIRECT·MIDXKEY_PLAIN·PLANNED, #371 D1). 키 비교표가 비면 모든 값이 컬럼의 타입·콜레이션이라 비교마다 검사하지 않는다.
+_Avoid_: 원소 규칙(INDEX/STRICT)으로 DIRECT 를 판정하는 것(단일 컬럼은 어떤 타입이든 INDEX), 계획 밖 검색(PLANNED, `search_keys` NULL)을 DIRECT 로 두는 것
+
 **기대 도메인 (expected domain)**:
 컴파일 시 파서가 `?` 를 비교·대입 상대(컬럼 등)로부터 추론한 도메인. 변환 계획의 입력이다.
 _Avoid_: 바인드 도메인(실제 값의 타입과 혼동), 호스트 변수 타입
