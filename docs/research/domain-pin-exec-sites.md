@@ -122,7 +122,7 @@ PX                   워커 클론이 각자 resolve → 루트로 역전파    
 | S-40 | `qexec_generate_row_default_expr` qx:13110~13127 / `qexec_execute_insert` qx:13650~13660: 컬럼이 비문자면 `db_to_char` 결과 도메인을 포맷 값(`format_val`)에서 결정 | 행당(INSERT 행) | 포맷 **값** | 규칙표(TO_CHAR 값 슬롯 부류) | G-08(8) | L-51 |
 | S-41 | PL/CSQL 바인드 mc:660~680: 마커의 `expected_domain` 이 NULL 이면 `pt_node_to_db_domain`, 그래도 NULL 타입이면 값 NULL — **서버 실행 하위에는 별도 지점 없음**(prepare 시 타입 소실은 #313 의 문제) | prepare당 | 파서 expected_domain | 규칙표(#313 PL 인자 부류) | G-08(3) | L-10~L-21 |
 | S-42 | 함수 인덱스·필터 predicate 스트림 `fpcache_claim`/`filter_pred_cache.c`: 게이트가 없는 load 경로, 오류 삼킴 | load당 | — | 경계(잔여 VARIABLE 이면 load 거부) | G-07 | L-40 L-48 |
-| S-43 | `hostvar_late_binding` 파라미터: 서버 측 소비자 0 | — | — | 클라이언트 측 deprecated 처리(#320 마무리 항목) | — | — |
+| S-43 | `hostvar_late_binding` 파라미터: 서버 측 소비자 0 | — | — | 클라이언트 측 deprecated 처리(#320 마무리 항목) → #344 D-344-01 로 유지(감사표 S-43) | — | — |
 
 ---
 

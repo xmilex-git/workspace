@@ -2,7 +2,7 @@
 
 지도: xmilex-git/workspace#312 · 티켓: #318(전략) · 짝 티켓: #323(인터페이스 design-it-twice) · #325(변환기 표·계획 슬롯·게이트 표) · 작성 2026-09-22 · 기준 엔진: `develop` `cad27172b`(워크트리 `~/dev/cubrid-worktree/dpin`).
 입력: 규칙표 `domain-pin-rule-table.md`(P0~P7, §2~§6 확정 시점 C/G/X·부류 K/R/S) · 실행 지점 전수 `domain-pin-exec-sites.md`(S-01~S-43, G-01~G-08) · 파서 규칙 `domain-pin-rules-parser.md` §2 · 서버 규칙 `domain-pin-rules-server.md` §6 · 렛저 `domain-pin-lessons.md`(L-08, L-40~L-49 전부 §7 대응표) · #318 코멘트 "#317 에서 넘어온 필수 입력" 1~7.
-결정 기록: #318 코멘트 "결정 기록"(D-318-nn). 이 문서의 §1.4 "선택" 은 그 코멘트가 잠근 뒤에만 정본이다.
+결정 기록: #318 코멘트 "결정 기록"(D-318-nn) — #318 이 잠갔다(D-318-01~10, 2026-09-22). 구현은 #324~#367 이 했고, 구현 결과의 정본은 `domain-pin-interface.md`(자료구조·게이트)와 `domain-pin-audit.md`(삭제·경계)다.
 
 인용 표기는 `domain-pin-exec-sites.md` 와 같다(`fe:` fetch.c, `qx:` query_executor.c, `qe:` query_evaluator.c, `sx:` stream_to_xasl.c, `xs:` xasl_to_stream.c, `xg:` xasl_generation.c, `pd:` parse_dbi.c, `vdb:` db_vdb.c, `qm:` query_manager.c, `pxt:` px_scan_task.cpp, `pxq:` px_query_task.cpp, `co:` class_object.c). `cpp-perf-rules` 규칙은 ID 로 인용한다.
 
@@ -86,7 +86,7 @@
 
 ### 결정 4 — 클라이언트
 - **바인드 값은 그대로 보낸다**: `pt_set_host_variables` 의 `tp_value_cast_preserve_domain` 분기 삭제(복제만; 참조 OID 검사는 유지). CHAR 도메인의 VARCHAR 값 유지(pd:3128)는 게이트의 B7 규칙으로 옮긴다. `host_var_expected_domains[]` 는 남는다 — prepare 응답의 파라미터 메타·PL/CSQL 보고(mc:650~670, S6)·바인드 피크 재계획의 입력이다. 사용자 `?` 배열 vs auto-param 카운트 불변식은 assert 로 고정(L-30).
-- **플랜은 값에 종속되지 않는다**: `pt_make_regu_hostvar` 2단계(값 타입으로 도메인, xg:6418~6445) **삭제**. 바인드 피크 재계획(vdb:3496)은 값을 **비용 추정에만** 쓰고 도메인은 1·3·4 단계(형제 미러·expected_domain)로만 정한다 → 같은 sha1 캐시 항목이 어떤 바인드 타입에서도 같은 슬롯 도메인을 가진다(L-49 의 전제 회복). `hostvar_late_binding=yes` 의 값 치환 재컴파일(nr:3790) 은 파라미터 deprecated 처리(#320)와 함께 클라이언트에서 제거. **기록(F-335-04)**: 사용자 호스트 변수에 대해서는 성립하지만 auto-param 은 리터럴 도메인(B33)을 가져 같은 sha1 의 리터럴 문장과 바인드 문장은 슬롯 도메인이 다를 수 있다.
+- **플랜은 값에 종속되지 않는다**: `pt_make_regu_hostvar` 2단계(값 타입으로 도메인, xg:6418~6445) **삭제**. 바인드 피크 재계획(vdb:3496)은 값을 **비용 추정에만** 쓰고 도메인은 1·3·4 단계(형제 미러·expected_domain)로만 정한다 → 같은 sha1 캐시 항목이 어떤 바인드 타입에서도 같은 슬롯 도메인을 가진다(L-49 의 전제 회복). `hostvar_late_binding=yes` 의 값 치환 재컴파일(nr:3790) 은 파라미터 deprecated 처리(#320)와 함께 클라이언트에서 제거. **→ #344 D-344-01(사용자 결정 2026-09-27): 제거하지 않고 지원을 유지한다** — 치환은 `?` 를 리터럴로 바꿀 뿐이라 게이트와 닿지 않고, SA A/B 에서 develop 과 답이 같다. **기록(F-335-04)**: 사용자 호스트 변수에 대해서는 성립하지만 auto-param 은 리터럴 도메인(B33)을 가져 같은 sha1 의 리터럴 문장과 바인드 문장은 슬롯 도메인이 다를 수 있다.
 - **결과 컬럼 메타데이터**: 컴파일 도메인이 prepare 응답에 실린다(현행 경로). 게이트 확정 슬롯이 결과 컬럼인 문장(`SELECT ?`, `SELECT ? UNION SELECT ?`, `SELECT sum(?)`)은 현행처럼 실행 응답의 `include_column_info` 로 갱신(L-31 재사용) — 이것이 "게이트 잔여" 의 전부이며 L-24 의 미실행 문장 메타는 후속(D-317-15) 그대로.
 - **기각**: 클라이언트가 게이트 규칙을 흉내 내 값을 미리 변환하는 이중 변환(D-M4 위반, L-30 사고 재현).
 
@@ -117,7 +117,7 @@
 
 ---
 
-## 1.5 삭제 목록 초안 — 전략 A 에서 각 지점이 사라지는 축
+## 1.5 삭제 목록 초안 — 전략 A 에서 각 지점이 사라지는 축 (구현 결과: `domain-pin-audit.md`)
 
 축: **CP** = 컴파일이 도메인을 채워 지점이 도달 불가 · **LD** = 로드 도출이 대체 · **G1/G2** = 게이트가 대체 · **KEEP** = 유지·결정적화(경계 assert 자리) · **X** = 실행 결정 잔존 — D-335-10(2026-09-24) 뒤 없음(F10 은 CP).
 
@@ -471,7 +471,7 @@ px_query_executor.cpp:48 / px_query_task.cpp:123 / pxt:648 → qexec_deep_copy_x
 - L-30: `pt_to_xasl` 끝 `assert (parser->dbval_cnt == parser->host_var_count + parser->auto_param_count)`; 서버 G1 ①.
 - L-31: prepare 응답은 컴파일 도메인. GATE 결과 컬럼(`SELECT ?`·`? UNION ?`·`sum(?)`)은 `list_id.type_list` 가 `XPLAN_DOMAIN` 으로 만들어지므로 실행 응답 `include_column_info`(cas_execute.c:1292·1637·1834) 현행 경로로 갱신 — wire 변경 0.
 - S6 PL/CSQL: PL 서버 → `method_callback.cpp:608` prepare **요청**에 마커별 (DB_TYPE, precision, scale, codeset, collation) 배열 추가(미지정 = DB_TYPE_NULL); 클라이언트 파서에 `parser->host_var_decl_domains[]`(별도 배열, JDBC 는 NULL)를 `db_compile_statement` 전에 주입; 타입 검사는 이 도메인을 `?` 노드의 **형제**(P1 의 PL 선언 타입)로 본다. 보고 경로(mc:650~675)는 그대로. `host_var_expected_domains[]` 선점 방식(β)은 tc:8617 이 덮어쓰므로 기각.
-- `hostvar_late_binding`(nr:3805·qr:501·tc:19714)·`pt_is_op_hv_late_bind`(tc:20520) 는 #320 마무리.
+- `hostvar_late_binding`(nr:3805·qr:501·tc:19714)·`pt_is_op_hv_late_bind`(tc:20520) 는 #320 마무리. (`hostvar_late_binding` 은 #344 D-344-01 로 유지 — 감사표 S-43)
 
 ## 2.8 SHOW PLAN / trace
 
@@ -513,7 +513,7 @@ px_query_executor.cpp:48 / px_query_task.cpp:123 / pxt:648 → qexec_deep_copy_x
 
 BR-04·A59·A62(불변 도출을 루프 밖·로드 1회로: cls·FETCH_ALL_CONST·AGG_OPERAND·원복) · BR-06/A61(행 경로 switch → 로드 고정 함수 포인터, 항등은 NULL 로 호출 생략) · MEM-02(노드 크기 불변, arena 항목) · ALLOC-08/A64(값·표 소유 스레드 = 만든 스레드, 워커 사본) · PHYS-01/05(해석기 헤더 레벨 1, `parser/` 포함 금지를 CMake 로) · 캐시(값·표 한 블록 64B 정렬, 워커 사본 분리).
 
-## 2.12 결정 목록(제안 — #323 코멘트 "결정 기록" 이 잠근 뒤 정본)
+## 2.12 결정 목록(#323 이 잠갔다 — D-323-01~18; 뒤 개정은 `domain-pin-interface.md` §12)
 
 | # | 결정(권고) | 대안·기각 근거 |
 |---|---|---|

@@ -177,7 +177,7 @@
 
 여섯 케이스 파일을 양쪽 설치본의 `csql -S` 로 재실행(`diag/<case>-{develop,probe}.{out,err}`, 12회 모두 exit 0, assert 없음). 결과는 §4 표의 C9(`values(1+?),(?+2),(?+3)` 1,'2',3 → 2,4,6 — develop 은 "Data type references are incompatible")·C11(`IFNULL/NVL/NVL2/COALESCE(?, 0)` 12.34568 → 12.00000, `NULLIF(?, ?)`·`LEAST/GREATEST(?, ?, ?)` 는 슬롯뿐이라 불변)·C12·C13·C14·C15 행에 반영했다. 미분류 0.
 
-## 5. 규칙표 개정 제안·#323/#325 입력
+## 5. 규칙표 개정 제안(#327 에서 결정)·#323/#325 입력
 
 **규칙표 개정이 필요한 것(사용자 승인 대상 — 승인 전에는 규칙표 정본을 고치지 않는다, L-01)**
 

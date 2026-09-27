@@ -21,7 +21,7 @@
 | D-325-08 | **NULL 원 값은 leaf 밖에서**: 게이트(상수 1회)·행 kernel 은 `DB_IS_NULL (src)` 이면 leaf 를 부르지 않고 목표 도메인의 typed NULL(`db_value_domain_init`)을 만든다 — 오늘 `tp_value_cast_preserve_domain (…, preserve_domain = true)`(pd:3110) 의 의미 | NULL 검사는 어차피 평가 경로에 있다; leaf 를 단순하게 |
 | D-325-09 | **GATE 슬롯 placeholder = `DB_TYPE_VARIABLE` 도메인(`tp_Variable_domain`) + `REGU_VARIABLE_GATE` 비트**, collation_flag NORMAL. NULL 도메인은 쓰지 않는다 | 경계 (a) 가 "GATE 비트 없는 VARIABLE/LEAVE" 를 거부하므로 자연스러운 짝(D-323-09). 스트림 팩은 오늘도 VARIABLE 도메인을 실어 왔다(변경 0). NULL 도메인은 `tp_value_cast_internal` 의 `default: DOMAIN_INCOMPATIBLE`(od:10028) 자리라 "값 없음" 과 "미확정" 이 섞인다 |
 | D-325-10 | **휘발 피연산자(세션변수 읽기)의 행 값 타입이 게이트 시점과 다르면** 항목의 마지막 (원 타입, leaf) 쌍을 스캔 스크래치에 두고 타입이 바뀐 행에서만 표를 다시 조회한다(분기 1, switch 0). 목표 도메인·실패 정책은 게이트 1회로 불변. 비교 문맥의 휘발 값은 KEEP 이 불가능하므로 실패 = ERROR(-494) | `@v := '1'; @v := @v + 1` 은 행 1 이 VARCHAR, 행 2 부터 INTEGER — 게이트 타입 고정이면 §7 이 약속한 `2,3,4` 가 -494 가 된다(§5 P-S3). KEEP 은 비교 도메인 재확정 = 행당 결정이라 금지 |
-| D-325-11 | **리스트 컬럼(`SELECT @v`·`SELECT ?` 결과 컬럼)의 게이트/행 변환 실패 정책 = `return_null_on_function_errors` 를 따른다**(산술·함수 인자와 같은 부류) — 규칙표 X1 에 "리스트 컬럼" 열 추가 제안 | 실측 P-S1: develop 은 default -494, `yes` 면 NULL(§5). 현행이 파라미터를 보고 있었다 |
+| D-325-11 | **리스트 컬럼(`SELECT @v`·`SELECT ?` 결과 컬럼)의 게이트/행 변환 실패 정책 = `return_null_on_function_errors` 를 따른다**(산술·함수 인자와 같은 부류) — 규칙표 X1 에 "리스트 컬럼" 열 추가 제안(반영됨; 뒤에 D-336-B 가 X1 의 미러 실패 정책을 삭제) | 실측 P-S1: develop 은 default -494, `yes` 면 NULL(§5). 현행이 파라미터를 보고 있었다 |
 | D-325-12 | **규칙표 S4/S5 "실행 중 타입 변경" 행의 답안 변경 판정 입력** = §5 표(P-S1~P-S10 develop 실측 vs 설계 예측). 판정은 사용자 | D-323-18 |
 
 ### 0b. 셀 계약 보완 (D-328-01~07 — 2026-09-22 사용자 승인, #328 코멘트 "결정 기록" 이 정본; #325 정적 리뷰 S1·R1~R6)

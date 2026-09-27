@@ -102,7 +102,7 @@ test_shell 실패 2건(둘 다 `cubrid-testcases-private-ex`):
 
 - 클라이언트: JDBC(`<prefix>/jdbc/cubrid_jdbc.jar`, 호스트 java 1.8) 로 `PreparedStatement` 바인드; 하네스 소스는 측정 티켓에서 툴링 리포 `.git_ignored_dir/scratch/dpin/bench/` 에 두고, 셀 정의·결과표는 `docs/research/` 문서로 기록한다. csql 은 호스트 변수 바인드가 없어 (L) 변형 전용.
 - 각 셀 실행 직전 `SET @collect_exec_stats = 0` → `1`로 `perfmon_start_watch`의 로컬 카운터 초기화를 보장한다. 질의 완료 직후 `0`으로 감시를 멈추고 `SHOW EXEC STATISTICS ALL`을 읽어 판독 질의 자체의 계측을 제외한다. 읽은 값을 ms와 같은 표에 적는다(읽을 때 초기화되므로 전후 차를 빼지 않는다)(카운터는 optdebug·release 어디서나 같은 값이어야 한다 — 다르면 빌드별 코드 경로 차이 = 조사 대상).
-- 성능 판정 기준(초안, 최종 게이트 티켓이 확정): 어떤 셀도 develop 대비 **+5% 이상 느려지지 않고**, (H≠) 변형은 (H=) 와 같은 플랜·같은 카운터 0 을 보인다.
+- 성능 판정 기준(초안, 최종 게이트 티켓 #345 가 확정): 어떤 셀도 develop 대비 **+5% 이상 느려지지 않고**, (H≠) 변형은 (H=) 와 같은 플랜·같은 카운터 0 을 보인다.
 
 ## 5. 잔여·다음 티켓으로 넘기는 것
 

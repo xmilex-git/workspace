@@ -421,7 +421,7 @@ struct domain_plan_key
 - 카운트 불변식(L-30): `pt_to_xasl` 끝 `assert (parser->dbval_cnt == parser->host_var_count + parser->auto_param_count)`; 서버 `qexec_resolve_domains` 1.
 - 결과 컬럼 메타(L-31): prepare 응답은 컴파일 도메인. GATE 결과 컬럼(`SELECT ?`·`? UNION ?`·`sum(?)`)은 `list_id->type_list` 가 `RESOLVED (…)->domain` 으로 만들어지므로 실행 응답 `include_column_info`(cas_execute.c:1292·1637·1834) 현행 경로로 갱신 — wire 변경 0.
 - PL/CSQL 선언 타입(S6): PL 서버 → `method_callback.cpp:608` prepare **요청**에 마커별 (DB_TYPE, precision, scale, codeset, collation) 배열 추가(미지정 = DB_TYPE_NULL); 파서에 `parser->host_var_decl_domains[]`(JDBC 는 NULL)를 `db_compile_statement` 전에 주입; 타입 검사는 이를 `?` 의 **형제**로 본다. 보고 경로(mc:650~675 `semantics.hvs[idx]`)는 그대로. **철회(#339, D-336-B)**: 구현하지 않는다 — PL `?` 는 사용자 `?` 와 같은 슬롯이다(develop 캐스트 자리는 기대 도메인, 나머지 GATE). 이 문단의 요청(`callback_handler::get_sql_semantics`)은 CREATE PROCEDURE 시점 컴파일에만 닿는다: 실행 때 정적 SQL 은 `callback_handler::prepare`(mc:188)로 따로 prepare 되고, 값은 `query_handler::set_host_variables` → `db_push_values` 로 JDBC 와 같은 클라이언트 캐스트 자리를 지난다. PL 컴파일러는 보고된 호스트 변수 타입을 쓰지 않는다(`ParseTreeConverter.checkAndConvertStaticSql` 의 `hostExprs.put(hostExpr, null)`). PL 이 보내는 값은 선언 타입과 다르므로(CHAR → VARCHAR, TIMESTAMP → DATETIME, NUMERIC → 값의 자릿수(p/s), NULL → 타입 없음; `DBType.getObjectDBtype`) 선언 타입을 슬롯 도메인으로 쓰면 develop 답이 바뀐다.
-- `hostvar_late_binding`(name_resolution.c:3805·query_rewrite.c:501·type_checking.c:19714)·`pt_is_op_hv_late_bind`(tc:20520) 는 #320 마무리.
+- `hostvar_late_binding`(name_resolution.c:3805·query_rewrite.c:501·type_checking.c:19714)·`pt_is_op_hv_late_bind`(tc:20520) 는 #320 마무리. (`hostvar_late_binding` 은 #344 D-344-01 로 유지 — 감사표 S-43)
 
 ---
 
@@ -466,7 +466,7 @@ struct domain_plan_key
 
 ---
 
-## 12. 결정 목록 (D-323-01~18, 제안 — #323 코멘트가 잠근 뒤 정본)
+## 12. 결정 목록 (D-323-01~18 — #323 이 잠갔다; 뒤 티켓의 개정은 각 결정의 본문 절에 적었다)
 
 | # | 결정 |
 |---|---|
