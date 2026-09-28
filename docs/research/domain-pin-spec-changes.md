@@ -23,7 +23,7 @@
 | 8 | 공통값 노드의 행 의존 피연산자는 힙 순서와 무관하게 계획 도메인이다 | [D-364-05](https://github.com/xmilex-git/workspace/issues/364#issuecomment-5846701545)(사용자 확인 (가)) | 0(캠페인 TC) |
 | 9 | 문장이 읽는 세션변수는 문장 동안 한 타입이다. 다른 타입은 실행 전 -1384 다 | [#366](https://github.com/xmilex-git/workspace/issues/366#issuecomment-5847984723) U1~U4 | 1 케이스(`bug_bts_6605`) |
 | 10 | 상수의 계산·변환 실패는 행과 무관하게 실행 전 오류다. 데이터로 닿지 않는 상수는 develop 답이다. 세션변수 조건이 막는 가지는 예외가 아니다 | [#367](https://github.com/xmilex-git/workspace/issues/367#issuecomment-5852725558) (가)·D-367-07 · #368 D-368-03 | 0(캠페인 TC) |
-| 11 | develop 결함이 없어진다: 분석 첫 값 변환 실패의 조용한 0행, 정렬 키를 CHAR 로 읽기, optdebug assert 셋, ALTER 뒤 옛 타입의 필터 술어(카탈로그 `filter_expression` 이 새 타입의 모양) | D-337-06·#362·F-341-06 · #368 D-368-05(#359) | 0 |
+| 11 | develop 결함이 없어진다: 분석 첫 값 변환 실패의 조용한 0행, 정렬 키를 CHAR 로 읽기, optdebug assert 셋, ALTER 뒤 옛 타입의 필터 술어(카탈로그 `filter_expression` 이 새 타입의 모양), 집계 인자의 함수를 첫 행 전에 한 번 더 부르기 | D-337-06·#362·F-341-06 · #368 D-368-05(#359) · #341 S-23 | 0(upstream shell `cbrd_25749` 1) |
 
 바뀌지 않는 것은 §14 에 적었다. 파라미터는 바뀌지 않는다. `hostvar_late_binding` 은 그대로 동작한다([D-344-01](https://github.com/xmilex-git/workspace/issues/344#issuecomment-5853038619)). 새 오류 코드와 통계는 §15, 매뉴얼 개정 목록은 §16 이다.
 
@@ -287,7 +287,9 @@ execute q using 'abc';
 | 인덱스 없는 열의 `c = concat(?, '')`·`c in (1, concat(?, ''))`(빈 테이블·걸러진 행) | 0행 | -181 |
 | 0행의 `median(?)` 에 `'abc'`, `median('abc')`, `median(B'0001')`, `median(?) over ()`, `percentile_cont(0.5) within group (order by ?)`, 세션변수 `'abc'` | NULL(또는 0행) | -1118 |
 
+- upstream shell 의 예(`bug_xdbms_sus18`, JDBC): `select x.a from xoo x where x.a = to_number(?) and x.a = ?` 에 ('1x', '10'), xoo 는 a = 1, 2 의 두 행. develop 은 행마다 `x.a = ?` 가 거짓이라 `to_number('1x')` 를 계산하지 않아 0행이다. 새 답은 실행 전 -834(`to_number()` 의 형식 불일치)다. 테스트는 세 번째 실행의 -834 를 기대하도록 바꿨다(`domain-pin-tc-changes.md`).
 - 인덱스 키 자리의 상수는 develop 도 스캔을 열 때 -181 이다(답 불변). 앞 컬럼이 NULL 인 복합 키, 닿지 않는 스캔에서만 달라진다(D-367-03).
+- 게이트의 -181 문구는 develop 이 그 오류를 내던 자리의 타입 순서를 따른다(#345 D-345-05, upstream shell `bug_bts_14584`·`cubrid_262`·`cbrd_24905`). 인덱스 키 범위 항(where_range)의 상수는 develop 이 B-tree 검색에서 만나므로 상수의 타입이 먼저다(`execute st using '147abc'` → `"character" to domain "integer"`). 어느 인덱스 키에도 들지 못하는 값은 단일 컬럼 키면 값이 먼저(B-tree 비교), 복합 키면 컬럼이 먼저다(`scan_dbvals_to_midxkey`). 그 밖의 항은 항의 왼쪽이 먼저다.
 - **데이터로 닿지 않는 상수는 develop 답이다(D-367-07, 사용자 "develop 답 유지").** 상수 조건이 어떤 데이터로도 그 상수에 닿지 않게 막으면 오류를 내지 않는다. 해당하는 조건은 다음과 같다.
   - CASE·IF·DECODE 의 상수 조건
   - 도메인이 정해진 COALESCE·NVL·IFNULL·NVL2 의 상수 첫 피연산자
@@ -328,6 +330,7 @@ execute q using 'abc';
 | `select ? union all select ?` 에 NULL·NULL, 재귀 CTE 시드 NULL | optdebug `qfile_unify_types` assert(release 는 답) | NULL·값 | D6, D-337-07 |
 | 세션변수 숫자 값·파생 열 DOUBLE/DATE 바인드 위 분석 MEDIAN 의 정렬 키(`set @v = 1.5; select median(@v) over (partition by p) …`) | 정렬 키를 CHAR 로 읽어 -1118, 같은 문장을 다른 바인드 타입으로 다시 실행하면 optdebug `or_advance` assert | 값 | #362 ②(dpin 은 #341·#355 부터) |
 | PX 워커가 클론 풀의 앞 실행 누산기 도메인으로 누적(정수 바인드 뒤 문자 바인드) | 결과 타입이 틀림 | 맞는 타입 | D-340-09(CBRD-27484 와 같은 풀) |
+| 집계의 인자가 함수일 때(`select (select max(pl_csql_int(col1)) from tbl) from tbl`, 4행) | 첫 행 전 도메인 해석(`qexec_resolve_domains_for_aggregation`)이 인자를 한 번 더 계산해 함수를 5번 부른다. NOT DETERMINISTIC PL 함수도 그렇다. develop 도 BENCHMARK 에서만 이 계산을 피한다 | 행마다 한 번, 4번(집계 도메인은 게이트가 정한다, #341 S-23). 트레이스의 `FUNC … calls:` 가 5 → 4 다(upstream shell `cbrd_25749`) | #341 S-23 · #345 |
 | 필터 인덱스 술어만 읽는 컬럼을 `ALTER … MODIFY/CHANGE` 로 바꿀 때 | 술어 스트림이 옛 타입으로 남는다. 카탈로그의 `filter_expression` 도 옛 모양이다 | 술어를 새 타입으로 다시 컴파일하고 인덱스를 재구축한다. `filter_expression` 이 새 모양이다 | D-368-05([#359](https://github.com/xmilex-git/workspace/issues/359)) |
 
 - develop optdebug 는 SA 실측에서 `collation_gate_probes`(D2)·`list_aggregate_probes` [SETOP](D6)·D4 문장에서 멈췄다. 코어는 원인을 적고 지웠다.
@@ -374,7 +377,8 @@ CTP 는 오류 코드만 비교하므로 답 파일에는 드러나지 않는다
 - 타입 격자: 산술·비교·공통값·집계의 결과 타입, 변환 방향, 손실 정책(비교 strict-or-keep, 대입 반올림), `return_null_on_function_errors`.
 - 바인드 캐스트: develop 이 기대 도메인으로 바인드를 캐스트하던 자리는 클라이언트에서 develop 규칙대로 한다(D-335-08).
 - 게이트는 나머지 슬롯의 도메인을 바인드 값의 타입으로 develop 격자대로 정한다(D-336-A·B).
-- collation: coercibility·병합 규칙·`SET NAMES`/`ALTER … COLLATE` 재컴파일·플랜 캐시 키는 그대로다(D-322-03). -1150/-622 의 시점도 develop 과 같다(행이 계산하는 병합). 예외는 ELT(§6)와 상수(§10)다.
+- collation: coercibility·병합 규칙·`SET NAMES`/`ALTER … COLLATE` 재컴파일·플랜 캐시 키는 그대로다(D-322-03).
+- 플랜·결과 캐시 키: develop 과 같다. 리터럴 문장과 그 바인드 형태(`?`)가 계획을 함께 쓰고, CTE 부질의의 결과 캐시를 같은 리터럴 문장이 함께 쓴다(#345 D-345-04, 사용자 결정 (가)). #336 이 넣었던 `;host_var_cnt=N` 접미사는 upstream shell 에서 결과 캐시 공유(`cbrd_25035`)와 plandump 의 sha1·SQL_ID(`cbrd_20149_ddl`·`_xasl`)를 바꿔 없앴다. 계획을 함께 쓰는 문장이 다른 타입의 값을 보내는 자리는 출력 목록의 바인드(UPDATE SET 값)뿐이고, 게이트가 develop 의 튜플 캐스트로 한 번 바꾼다(D-345-06). -1150/-622 의 시점도 develop 과 같다(행이 계산하는 병합). 예외는 ELT(§6)와 상수(§10)다.
 - 플랜: 바인드 피크 재계획과 LIKE/LIMIT 값 의존 재컴파일의 플랜 모양은 그대로다(D-318-05).
 - 인덱스 키: 단일 컬럼 키는 값 그대로 쓰고, 복합 키는 strict-or-keep 이다(develop 답, #342).
 - PL/CSQL 정적 SQL 의 `?` 는 JDBC `?` 와 같은 슬롯이다. 선언 타입은 쓰지 않는다(D-339-01, develop 답).
@@ -393,23 +397,7 @@ CTP 는 오류 코드만 비교하므로 답 파일에는 드러나지 않는다
 
 `ER_LAST_ERROR` 는 -1385 다. ko_KR 문구도 추가했다.
 
-통계(`SET @collect_exec_stats = 1` 뒤 `SHOW EXEC STATISTICS ALL`, perfmon)는 10개다.
-
-| 이름 | 뜻 | 기대값 |
-|---|---|---|
-| `Num_domain_resolve_fetch` | fetch 가 값에서 도메인을 정한 횟수 | 0 |
-| `Num_domain_coerce_compare` | 비교가 타입이 다른 두 값의 도메인을 값에서 정한 횟수 | 0(계획이 답하지 않는 top-N 키만 셈, 실측 0) |
-| `Num_domain_resolve_list` | 리스트·정렬 키 도메인을 값에서 정한 횟수 | 0 |
-| `Num_domain_resolve_agg` | 집계·분석 도메인을 첫 값에서 정한 횟수 | 0 |
-| `Num_domain_key_coerce` | 인덱스 키 변환을 값에서 정한 횟수 | 0(계획 밖 B-tree 검색만) |
-| `Num_domain_px_resolve` | PX 워커가 도메인을 정한 횟수 | 0 |
-| `Num_domain_restore_clone` | 실행 뒤 플랜 노드 도메인을 되돌린 횟수 | 0 |
-| `Num_domain_gate_convert` | 게이트가 값을 변환한 횟수(값 × 실행) | 상수 수 × 실행 |
-| `Num_domain_bind_plan_mismatch` | 바인드 값 타입 ≠ 계획 도메인 | 0 |
-| `Num_planned_convert` | 행에서 계획된 변환기를 부른 횟수 | 행 × 변환 |
-
-- `Num_planned_convert` 는 상수 피연산자를 실행당, 상관 값을 스코프당 한 번 센다(#368, D-368-01·07).
-- 이 10개는 캠페인 계측이다. #345 측정이 끝나면 최종 PR(#346)에서 모두 지운다([D-368-09](https://github.com/xmilex-git/workspace/issues/368#issuecomment-5855677452)). 매뉴얼에 적지 않는다.
+통계는 바뀌지 않는다. 캠페인이 계측으로 넣었던 perfmon 통계 10개(`Num_domain_resolve_fetch`·`_coerce_compare`·`_resolve_list`·`_resolve_agg`·`_key_coerce`·`_px_resolve`·`_restore_clone`·`_gate_convert`·`_bind_plan_mismatch`, `Num_planned_convert`)는 #345 의 측정이 끝난 뒤 upstream PR 전에 모두 지웠다([D-368-09](https://github.com/xmilex-git/workspace/issues/368#issuecomment-5855677452), #345 가 #346 을 합쳐 수행). `SHOW EXEC STATISTICS ALL` 의 출력과 `cubrid statdump` 는 develop 과 같다. `cubrid plandump` 의 XASL 캐시 메모리 값은 조금 크다: 계획마다 인덱스 스캔 1개당 8바이트(스트림에 싣는 B-tree 키 도메인, #342), 클론마다 16바이트(`XASL_NODE` 의 로드용 포인터 둘)다. upstream shell `cbrd_20149_ddl`·`_xasl`·`_filter` 의 가린 메모리 줄이 이 때문에 10 KB·반올림 경계를 넘었다(TC 변경 문서 §4.3). 계측 기간의 값과 기대값은 `domain-pin-bench-baseline.md`(#324 이전 표, #345 이후 절)에 남아 있다.
 
 ## 16. 매뉴얼에 적을 곳 (요약)
 

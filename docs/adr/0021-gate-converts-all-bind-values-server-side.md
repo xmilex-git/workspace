@@ -20,6 +20,8 @@ locked-by: xmilex-git/workspace#320 (2026-09-22)
 
 **정정 3 (2026-09-24, #339)**: Consequences 셋째 항목의 PL/CSQL 선언 타입 전달(`host_var_decl_domains[]`, 규칙표 S6·D-323-10)은 구현하지 않는다 — 정정 2 가 PL 정적 SQL 의 `?` 에도 그대로 적용된다(PL 인자는 슬롯, 규칙표 S7). PL 이 보내는 값은 선언 타입과 다르다(CHAR → VARCHAR, TIMESTAMP → DATETIME, NUMERIC → 값의 자릿수(p/s), NULL → 타입 없음; `DBType.getObjectDBtype`) — 선언 타입을 슬롯 도메인으로 쓰면 develop 답이 바뀐다. 실행 때 정적 SQL 의 바인드는 `query_handler::set_host_variables` → `db_push_values` 로 JDBC 와 같은 클라이언트 캐스트 자리를 지나므로 PL 전용 경로가 필요 없다. `host_var_expected_domains[]` 는 그대로 남는다.
 
+**정정 5 (2026-09-28, #345 D-345-04·D-345-06, 사용자 결정 (가))**: 위 정정의 "계획 공유(F-335-04)는 캐시 키로 가른다(#336 결정 ②)" 는 철회한다. `;host_var_cnt=N` 접미사는 없고 캐시 키는 develop 의 것이다. 리터럴 문장과 그 바인드 형태, CTE 부질의(부모의 리터럴을 호스트 변수로 받는다)와 같은 리터럴 문장이 계획·결과 캐시를 함께 쓴다. 접미사는 upstream PR shell 에서 결과 캐시 공유(`cbrd_25035`)와 plandump 의 sha1·SQL_ID(`cbrd_20149_ddl`·`_xasl`)를 바꿨다. F-335-04 의 이유(계획에 형태별 캐스트 결정)는 정정 2 이후 남지 않는다. 비교·키는 바인드 값으로 판정하고, LIMIT 는 GATE 슬롯이고, 대입은 속성 도메인으로 바꾼다. 출력 목록의 바인드(UPDATE SET 값)는 계획의 컴파일 도메인을 읽는다. 공유 계획에서 다른 타입이 오면 게이트가 develop 의 튜플 캐스트(`tp_value_auto_cast`)로 한 번 바꾼다(D-345-06). 규칙표 B33 의 "K 게이트가 값을 그 도메인으로 변환" 이 이 자리에서 구현됐다. 캐스트가 거부하는 값은 그대로 두어 develop 처럼 행에서 오류가 난다.
+
 ## Considered Options
 
 - **클라이언트가 게이트 규칙을 흉내 내 미리 변환(이중 변환)**: 기각. 같은 규칙 두 벌(P6), 이전 캠페인의 `host_var_expected_domains[]` OOB → cub_cas SIGSEGV 사고(L-30)의 재현 경로.

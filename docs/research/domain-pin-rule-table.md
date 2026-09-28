@@ -87,7 +87,7 @@
 | B30 | 인덱스 키(단일 컬럼): `int_col = ?` 1.5, `int_col > 1.5` | 키 도메인 = 값 도메인(현행 strict-or-keep) | K 게이트 1회(strict 성공 시 인덱스 도메인, 실패 시 값 도메인), B+tree 원소 비교 = 계획된 **R idx_elem→double 변환기**(`btree_compare_key` 의 comparable 판정·`tp_value_compare_with_error` 폴백 제거) | C/G | 현행(실측: 인덱스/순차 스캔 답 전 셀 일치) | — (P4·P6) |
 | B31 | 인덱스 키(다중 컬럼, midxkey) | 원소마다 strict-or-keep, 실패 원소만 값 도메인 | 게이트가 setdomain 을 1회 확정(현행 `need_new_setdomain`/`prebuilt_midxkey_domains` 대체), 원소 변환기 고정; 상관 키는 range open 시 S | C/G | 현행 | — |
 | B32 | ISS 첫 컬럼, KEYLIMIT, MRO/top-N 정렬 도메인 | #314 G-05·L-44·L-45(e) 그대로: 인덱스 스키마에서 시딩, 오름차순 사본 | C | 현행 | — (#323 키 변환 계획) |
-| B33 | auto-param 슬롯(`int_col = 3`, `int_col > 1.5`, `int_col = to_number('3')`) | 리터럴 규칙 결과 도메인(INTEGER / DOUBLE / NUMERIC floating) | K 게이트가 값을 그 도메인으로 변환 → "값 타입 = 계획 도메인" 불변식 | C | 현행(플랜 `c = ?:0` 동일) | — (D-317-08) (D-335-07·08: auto-param 은 develop 의 컴파일 꼬리 캐스트 그대로 — 값과 슬롯의 타입·collation 이 같으면 변환하지 않는다; 컬렉션 리터럴을 변환하면 develop 의 NULL 저장 답이 바뀐다, 그 결함은 #347) |
+| B33 | auto-param 슬롯(`int_col = 3`, `int_col > 1.5`, `int_col = to_number('3')`) | 리터럴 규칙 결과 도메인(INTEGER / DOUBLE / NUMERIC floating) | K 게이트가 값을 그 도메인으로 변환 → "값 타입 = 계획 도메인" 불변식 | C | 현행(플랜 `c = ?:0` 동일) | — (D-317-08) (D-335-07·08: auto-param 은 develop 의 컴파일 꼬리 캐스트 그대로 — 값과 슬롯의 타입·collation 이 같으면 변환하지 않는다; 컬렉션 리터럴을 변환하면 develop 의 NULL 저장 답이 바뀐다, 그 결함은 #347) **#345 D-345-06**: 공유 계획에서 출력 목록의 바인드(UPDATE SET 값)에 다른 타입이 오면(`DEFAULT (다른 컬럼)` 은 대입 컬럼 타입으로 바뀌지 않는다) 게이트가 develop 의 튜플 캐스트로 한 번 바꾼다(`DOMAIN_PLAN_LIST_BIND`). 비교·키는 값으로 판정, 대입은 속성 도메인으로 바꾼다. |
 | B34 | `LIMIT ?`, `LIMIT ?, ?`, `KEYLIMIT ?`, `orderby_num() <= ?` | BIGINT(현행) | K 게이트 값→bigint(문자 파싱 허용, 날짜 -494 현행) | C | 현행 | — |
 
 ## 4. 규칙표 — 대입·공통값·집계·함수·세션변수·PL·기타

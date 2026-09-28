@@ -11,6 +11,10 @@
 
 카운터 증거는 perfmon 카운터(`SHOW EXEC STATISTICS`, 셀 하네스)와 진단 빌드 CTP 전수 집계(각 카운터 증가 자리에 이유별 한 줄을 찍는 빌드, 커밋하지 않음) 두 가지다. CTP 는 perfmon 추적을 켜지 않으므로 전수 증거는 진단 집계와 경계 assert(코어 0)다.
 
+**최종(#345, 2026-09-28)**: 재기반한 머리 `328058c80`(develop `e1c3db198` 위)에서 진단 전수를 한 번 더 돌렸다. 계측 빌드 `install-diag-g0` 는 남은 카운터 자리 셋(`tp_value_compare_with_error` 의 두 타입 값 비교, `qexec_topn_cmpval` 의 계획 도메인 없는 키, `btree_compare_key` 의 검색 키 표 없는 비교)에 한 줄씩 찍는다. 결과는 CTP sql 17483/17483 · medium 975/975 이다. 적중 1,074줄은 모두 medium 의 첫 케이스 전 loaddb 단계(`col_find`·`col_sort` 의 집합 원소 비교)라 질의 실행 밖이고, **질의 실행 중 적중은 0줄**이다(`sql-20260928T070857Z-3023843` 집계는 `.git_ignored_dir/scratch/312-345/g0/diag/census.txt`). 그 뒤 캠페인 카운터 10종과 증가 자리는 upstream PR 전에 지웠다(D-368-09, `c3b4dad4b`). 아래 표의 카운터 증거 열은 그 기록이다. 경계 assert 와 -1383 은 그대로 남는다.
+
+**#345 shell 수정(2026-09-28, D-345-06)**: 출력 목록의 튜플 쓰기(`qdata_get_dbval_from_constant_regu_variable`)는 값 타입이 열의 도메인과 다르면 develop 처럼 `tp_value_auto_cast` 로 바꾼다. 컴파일이 타입을 준 바인드는 불변식상 이 캐스트를 타지 않는다. 다만 공유 계획(리터럴 문장끼리, 리터럴과 바인드 형태, D-345-04)에서 `DEFAULT (다른 컬럼)` 같은 다른 타입이 올 수 있다. 그런 값은 G1 이 같은 캐스트로 한 번 바꾸고(`DOMAIN_PLAN_LIST_BIND`), 캐스트가 거부한 값만 develop 처럼 튜플 쓰기에서 오류가 난다. 행의 타입 결정으로 세지 않는다(실패 경로).
+
 ## 1. 지점 S-01~S-43
 
 | ID | 지점(요약) | 판정 | 티켓 | 정적 근거 | 카운터 증거 | 경계 위치 |
