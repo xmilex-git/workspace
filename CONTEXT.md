@@ -391,7 +391,7 @@ _Avoid_: 변환 계획·conversion plan(옛 이름), 맨 "plan"(쿼리 플랜과
 _Avoid_: 서버 게이트·실행 게이트·게이트·G1(옛 이름, D-374-07), G1 step N·7b(단계는 함수 이름으로 부른다), 블록 게이트·G2(폐기), execute 직전 잔여 확정(이전 캠페인 용어), 세 번째 확정 지점(PX 워커), 도메인 계획 안의 DB_VALUE 를 바꾸는 제자리 coerce, 스캔 open 마다 도메인을 정하는 것
 
 **가변 POS (variable POS)**:
-타입이나 collation 을 바인드 값이 정하는 호스트 변수·auto-param 자리(`TYPE_POS_VALUE` 이고 도메인이 가변 도메인) — 형제가 전부 POS 인 자리, 집계·분석 인자, ENUM 산술, 값 요구 함수 인자, 형제 없는 세션변수 읽기, 그리고 숫자 컬럼과 비교하는 `?`(`int_col = ?`, `id IN (?, ?)`, `bigint_col = ?` — develop 파서가 기대 도메인을 주지 않아 클라이언트가 캐스트하지 않고, 값의 타입이 답을 정한다: `id IN (?, ?)` 에 1, 2.5 를 주면 1 행, #372 탐침). 실행 전 도메인 확정이 실행당 1회 값 타입으로 확정한다(D-317-02·12·13). 문자 POS 이면 collation 도 같은 자리에서 값의 collation 으로 기록된다 — 도메인과 collation 은 확정 도메인 표의 한 항목이다. 컴파일이 타입을 정했지만 collation 이 LEAVE·ENFORCE 인 문자 POS(auto-param 포함)도 값 도메인을 기록하는 가변 POS 다(현재 코드 `COLLATION_GATE`, #336·#338).
+타입이나 collation 을 바인드 값이 정하는 호스트 변수·auto-param 자리(`TYPE_POS_VALUE` 이고 도메인이 가변 도메인) — 형제가 전부 POS 인 자리, 집계·분석 인자, ENUM 산술, 값 요구 함수 인자, 형제 없는 세션변수 읽기, 그리고 숫자 컬럼과 비교하는 `?`(`int_col = ?`, `id IN (?, ?)`, `bigint_col = ?` — develop 파서가 기대 도메인을 주지 않아 클라이언트가 캐스트하지 않고, 값의 타입이 답을 정한다: `id IN (?, ?)` 에 1, 2.5 를 주면 1 행, #372 탐침). 실행 전 도메인 확정이 실행당 1회 값 타입으로 확정한다(D-317-02·12·13). 문자 POS 이면 collation 도 같은 자리에서 값의 collation 으로 기록된다 — 도메인과 collation 은 확정 도메인 표의 한 항목이다. 컴파일이 타입을 정했지만 collation 이 LEAVE·ENFORCE 인 문자 POS(auto-param 포함)도 값 도메인을 기록하는 가변 POS 다(코드 `DOMAIN_PLAN_LATE_BIND_COLLATION`, #336·#338).
 _Avoid_: 게이트 확정 슬롯·게이트 슬롯·slot(옛 이름 — CUBRID 에서 slot 은 힙 slotted page 의 것이다, D-374-08·18), 행 시점 확정과 혼용, 타입만 실행 전에 정하고 collation 은 행에 남기는 서술
 
 **collation 병합 (collation merge)**:
@@ -403,7 +403,7 @@ _Avoid_: LEAVE 계약(실행이 값을 보고 도메인을 정하는 develop 기
 _Avoid_: 하향 전파(previous-campaign 용어), 형제 미러와 혼용(타입 축), "컴파일 ENFORCE 로 POS collation 이 확정된다"(값은 클라이언트가 보낸 그대로라 실행 전 확정이 값의 도메인을 기록한다, F-336-01)
 
 **collation 늦은 바인딩 노드 (collation late-binding node)**:
-컴파일이 타입을 정했지만 collation 을 값에 맡긴(LEAVE) 또는 타입을 모르는 피연산자에 ENFORCE 한 문자 식 노드(`concat(?, ?)`, `upper(?)`, `to_char(dt, ?)`, CAST 래퍼, 문자 결과 함수). 로드 도출이 확정 도메인 표 번호를 주고(현재 코드 `GATE | COLLATION_GATE`), 실행 전 도메인 확정이 피연산자의 확정 도메인에 그 연산자가 값에 하는 규칙(병합·첫 문자 인자·서식 인자·LANG_SYS·분기, CAST LEAVE/ENFORCE)을 실행당 1회 적용해 타입·codeset·collation 을 정한다. precision 은 값이 정한다(floating, D-338-03). 병합이 실패하면 값 없음이고 행 계산이 develop 처럼 오류를 낸다. 행이 고르는 분기의 도메인이 다르면, ELT 의 인덱스가 실행 전 확정에서 값(바인드·리터럴)일 때는 그 가지의 도메인이고 그 밖에는 가지 collation 을 합친 도메인이다(D-343-01) — 확정 없음은 없다(#343, D-338-02 대체).
+컴파일이 타입을 정했지만 collation 을 값에 맡긴(LEAVE) 또는 타입을 모르는 피연산자에 ENFORCE 한 문자 식 노드(`concat(?, ?)`, `upper(?)`, `to_char(dt, ?)`, CAST 래퍼, 문자 결과 함수). 로드 도출이 확정 도메인 표 번호를 주고(코드 `DOMAIN_PLAN_LATE_BIND | DOMAIN_PLAN_LATE_BIND_COLLATION`), 실행 전 도메인 확정이 피연산자의 확정 도메인에 그 연산자가 값에 하는 규칙(병합·첫 문자 인자·서식 인자·LANG_SYS·분기, CAST LEAVE/ENFORCE)을 실행당 1회 적용해 타입·codeset·collation 을 정한다. precision 은 값이 정한다(floating, D-338-03). 병합이 실패하면 값 없음이고 행 계산이 develop 처럼 오류를 낸다. 행이 고르는 분기의 도메인이 다르면, ELT 의 인덱스가 실행 전 확정에서 값(바인드·리터럴)일 때는 그 가지의 도메인이고 그 밖에는 가지 collation 을 합친 도메인이다(D-343-01) — 확정 없음은 없다(#343, D-338-02 대체).
 _Avoid_: collation 게이트 노드(옛 이름, D-374-15), 늦은 바인딩 노드(타입이 가변인 노드 — 타입 축)와 혼용, 컴파일이 LEAVE 를 없앤다는 서술(컴파일은 develop 그대로, Q2), 실행이 첫 값으로 라벨을 정한다는 서술(S-02 는 확정을 읽는다)
 
 **피연산자 부류 (operand class)**:
@@ -439,12 +439,12 @@ _Avoid_: 절단을 OVERFLOW 실패로만 서술, 사용자 CAST 를 명시 모�
 _Avoid_: 셀 함수·leaf·cell(옛 이름, 실행 도메인과도 혼동), `tp_value_cast` 를 다시 부르는 래퍼를 변환기라 부르는 것, 변환기 안의 `er_set`(변환기가 부르는 파서도 상태만 돌려주는 코어여야 한다, D-328-07), 변환기 한 단계 아래의 타입 switch(검수 범위는 호출 경로 전체, D-328-01)
 
 **비교 연산자 함수 (comparison operator function)**:
-확정 비교(`DOMAIN_COMPARE`)가 비교 방법마다 드는 연산자별 함수 표(현재 코드 `leaves`)의 한 원소 — 비교 항의 행이 현재 연산자로 인덱싱해 한 번 부른다(DIRECT 방법: 두 쪽 값 선택·NULL 규칙·`cmpval`·결과 읽기, #371 D3). 변환기와 다르다.
+확정 비교(`DOMAIN_COMPARE`)가 비교 방법마다 드는 연산자별 함수 표(코드 `operator_functions`)의 한 원소 — 비교 항의 행이 현재 연산자로 인덱싱해 한 번 부른다(DIRECT 방법: 두 쪽 값 선택·NULL 규칙·`cmpval`·결과 읽기, #371 D3). 변환기와 다르다.
 _Avoid_: 비교 leaf(옛 이름), 커널(kernel, 옛 이름 — 비교 방법이라 부른다), 로드 시 연산자를 고정한 함수(`qexec_eval_instnum_pred` 가 항의 연산자를 바꾼다), 이 함수 안의 perfmon·er_*·thread entry 호출
 
 **검색 키 비교기 (search compare)**:
-인덱스 스캔이 open 때 한 번 고르는 B-tree 검색 키 비교 방식(`BTID_INT.search_compare`: DIRECT·MIDXKEY_PLAIN·PLANNED, #371 D1). 인덱스 키 비교 표가 비면 모든 값이 컬럼의 타입·콜레이션이라 비교마다 검사하지 않는다. 비교 확정이 아니라 빠른 길 선택이다(D-374-23).
-_Avoid_: 원소 규칙(INDEX/STRICT)으로 DIRECT 를 판정하는 것(단일 컬럼은 어떤 타입이든 INDEX), 계획 밖 검색(PLANNED, `search_keys` NULL)을 DIRECT 로 두는 것
+인덱스 스캔이 open 때 한 번 고르는 B-tree 검색 키 비교 방식(`BTID_INT.search_compare`: DIRECT·MIDXKEY_PLAIN·RESOLVED, #371 D1). 키 컬럼이 제 키가 아닌 값을 받지 않으면(`other_keys` 거짓) 모든 값이 컬럼의 타입·콜레이션이라 비교마다 검사하지 않는다. 비교 확정이 아니라 빠른 길 선택이다(D-374-23).
+_Avoid_: 원소 규칙(INDEX/STRICT)으로 DIRECT 를 판정하는 것(단일 컬럼은 어떤 타입이든 INDEX), 계획 밖 검색(RESOLVED, `search_keys` NULL)을 DIRECT 로 두는 것
 
 **기대 도메인 (expected domain)**:
 컴파일 시 파서가 `?` 를 비교·대입 상대(컬럼 등)로부터 추론한 도메인. 도메인 계획의 입력이다. 비교에서는 상대에 따라 다르다 — 문자열·날짜 컬럼과 비교하는 `?` 는 그 컬럼의 도메인을 받고(클라이언트가 캐스트), 숫자 컬럼과 비교하는 `?` 는 받지 않는다(가변 POS).
@@ -498,7 +498,7 @@ _Avoid_: 실행 중 플랜 필드에 쓰는 것(행 시점 확정), 계획을 �
 XASL_STATE 에 사는 실행별 항목 — 가변 POS·늦은 바인딩 노드와 그 파생 소비자(산술 결과·리스트 컬럼·누산기·정렬 키·비교 도메인)의 실행당 답(도메인, collation, 변환기)이 여기에만 있고 도메인 계획에는 없다. 실행 전 도메인 확정이 채운 뒤 봉인되어 실행 중 누구도 쓰지 않으며, PX 워커는 이 표를 값 배열과 함께 깊은 복사로 상속한다(D-318-03·06, D-323-08).
 _Avoid_: 게이트 표(gate table, 옛 이름), 슬롯 번호(`slot`, 옛 이름 — 번호는 `resolved_index`, D-374-18), 플랜 노드의 `domain` 필드(불변), 바인드 값 배열과 혼용, 실행 중 쓰기
 
-**실행 도메인 (execution domain)** — 코드 이름 `RESOLVED_DOMAIN_TABLE.taken` · `taken_list` · `taken_type`, 항목의 `cell`:
+**실행 도메인 (execution domain)** — 코드 이름 `RESOLVED_DOMAIN_TABLE.node_domains` · `interpolation_list_domains` · `operand_types`, 항목의 `node_domain_index`:
 develop 이 실행 중 노드 필드에 쓰고 XASL clear 에서 되돌리던 답(문자 LEAVE 노드의 첫 계산, 셋업이 주는 집계·분석·위치·출력 열 도메인과 연산자 타입 — 행이 정하던 D-336-E 바인딩은 #366 에서 없어짐)을 두는 XASL_STATE 의 실행별 자리. 로드가 컴파일 도메인이 가변 도메인인 노드와 모든 집계·분석에 번호를 주고, 노드마다 따로다(생산자 항목을 공유하는 값 포인터도 자기 실행 도메인). 실행의 주인 스레드만 쓰고, 읽는 곳은 실행 도메인 ?: 컴파일 도메인을 읽으며, 실행 동안 남아 develop 의 쓰기·원복 이력과 같다(#355 D-355-01·09).
 _Avoid_: 노드 칸·cell(옛 이름, 변환기와 혼동), 확정 도메인 표(봉인된 확정)와 혼용, 플랜 노드 필드에 쓰는 것, 새 확정 지점으로 서술(develop 이 쓰던 답의 자리일 뿐이다)
 
@@ -508,7 +508,7 @@ _Avoid_: 변환 계획 항목·plan item(옛 이름), 확정 도메인 표(실�
 
 **실행 임시값 (execution temporary)** — 코드 이름 `DOMAIN_EXECUTION_TEMPORARY`:
 스코프(실행·스캔·range·집계 그룹·바깥 행)에 진입할 때 확정 변환기를 1회 적용해 그 스코프의 기존 실행 상태에 두는 값, 그리고 상관 복합 키의 혼합 setdomain 같은 스코프 한정 파생물. 스코프에 다시 들어가면 세대(generation)가 바뀌어 새로 변환한다. 확정이 아니라 캐시이며, 도메인 계획과 확정 도메인 표는 그대로 읽기 전용이다(D-323-08, D-374-17).
-_Avoid_: held value·보유값·epoch(옛 이름, 현재 코드 `DOMAIN_HELD_VALUE`), 확정 도메인 표에 쓰는 것, 두 번째 확정 지점으로 서술
+_Avoid_: held value·보유값·epoch(옛 이름, 옛 코드 `DOMAIN_HELD_VALUE`), 확정 도메인 표에 쓰는 것, 두 번째 확정 지점으로 서술
 
 **POS 참조 (POS reference)**:
 같은 `?`(val_pos) 를 참조하는 regu 마다 따로 두는 변환값. (val_pos, 목표 도메인, 실패 정책)이 같으면 POS 참조를 공유하고, 다르면(등식 축약·UNION 푸시다운이 다른 형제 옆에 같은 `?` 를 복사한 경우) 갈린다. 실패 정책의 NULL 은 그 POS 참조에만 들어가고 원 바인드 값은 불변이다(D-323-03·04).
@@ -522,11 +522,11 @@ _Avoid_: 휘발 피연산자·volatile(옛 이름, C 키워드와 혼동), 상�
 문장이 읽는 세션변수가 그 문장 동안 갖는 한 타입. 실행 시작 때 값의 타입과 문장 안 대입식의 계획 도메인을 합친다 — 열이 어떤 행에서 NULL 이어도 열의 타입이고, 명시적 NULL·미정의 시작만 타입이 없다. codeset·collation 이 같은 문자열은 길이·CHAR/VARCHAR 와 무관하게 한 타입(대입하는 변수의 확정은 가변 길이 VARCHAR)이고, 그 밖의 다른 타입은 실행 전 `ER_QPROC_SESSION_VARIABLE_TYPE`(-1384)이다. 실행 전 도메인 확정이 정하고 행의 읽기는 그 타입만 받는다 — 실행 전 확정이 보지 못한 쓰기(저장 프로시저)의 다른 타입 값도 같은 오류다(#366, 사용자 결정 U1~U4, D-366-01~06).
 _Avoid_: 행마다 타입이 바뀌는 변수(D-336-E, #366 에서 없어짐), 대입만 하고 읽지 않는 문장에 적용하는 것, 숫자끼리는 같은 타입이라는 서술(INT 에 DOUBLE 을 넣으며 읽으면 오류다), G1 7b 단계(옛 이름)
 
-**상수 오류 (constant error)** — 코드 이름 `qexec_evaluate_constant`, `qexec_raise_reached_failures`:
+**상수 오류 (constant error)** — 코드 이름 `qexec_evaluate_constant_expression`, `qexec_raise_deferred_errors`:
 상수(리터럴·바인드·상수식 — 컴파일이 상수에 씌운 암시적 CAST 포함)의 계산이나 변환이 실패하는 것. 실행 전 도메인 확정이 실행 전 오류로 낸다. 행이 0개여도, 행이 고르는 안 쓰인 분기에 있어도, 행 값이 막는 단락 뒤에 있어도 그렇다(#367, 사용자 결정 (가)). 대상은 상수식 계산, 술어 항·ALL/SOME 의 상수 쪽 변환(-181), 인덱스 키 상수의 키 타입(-181), MEDIAN/PERCENTILE 값 인자의 인자 타입(-1118)이다(D-367-01~04). 행이 계산하는 실패(열 값이 원인인 오류, 대입, LEAD/LAG 기본값, 항 밖 비교의 순위 답)는 행에 남는다(D-367-05). 상수 조건이 막는 가지는 상수 가지를 본다(D-367-07).
 _Avoid_: 행에 맡긴 상수(D-352-05, #367 에서 없어짐), 행이 원인인 오류를 실행 전 확정으로 옮기는 서술, 상수 부분트리(옛 이름 — 상수식)
 
-**상수 가지 (constant branch)** — 코드 이름 `DOMAIN_PLAN_GUARD`, `qexec_guard_reached`:
+**상수 가지 (constant branch)** — 코드 이름 `DOMAIN_PLAN_CONSTANT_BRANCH`, `qexec_constant_branch_reached`:
 develop 의 평가가 상수 조건으로 고르는 가지. CASE·IF·DECODE 의 상수 조건, 도메인이 정해진 COALESCE·NVL·IFNULL·NVL2 의 상수 첫 피연산자, AND/OR 의 상수 앞 항, 블록의 상수 if_pred, 최상위 블록의 상수 LIMIT 가 상수 가지를 만든다. 여기서 상수 조건은 행이 값을 바꾸지 못하는 조건이다(로드 항목의 `row_invariant`, #368 C1). 상수식, 그리고 그런 피연산자 위의 CASE·IF·DECODE·술어 노드·캐시 함수·컬렉션 생성자가 든다(`case when if(? = 0, 0, 1) = 0 then …`). 캐시 부류 `OPERAND_CONST` 와는 다르다. develop 은 이 노드들을 캐시하지 않는다. 세션변수 읽기는 상수 조건이 아니다. 문장이나 그 문장이 부르는 저장 프로시저가 대입할 수 있기 때문이다(D-368-03). 로드가 가지 아래 항목·항·인덱스 스캔에 가장 안쪽 상수 가지를 적는다. 실행 전 도메인 확정은 상수 가지 아래 상수 오류를 미뤄 두었다가(미룬 상수 오류, deferred constant error), 끝에서 상수 가지를 바깥부터 develop 대로 평가해 행이 닿는 첫 실패만 낸다. 어떤 데이터로도 닿지 않는 상수는 develop 답이다(사용자 결정 2026-09-27, D-367-07). 행이 주는 조건의 가지는 상수 가지가 아니다(어느 행이든 탈 수 있다). 가변 도메인의 COALESCE 류도 상수 가지가 아니다(develop 이 첫 행에서 모든 피연산자를 읽는다). 한 노드가 서로 감싸지 않는 두 상수 가지 아래에서 만나면 계획은 상수 가지를 두지 않는다.
 _Avoid_: 가지 가드·가드·guard·selector(옛 이름), 행 값으로 가지를 판단하는 것, 상수 가지를 확정 지점으로 서술(도메인은 그대로 실행 전 도메인 확정이 정한다)
 
