@@ -10,7 +10,7 @@ Division of labor (mirrored verbatim in `.claude/CLAUDE.md`, the only copy the h
 - A skill or map asking for a research/exploration subagent does not expand this boundary: the lead performs source investigation directly. Delegate such investigation only when the user explicitly requests it.
 
 Delegation model: **use the harness's own subagent facility**:
-- **Codex:** Luna via `collaboration.spawn_agent` with `model: "gpt-5.6-luna"`,
+- **Codex:** Luna via `collaboration.spawn_agent` with `model: "gpt-6-luna"`,
   `reasoning_effort: "max"`, and `fork_turns: "none"` (supply a self-contained task) or a
   bounded numeric fork; `"all"` cannot accept model/effort overrides. Prefer fast/priority
   mode when exposed for Luna; otherwise keep Luna/max without an unsupported parameter.
