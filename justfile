@@ -88,6 +88,7 @@ build mode="debug" version=ver: _submodules
     ( cd "$ws" && cmake --preset $mode -DCMAKE_INSTALL_PREFIX="$dest" \
                 && cmake --build "build_preset_$mode" -j {{jobs}} --target install )
     [ -x "$dest/bin/cubrid" ] || { echo "ERROR: install did not land in $dest (bin/cubrid missing) — stale justfile copy or preset prefix override?" >&2; exit 1; }
+    [ -e "$dest/jdbc/cubrid_jdbc.jar" ] || { echo "ERROR: $dest has no jdbc/cubrid_jdbc.jar — CTP sql/medium cannot run on this install." >&2; exit 1; }
     just install-locale "$dest"
     # workspace#157: CMake's install step reinstalls conf/cubrid.conf from the
     # source template on EVERY build, silently reverting whatever was there. The
@@ -102,10 +103,11 @@ build mode="debug" version=ver: _submodules
         echo "~/CUBRID -> $(readlink "$HOME/CUBRID")"
     fi
 
-# Incremental build + install into an already-configured preset tree — no reconfigure,
-# no locale copy, ~/CUBRID symlink untouched. The install prefix is whatever the tree
-# was configured with (check: grep CMAKE_INSTALL_PREFIX build_preset_<mode>/CMakeCache.txt).
-incr mode="release":
+# Incremental build + install into an already-configured preset tree — no locale copy,
+# ~/CUBRID symlink untouched. No reconfigure, except once for a tree that lacks the JDBC
+# targets (see below). The install prefix is whatever the tree was configured with
+# (check: grep CMAKE_INSTALL_PREFIX build_preset_<mode>/CMakeCache.txt).
+incr mode="release": _submodules
     #!/usr/bin/env bash
     set -eu
     mode="{{mode}}"; if [ "$mode" = debug ]; then mode=optdebug; fi
@@ -114,8 +116,17 @@ incr mode="release":
     [ -f "$ws/build_preset_$mode/CMakeCache.txt" ] || { echo "ERROR: '$ws/build_preset_$mode' is not configured — run 'just configure $mode' (or 'just build') first." >&2; exit 1; }
     dest=$(sed -n 's/^CMAKE_INSTALL_PREFIX:PATH=//p' "$ws/build_preset_$mode/CMakeCache.txt")
     echo "incremental install dest: $dest"
+    # A tree configured while cubrid-jdbc/src was missing has no JDBC targets
+    # (CMakeLists: if(WITH_JDBC AND EXISTS cubrid-jdbc/src)), and rebuilding it never
+    # adds them: it keeps installing without jdbc/. _submodules has restored the source,
+    # so configure the tree again, with its own prefix, to bring the driver back.
+    if ! grep -q '/cubrid-jdbc/' "$ws/build_preset_$mode/CMakeFiles/TargetDirectories.txt" 2>/dev/null; then
+        echo "build_preset_$mode has no JDBC targets (configured without cubrid-jdbc/src) — reconfiguring"
+        ( cd "$ws" && cmake --preset $mode -DCMAKE_INSTALL_PREFIX="$dest" )
+    fi
     ( cd "$ws" && cmake --build "build_preset_$mode" -j {{jobs}} --target install )
     [ -x "$dest/bin/cubrid" ] || { echo "ERROR: install did not land in $dest (bin/cubrid missing)." >&2; exit 1; }
+    [ -e "$dest/jdbc/cubrid_jdbc.jar" ] || { echo "ERROR: $dest has no jdbc/cubrid_jdbc.jar — CTP sql/medium cannot run on this install." >&2; exit 1; }
     echo "installed (incremental) $mode ($ws) -> $dest"
 
 # Convenience aliases (default version).
@@ -149,6 +160,7 @@ rebuild mode="debug" version=ver: _submodules
     ( cd "$ws" && cmake --preset $mode -DCMAKE_INSTALL_PREFIX="$dest" \
                 && cmake --build "build_preset_$mode" -j {{jobs}} --target install )
     [ -x "$dest/bin/cubrid" ] || { echo "ERROR: install did not land in $dest (bin/cubrid missing) — stale justfile copy or preset prefix override?" >&2; exit 1; }
+    [ -e "$dest/jdbc/cubrid_jdbc.jar" ] || { echo "ERROR: $dest has no jdbc/cubrid_jdbc.jar — CTP sql/medium cannot run on this install." >&2; exit 1; }
     just install-locale "$dest"
     echo "installed $mode ($ws) -> $dest"
     if [ -n "${INSTALL_PREFIX:-}" ]; then
