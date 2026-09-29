@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted — ADR 0023(proposed 2026-09-29, #374)이 대체한다. 이 ADR 의 셀 함수(leaf)·계획된 변환기·게이트는 #374 의 새 말로 변환기·확정 변환기·실행 전 도메인 확정이다
 date: 2026-09-22
 locked-by: xmilex-git/workspace#320 (2026-09-22)
 ---
