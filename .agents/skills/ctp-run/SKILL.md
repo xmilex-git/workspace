@@ -64,6 +64,13 @@ worktrees, so host checkouts (and their uncommitted edits) are never touched.
 `data_file` tarball and its cases mutate it in place; an ha_shell shard is a
 master+slave container pair. `SHARDS>1` is refused with the reason.
 
+**sql and medium need the install's JDBC driver.** CTP compiles its Java SP classes
+against `<install>/jdbc/cubrid_jdbc.jar` and runs CQT on it. The runner therefore
+refuses a `--build` without that jar before it starts anything. An install built
+while the engine's `cubrid-jdbc` submodule was missing lacks the jar.
+`just build`, `just rebuild` and `just incr` restore the submodule and fail when
+the jar is not installed (2026-09-29).
+
 ## Layout
 
 | path | what |

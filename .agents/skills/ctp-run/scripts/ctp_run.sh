@@ -554,6 +554,14 @@ host_preflight() {
     err "Install podman (rootless) and retry, or use --dry-run to validate the split logic only."
     exit 3
   fi
+  # sql/medium compile CTP's Java SP classes against the install's JDBC driver and run
+  # CQT on it. An install built while the engine's cubrid-jdbc submodule was missing
+  # has no jdbc/, and CTP would only die after the container, createdb and javac.
+  case "$ARG_SUITE" in
+    sql|medium)
+      [ -e "$ARG_BUILD/jdbc/cubrid_jdbc.jar" ] \
+        || die "--build has no jdbc/cubrid_jdbc.jar: $ARG_BUILD (CTP $ARG_SUITE needs the JDBC driver; 'just build' or 'just incr' restores the cubrid-jdbc submodule and installs it)" ;;
+  esac
   if ! podman image exists "$ARG_IMAGE" 2>/dev/null; then
     info "image '$ARG_IMAGE' not present locally; pulling ..."
     podman pull "$ARG_IMAGE" || die "could not obtain image '$ARG_IMAGE' (pull failed)."
