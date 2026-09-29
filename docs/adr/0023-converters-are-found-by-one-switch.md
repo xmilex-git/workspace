@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted (2026-09-29, #374 커밋 2 `7541abcc2` 게이트 통과)
 date: 2026-09-29
 locked-by: xmilex-git/workspace#374 (D-374-03·04·20·21·27·37, 2026-09-29)
 supersedes: ADR 0022 (accepted 뒤)
@@ -32,3 +32,4 @@ supersedes: ADR 0022 (accepted 뒤)
 - 캐스트가 develop 과 같은 오류를 내려고 남기는 앞뒤 처리: 문자열 → NUMERIC 의 파싱 넘침은 er_set 과 DOMAIN_ERROR(확정 변환기는 DOMAIN_OVERFLOW), BIT·VARBIT 목표의 incompatible 쌍은 `db_bit_string_coerce` 의 오류 설정, CLOB → 문자열의 src == dest 처리, `tp_value_coerce_strict` 의 ENUM·JSON 원본 거절(비교 변환기는 tp_value_compare 처럼 변환한다).
 - 셀·표·이름 표 없이 변환기를 부르는 곳은 `tp_value_convert` 하나다. 플랜 덤프와 optdebug 교차 검사는 변환기 이름을 찍지 않는다(D-374-02).
 - 되돌리는 길: 이 재작성은 동작 불변 커밋 하나다. 문제가 있으면 그 커밋만 되돌려 ADR 0022 구조로 돌아간다.
+- 측정 결과(2026-09-29): 방문자(직접 호출) 시도는 변환기 본문이 switch 안에 인라인되어 스택 프레임이 커졌고, P2·P3·P4 가 더 나빠져 되돌렸다. 대신 행마다 변환기를 찾던 캐스트는 로드가 변환기를 행 전에 확정한다(D-374-40, `fetch_cast_operand`). 그래도 리터럴을 캐스트하는 7칸(P2-expr, P3-agg, P4-topn, P6-in L)은 PR 머리보다 명령 수가 1.2~2.4% 많다. 모두 develop 대비 +5% 이내이고, 사용자가 이 상태를 받아들였다(D-374-41, D-374-30 의 예외).
