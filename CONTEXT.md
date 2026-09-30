@@ -366,6 +366,8 @@ _Avoid_: 서버 전체 statdump, 클라이언트 RTT
 
 ### 도메인·collation 사전 확정 (지도: xmilex-git/workspace#312, 옛 말과 새 말의 대응: #374)
 
+현재 구현의 필드·값 흐름·소유권·PX 복사 설명: [PR #8022 도메인 상태 필드 가이드](docs/research/pr8022-domain-state-guide.md) (`c997c02d5`, 2026-09-30).
+
 **공통 타입 (common type)**:
 서로 다른 타입의 피연산자가 만났을 때 현행 타입 규칙(문자×숫자 → DOUBLE, 정수×NUMERIC → NUMERIC, 날짜±숫자 → 날짜 …)이 정하는 결과 타입이다. 이 캠페인은 타입 규칙을 바꾸지 않는다(D-317-03·23). "애매한 자리에 DOUBLE/VARCHAR 를 강제한다" 는 초기 안은 실행 전 도메인 확정으로 대체됐다(D-317-02).
 _Avoid_: 승격(promotion) 규칙과 혼용, DOUBLE/VARCHAR 폴백이 아직 있다는 서술, 격자·G-row grid(옛 이름 — 타입 규칙)
