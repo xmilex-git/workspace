@@ -25,8 +25,10 @@ cp "$SCRATCH/CTP/conf/sql.conf" "$SCRATCH/stock.conf"
 : > "$SCRATCH/default-exclude"
 : > "$SCRATCH/exclude & a|b.txt"
 
+# command -p env: the env found on PATH can be uv's ~/.local/bin/env, a PATH setup
+# script that ignores its arguments, so the command never ran and every check failed.
 compose() {
-  env CTP_HOME="$SCRATCH/CTP" TEST_SUITE=sql "$@" bash -e -c '
+  command -p env CTP_HOME="$SCRATCH/CTP" TEST_SUITE=sql "$@" bash -e -c '
     . "$1"
     resolve_category
     check_scope
@@ -64,7 +66,7 @@ testcase_exclude_from_file=$SCRATCH/default-exclude
 testcase_update_yn=true
 testcase_git_branch=develop
 EOF
-env CTP_HOME="$SCRATCH/CTP" TEST_SUITE=shell bash -e -c '
+command -p env CTP_HOME="$SCRATCH/CTP" TEST_SUITE=shell bash -e -c '
   . "$1"
   resolve_category
   "$CONF_WRITER"
