@@ -594,6 +594,12 @@ _Avoid_: tdes 임시값, tdes 에 여는 저장/복원 창
 같은 tran_index 로 한 트랜잭션을 함께 실행하는 스레드들 — 요청 스레드와 그 PX·정렬·히스토그램 워커, 그리고 시스템 트랜잭션(tran 0)의 tdes 를 함께 쓰는 데몬들. 트랜잭션 대기 시간을 공유하므로 누가 그 값을 잠시 바꾸면 나머지에게 보인다.
 _Avoid_: 워커(데몬 포함 여부가 흐려짐), 자식 스레드(상속 방향을 말할 때만 부모 스레드를 쓴다)
 
+### 병렬 실행과 system operation (CBRD-27492)
+
+**문장 단위 sysop (statement-level system operation)**:
+엔진이 한 문장의 원자성을 위해 `xtran_server_start_topop`으로 열어 그 문장이 끝날 때까지 쥐는 sysop이다. 저장 계층이 한 호출 안에서 잠깐 여닫는 내부 sysop(temp 파일 생성·확장 등)과 구분하며, 둘 다 형제 스레드가 공유하는 트랜잭션의 sysop 스택에 쌓인다.
+_Avoid_: topop(두 종류를 다 가리킴)
+
 ### nix 개발 환경 (그릴링 2026-09-30)
 
 CUBRID CI 환경을 nix로 재현하는 추가 경로의 용어(nix 개발 환경, CI 툴체인 스냅샷, 봉인 입력, 실행 디렉터리, 샤드 등)와 결정은 [xmilex-git/cubrid-nix](https://github.com/xmilex-git/cubrid-nix)의 `CONTEXT.md`와 ADR 0001에 있다. 그 레포의 **샤드**는 컨테이너가 아니라 `unshare` 네임스페이스 하나와 1:1이다.
