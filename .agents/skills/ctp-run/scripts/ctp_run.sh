@@ -462,14 +462,18 @@ materialize_tc_worktree() {
   flock -w 900 "$fd" || die "timed out after 900s waiting for $lock (another run is materializing testcases)"
   # Called bare so set -e still stops the run on a failed git step; exiting
   # releases the lock with the process.
-  materialize_tc_worktree_unlocked "$@"
+  materialize_tc_worktree_unlocked "$@" "$common"
   exec {fd}>&-
 }
 
 materialize_tc_worktree_unlocked() {
-  local repo_dir="$1" ref="$2" wt_root="$3"
+  local repo_dir="$1" ref="$2" wt_root="$3" common="$4"
   local safe; safe="$(printf '%s' "$ref" | tr -c 'A-Za-z0-9._-' '_')"
-  local wt="$wt_root/$(basename "$repo_dir")/$safe"
+  # Keyed by the suite's repository, not by the checkout's basename: the
+  # cubrid-testcases and cubrid-testcases-private-ex checkouts are both named
+  # develop, so a sql run found the shell repo's tc/pr-<N> worktree at its path,
+  # could not reset it to its own SHA, and died before any case (2026-10-01).
+  local wt="$wt_root/${SUITE_TCREPO:?}/$safe"
 
   if git -C "$repo_dir" fetch --quiet origin "$ref" 2>/dev/null; then
     TC_SHA="$(git -C "$repo_dir" rev-parse FETCH_HEAD)"
@@ -485,7 +489,7 @@ materialize_tc_worktree_unlocked() {
       if [ "$ref" != "develop" ]; then
         warn "$(basename "$repo_dir"): ref '$ref' not on origin -> falling back to develop."
         TC_REF="develop"; TC_REF_SRC="$TC_REF_SRC + fallback (no $ref on origin)"
-        materialize_tc_worktree_unlocked "$repo_dir" develop "$wt_root"
+        materialize_tc_worktree_unlocked "$repo_dir" develop "$wt_root" "$common"
         return
       fi
       die "$(basename "$repo_dir"): cannot fetch origin develop"
@@ -495,6 +499,10 @@ materialize_tc_worktree_unlocked() {
 
   mkdir -p "$(dirname "$wt")"
   if [ -d "$wt/.git" ] || [ -f "$wt/.git" ]; then
+    # Reuse only a worktree of this repository: one from another clone would be reset
+    # to a SHA its repository may not have.
+    [ "$(git -C "$wt" rev-parse --git-common-dir 2>/dev/null)" -ef "$common" ] \
+      || die "$wt is not a worktree of $repo_dir: remove it with 'git worktree remove' from its own repository, or pass --worktree-root"
     git -C "$wt" reset --quiet --hard "$TC_SHA"
     git -C "$wt" clean -qfd
   else

@@ -89,6 +89,7 @@ the jar is not installed (2026-09-29).
 | `test/image_contract_test.sh` | runtime conf isolation, scope migration and exclusion planning fixtures |
 | `test/locale_staging_test.sh` | real shard staging followed by CTP-style locale deletion |
 | `test/crash_loop_watchdog_test.sh` | core watchdog over stubbed podman: abort-on-core, crash-loop shard stop, core cap, disk floor |
+| `test/tc_worktree_repo_key_test.sh` | testcase worktrees keyed by repository (`tc-worktrees/<repo>/<ref>`): the two `develop` checkouts keep their own `tc/pr-<N>`, another clone's worktree is refused |
 
 The image is `cubridci/cubridci:test_rl8.10`, digest-pinned in `ctp_run.sh`. It is
 never built locally; the CUBRID install is mounted in from the host (`just build`

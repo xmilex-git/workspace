@@ -666,6 +666,12 @@ else
   bad "core watchdog: abort-on-core, crash-loop shard stop, core cap and disk floor"
 fi
 
+if bash "$HERE/tc_worktree_repo_key_test.sh"; then
+  ok "testcase worktrees keyed by repository; another clone's worktree refused"
+else
+  bad "testcase worktrees keyed by repository; another clone's worktree refused"
+fi
+
 # HA setup regression: exercise the entrypoint functions with isolated fixtures.
 if bash "$HERE/ha_shell_test.sh"; then
   ok "HA csql port and slave broker setup regression"
