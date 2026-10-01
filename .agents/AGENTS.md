@@ -14,7 +14,11 @@ Delegation model: **use the harness's own subagent facility**:
   `reasoning_effort: "max"`, and `fork_turns: "none"` (supply a self-contained task) or a
   bounded numeric fork; `"all"` cannot accept model/effort overrides. Prefer fast/priority
   mode when exposed for Luna; otherwise keep Luna/max without an unsupported parameter.
-- **Claude Code:** Sonnet via the native `Agent` tool with `model: "sonnet"`.
+- **Claude Code:** Sonnet at effort `xhigh`, spawned through the `Workflow` tool: the workflow
+  script runs each delegated task as `agent(prompt, { model: 'sonnet', effort: 'xhigh' })`.
+  This rule is the user's standing opt-in to the Workflow tool for these delegations (user
+  instruction, 2026-10-01); if the tool is unavailable, report that instead of falling back to
+  a direct `Agent` call.
 
 Do not use herdr, external terminal-multiplexer sessions, or a second CLI process to host
 workers. If the harness cannot select its designated model, report the limitation instead
