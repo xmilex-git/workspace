@@ -502,3 +502,22 @@ port-release key:
     removed=$((before - after))
     [ "$removed" -gt 0 ] || { echo "WARNING: no claim matched '{{key}}'." >&2; exit 1; }
     echo "released $removed claim(s) matching '{{key}}'"
+
+# ---------------------------------------------------------------------------
+# code-index — build-free symbol lookup in an engine worktree (AGENTS.md "Code lookup")
+# ---------------------------------------------------------------------------
+
+# Build the pinned toolchain (Universal Ctags, GNU Global, python3; tools/code-index/tools.nix) into
+# the GC root .git_ignored_dir/code-index/tools, the only binaries tools/code-index/code-index runs.
+[doc("Install the pinned code-index toolchain with nix-build (GC root under .git_ignored_dir/)")]
+code-index-install:
+    #!/usr/bin/env bash
+    set -eu
+    command -v nix-build >/dev/null || { echo "ERROR: nix-build not found; install nix first" >&2; exit 1; }
+    out="{{justfile_directory()}}/.git_ignored_dir/code-index/tools"
+    export TMPDIR="{{justfile_directory()}}/.git_ignored_dir/scratch/tmp"
+    mkdir -p "$(dirname "$out")" "$TMPDIR"
+    nix-build "{{justfile_directory()}}/tools/code-index/tools.nix" -o "$out"
+    "$out/bin/ctags" --version | head -1
+    "$out/bin/global" --version | head -1
+    "$out/bin/python3" --version

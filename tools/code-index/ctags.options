@@ -1,0 +1,10 @@
+# Universal Ctags options for tools/code-index (decision D10).
+# CUBRID compiles its .c files as C++, so .c/.h/.i go to the C++ parser. The YACC and LEX parsers stay
+# off: csql_grammar.y alone took 7.6 s of a 10.3 s full index, and they miss the C functions of those
+# files anyway. code_index.py's column-0 and grammar-rule scans cover the grammar and lexer files.
+--languages=C++,Java
+--map-C=-.c
+--map-C++=+.c
+--map-C++=+.i
+--fields=+neKSst
+--sort=no

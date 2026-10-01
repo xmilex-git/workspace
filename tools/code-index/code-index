@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# code-index — build-free symbol lookup in a CUBRID task worktree; see `code-index --help`.
+# Runs code_index.py on the pinned nix toolchain that `just code-index-install` puts in
+# .git_ignored_dir/code-index/tools (decision D12), never on the host's python or ctags.
+set -euo pipefail
+here="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+repo="$(cd "$here/../.." && pwd)"
+bin="$repo/.git_ignored_dir/code-index/tools/bin"
+for t in python3 ctags gtags global; do
+  if [ ! -x "$bin/$t" ]; then
+    echo "code-index: $bin/$t is missing; run 'just code-index-install' in $repo" >&2
+    exit 3
+  fi
+done
+exec "$bin/python3" "$here/code_index.py" "$@"

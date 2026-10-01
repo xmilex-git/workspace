@@ -28,6 +28,8 @@ ending with `Summary: N OK / M MISS / K WARN`.
 
 - **MISS** — a build-blocking dependency is absent: the workspace is not a CUBRID source tree
   (`CMakePresets.json` + `CMakeLists.txt`), or `cmake` / `ninja` / `gcc` / `g++` / `just` is off PATH.
+  Also MISS: the code-index toolchain (`just code-index-install`), which every engine code lookup
+  starts with (AGENTS.md "Code lookup").
 - **WARN** — an optional or per-skill dependency is absent: `~/CUBRID` runtime, CTP
   (`CTP_HOME`), the testcase repos, `cubrid-manual`, `podman`, `ssh`/`tmux`, `node`, `gh` (auth),
   `uv`, `cubrid-jira-search`, the prebuilt locale `.so`.

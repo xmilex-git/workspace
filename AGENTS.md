@@ -62,6 +62,24 @@ deletes old runs after their evidence was read (see its skill); it takes the ins
 build/test dependencies). The other skills are workspace-agnostic or operate on fixed
 infrastructure and take no `$WORKSPACE`.
 
+## Code lookup in an engine worktree
+
+Look up engine code with `tools/code-index/code-index <WORKSPACE> <command> <name>` first — it
+answers from a build-free index of the task worktree that refreshes itself before every query:
+
+| Question | Command |
+|---|---|
+| where X is defined (function, macro, type, member, enumerator, grammar rule, Java class) | `definition X` |
+| X's source with line numbers | `body X` |
+| a file's contents with line ranges | `outline <path>` |
+| who calls X, from which function | `callers X` |
+| every use of X | `references X` |
+
+Every hit carries `{server,sa,cs}` — the libraries that compile its file — and `[...]`, the `#if`
+conditions around it (e.g. `[#else of !defined(NDEBUG)]`); read both before following a call into
+server code. Reach for rg when the target is a comment, a string, a regex, or a name code-index
+reports as not found.
+
 ## Diagnostics
 
 Run `cubrid-deps-check <workspace>` to get a read-only `[OK]/[MISS]/[WARN]` report of the build

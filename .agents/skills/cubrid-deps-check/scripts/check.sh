@@ -79,6 +79,13 @@ if have gh; then
   if gh auth status >/dev/null 2>&1; then emit OK "gh authenticated (cubrid-pr-*)"
   else emit WARN "gh present but not authenticated" "authenticate the GitHub CLI (gh auth login)"; fi
 else emit WARN "gh not found (cubrid-pr-create/review)" "install the GitHub CLI"; fi
+# code-index is the required first step of every engine code lookup (AGENTS.md "Code lookup"), so it is MISS.
+ci="$REPO/.git_ignored_dir/code-index/tools/bin"
+if [ -n "$REPO" ] && [ -x "$ci/ctags" ] && [ -x "$ci/gtags" ] && [ -x "$ci/global" ] && [ -x "$ci/python3" ]; then
+  emit OK "code-index toolchain ($("$ci/ctags" --version 2>/dev/null | head -1 | cut -d, -f1); $("$ci/global" --version 2>/dev/null | head -1))"
+else
+  emit MISS "code-index toolchain not installed (.git_ignored_dir/code-index/tools)" "just code-index-install  (needs nix-build)"
+fi
 have uv && emit OK "uv (jira)" || emit WARN "uv not found (jira)" "install uv (astral.sh)"
 have cubrid-jira-search && emit OK "cubrid-jira-search (jira)" || emit WARN "cubrid-jira-search not on PATH (jira)" "install/link the cubrid-jira-search helper"
 
