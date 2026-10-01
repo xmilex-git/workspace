@@ -1,8 +1,8 @@
 # PR #8022 도메인 상태 읽기: 기존 CUBRID 개발자를 위한 필드 가이드
 
-기준: [CUBRID/cubrid#8022](https://github.com/CUBRID/cubrid/pull/8022), HEAD `c997c02d5`, 2026-09-30.
+기준: [CUBRID/cubrid#8022](https://github.com/CUBRID/cubrid/pull/8022), HEAD `d91666acd`, 2026-10-01.
 
-이 문서는 **현재 구현을 설명한다.** `ca907aaed` 기준의 첫 판을 [정리 작업 명세](pr8022-compact-refactor-handoff.md)의 0~3단계 적용 뒤 구조(커밋 `be1e08e01`, `3ceafd994`, `88a438e17`)와 미사용 코드 정리(`c997c02d5`)로 고쳤다. 예시는 데이터 흐름을 설명하기 위한 것이다.
+이 문서는 **현재 구현을 설명한다.** `ca907aaed` 기준의 첫 판을 [정리 작업 명세](pr8022-compact-refactor-handoff.md)의 0~3단계 적용 뒤 구조(커밋 `be1e08e01`, `3ceafd994`, `88a438e17`)와 미사용 코드 정리(`c997c02d5`), 리뷰 반영(`ad7927e4e`, `5213742f3`, `d91666acd`)으로 고쳤다. 예시는 데이터 흐름을 설명하기 위한 것이다.
 
 빠르게 찾아볼 곳: [실행 상태의 세 부분](#4-실행-상태-확정-결과-행이-바꾸는-상태-준비-중-오류), [SUM/AVG와 함수 노드의 실행 상태](#5-sumavg와-함수-노드가-따로-두는-것), [노드의 계획 항목](#9-domain_plan_item-각-노드가-붙잡는-작은-진입점), [전체 준비 목록](#10-domain_plan-전체-필드-준비-순서를-설명하는-목록들), [PX 복사 규칙](#12-px-복사에서-무엇을-유지하고-무엇을-다시-시작하는가).
 
@@ -69,7 +69,7 @@ flowchart TD
 
 원래 입력 `in`은 빌린 배열이다. 일반 바인드는 `qexec_share_value()`로 payload를 공유할 수 있고, 계산·변환한 값은 실행이 관리한다. PX 복사에서는 worker가 사용할 값의 payload를 clone한다. 정리(`qexec_clear_resolved_domains`)는 각 `DB_VALUE`를 clear하고 소유 블록과 scope 캐시를 해제한 뒤 `vd.dbval_ptr`을 `in`으로 복원한다.
 
-소스: [준비·할당·PX 복사](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_resolve.c#L138), [실행 준비 본체](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_resolve.c#L2616), [정리와 scope 처리](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_resolve.c#L3027).
+소스: [준비·할당·PX 복사](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_resolve.c#L138), [실행 준비 본체](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_resolve.c#L2616), [정리와 scope 처리](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_resolve.c#L3042).
 
 ## 3. 서로 다른 인덱스를 구분하기
 
@@ -95,7 +95,7 @@ flowchart TD
 
 ### 4.1 RESOLVED_DOMAIN_TABLE (`XASL_STATE.resolved_domain`)
 
-정의: [domain_plan.h의 RESOLVED_DOMAIN_TABLE](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L447). 준비(`qexec_resolve_domains`)가 채우고 행은 읽기만 한다. 16개 필드, 104바이트(LP64). `XASL_STATE`는 두 멤버를 합쳐 232바이트다(이전 240).
+정의: [domain_plan.h의 RESOLVED_DOMAIN_TABLE](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L448). 준비(`qexec_resolve_domains`)가 채우고 행은 읽기만 한다. 16개 필드, 104바이트(LP64). `XASL_STATE`는 두 멤버를 합쳐 232바이트다(이전 240).
 
 | 필드 | 무엇인가 | 누가 쓰고 누가 읽는가 / 수명 |
 |---|---|---|
@@ -118,7 +118,7 @@ flowchart TD
 
 ### 4.2 DOMAIN_EXECUTION_STATE (`XASL_STATE.domain_execution`)
 
-정의: [domain_plan.h의 DOMAIN_EXECUTION_STATE](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L481). 준비가 빈 상태로 할당하고 행이 채운다. 10개 필드, 64바이트(LP64). 접근 함수는 `vd->xasl_state->domain_execution`을 읽으며, `resolved_domain`을 읽던 때와 포인터를 따라가는 단계 수가 같다.
+정의: [domain_plan.h의 DOMAIN_EXECUTION_STATE](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L482). 준비가 빈 상태로 할당하고 행이 채운다. 10개 필드, 64바이트(LP64). 접근 함수는 `vd->xasl_state->domain_execution`을 읽으며, `resolved_domain`을 읽던 때와 포인터를 따라가는 단계 수가 같다.
 
 | 필드 | 무엇인가 | 누가 쓰고 누가 읽는가 / 수명 |
 |---|---|---|
@@ -135,7 +135,7 @@ flowchart TD
 
 ### 4.3 DOMAIN_DEFERRED_ERRORS (`qexec_resolve_domains`의 지역 목록)
 
-정의: [domain_resolve.c의 DOMAIN_DEFERRED_ERRORS](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_resolve.c#L455)와 [DOMAIN_DEFERRED_ERROR](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_resolve.c#L441). 실행 상태에 들어가지 않는다.
+정의: [domain_resolve.c의 DOMAIN_DEFERRED_ERRORS](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_resolve.c#L455)와 [DOMAIN_DEFERRED_ERROR](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_resolve.c#L441). 실행 상태에 들어가지 않는다.
 
 | 필드 | 무엇인가 | 누가 쓰고 누가 읽는가 / 수명 |
 |---|---|---|
@@ -147,7 +147,7 @@ flowchart TD
 
 SUM/AVG는 첫 값 뒤에 들어오는 값을 누적 값에 더할 때 `qdata_add_dbval`이 값의 타입으로 하던 피연산자 변환을 준비 때 정한다. 이 변환은 두 입력의 converter와 target이면 충분하다.
 
-정의: [DOMAIN_OPERAND_COERCION](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_rules.h#L74).
+정의: [DOMAIN_OPERAND_COERCION](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_rules.h#L74).
 
 | 필드 | 뜻 |
 |---|---|
@@ -169,7 +169,7 @@ SUM/AVG는 첫 값 뒤에 들어오는 값을 누적 값에 더할 때 `qdata_ad
 
 ### 6.1 RESOLVED_DOMAIN
 
-정의: [domain_rules.h의 RESOLVED_DOMAIN](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_rules.h#L37). 로드 또는 `domain_resolve()`가 채운다. `DOMAIN_PLAN_ITEM.fixed`와 실행의 `domains[]`가 같은 구조를 사용한다.
+정의: [domain_rules.h의 RESOLVED_DOMAIN](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_rules.h#L37). 로드 또는 `domain_resolve()`가 채운다. `DOMAIN_PLAN_ITEM.fixed`와 실행의 `domains[]`가 같은 구조를 사용한다.
 
 | 필드 | 뜻 |
 |---|---|
@@ -181,7 +181,7 @@ SUM/AVG는 첫 값 뒤에 들어오는 값을 누적 값에 더할 때 `qdata_ad
 
 ### 6.2 DOMAIN_COMPARE_KEY와 DOMAIN_OPERAND
 
-정의: [DOMAIN_OPERAND와 DOMAIN_COMPARE_KEY](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_rules.h#L44). `DOMAIN_OPERAND`는 도메인 규칙을 호출할 때 만드는 입력이다. 실행 상태에 저장하는 최종 결과가 아니다.
+정의: [DOMAIN_OPERAND와 DOMAIN_COMPARE_KEY](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_rules.h#L44). `DOMAIN_OPERAND`는 도메인 규칙을 호출할 때 만드는 입력이다. 실행 상태에 저장하는 최종 결과가 아니다.
 
 | 구조.필드 | 뜻 |
 |---|---|
@@ -197,7 +197,7 @@ SUM/AVG는 첫 값 뒤에 들어오는 값을 누적 값에 더할 때 `qdata_ad
 
 ### 6.3 DOMAIN_COMPARE
 
-정의: [DOMAIN_COMPARE](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_rules.h#L175). 로드의 `domain_resolve_comparison()` 또는 실행 준비가 채운다. 비교 evaluator와 `domain_compare_values()`가 읽는다. `[0]`은 왼쪽, `[1]`은 오른쪽이다. 72바이트이며 행이 읽는 필드는 앞 64바이트에 있다.
+정의: [DOMAIN_COMPARE](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_rules.h#L163). 로드의 `domain_resolve_comparison()` 또는 실행 준비가 채운다. 비교 evaluator와 `domain_compare_values()`가 읽는다. `[0]`은 왼쪽, `[1]`은 오른쪽이다. 72바이트이며 행이 읽는 필드는 앞 64바이트에 있다.
 
 | 필드 | 뜻 |
 |---|---|
@@ -214,7 +214,6 @@ SUM/AVG는 첫 값 뒤에 들어오는 값을 누적 값에 더할 때 `qdata_ad
 | `source[2]` | 변환 전 양측의 `DB_TYPE`. 변환 실패 시 오류의 타입 이름과 rank를 재현한다. |
 | `converted_first` | 첫 변환이 성공한 뒤 그 측의 타입. 두 번째 변환이 실패했을 때 기존 결과를 재현한다. |
 | `failed` | 준비 중 변환에 실패한 상수 측의 비트. Predicate term은 준비 오류, term 밖의 비교는 기존 rank 결과를 유지한다. |
-| `reason` | VALUES 방법이 기존 값 비교를 사용하는 이유: NULL, VARIABLE, UNRESOLVED. 미확정 상태를 허용하는 예외 목록으로 해석하면 안 된다. |
 | `rank` | RANK 방법의 미리 정한 `DB_LT`/`DB_GT` 결과. |
 | `codeset_side` | 다른 codeset의 문자열을 ENUM 쪽으로 맞춰야 하는 측. 없으면 `-1`. |
 
@@ -222,7 +221,7 @@ SUM/AVG는 첫 값 뒤에 들어오는 값을 누적 값에 더할 때 `qdata_ad
 
 ### 6.4 DOMAIN_ELEMENTS: IN/ALL/SOME의 오른쪽 값 읽기
 
-정의: [DOMAIN_ELEMENTS](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L235).
+정의: [DOMAIN_ELEMENTS](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L236).
 
 | 필드 | 뜻 |
 |---|---|
@@ -238,7 +237,7 @@ SUM/AVG는 첫 값 뒤에 들어오는 값을 누적 값에 더할 때 `qdata_ad
 
 ## 7. 인덱스 키: 스캔, 범위, 컬럼의 세 단계
 
-정의: [키 계획과 실행별 키 결정](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L268). 계획은 로드가 만들고, CONSTANT/LATE_BIND 부분을 `qexec_resolve_index_keys()`가 실행별로 채운다. 행 scan은 그 정책으로 키를 작성한다.
+정의: [키 계획과 실행별 키 결정](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L269). 계획은 로드가 만들고, CONSTANT/LATE_BIND 부분을 `qexec_resolve_index_keys()`가 실행별로 채운다. 행 scan은 그 정책으로 키를 작성한다.
 
 ```text
 domain_plan_index (인덱스 스캔 하나)
@@ -285,7 +284,7 @@ RESOLVED_INDEX_KEYS (이번 실행에 확정한 부분)
 | `RESOLVED_KEY_ELEMENT.strict_conv` | LATE_BIND 결과가 STRICT일 때 사용할 변환 함수. |
 | `RESOLVED_KEY_ELEMENT.rule` | 가변 컬럼 도메인에서 확정한 INDEX/STRICT/KEEP 정책. 도메인을 주는 값이 NULL뿐이면 LATE_BIND 표시가 남을 수 있다. |
 | `RESOLVED_KEY_ELEMENT.kept` | CONSTANT의 값이 원래 타입으로 유지되어 복합 키가 혼합 도메인을 필요로 하는지. |
-| `DOMAIN_SEARCH_KEYS.other_keys` | B-tree 비교가 다른 key를 받을 수 있음을 알리는 작은 상태. false이면 인덱스 컬럼과 그대로 비교한다. |
+| `DOMAIN_SEARCH_KEYS` | B-tree 비교가 읽는 세 값의 enum으로 값 전달된다(`BTID_INT.search_keys`). NONE: 질의 계획 밖의 B-tree 검색(값끼리 비교), OWN: 모든 값이 컬럼 자신의 key라 인덱스와 그대로 비교, OTHER: 다른 key를 받는 컬럼이 있어 타입 쌍 표로 비교. midxkey 원소 비교 콜백은 문맥 인자 없이 OWN용과 OTHER용 두 함수다. |
 
 `STRICT`는 모든 실패를 문장 오류로 만드는 뜻이 아니다. **엄격 변환을 시도한 후 실패한 컬럼의 원래 타입을 유지하는 기존 복합 키 동작**이다. 한 컬럼은 INT로 변환되고 다른 컬럼은 DOUBLE로 유지되는 혼합 키가 가능하다. 하나의 키 전체에 strict/keep 하나를 적용하거나 유지 도메인을 모두 인덱스 도메인으로 바꾸면 결과·정렬·오류가 달라질 수 있다.
 
@@ -293,7 +292,7 @@ RESOLVED_INDEX_KEYS (이번 실행에 확정한 부분)
 
 ### 8.1 DOMAIN_EXECUTION_TEMPORARY
 
-정의: [DOMAIN_EXECUTION_TEMPORARY](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L413). `domain_execution.temporaries[]`의 원소다. 준비 시 빈 상태로 할당한다. 최초 행 사용이 값을 변환하고 이후 같은 generation은 재사용한다. release 88바이트, debug 104바이트.
+정의: [DOMAIN_EXECUTION_TEMPORARY](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L414). `domain_execution.temporaries[]`의 원소다. 준비 시 빈 상태로 할당한다. 최초 행 사용이 값을 변환하고 이후 같은 generation은 재사용한다. release 88바이트, debug 104바이트.
 
 | 필드 | 뜻 |
 |---|---|
@@ -309,7 +308,7 @@ RESOLVED_INDEX_KEYS (이번 실행에 확정한 부분)
 
 ### 8.2 DOMAIN_DEFERRED_ERROR와 상수 분기
 
-정의: [분기 종류와 계획](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L163), [DOMAIN_DEFERRED_ERROR](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_resolve.c#L441)는 domain_resolve.c에 있다.
+정의: [분기 종류와 계획](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L164), [DOMAIN_DEFERRED_ERROR](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_resolve.c#L441)는 domain_resolve.c에 있다.
 
 | 구조.필드 | 뜻 |
 |---|---|
@@ -330,7 +329,7 @@ RESOLVED_INDEX_KEYS (이번 실행에 확정한 부분)
 
 ## 9. DOMAIN_PLAN_ITEM: 각 노드가 붙잡는 작은 진입점
 
-정의: [DOMAIN_PLAN_ITEM과 cold 부분](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L69). 모두 로드가 작성한다. 실행 중 변경하지 않는다. 현재 크기 계약은 item 80바이트, cold 24바이트다.
+정의: [DOMAIN_PLAN_ITEM과 cold 부분](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L71). 모두 로드가 작성한다. 실행 중 변경하지 않는다. 현재 크기 계약은 item 80바이트, cold 16바이트다. 노드(REGU_VARIABLE, ARITH_TYPE, QFILE_TUPLE_VALUE_POSITION, AGGREGATE_TYPE, ANALYTIC_TYPE)는 항목을 `plan_item` 멤버로 가리키고, INDX_INFO는 키 계획을 `key_plan` 멤버로 가리킨다. `XASL_NODE.domain_plan`만 `DOMAIN_PLAN` 전체다.
 
 | 필드 | 뜻 |
 |---|---|
@@ -338,7 +337,6 @@ RESOLVED_INDEX_KEYS (이번 실행에 확정한 부분)
 | `ref` | 이 참조가 읽을 준비된 값의 `vals[]` 위치. 값 참조가 없으면 `-1`. |
 | `flags` | 별도 역할/해석을 표시하는 아래 비트들. |
 | `operand_class` | CONST: 실행 동안 고정, ROW: 현재 block의 행마다 변화, CORRELATED: 바깥 block의 scope 동안 고정, NON_CACHEABLE: fetch를 상수 캐시로 바꾸면 안 되는 값. |
-| `fail` | 이 참조의 변환 실패 정책 ERROR/NULL/KEEP. 같은 바인드라도 대상 도메인과 실패 정책이 다르면 다른 참조다. |
 | `node_domain_index` | `domain_execution`의 세 노드 배열의 공통 1-based 번호. 0이면 없다. |
 | `fixed` | 로드에 확정한 `RESOLVED_DOMAIN`. 결과뿐 아니라 별도 피연산자 대상 도메인과 변환 함수도 담는다. |
 | `compares` | union의 비교 용도. FIELD/NULLIF/LEAST/GREATEST가 사용할 계획 비교들의 포인터 배열. |
@@ -352,15 +350,16 @@ RESOLVED_INDEX_KEYS (이번 실행에 확정한 부분)
 | `ctx` | 이 참조가 필요한 규칙의 문맥: ARITH, COMPARE, ASSIGN, COMMON_VALUE, AGG, ANALYTIC, FUNC_ARG, LIST_COLUMN, KEY_ELEM. |
 | `opcode` | 그 문맥의 연산/함수 코드. AGG/ANALYTIC는 FUNC_CODE, 산술 등은 해당 OPERATOR_TYPE. |
 | `constant_branch` | 해당 항목을 감싸는 가장 안쪽 상수 분기. |
-| `name` | 항목 종류/진단에 쓰는 이름. 일부 검증은 `domain_list_column_name`과 포인터 동일성으로 종류를 검사한다. 단순한 출력 문자열로 보고 제거하면 안 된다. |
+| `synthetic` | XASL 노드가 가리키지 않는 집합 연산·CTE 리스트 컬럼 항목. 로드의 미확정 검사는 이 항목 대신 그 소비자를 검사한다. |
 
 ### flags의 현재 의미
 
-값은 이전과 같다. 쓰이지 않던 KEY1(0x02), KEY2(0x04), ISS(0x08), KEEP_LAZY(0x20), TRUNCATE_OK(0x80)는 없어졌다.
+쓰이지 않던 KEY1(0x02), KEY2(0x04), ISS(0x08), KEEP_LAZY(0x20), TRUNCATE_OK(0x80)는 없어졌고, 0x02는 이제 `DOMAIN_PLAN_CONSUMER_CONVERTS`다. 나머지 값은 이전과 같다.
 
 | 비트 | 현재 의미/사용 |
 |---|---|
 | `DOMAIN_PLAN_LATE_BIND` (0x01) | 실행의 입력 도메인에서 확정해야 하는 항목. |
+| `DOMAIN_PLAN_CONSUMER_CONVERTS` (0x02) | 비교, 인덱스 키, 대입, CAST처럼 값을 자기 타입에서 스스로 해석·변환하는 소비자의 참조. 바인드 값이 계획 타입일 필요가 없다. 계획 타입으로 값을 읽는 참조와는 값 슬롯도 생산자도 공유하지 않는다. 예전의 3값 실패 정책(ERROR/NULL/KEEP)에서 읽는 쪽이 실제로 묻던 것은 이것 하나였다. |
 | `DOMAIN_PLAN_ALIAS` (0x10) | 다른 생산자의 도메인 결정에 연결된 항목. |
 | `DOMAIN_PLAN_ACCUMULATOR` (0x40) | 고정 aggregate의 `fixed.operand_domain[0]`이 accumulator 도메인임을 표시. |
 | `DOMAIN_PLAN_LATE_BIND_COLLATION` (0x100) | 타입은 컴파일되어 있지만 값의 collation을 실행 준비에 반영해야 한다. |
@@ -370,11 +369,11 @@ RESOLVED_INDEX_KEYS (이번 실행에 확정한 부분)
 | `DOMAIN_PLAN_LATE_BIND_COERCION` (0x1000) | 산술 결과 도메인은 고정되어 있고, 가변 피연산자의 operand coercion만 실행 준비가 확정한다. |
 | `DOMAIN_PLAN_LIST_BIND` (0x2000) | 컴파일된 output list 컬럼 도메인에 바인드를 맞추는 tuple write 동작을 실행 준비로 옮긴다. |
 
-값 포인터 alias는 flags 전체도 비교한다. TRUNCATE_OK가 있던 때에는 non-strict CAST 아래의 값 포인터가 생산자 항목을 공유하지 못했지만, 지금은 다른 값 포인터처럼 공유한다(도메인·operand class·실패 정책이 같을 때).
+값 포인터 alias는 flags 전체도 비교한다. TRUNCATE_OK가 있던 때에는 non-strict CAST 아래의 값 포인터가 생산자 항목을 공유하지 못했지만, 지금은 다른 값 포인터처럼 공유한다(도메인·operand class·flags가 같을 때).
 
 ## 10. DOMAIN_PLAN 전체 필드: 준비 순서를 설명하는 목록들
 
-정의: [DOMAIN_PLAN](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L344). 로드의 `stx_build_domain_plan()`이 배열과 번호를 만들고 준비 함수가 읽는다. `n_*`는 아래 대응 배열/상태의 길이이며 XASL 로드 메모리의 수명 동안 고정된다.
+정의: [DOMAIN_PLAN](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L345). 로드의 `stx_build_domain_plan()`이 배열과 번호를 만들고 준비 함수가 읽는다. `n_*`는 아래 대응 배열/상태의 길이이며 XASL 로드 메모리의 수명 동안 고정된다.
 
 | 필드 | 뜻 |
 |---|---|
@@ -430,7 +429,7 @@ RESOLVED_INDEX_KEYS (이번 실행에 확정한 부분)
 
 ## 11. DOMAIN_COMPARE_PLAN과 DOMAIN_ELEMENT_COMPARE_PLAN
 
-정의: [DOMAIN_COMPARE_PLAN](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L131), [DOMAIN_ELEMENT_COMPARE_PLAN](https://github.com/CUBRID/cubrid/blob/c997c02d5f7e996f97653ce941da06d99d1a7752/src/query/domain_plan.h#L213). 로드가 작성하고 실행 준비가 읽는다.
+정의: [DOMAIN_COMPARE_PLAN](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L133), [DOMAIN_ELEMENT_COMPARE_PLAN](https://github.com/CUBRID/cubrid/blob/d91666acd69b2db8b4fbf42f2cdbe115bc774565/src/query/domain_plan.h#L214). 로드가 작성하고 실행 준비가 읽는다.
 
 | DOMAIN_COMPARE_PLAN 필드 | 뜻 |
 |---|---|
@@ -491,7 +490,7 @@ RESOLVED_INDEX_KEYS (이번 실행에 확정한 부분)
 
 ## 14. 문서의 근거와 범위
 
-- 구현: `c997c02d5`의 `domain_plan.h/.c`, `domain_rules.h/.c`, `domain_resolve.h/.c`, `query_opfunc.h/.c`, `query_aggregate.cpp`, `query_analytic.cpp`, `xasl_aggregate.hpp`, `xasl_analytic.hpp`, `fetch.c`, `query_evaluator.c`, `query_executor.h/.c`와 PX 복사 경로. 크기는 release/optdebug 빌드의 DWARF(`gdb ptype /o`)에서 읽었다.
+- 구현: `d91666acd`의 `domain_plan.h/.c`, `domain_rules.h/.c`, `domain_resolve.h/.c`, `query_opfunc.h/.c`, `query_aggregate.cpp`, `query_analytic.cpp`, `xasl_aggregate.hpp`, `xasl_analytic.hpp`, `fetch.c`, `query_evaluator.c`, `query_executor.h/.c`와 PX 복사 경로. 크기는 release/optdebug 빌드의 DWARF(`gdb ptype /o`)에서 읽었다.
 - 계약: [#312 본문·댓글](https://github.com/xmilex-git/workspace/issues/312), [#374 재정리의 결정·댓글](https://github.com/xmilex-git/workspace/issues/374), ADR-0019~0024.
-- 계획 항목의 저장 크기 압축은 [#375](https://github.com/xmilex-git/workspace/issues/375)의 미결 과제다. 2026-09-30 측정(측정 전용 빌드, 벤치 문장 45개): plan은 XASL 로드 요청 바이트의 26.3%이고, 항목 1201개 중 894개가 고정 결정만 가지며 서로 다른 고정 결정은 191개다. 요청 바이트 절감은 (c) cold 24→16바이트 1.4%, (b) 32바이트 항목과 공유 고정 결정 6.9%, (d) 단순 바인드 항목 제거 2.4%였고, 구현 여부는 정해지지 않았다.
+- 계획 항목의 저장 크기 압축은 [#375](https://github.com/xmilex-git/workspace/issues/375)의 미결 과제다. 2026-09-30 측정(측정 전용 빌드, 벤치 문장 45개): plan은 XASL 로드 요청 바이트의 26.3%이고, 항목 1201개 중 894개가 고정 결정만 가지며 서로 다른 고정 결정은 191개다. 요청 바이트 절감은 (c) cold 24→16바이트 1.4%(리뷰 반영 `ad7927e4e`에서 `name`을 `synthetic` 표시로 바꾸며 이뤄졌다), (b) 32바이트 항목과 공유 고정 결정 6.9%, (d) 단순 바인드 항목 제거 2.4%였고, (b)와 (d)의 구현 여부는 정해지지 않았다.
 - 검증: 커밋마다 optdebug/release 빌드, 컨테이너 CTP sql 17483/17483과 medium 975/975(`tc/pr-8022` `f9eaf6ac0`, case 판정이 `ca907aaed`와 같음), release 사용자 공간 명령 수 A/B(`ca907aaed` 대비). 수치는 각 커밋 메시지에 있다.
