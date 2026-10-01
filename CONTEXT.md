@@ -16,6 +16,10 @@ _Avoid_: JIRA 이슈 본문
 CUBRID 엔진 PR 브랜치와 그 PR에 연결된 공개·비공개 TC 브랜치를 각 저장소의 develop 기준으로 함께 최신화하는 작업이다.
 _Avoid_: TC 최신화, PR rebase
 
+**TC PR**:
+엔진 PR N마다 봇이 두 TC 저장소(cubrid-testcases, cubrid-testcases-private-ex)에 하나씩 여는 `tc/pr-N` 브랜치의 PR로, 그 엔진 PR의 TC 변경이 담기는 유일한 자리다. 변경이 없는 쪽은 빈 draft로 남고, 봇이 PR을 만들지 못하면 브랜치만 있다.
+_Avoid_: TC 브랜치(fork 브랜치와 혼동), 테스트 PR
+
 **해시 포기 (hash abandonment, HS_REJECT_ALL)**:
 그룹바이 해시 집계 도중 선택도 휴리스틱(표본 튜플 대비 그룹 비율 초과)이 발동해 그 문장의 해시 전략을 영구히 버리고 정렬 폴백으로 전환하는 런타임 결정이다. 그때까지 누적한 그룹은 버리지 않고 테이블 전체를 partial list로 보존한 뒤 전환한다. 트레이스에는 `hash: partial`로 표시된다.
 _Avoid_: 해시테이블 꽉 참, 메모리 초과, spill
