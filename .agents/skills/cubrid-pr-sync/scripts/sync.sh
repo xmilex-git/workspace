@@ -52,6 +52,54 @@ behind_by() {
   gh api "repos/$repo/compare/$develop_sha...$branch_tip" --jq '.behind_by'
 }
 
+# The number of files GitHub lists for the merge base of base..head -> head (at most
+# 300), then their names (old and new name of a rename).
+changed_files() {
+  local repo=$1
+  local base=$2
+  local head=$3
+  gh api "repos/$repo/compare/$base...$head" \
+    --jq '(.files // [] | length), (.files // [] | .[] | .filename, (.previous_filename // empty))'
+}
+
+# A behind branch and develop that changed the same file since their merge base can merge
+# cleanly and still not build, or carry one fix twice: the server-side merge pushes before
+# anything builds. Print the shared files; return 1 when there are any, or when GitHub's
+# 300-file limit hides part of either side.
+report_overlap() {
+  local label=$1
+  local repo=$2
+  local branch=$3
+  local develop_sha=$4
+  local branch_tip=$5
+  local behind=$6
+  local branch_side develop_side shared
+
+  if [[ "$behind" == "0" ]]; then
+    return 0
+  fi
+  branch_side=$(changed_files "$repo" "$develop_sha" "$branch_tip") \
+    || die "cannot list the files $repo:$branch changed"
+  develop_side=$(changed_files "$repo" "$branch_tip" "$develop_sha") \
+    || die "cannot list the files develop changed in $repo"
+
+  if (( $(head -n 1 <<< "$branch_side") >= 300 || $(head -n 1 <<< "$develop_side") >= 300 )); then
+    printf 'OVERLAP  %-10s %s:%s unknown: one side changed 300+ files, more than GitHub lists\n' \
+      "$label" "$repo" "$branch"
+    return 1
+  fi
+
+  shared=$(LC_ALL=C comm -12 <(tail -n +2 <<< "$branch_side" | LC_ALL=C sort -u) \
+                             <(tail -n +2 <<< "$develop_side" | LC_ALL=C sort -u))
+  if [[ -z "$shared" ]]; then
+    return 0
+  fi
+  printf 'OVERLAP  %-10s %s:%s and develop %s both changed:\n' \
+    "$label" "$repo" "$branch" "${develop_sha:0:12}"
+  sed 's/^/           /' <<< "$shared"
+  return 1
+}
+
 merge_develop() {
   local label=$1
   local repo=$2
@@ -101,6 +149,7 @@ main() {
   local engine_develop public_develop private_develop
   local engine_tip public_tip private_tip
   local engine_behind public_behind private_behind
+  local overlap=0
   local -a fields
 
   pr_number=$(parse_pr_number "$1")
@@ -140,6 +189,19 @@ main() {
 
   printf 'Pinned develop: engine=%s public-tc=%s private-tc=%s\n' \
     "${engine_develop:0:12}" "${public_develop:0:12}" "${private_develop:0:12}"
+
+  report_overlap engine "$engine_repo" "$engine_branch" "$engine_develop" "$engine_tip" "$engine_behind" \
+    || overlap=1
+  report_overlap public-tc "$PUBLIC_TC_REPO" "$tc_branch" "$public_develop" "$public_tip" "$public_behind" \
+    || overlap=1
+  report_overlap private-tc "$PRIVATE_TC_REPO" "$tc_branch" "$private_develop" "$private_tip" "$private_behind" \
+    || overlap=1
+  if (( overlap )); then
+    printf 'STOPPED: nothing was merged. Merge locally against these develop tips, build and gate,\n' >&2
+    printf 'push, then rerun to verify: engine=%s public-tc=%s private-tc=%s\n' \
+      "$engine_develop" "$public_develop" "$private_develop" >&2
+    exit 3
+  fi
 
   merge_develop engine "$engine_repo" "$engine_branch" "$engine_develop" "$engine_tip" "$engine_behind" \
     "Merge CUBRID/develop into $engine_branch"
