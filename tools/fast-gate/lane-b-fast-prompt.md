@@ -17,6 +17,6 @@ Steps (foreground, one continuous turn):
 2. Counters: `bash $V/fast-counters.sh $T/counters/<LABEL> $O; echo rc=$?` (Bash timeout 600000; about 2 minutes). If rc is not 0, report `cat $T/counters/<LABEL>/s/<n>/stack.log` for every failed stack and the error lines of the files under its up-install/log/, then continue.
 3. Compare: `python3 <COMPARE SCRIPT, e.g. $T/counters/compare-t343.py> <LABEL> | tee $T/counters/<LABEL>-compare.txt`.
 4. Report `cat $T/counters/<LABEL>/logs/provenance.txt` and the FULL content of $T/counters/<LABEL>-compare.txt.
-5. Leftovers: `pgrep -u $USER -a -f DomainBench` (expected none; lane A's container processes are not yours) and `find /bench/hdd/core -maxdepth 1 -newermt 'START' -name 'core.*'` (paths only; do not analyze or delete).
+5. Leftovers: `pgrep -u $USER -a -f DomainBench` (expected none; lane A's container processes are not yours) and `find /data/core/ -maxdepth 1 -newermt 'START' -name 'core.*'` (paths only; do not analyze or delete).
 
 Final report: libcubrid.so hash; runner rc; provenance; the FULL compare output; leftovers and cores.
