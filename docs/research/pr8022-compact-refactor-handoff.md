@@ -239,7 +239,7 @@ DOMAIN_RESOLVE_WORK                준비 함수의 지역 작업 상태
 - [xasl_analytic.hpp: 기존 함수별 union과 추가 coercion](https://github.com/CUBRID/cubrid/blob/ca907aaed3d94ed7e1aa87a5463fd064b8f3c208/src/xasl/xasl_analytic.hpp#L64)
 - [xasl_aggregate.hpp: accumulator의 coercion 저장](https://github.com/CUBRID/cubrid/blob/ca907aaed3d94ed7e1aa87a5463fd064b8f3c208/src/xasl/xasl_aggregate.hpp#L80)
 - [query_opfunc.c: 두 입력의 coercion 소비](https://github.com/CUBRID/cubrid/blob/ca907aaed3d94ed7e1aa87a5463fd064b8f3c208/src/query/query_opfunc.c#L2458)
-- [ADR-0020: 노드 내 union/flags 인라인 후보의 보류](https://github.com/xmilex-git/workspace/blob/main/docs/adr/0020-two-decision-points-compile-and-execution-gate.md)
+- [ADR-0020: 노드 내 union/flags 인라인 후보의 보류](https://github.com/xmilex-git/workspace/blob/main/docs/adr/0020-two-resolve-points-compile-and-resolve-domains.md)
 - [ADR-0023: 하나의 switch로 변환기 선택](https://github.com/xmilex-git/workspace/blob/main/docs/adr/0023-converters-are-found-by-one-switch.md)
 - [ADR-0024: 타입 쌍 비교 표와 자리별 확정 비교](https://github.com/xmilex-git/workspace/blob/main/docs/adr/0024-comparison-resolution-is-a-type-pair-table-cell.md)
 

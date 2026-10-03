@@ -438,8 +438,8 @@ flowchart TB
 
 ---
 
-## 읽을 때 주의할 점 (ADR 제목과 구현이 다른 곳)
+## 읽을 때 주의할 점 (용어)
 
-- ADR 0021 제목은 "클라이언트 캐스트 삭제" 이지만 **Amendment(D-335-08, D-336-A·B)** 로 정정됐다: 클라이언트 캐스트(`pt_set_host_variables`)는 develop 그대로 남고, 게이트는 값을 바꾸지 않고 참조마다 복제한 뒤 `tp_Variable_domain` 슬롯의 도메인만 값에서 기록한다. 이유는 XASL 캐시 키가 리터럴 문장과 바인드 문장을 구분하지 않는다는 것(F-335-04)과 OBJECT 바인드가 클라이언트 전용 코드라는 것(F-335-05).
-- ADR 0020 의 `REGU_VARIABLE_GATE` 비트는 구현에서 이름이 다르다: 컴파일은 도메인 자체를 `tp_Variable_domain` 으로 두고(`pt_make_regu_hostvar`), 로드가 `REGU_VARIABLE_VARIABLE_DOMAIN`(0x8000, 스트림에 없음) 과 `DOMAIN_PLAN_LATE_BIND` 항목 플래그를 도출한다.
-- ADR 0020 의 "G2 블록 게이트" 는 최종 구현에 없다(제목에 "블록 게이트 없음"). 상관 값의 scope 변환은 `domain_execution.temporaries[]` 가 첫 사용 때 1회 변환하는 것으로 대신한다.
+- ADR 0019~0024 는 2026-10-03 에 PR 8022 최종 구현 기준으로 다시 썼다. 이 문서가 "게이트" 라 부르는 것은 `CONTEXT.md` 용어집의 **실행 전 도메인 확정**(`qexec_resolve_domains`)이고, "게이트 슬롯" 은 **가변 POS**, "게이트 표" 는 **확정 도메인 표**(`XASL_STATE.resolved_domain`)다. 그림의 함수·필드 이름은 코드 그대로다.
+- 컴파일은 가변 도메인 자리에 도메인 자체를 `tp_Variable_domain` 으로 두고(`pt_make_regu_hostvar`), 로드가 `REGU_VARIABLE_VARIABLE_DOMAIN`(0x8000, 스트림에 없음)과 `DOMAIN_PLAN_LATE_BIND` 항목 플래그를 도출한다. 클라이언트 캐스트(`pt_set_host_variables`)는 develop 그대로다(ADR 0021).
+- mainblock 안에서 다시 확정하는 단계(초안의 "블록 게이트")는 없다. 상관 값의 scope 변환은 `domain_execution.temporaries[]` 가 첫 사용 때 1회 변환하는 것으로 대신한다(ADR 0020).

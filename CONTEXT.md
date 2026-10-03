@@ -504,7 +504,7 @@ _Avoid_: 실행 중 플랜 필드에 쓰는 것(행 시점 확정), 계획을 �
 XASL_STATE 에 사는 실행별 항목 — 가변 POS·늦은 바인딩 노드와 그 파생 소비자(산술 결과·리스트 컬럼·누산기·정렬 키·비교 도메인)의 실행당 답(도메인, collation, 변환기)이 여기에만 있고 도메인 계획에는 없다. 실행 전 도메인 확정이 채운 뒤 봉인되어 실행 중 누구도 쓰지 않으며, PX 워커는 이 표를 값 배열과 함께 깊은 복사로 상속한다(D-318-03·06, D-323-08).
 _Avoid_: 게이트 표(gate table, 옛 이름), 슬롯 번호(`slot`, 옛 이름 — 번호는 `resolved_index`, D-374-18), 플랜 노드의 `domain` 필드(불변), 바인드 값 배열과 혼용, 실행 중 쓰기
 
-**실행 도메인 (execution domain)** — 코드 이름 `RESOLVED_DOMAIN_TABLE.node_domains` · `interpolation_list_domains` · `operand_types`, 항목의 `node_domain_index`:
+**실행 도메인 (execution domain)** — 코드 이름 `XASL_STATE.domain_execution`(`DOMAIN_EXECUTION_STATE`)의 `node_domains` · `interpolation_list_domains` · `operand_types`, 항목의 `node_domain_index`:
 develop 이 실행 중 노드 필드에 쓰고 XASL clear 에서 되돌리던 답(문자 LEAVE 노드의 첫 계산, 셋업이 주는 집계·분석·위치·출력 열 도메인과 연산자 타입 — 행이 정하던 D-336-E 바인딩은 #366 에서 없어짐)을 두는 XASL_STATE 의 실행별 자리. 로드가 컴파일 도메인이 가변 도메인인 노드와 모든 집계·분석에 번호를 주고, 노드마다 따로다(생산자 항목을 공유하는 값 포인터도 자기 실행 도메인). 실행의 주인 스레드만 쓰고, 읽는 곳은 실행 도메인 ?: 컴파일 도메인을 읽으며, 실행 동안 남아 develop 의 쓰기·원복 이력과 같다(#355 D-355-01·09).
 _Avoid_: 노드 칸·cell(옛 이름, 변환기와 혼동), 확정 도메인 표(봉인된 확정)와 혼용, 플랜 노드 필드에 쓰는 것, 새 확정 지점으로 서술(develop 이 쓰던 답의 자리일 뿐이다)
 
