@@ -76,7 +76,8 @@ select median(s), typeof(median(s)) from tm;
 | 숫자 문자열 | `2.5` `'double'` | `2.5` `'double'` |
 | `'abc'` | -1118 | -1118(문구 "DOUBLE") |
 
-- 첫 값이 변환되지 않으면 -1118 이고, 뒤 행의 값이 변환되지 않으면 -181 이다(develop 과 같은 시점).
+- 그룹(GROUP BY)·파티션(OVER)의 첫 값이 변환되지 않으면 -1118 이고, 그 뒤 값이 변환되지 않으면 -181 이다. develop 은 첫 값 검사를 **실행당 한 번**(XASL 수명 기준: 같은 prepare 를 다시 실행하면 -181) 했으므로 뒤 그룹의 나쁜 첫 값은 -181 이었다. 엔진은 첫 값 상태를 두지 않고(2026-10-07, #379 D-379-33), 변환이 실패한 자리에서 리스트의 튜플 수(집계)와 파티션의 값 수(분석)로 가른다. BIT·컬렉션처럼 함수가 받지 못하는 타입의 값은 위치와 무관하게 -1118 이다. 값 인자(리터럴·바인드·세션변수)는 변환 오류 그대로다.
+  - CTP 답 변경(`a19c62dd5`, 3 케이스 10 블록): `issue_11087_median/11087`, `issue_11088_percentile_cont/_01_aggregate_function/_00_from_dev`, `issue_11089_percentile_disc/_01_aggregate_function/_00_from_dev` — `median(c13) over (partition by a)`, `percentile_cont(0.2) within group (order by c13) … group by a` 의 뒤 그룹(a = 5)의 첫 값 `'abc'`: develop -181 → -1118.
 - 결과 열의 타입이 준비 시점에 DOUBLE 로 정해진다. 그래서 csql 은 이 열을 숫자 열처럼 오른쪽에 붙여 보인다.
 - 분석 함수도 같다. `median(c12) over (partition by a)`(날짜 문자열 컬럼)는 develop 의 날짜 값 대신 -1118 이다.
   - 게이트 의존 문자 식(`median(coalesce(?, s)) over ()`)의 날짜 내용도 -1118 이다(정렬 단계, #362 F-362-03).
@@ -84,6 +85,26 @@ select median(s), typeof(median(s)) from tm;
 - ADDTIME: 존이 붙은 문자열 컬럼(`addtime(varchar_col, ...)`)은 develop optdebug 가 assert 로 멈추던 자리이고, 지금은 VARCHAR 로 답한다. CTP 에는 이 모양이 없다.
 - CTP 답 변경(`cb1bdc413`): `issue_11087_median/11087·11087_1·11087_3·11743`, `_14_1h/bug_bts_13916`, `issue_11088_percentile_cont/_01_aggregate_function/_00_from_dev·_08_expression`, `issue_11089_percentile_disc/_01_aggregate_function/_00_from_dev·_08_expression`, `_07_misc/domain_conversion_contract/conversion_contract`(10건·33블록, 전부 날짜·시간 값 → `Error:-1118`).
 - 매뉴얼: "MEDIAN·PERCENTILE_CONT·PERCENTILE_DISC 의 인자가 문자열 컬럼이나 문자열 식이면 DOUBLE 로 변환해 계산한다. 숫자로 변환되지 않는 값은 오류다. 문자열 상수·호스트 변수·세션변수는 값에 따라 DOUBLE·DATETIME·TIME 중 하나로 계산한다." ADDTIME 표는 이미 이 규칙이다.
+
+## 2a. 분석 함수는 첫 값으로 바인딩하지 않는다 (#379 D-379-33)
+
+develop 의 분석 함수는 피연산자 타입이 가변(`opr_dbtype == VARIABLE`)이면 첫 non-NULL 값에서 함수 도메인과 피연산자 타입을 정하고, 그 값을 함수의 컴파일 도메인으로 바꿨다. 이 바인딩은 실행당 한 번이라 두 번째 파티션부터는 값을 바꾸지 않았다. 엔진은 셋업(`qexec_execute_mainblock` 직전)에서 resolve_domains 의 해석으로 도메인·피연산자 타입만 확정하고 값은 바꾸지 않는다. 각 함수는 자기가 읽는 자리에서 값을 변환한다(SUM/AVG 의 문자 → 함수 도메인, MEDIAN/PERCENTILE 의 모든 값, DISTINCT 리스트).
+
+```sql
+create table t (i1 int, i2 int, i3 int);
+-- i1 = 1 인 5행, i1 = 2 인 9행
+prepare stmt from 'select i1, avg(?) over (partition by i1) from t order by 1';
+execute stmt using 5.7;
+```
+
+| 파티션 | develop | 새 답 |
+|---|---|---|
+| i1 = 1 (5행, 실행의 첫 값이 든 파티션) | `5.700000000000002` (첫 값을 DOUBLE 로 바꿔 DOUBLE 로 합산) | `5.7` (NUMERIC 으로 합산 뒤 나눔) |
+| i1 = 2 (9행) | `5.699999999999999` (NUMERIC 합산) | `5.699999999999999` |
+
+- NUMERIC 바인드의 AVG 가 모든 파티션에서 `avg(numeric 컬럼)` 과 같은 방식으로 계산된다. 정수·문자열·FLOAT 바인드는 바뀌지 않는다(문자열은 develop 처럼 SUM/AVG 가 함수 도메인 DOUBLE 로 바꾼다).
+- CTP 답 변경(`a19c62dd5`): `_19_apricot/_07_analytic_clause/_18_host_vars` 의 avg 셀 32개(첫 파티션, 1~2 ulp).
+- 매뉴얼: 없음(마지막 자리 반올림).
 
 ## 3. 반복 실행이 앞 실행의 바인드에 끌려가지 않는다 (#352, `cbrd_24598`)
 
