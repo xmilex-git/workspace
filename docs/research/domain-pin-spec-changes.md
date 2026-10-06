@@ -102,6 +102,17 @@ execute p using 'A';   -- develop: -181 / 새 답: 'Z'
 - CTP 답 변경: `_13_issues/_23_1h/cbrd_24598`(`de2e2b767`, 사용자 승인 2026-09-25).
 - 매뉴얼: 없음(결함 수정).
 
+같은 제자리 변환이 한 실행 안에서도 출력에 드러나던 자리도 없어졌다(PR 8022 리뷰 탐침, 2026-10-06, #379 D-379-17). develop 은 파생 테이블의 바인드 열을 바깥 비교가 비교 타입으로 제자리에서 바꿔, 그 값을 select 목록이 바뀐 타입으로 내보냈다.
+
+```sql
+create table ta (id int, ci int); insert into ta values (1, 1), (5, 1);
+create table tb (id int); insert into tb values (1);
+prepare q from 'select /*+ ordered */ ta.id, q.k from ta, (select ? k from tb) q where ta.ci = q.k order by 1, 2';
+execute q using '1';   -- develop: q.k = 1.000000000000000e+00 (DOUBLE) / 새 답: '1'
+```
+
+같은 모양이 use_nl·use_merge·use_hash 와 두 파생 테이블 조인에서 25 문장이다. 행 집합은 같고 바인드 열의 값 타입만 다르다.
+
 ### 3a. 집합 연산 열 위 분석 MEDIAN 의 첫 값 (#344 D-344-02 — develop 답으로 되돌림)
 
 스펙 변경이 아니다. 캠페인 중간(#341~#367)에 develop 과 달라졌던 자리를 #344 가 develop 오류 코드로 되돌렸고, 기록으로만 남긴다.
@@ -149,6 +160,8 @@ execute q using 1, 'a';
 | `difference`, CTE(`with cte(x) as (… union all …)`) 같은 모양 | 한 가지의 타입 | -456 |
 | 두 가지 모두 행이 있는 `1`, `'a'` | -456 | -456 |
 | `1`, `2` · `'a'`, `'bcd'` · `1`, NULL | 값 | 값(같은 타입·가변 문자열·NULL 가지는 전처럼 합친다) |
+| 파생 테이블 `(select ? k from ta union all select ? k from tb) q where k = 1.5` 에 `1`, `1.5` | 행 `1.5`(바깥 조건이 한쪽 가지를 비워 다른 가지의 타입) | -456 |
+| 같은 파생 테이블에 `where k = 'a'`, `1`, `'1'` | -181 `Cannot coerce value of domain "character" to domain "*variable*"` | -456 |
 
 - 사용자 결정 (나)(2026-09-25).
 - 매뉴얼: "집합 연산과 CTE 의 가지가 서로 다른 타입의 값을 내면, 한쪽 가지의 결과 행이 없어도 오류다."
@@ -263,7 +276,7 @@ select @sv_m := s collate utf8_en_ci, @sv_m from sv_t order by k;
 
 ## 10. 상수의 계산·변환 오류는 실행 전 (#367 (가), D-367-07)
 
-상수(리터럴·바인드·상수 부분트리, 컴파일이 상수 피연산자에 씌운 암시적 CAST 포함)의 계산·변환이 실패하면 행과 무관하게 실행 전 오류다. 행 0개, 행이 고르는 안 쓰인 분기, 행 값이 막는 단락에서도 그렇다. develop 은 그 식을 처음 계산하는 행에서 오류를 냈다.
+상수(리터럴·바인드·상수 부분트리, 컴파일이 상수 피연산자에 씌운 암시적 CAST 포함)의 계산·변환이 실패하면 행과 무관하게 실행 전 오류다. 행 0개, 행이 고르는 안 쓰인 분기, 행 값이 막는 단락에서도 그렇다. develop 은 그 식을 처음 계산하는 행에서 오류를 냈다. 대상은 상수식의 계산, 술어 항·ALL/SOME 의 상수 쪽 변환, 인덱스 키 상수의 키 타입, MEDIAN/PERCENTILE 값 인자의 인자 타입이다(D-367-01~04). 산술(`+ - * /`)과 SUM/AVG 가 바꾸는 상수 피연산자(`a + ?` 의 바인드 하나, `sum(?)`)도 그렇다(PR 8022 리뷰, #379 D-379-31 — 그 전에는 첫 행이 읽을 때 바꾸고 실패를 행에 맡겼다). 그 변환은 `return_null_on_function_errors=yes` 면 develop 처럼 오류 없이 NULL 이다.
 
 ```sql
 -- ce_t: a = 1, 2, 3 (NULL 없음), c int / ce_e: 빈 테이블
@@ -284,6 +297,7 @@ execute q using 'abc';
 | CASE 의 안 쓰인 가지(모든 a > 0) | `1`, `2`, `3` | -181 |
 | AND 뒤 항의 `100 / (? - ?)` 에 (1, 1) | 0행 | -539(0 으로 나누기) |
 | 빈 테이블의 `a + concat(?, '')`·`greatest(a, …)`·`nullif(a, …)` | 0행 | -181 |
+| 빈 테이블·a 가 전부 NULL 인 테이블의 `a + ?` 에 `'abc'` | 0행 / NULL | -181 |
 | 인덱스 없는 열의 `c = concat(?, '')`·`c in (1, concat(?, ''))`(빈 테이블·걸러진 행) | 0행 | -181 |
 | 0행의 `median(?)` 에 `'abc'`, `median('abc')`, `median(B'0001')`, `median(?) over ()`, `percentile_cont(0.5) within group (order by ?)`, 세션변수 `'abc'` | NULL(또는 0행) | -1118 |
 
@@ -328,6 +342,7 @@ execute q using 'abc';
 | 분석 첫 값이 변환되지 않을 때(`sum(?) over (partition by g)` 에 DATE 바인드) | release: 오류 없이 0행, optdebug: `qexec_analytic_add_tuple` assert | -181 `Cannot coerce value of domain "date" to domain "double"` | D-337-06(D4) |
 | `group_concat(?)` 에 NULL 바인드 | optdebug `qexec_end_one_iteration` collation 플래그 assert(release 는 NULL) | NULL | D2, F-341-06 |
 | `select ? union all select ?` 에 NULL·NULL, 재귀 CTE 시드 NULL | optdebug `qfile_unify_types` assert(release 는 답) | NULL·값 | D6, D-337-07 |
+| NULL 바인드만 받은 문자열 식의 collation(`cs > any (select concat(?, ?) from tb)`, `cs = (select max(concat(?, ?)) from tb)`, `cs = any (select concat(?, ?) from tb union all select cs from tb)` 에 NULL·NULL) | develop 은 값이 전부 NULL 이면 collation 을 정하지 못한다. 집계·부분질의는 optdebug `qexec_end_one_iteration` collation 플래그 assert, UNION 은 `qfile_unify_types` 의 -1150 `Context requires compatible collations.`(값이 NULL 이 아니면 같은 문장이 답한다) | 답(행 1, 2, 3, 5 등) | PR 8022 리뷰 탐침 18-1·18-2, #379 D-379-17·20 |
 | 세션변수 숫자 값·파생 열 DOUBLE/DATE 바인드 위 분석 MEDIAN 의 정렬 키(`set @v = 1.5; select median(@v) over (partition by p) …`) | 정렬 키를 CHAR 로 읽어 -1118, 같은 문장을 다른 바인드 타입으로 다시 실행하면 optdebug `or_advance` assert | 값 | #362 ②(dpin 은 #341·#355 부터) |
 | PX 워커가 클론 풀의 앞 실행 누산기 도메인으로 누적(정수 바인드 뒤 문자 바인드) | 결과 타입이 틀림 | 맞는 타입 | D-340-09(CBRD-27484 와 같은 풀) |
 | 집계의 인자가 함수일 때(`select (select max(pl_csql_int(col1)) from tbl) from tbl`, 4행) | 첫 행 전 도메인 해석(`qexec_resolve_domains_for_aggregation`)이 인자를 한 번 더 계산해 함수를 5번 부른다. NOT DETERMINISTIC PL 함수도 그렇다. develop 도 BENCHMARK 에서만 이 계산을 피한다 | 행마다 한 번, 4번(집계 도메인은 게이트가 정한다, #341 S-23). 트레이스의 `FUNC … calls:` 가 5 → 4 다(upstream shell `cbrd_25749`) | #341 S-23 · #345 |
@@ -359,6 +374,7 @@ execute q using 'abc';
 - [#370](https://github.com/xmilex-git/workspace/issues/370) `SUM/AVG(DISTINCT x)` 의 인자가 문자열 값을 내는 열린 식이면 plus_as_concat 에서 서로 다른 값을 이어 붙인다.
 - [#326](https://github.com/xmilex-git/workspace/issues/326) ENUM 형제 collation.
 - [#360](https://github.com/xmilex-git/workspace/issues/360) 비직관 규칙 10가지.
+- [#380](https://github.com/xmilex-git/workspace/issues/380) PR 8022 리뷰가 찾은 다섯: CONNECT BY 해시 리스트 스캔의 NUMERIC probe 짝(행이 빠진다), `tp_value_coerce_strict` 의 src == dest, TIMESTAMP → DATE 의 decode 실패 무시(캐스트·strict), NUMERIC 원본의 strict 변환이 늘 실패.
 
 ## 13. 오류 코드는 같고 문구만 다른 자리
 
@@ -370,6 +386,11 @@ CTP 는 오류 코드만 비교하므로 답 파일에는 드러나지 않는다
 | 분류하지 못한 값 인자의 분석 -1118(`median(dt.x) over ()` 의 파생 열 바인드 등) | `"DOUBLE, DATETIME, TIME"` | `"DOUBLE, DATETIME or TIME"`(집계와 같은 문구) |
 | `limit ?, ?` 에 `'c'`, `2`(`20567_limit_SELECT_hostvar_2`) | -181 `Cannot coerce value of domain "character" to domain "double".` | -181 `Cannot coerce value of domain "bigint" to domain "character".` |
 | `where coalesce(cast(? as datetime), ?, k) = 1` 에 날짜 바인드(JDBC) | -181 문구가 세션의 앞 실행에 따라 `"character varying" → "double"` 또는 `"integer"` | 늘 `"integer"`(#364 F-364-03) |
+| 술어 항의 상수 쪽 변환 실패(`select * from g4 where i = ? and i > 99` 에 `'xyz'`) | 행이 비교하는 순서(열 먼저): `"integer" to domain "character"` | 계획한 비교의 쪽 순서: `"character" to domain "integer"` |
+| CASE·DECODE 선택자의 날짜 바인드(`where ci = case ? when 1 then ? else ? end`, `cs = decode(?, 1, ?, ?)`) | 세션의 앞 실행에 따라 `"date" to domain "numeric"`(앞에서 1.5 를 바인드) 또는 `"integer"` | 늘 `"integer"` |
+| 파생 테이블·ALL/SOME 의 UNION 가지 위 IF/CASE(`? = any (select if(ci > 1, ?, cd) from tb union all select cs from tb)` 에 1, NULL; `(select if(ci > 1, ?, cd) k … union all select ? k …) q where k = 'a'`) | 행의 중간 변환을 거친 값의 타입: `"character varying" to domain "date"`, `"date" to domain "*variable*"` | 상수의 타입: `"integer" to domain "date"`, `"character" to domain "*variable*"` 또는 `"character" to domain "integer"` |
+
+위 세 줄은 PR 8022 리뷰 탐침(2026-10-06, `.git_ignored_dir/scratch/pr8022-review-1006/w4/d2/report.md`, 23문장)이 찾았다. sql TC answer 는 오류 코드만 싣고 private-ex shell TC 에는 이 문구가 없어 TC 갱신은 없다(#379 D-379-30).
 
 ## 14. 바뀌지 않는 것
 
