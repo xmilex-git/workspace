@@ -51,3 +51,17 @@ _23_apricot_qa/_01_sql_extension3/_04_mutitable_update_delete/_01_multi_table_up
 # - sleep_001.sql: two statements whose answer is -494 return a row instead. The
 #   state they fail on in CI order is not there.
 _27_banana_qa/issue_14217_sleep/cases/sleep_001.sql
+
+# Found by the CBRD-27568 gate (2026-10-06, develop ecb26cda1). Both fail on the
+# develop build as well.
+# - case_join_01.sql: a known engine defect, not a TC defect: xmilex-git/workspace#381.
+#   About 100k Java SP calls send 200k change-rights callbacks to the CAS without
+#   waiting. Under the load of 16 shards the send queue passes IOV_MAX and the
+#   server drops the connection, so the case gets -111 on some runs. This is
+#   CBRD-27287. Remove once its fix (CUBRID/cubrid#7920) is in develop.
+_08_javasp/cases/case_join_01.sql
+# - cbrd_27485.sql: xmilex-git/workspace#382. On the pinned plan it runs after
+#   _13_issues/_23_2h/cases/cbrd_24876.sql, which leaves trace on for the rest of
+#   the connection. The first show trace of its Case 5 then prints Case 4's plan.
+#   Remove once the cbrd_24876 fix (CUBRID/cubrid-testcases#3654) is in develop.
+_36_guava/cbrd_27485/cases/cbrd_27485.sql
