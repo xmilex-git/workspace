@@ -2,7 +2,7 @@
 name: cubrid-pr-review
 description: "Review a CUBRID pull request together with its JIRA ticket and its two TC PRs, and write a code review report. Use this when the user shares a CUBRID GitHub PR link or asks to review CUBRID code changes."
 argument-hint: "<pr-url>"
-allowed-tools: Bash(gh *), Bash(git *), Bash(jq *), Bash(scripts/*), Bash(cubrid-jira *), Bash(curl *), Read, Write, Edit, Glob, Grep, Skill, Workflow, mcp__plugin_oh-my-claudecode_t__lsp_diagnostics, mcp__plugin_oh-my-claudecode_t__lsp_diagnostics_directory, mcp__plugin_oh-my-claudecode_t__lsp_hover, mcp__plugin_oh-my-claudecode_t__lsp_goto_definition, mcp__plugin_oh-my-claudecode_t__lsp_find_references, mcp__plugin_oh-my-claudecode_t__lsp_document_symbols
+allowed-tools: Bash(gh *), Bash(git *), Bash(jq *), Bash(scripts/*), Bash(cubrid-jira *), Bash(curl *), Bash(tools/code-index/*), Read, Write, Edit, Glob, Grep, Skill, Workflow, mcp__plugin_oh-my-claudecode_t__lsp_diagnostics, mcp__plugin_oh-my-claudecode_t__lsp_diagnostics_directory, mcp__plugin_oh-my-claudecode_t__lsp_hover, mcp__plugin_oh-my-claudecode_t__lsp_document_symbols
 ---
 
 # CUBRID PR Reviewer
@@ -197,7 +197,7 @@ Run these in parallel. Downloads and scratch files go under `.git_ignored_dir/sc
 
 ### Step 3: Review
 
-Read the **full functions** surrounding each diff hunk, not just the hunk. Trace call chains where it matters. Aim for **signal**: prefer reading one suspicious function carefully over skimming ten safe ones. Investigate broadly, report narrowly — deep reading is for filtering findings, not justifying long reports.
+Read the **full functions** surrounding each diff hunk, not just the hunk. Trace call chains where it matters. Look them up with `tools/code-index/code-index <worktree> body|callers|references <name>` on an engine worktree checked out at `head_sha`; every hit carries its `{server,sa,cs}` libraries and `#if` conditions, which answer the build-mode guard question below. Aim for **signal**: prefer reading one suspicious function carefully over skimming ten safe ones. Investigate broadly, report narrowly — deep reading is for filtering findings, not justifying long reports.
 
 Focus on these high-signal categories for CUBRID. One sentence each — the detailed sub-checklists live in `reference.md`:
 
@@ -211,7 +211,7 @@ If the diff touches the SQL parser, broker protocol, or CCI client interface, al
 
 Fill the Approval Criteria tables while reading. The JIRA rows come from `design.md` and `test.md` read against the diff; the TC rows come from `test.md` and the TC PRs.
 
-**LSP analysis (optional).** If `compile_commands.json` is available, run `lsp_diagnostics` on changed files for clangd warnings on changed lines, `lsp_hover`/`lsp_goto_definition` on suspicious types, and `lsp_find_references` if a function signature changed. Skip silently if LSP is unavailable.
+**LSP analysis (optional).** If `compile_commands.json` is available, run `lsp_diagnostics` on changed files for clangd warnings on changed lines. Definitions and callers come from code-index (above), including every caller of a function whose signature changed. Skip silently if LSP is unavailable.
 
 If `reference.md` is present and flags a rule (e.g., new error code -> 6 places), don't restate the rule body — link to it by name and point to the file:line that needs updating.
 

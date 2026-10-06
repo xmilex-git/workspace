@@ -4,6 +4,8 @@ CUBRID validation policy (user instruction, 2026-09-22): skip unit tests, includ
 
 Whenever modifying CUBRID source code, ALWAYS consult the `cpp-perf-rules` skill (C/C++ performance rulebook) and apply its rules.
 
+Engine code lookup (definition, body, outline, callers, references of a symbol in an engine worktree) goes through `tools/code-index/code-index <WORKSPACE> <command> <name>` first — ahead of the Grep tool, rg, LSP, or an Explore agent; this overrides the harness default that prefers the Grep tool. Keep Grep/rg for comments, strings, regexes, and names code-index reports as not found. Commands and output: root `AGENTS.md`, "Code lookup in an engine worktree".
+
 Division of labor (mirrored VERBATIM from [`.agents/AGENTS.md`](../.agents/AGENTS.md), which the harness does not auto-load — a pointer alone was not followed; same remedy as CUBRID_SSOT.md 환경·운영 17; keep the two copies in lockstep):
 - **Lead directly:** source reading/comparison, static code and call-path analysis, documentation/research, design, implementation, and verification planning. Read-only inspection of files, git history/diffs, and tracker records belongs to the lead; it is not execution validation.
 - **Delegate runtime work only:** builds, test/validation execution, server start & query execution, data loading, error reproduction, core/gdb analysis, and callstack analysis from a core file. The lead uses the worker's runtime evidence to make the final diagnosis and implementation decisions.
