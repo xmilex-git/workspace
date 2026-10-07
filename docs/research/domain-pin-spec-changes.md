@@ -180,7 +180,8 @@ execute q using 1, 'a';
 | 두 가지 모두 비는 `where i > 5 union all … where i > 5` 에 `1`, `'a'` | 결과 없음 | -456 |
 | `difference`, CTE(`with cte(x) as (… union all …)`) 같은 모양 | 한 가지의 타입 | -456 |
 | 두 가지 모두 행이 있는 `1`, `'a'` | -456 | -456 |
-| `1`, `2` · `'a'`, `'bcd'` · `1`, NULL | 값 | 값(같은 타입·가변 문자열·NULL 가지는 전처럼 합친다) |
+| `1`, `2` · `'a'`, `'bcd'` · `1`, NULL | 값 | 값(같은 타입·가변 문자열·**바인드 그 자체인 가지**의 NULL 은 전처럼 합친다 — 그 가지의 타입은 바인드 값에서 오므로 NULL 바인드면 타입이 없다) |
+| `select least(?, i) … union select least(?, d) …` 에 NULL, `1` (가지가 함수 결과) | NULL 행 + 값(그 실행의 값이 전부 NULL 이라 합쳐짐; `1`, `1` 이면 -456) | -456 (가지 타입은 함수 규칙이 정한 INT·DOUBLE 로 바인드와 무관; PR 8022 리뷰 2차 shparkcubrid, #387 D-387-08) |
 | 파생 테이블 `(select ? k from ta union all select ? k from tb) q where k = 1.5` 에 `1`, `1.5` | 행 `1.5`(바깥 조건이 한쪽 가지를 비워 다른 가지의 타입) | -456 |
 | 같은 파생 테이블에 `where k = 'a'`, `1`, `'1'` | -181 `Cannot coerce value of domain "character" to domain "*variable*"` | -456 |
 
@@ -259,6 +260,21 @@ execute q using null, date'2024-01-02', null, date'2024-01-02';
 - 사용자 확인 (가) "현행 유지"(2026-09-26).
 - 매뉴얼: 없음(결과 타입이 행 순서에 따라 달라지지 않게 된 것).
 
+### 8a. 공통값 노드와 GROUP BY 식의 바인드 타입, 읽지 않는 피연산자 (PR 8022 리뷰 2차, #387)
+
+PR 8022 리뷰 2차(soheejung-cs 6031589925·6032684822)의 대조에서 드러난 것. 모두 "도메인을 실행 전에 바인드 타입으로 정한다" 의 귀결이다(D-364-01·05). develop ecb26cda1·fa551431b 과 PR 머리 1e1ea22eb 의 optdebug SA csql 대조(`scratch/pr8022-review-1006/shpark/probe/out2`, `out3`, `out8`, `out9`).
+
+| 문장(`t1 (id, a int)`) | develop | 새 답 |
+|---|---|---|
+| `NULLIF(a, ?)` 에 INT 바인드 `10` | `'20', '30', …` VARCHAR(바인드가 끼면 늘 VARCHAR) | `20, 30, …` INTEGER(공통 타입 = INT) |
+| `NULLIF(a, ?)` 에 `'10'` | VARCHAR | VARCHAR(같음) |
+| `a * ?` GROUP BY 에 `1.5` | NUMERIC `-7.5, 0.0, …` | 같음 |
+| `a * ?` 에 문자열 `'1.5'` | `-7.5, 0, 10.5, 15 …`(표시) | DOUBLE `-7.5e+00 …`(typeof 는 둘 다 double) |
+| `MIN(NVL(?, @n))`, `@n` 미정의, 바인드 `'a'` | "Session variable '@n' not defined"(타입 미정 NVL 의 모든 피연산자를 첫 행에서 읽음) | `'a'`(도메인이 정해져 NVL 이 둘째를 읽지 않음; `SELECT @n` 은 전처럼 오류) |
+| `PRIOR ?`, `CONNECT_BY_ROOT ?` | 값을 알면 컴파일에서 접음 | 행에서 인자 계산(같은 답) |
+
+- 매뉴얼: 공통값 노드 항목에 "바인드의 타입이 공통 타입에 든다" 한 줄.
+
 ## 9. 문장이 읽는 세션변수는 문장 동안 한 타입 (#366, U1~U4)
 
 문장이 **읽는** 세션변수의 타입은 게이트가 실행 전에 정한다.
@@ -321,6 +337,9 @@ execute q using 'abc';
 | 빈 테이블·a 가 전부 NULL 인 테이블의 `a + ?` 에 `'abc'` | 0행 / NULL | -181 |
 | 인덱스 없는 열의 `c = concat(?, '')`·`c in (1, concat(?, ''))`(빈 테이블·걸러진 행) | 0행 | -181 |
 | 0행의 `median(?)` 에 `'abc'`, `median('abc')`, `median(B'0001')`, `median(?) over ()`, `percentile_cont(0.5) within group (order by ?)`, 세션변수 `'abc'` | NULL(또는 0행) | -1118 |
+| `select a + 1 / ? from t where a is null` 에 0 (걸러져 0행) | 0행 | -539 (PR 8022 리뷰 2차 soheejung 6030809833, D-387-07 — (가) 그대로) |
+| `select id, case when a > ? then 1 / ? else 0 end …` 에 (100, 0): 행이 고르는 가지, 타는 행 없음 — `IF`, `WHERE a > ? AND 1/? > 0` 도 같음 | `0.0` / 0행 | -539 (#367 본문 "행이 고르는 분기는 (가) 대로"; 6031589925 1번, D-387-07) |
+| `select id from t where id between ? and ?` 에 `'_'`, 3 — `id >= ? and id <= ?` 도 같음 | 0행(`id > '_'` 는 -181 로 비일관) | -181 (D-367-02; 6032684822 1번) |
 
 - upstream shell 의 예(`bug_xdbms_sus18`, JDBC): `select x.a from xoo x where x.a = to_number(?) and x.a = ?` 에 ('1x', '10'), xoo 는 a = 1, 2 의 두 행. develop 은 행마다 `x.a = ?` 가 거짓이라 `to_number('1x')` 를 계산하지 않아 0행이다. 새 답은 실행 전 -834(`to_number()` 의 형식 불일치)다. 테스트는 세 번째 실행의 -834 를 기대하도록 바꿨다(`domain-pin-tc-changes.md`).
 - 인덱스 키 자리의 상수는 develop 도 스캔을 열 때 -181 이다(답 불변). 앞 컬럼이 NULL 인 복합 키, 닿지 않는 스캔에서만 달라진다(D-367-03).
@@ -361,6 +380,7 @@ execute q using 'abc';
 | 자리 | develop | 새 답 | 근거 |
 |---|---|---|---|
 | 분석 첫 값이 변환되지 않을 때(`sum(?) over (partition by g)` 에 DATE 바인드) | release: 오류 없이 0행, optdebug: `qexec_analytic_add_tuple` assert | -181 `Cannot coerce value of domain "date" to domain "double"` | D-337-06(D4) |
+| SUM/AVG 의 인자를 실행 전 확정이 날짜·시간으로 정할 때(`sum(nvl(?, d)) over ()`, `sum(nvl(?, d))` 에 NULL 바인드; 컴파일은 `sum(d)` 를 거부하지만 NULL 바인드는 통과) | 분석: release 0행 / optdebug assert; 집계: 값 1개면 그 날짜 그대로, 2개면 -454 | 집계·분석 모두 실행 전 -454 `Invalid data type referenced.` (`return_null_on_function_errors=yes` 면 행에 맡김) | #387 D-387-04·D-387-11 (PR 8022 리뷰 2차 shparkcubrid) |
 | `group_concat(?)` 에 NULL 바인드 | optdebug `qexec_end_one_iteration` collation 플래그 assert(release 는 NULL) | NULL | D2, F-341-06 |
 | `select ? union all select ?` 에 NULL·NULL, 재귀 CTE 시드 NULL | optdebug `qfile_unify_types` assert(release 는 답) | NULL·값 | D6, D-337-07 |
 | NULL 바인드만 받은 문자열 식의 collation(`cs > any (select concat(?, ?) from tb)`, `cs = (select max(concat(?, ?)) from tb)`, `cs = any (select concat(?, ?) from tb union all select cs from tb)` 에 NULL·NULL) | develop 은 값이 전부 NULL 이면 collation 을 정하지 못한다. 집계·부분질의는 optdebug `qexec_end_one_iteration` collation 플래그 assert, UNION 은 `qfile_unify_types` 의 -1150 `Context requires compatible collations.`(값이 NULL 이 아니면 같은 문장이 답한다) | 답(행 1, 2, 3, 5 등) | PR 8022 리뷰 탐침 18-1·18-2, #379 D-379-17·20 |
