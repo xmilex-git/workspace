@@ -130,15 +130,17 @@ Rows without a case need a reason a reviewer accepts: "timing only (R4)", "needs
 "covered by case 3", "CBRD-27572 assert on develop makes it crash CI". A row with neither blocks Step 3.
 Model for the table: cubrid-testcases#3527's "첨부 21개 시나리오 → 케이스 매핑표".
 
-## §4 Large features — parallel diff reading before the coverage list
+## §4 Parallel code reading before the coverage list — every issue
 
-Trigger: the diff touches 3+ files under `src/query`, `src/optimizer`, `src/parser`,
-`src/storage`, or the issue type is Development Subject. The user asked for this (2026-10-08):
-split the diff by area, read each area with an **Opus, effort high** agent in parallel through
-the `Workflow` tool, and let the lead judge the candidates.
+Trigger: **every issue, small or large** (user, 2026-10-08: "작든 크든 그걸로 해야되는데"; a one-file
+fix gets one reader). Split the diff by area, read each area with an **Opus, effort high** agent in
+parallel through the `Workflow` tool, and let the lead judge the candidates. The issue's scenarios
+are an input, never a replacement: CBRD-27181's TC followed the attached test plan and missed the
+boundaries of its own code (depth 256/257, memchr candidate retry, escape forms).
 
-1. Split `pr.diff` into area files: `git -C ~/dev/cubrid-worktree/develop diff <base>..<fix> -- <dir>` per
-   top-level directory with changes (one file per `src/<dir>`), saved as `<rundir>/diff-<dir>.patch`.
+1. Split `pr.diff` into area files, one per changed source file (`git -C ~/dev/cubrid-worktree/develop
+   diff <base>..<fix> -- <file>`, saved as `<rundir>/diff-<file basename>.patch`); with more than 8 source
+   files, one per top-level `src/<dir>` instead. Build files (CMakeLists) are not areas.
 2. Workflow script: one `agent(prompt, { model: 'opus', effort: 'high', phase: 'Extract' })` per patch,
    all in `parallel(...)`. Prompt for each (fill the brackets):
 
@@ -150,7 +152,10 @@ plan shape, or trace token than before the fix. For each: the function, the cond
 it (hint, parameter, data shape, type, partition, parallel), one SQL statement that reaches it, and
 how a test would see it (result value / error / trace token). Also list conditions that this patch
 handles but a SQL statement cannot observe (say why). Output: a markdown table with columns
-function | condition | SQL | observable as | note. First line of your output: RESULT: <row count>.
+function | condition | SQL | observable as | note. Then list the boundaries of every condition in
+the new or changed code (input just below, at and just above it; both sides of every fallback or
+dispatch guard; early exit at the first, a middle and the last position) as rows of the same table.
+First line of your output: RESULT: <row count>.
 Read only; do not edit files. Use tools/code-index/code-index <workspace> body <function> for context.
 ```
 

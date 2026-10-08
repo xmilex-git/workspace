@@ -38,8 +38,9 @@ Done when `ground.md` has every section of the §1 template filled or explicitly
 ## Step 2 — judge: sql / shell / both / out of scope
 
 Follow [references/judge.md](references/judge.md) §2 (the decision table) and §3 (coverage list).
-Large features (diff touches 3+ executor/optimizer files or the issue is a Development Subject):
-run §4, the parallel diff-reading workflow, before writing the coverage list.
+Every issue, small or large: run §4, the parallel Opus code reading through the Workflow tool,
+before writing the coverage list (user, 2026-10-08). The coverage list comes from the code, not only
+from the issue's scenarios.
 
 Done when `<rundir>/judge.md` states one verdict with its rule number, and a coverage list whose
 every row has a case number or an exclusion reason. Verdict `out of scope` → go to Step 7 (JIRA comment).
