@@ -103,3 +103,16 @@
 - Q19' PR 이 만든 답 변경은 이 티켓 범위(범위 추가 기록).
 - Q20 되돌린 답(16-a·b·c)을 develop 답으로 고정하는 TC 를 `tc/pr-8022` `_36_guava/cbrd_27510/` 에. 1·2번은 gdb jump 재현을 증거로.
 - Q22 같은 develop 기준(sync 머리)으로 차이 문장 A/B 재확인 뒤 되돌리기.
+
+## 리뷰 2~6차 요약 (2026-10-07~08, 티켓 #387 dpin-23; 결정 D-387-01~18)
+
+| 차수 | 리뷰어 | 지적 | 판정 | 처리 |
+|---|---|---|---|---|
+| 2차 (10-07 07:xxZ) | shparkcubrid | `MAX(CAST(? AS VARCHAR))` -1383(S1), 분석 SUM 날짜 인자 쓰레기/assert(S2), UNION `least(?, i)` -456(S3), CONNECT BY + 파생 바인드 -1383(J1), 상수식 0행·BETWEEN·혼합 IN 등 | S1·S2·J1 회귀, 나머지 지도 결정 | 5504994ab·7332eaa3d·86923ed0b·a6090dc88·c1dc47685·2440223ef; TC 23·24, 09 Case 4; 스펙 §5·§8a·§10·§11 |
+| 3차 (10-07 11:17–12:26Z) | soheejung-cs | DML `DATE'…' + ?` PREPARE → ALTER → EXECUTE -1383; `(1 + ?) + '3'` NULL; `SUM(NULL)` -1383 | 전부 회귀 | 42c102a29(접힌 리터럴은 값의 도메인)·dcc32ccd5(ENFORCE 캐스트 피연산자의 사칙 노드는 실행 전 변환 확정 → -181, develop 캐시 켬과 동일)·9082e8549(NULL 인자 SUM/AVG 는 값 없음 경로)·fa3cedb98(실행 검사 메시지에 문장); TC 06 Case 11, 25, 26. 오진 하나: 접힌 플랜 재사용은 develop 도 같음(설치본 conf 의 `max_plan_cache_entries=0`) → #389 |
+| 4차 (10-08 02:10Z) | shparkcubrid | INSERT VALUES 긴 바인드 식 첫 실행 절단; LPAD/RPAD/SUBSTRING_INDEX collation 이 MERGE; 분석 SUM/AVG 문자열 첫 값 0행 | 전부 회귀(셋째는 develop 도) | b640a0d6b(INSERT 값 strict 플래그를 로드에서)·72290a929(LPAD/RPAD FIRST, SUBSTRING_INDEX FIRST_MERGED)·55b90f173(-181); TC 27·28·29 |
+| 5차 (10-08 03:51–04:10Z) | soheejung-cs / shparkcubrid | 재컴파일 모양 6개 -1383, `SUM(NULL + ?)` -1383 / 설계: 바인드 서명 빠른 경로, 계획 도출의 컴파일 이전 | 현 머리 재현 안 됨(42c102a29·9082e8549 가 덮음) / 후속 | TC 06 Case 12, 26 Case 3 (`726927075`) / #391, #392 |
+| 6차 (10-08 04:29Z) | shparkcubrid | 대안 구조: 바인드 타입 서명별 플랜을 컴파일에서 | 머지 조건 아님 | 답글 6052549869: 이 PR 은 현 스펙으로, "행 시점 확정 0" 원칙 아래 다른 구조는 열어 둠, 후속은 사용자가 이슈로 올려 assign |
+
+- 게이트: c1dc47685 17501/975 → fa3cedb98 17503/975 → 55b90f173 17506/975 (optdebug, sql+medium). 2~5차 답글은 전부 게시, TC #3588 인라인 설명 포함.
+- 선제 감사(D-387 Q2, 10-08): ① 컴파일러가 collation 을 인자에 맡기는 연산자 목록(type_checking.c `pt_check_expr_collation` step 4) 가운데 규칙표에 없는 것은 CONCAT_WS(연결 체인 = MERGE, 맞음)·REPLACE(리뷰어 확인)·INDEX_PREFIX 뿐 ② 행 경로가 늦게 세우는 플래그는 `STRICT_TYPE_CAST` 두 자리뿐(둘 다 처리) ③ `tp_value_coerce` 실패를 er_set 없이 반환하는 자리: 분석 DISTINCT 리스트 변환·STDDEV/VARIANCE 변환 2곳 남음(후속 커밋).
