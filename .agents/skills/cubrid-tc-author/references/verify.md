@@ -189,6 +189,9 @@ Try the planned checks on the pre and dev installs before writing the case:
   path must fit in 107 bytes, and the scratch path gives 114. Stop the server with the
   cubrid-server-control wrapper, and its cub_master with SIGTERM after checking that the CUBRID value in
   `/proc/<pid>/environ` is your tree. Never `cubrid service stop` or pkill (CBRD-27184).
+- **Many candidate shapes**: one throwaway probe script with a `probe <tag> <query>` helper measures
+  every shape's trace and counters on all three points in one parallel CTP run (about 25 s a point;
+  CBRD-27217 `probe3/`).
 - **A path with no trace token** (e.g. CREATE INDEX): CTP OK does not prove the case reaches the fixed
   branch. Run the case's SQL on a host server under `gdb` with `dprintf` on the fixed branch and on the
   worker start, on the dev install at least (CBRD-26799: a CHAR-padded design ran serial on develop

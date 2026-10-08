@@ -166,4 +166,7 @@ Read only; do not edit files. Use tools/code-index/code-index <workspace> body <
 ```
 
 3. The lead merges the tables, drops duplicates and unobservable rows (they become exclusion
-   reasons), and writes the coverage list of §3. The lead, not the agents, decides what becomes a case.
+   reasons), and writes the coverage list of §3. Mark a row unreachable when SQL cannot get there: a
+   parallel scan opens only on the outermost spec, and `scan_ptr` / `dptr_list` subtrees (join inner
+   sides, correlated subqueries) are forced serial on every point
+   (`process_xasl_node_recursive_force_cannot_parallel`), so rows about their rescans are excluded (CBRD-27217). The lead, not the agents, decides what becomes a case.

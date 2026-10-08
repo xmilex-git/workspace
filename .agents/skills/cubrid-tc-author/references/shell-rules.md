@@ -178,6 +178,11 @@ finish
     selectivity) keeps it ≥5x above or ≤1/5 of the threshold, and a page or row count ≥3x its threshold.
     Histograms and statistics come from samples and heap placement differs between builds and runs, so a
     value near a threshold flips. Write the margin into `Setup:`.
+20. **Checks of one shape share one helper** (trace path check, warm-up, loop, measured delta), but each
+    check keeps its own trace guard, so a plan change cannot make it pass without testing anything; a
+    missing measurement (no memmon output) is a failure, never 0 (cbrd_27217 `loop_verdict`).
+21. A loop whose statements must fail on every execution runs `csql -e` (`--error-continue`); without it
+    csql exits at the first error.
 
 ## Checklist before saving
 
