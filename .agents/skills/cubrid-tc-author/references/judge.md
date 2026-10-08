@@ -90,7 +90,7 @@ placement; a Sub-task takes its parent's type):
 | issue type | sql | shell (cubrid-testcases-private-ex) |
 |---|---|---|
 | Correct Error | `sql/_13_issues/_26_2h/cases/cbrd_<N>.sql` + `answers/cbrd_<N>.answer` (flat `cases/`, half-year of **today**) | `shell/_06_issues/_26_2h/cbrd_<N>/cases/cbrd_<N>.sh` |
-| every other type (Improve, Development Subject, Task, Sub-task of those) | `sql/_36_guava/cbrd_<N>/cases/cbrd_<N>.sql` + `answers/` | `shell/_40_guava/cbrd_<N>_<keyword>/cases/cbrd_<N>_<keyword>.sh` |
+| every other type (Improve, Development Subject, Task, Sub-task of those) | `sql/_36_guava/cbrd_<N>/cases/cbrd_<N>.sql` + `answers/` | `shell/_40_guava/cbrd_<N>/cases/cbrd_<N>.sh`; several cases: `shell/_40_guava/cbrd_<N>/cbrd_<N>_<keyword>/cases/cbrd_<N>_<keyword>.sh` (the shapes private-ex develop uses) |
 
 Several files for one issue: `cbrd_<N>_<keyword>.sql` in the same `cases/`; shell: one directory
 per script, directory name = script name.
