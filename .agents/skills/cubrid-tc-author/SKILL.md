@@ -76,7 +76,8 @@ Done when the PR URL is in `<rundir>/results.md` and the inline review is posted
 Follow [references/pr-and-jira.md](references/pr-and-jira.md) §4. Exactly one reviewer from the
 team list, chosen by the counting rule there.
 
-Done when `gh pr view <tc-pr> --json reviewRequests` lists one login.
+Done when `gh pr view <tc-pr> --json reviewRequests` lists the chosen team login. The QA logins
+CODEOWNERS requests at PR creation (e.g. kwonhoil, ssihil) stay; never remove them.
 
 ## Step 7 — JIRA comment (only three kinds)
 
