@@ -58,6 +58,18 @@ tail -3 .git_ignored_dir/scratch/tc-author/CBRD-<N>/build-<pre|fix>.log   # ends
 bounded poll in the same turn (§0). `just build` applies the campaign conf; the CTP runner pins its
 own server parameters, so the install's conf does not matter for CTP.
 
+**A sha older than 2026-07-15 has no `optdebug` preset** (`CMake Error: No such preset ... "optdebug"`).
+The mode came with dab6cf7c3 (CBRD-27049). Port only its build files into the worktree, identically
+on pre and fix, before `just build` (CBRD-26930, 2026-10-08: applied cleanly on 2026-06-25 trees):
+
+```bash
+git -C ~/dev/cubrid-worktree/develop show dab6cf7c3 -- CMakePresets.json CMakeLists.txt > "$R/optdebug-port.patch"
+git -C "$WT" apply --3way "$R/optdebug-port.patch"
+git -C "$WT" diff HEAD --stat -- src                      # must print nothing: engine sources unchanged
+```
+
+State the port in the PR body's verification section.
+
 ## §2 Generate the answer on the fix build (sql only)
 
 ```bash
@@ -87,6 +99,10 @@ case is NOK, which is expected here. Then:
 
 Shell has no answer: run `CTP_ARGS="--testcases-as-is --testcases $TCEX" CTP_KEEP_COPIES=1 BUILD=<fix> just ctp shell <dir>`
 and read `<run dir>/shard_0/testcases/shell/<dir>/cases/<name>.result`: one line per check, all `OK`.
+The case's own logs are gone after `do_cleanup`; the measured values are in the xtrace at
+`<run dir>/shard_0/CTP/result/shell/current_runtime_logs/test_local.log` (`+ workers=2` lines).
+A pre build that is expected to crash runs with `NO_ABORT_ON_CORE=1`, otherwise the runner stops the
+shard at the first core and the case writes no `.result` (CBRD-26930).
 
 ## §3 Run the three builds in parallel (one foreground command)
 
