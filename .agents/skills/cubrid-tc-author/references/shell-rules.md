@@ -172,7 +172,10 @@ finish
     counted k times, so checks at different depths show different multipliers. A partitioned inner
     table multiplies the outer nodes' counters by the partition count even in a serial run: compare only
     the partitioned node and its PARTITION lines. An aggregate with ROWNUM stays a row-by-row gather on
-    every point, which makes it a stable control.
+    every point, which makes it a stable control. FUNC `calls` are not always one per row: an aggregate
+    argument is evaluated once more on both paths (domain resolution: 537 calls for 536 rows), and a
+    declared select-list function under a mergeable-list gather reports one more call in parallel than
+    serially. Judge them as "at least the row count" or "equal to the serial twin" (CBRD-27299).
 18. **Old comparison points**: trees before 7355bcec7 (CBRD-27326, 2026-09-09) default
     `parallel_scan_page_threshold` to 2048 pages, so a 200k-row table is not scanned in parallel there;
     lower it with `change_db_parameter` when the pre point is older. The gather of plain LIMIT/ROWNUM

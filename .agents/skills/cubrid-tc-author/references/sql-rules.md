@@ -15,6 +15,10 @@ develop: `sql/_36_guava/cbrd_27465/cases/cbrd_27465.sql` (reference twins, trace
 - **A statement ends at a line that ends with `;`** — comments are not parsed. A `/** */` header
   line ending in `;` becomes a statement and prints `Error:-493` (cbrd_27465, 2026-09-22). A `;` in
   the middle of a line is harmless. A whole line starting with `--` is dropped before parsing.
+- **CQT runs a statement as a control command** when its text contains `server-message`, `autocommit`
+  or `holdcas` followed by `on` or `off` anywhere (`ConsoleBO.isPropOn/isPropOff`). The `/** */` header
+  travels with the first statement, so a header saying "server-message on" silently skips the first
+  `drop table`: the result has one block fewer than the statements (CBRD-27299).
 - **CTP masks every digit** in the plan, the trace statistics, the first `rewritten query` line and
   in error messages: `parallel workers: 4` → `?`, `idx_col2` → `idx_col?`, `rows: 100` → `?`.
   Result rows are **not** masked. So a trace can only assert **tokens** (`MEMOIZE`, `gather: buildvalue`,
@@ -107,7 +111,8 @@ drop table t_outer, t_inner;
    go to the PR body, not here (user, 2026-09-30 #3611; QA lint caps headers, CUBRIDQA-1481).
 2. **No line ends with `;`** inside the header or any comment. Check:
    `sed -n '1,/\*\//p' <file> | /usr/bin/grep -c ';[[:space:]]*$'` must print `0`.
-3. **No `--` inside `/** */`** — CTP drops that line and the block breaks.
+3. **No `--` inside `/** */`** — CTP drops that line and the block breaks. No `server-message`,
+   `autocommit` or `holdcas` followed by `on`/`off` either (facts above): reword it.
 4. No workspace issue numbers, decision ids, map names, developer names. Issue keys (`CBRD-N`) and
    engine PR numbers are fine.
 5. An engine function named in a comment must exist: `tools/code-index/code-index ~/dev/cubrid-worktree/develop definition <name>`
@@ -143,7 +148,10 @@ drop table t_outer, t_inner;
     the planned shapes with a placeholder answer on pre, post and dev, and trace only shapes whose
     post and dev output match. Shapes that moved after mid-2026: GROUPBY lines (readrows, parallel sort
     lines), hash joins, the parallelism of an outer index scan keyed by a subquery, and the `IS NOT NULL`
-    CBRD-27058 (e23a9e513) adds to a MIN/MAX subquery with WHERE in `rewritten query` (CBRD-26931).
+    CBRD-27058 (e23a9e513) adds to a MIN/MAX subquery with WHERE in `rewritten query` (CBRD-26931),
+    the outer `SCAN (temp ...)` parallel line over a large hash-join or analytic result list (printed by
+    Sep-2026 points only), and `EXISTS` rewritten into a semi join on develop (CBRD-27299). Keep traced
+    join and analytic results small, and use scalar correlated subqueries instead of `EXISTS`.
 17. MIN/MAX over an indexed column reads one key (`noscan`, `agl:`) and opens no scan; a case that needs
     the scan keeps that column unindexed.
 18. **Execution counts in sql**: put `(select s.next_value from db_root) * 0` in the subquery and read
@@ -176,6 +184,10 @@ drop table t_outer, t_inner;
     use a table without an index or order by a non-indexed column.
 26. Many paths, header ≤ 30 lines: group close shapes as several test/twin pairs inside one case
     (CBRD-27041: 18 cases → 15).
+27. A parallel hash join is sql-observable: under `test_mode` its floor is 2 pages, and the trace shows
+    `PROBE` with a `parallel workers` line (CBRD-27299). An outer-join case must not null-reject the
+    inner side: a `y.a is not null` check turns the LEFT JOIN into an inner join and moves its ON terms
+    into the residual set, so the ON path is no longer tested.
 
 ## Cases
 
@@ -214,6 +226,7 @@ drop table t_outer, t_inner;
 
 - `sed -n '1,/\*\//p' <file> | /usr/bin/grep -c ';[[:space:]]*$'` → `0`
 - `/usr/bin/grep -c '^ \*.*--' <file>` → `0` (no `--` in the header)
+- `sed -n '1,/\*\//p' <file> | /usr/bin/grep -ciE '(server-message|autocommit|holdcas)[[:space:]]+(on|off)'` → `0`
 - `/usr/bin/grep -o "evaluate 'Case [0-9]*" <file>` → consecutive numbers from 1
 - `/usr/bin/grep -c 'set trace on' <file>` = `/usr/bin/grep -c 'set trace off' <file>` and the last
   `set trace` in the file is `off`

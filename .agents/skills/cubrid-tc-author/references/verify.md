@@ -131,6 +131,11 @@ A diff between them = nondeterministic output (heap order without `order by`, ti
 a threshold at the edge) → back to Step 3; never widen the answer. A case whose plan or parallel
 decision rests on an estimate or a page count also runs 3 times on pre and dev (sampling and heap
 placement move between runs); any flip → back to Step 3 with larger margins (sql-rules, shell-rules 19).
+Points before 58aa0eddf (CBRD-27287, 2026-10-07) can drop the CAS connection when one statement calls an
+undeclared stored function tens of thousands of times ("pending transmission reached IOV_MAX",
+`change_exec_rights` -2). CQT reconnects and reruns, so the rows still match but later `show trace`
+output is null. Cap undeclared calls near 1,000 per statement with a cheap leading filter (simple
+comparisons are evaluated first); read a null trace by grepping the server log for `IOV_MAX` (CBRD-27299).
 
 ## §5 Expected verdicts — fill the table and compare
 
