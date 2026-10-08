@@ -179,7 +179,9 @@ Try the planned checks on the pre and dev installs before writing the case:
 ## §7 Hygiene
 
 - Read `provenance.txt` before deleting any run dir; delete this skill's run dirs
-  (`rm -rf /home/cubrid/ctp-run-out/<tooling-repo>/sql-<timestamp>-<pid> || podman unshare rm -rf <same>`)
+  (`rm -rf /home/cubrid/ctp-run-out/<tooling-repo>/sql-<timestamp>-<pid> || podman unshare rm -rf <same>`).
+  Every `rm -rf` target is a literal absolute path typed out in the command: no variables, globs, loops
+  or `xargs` (root AGENTS.md house rule; a variable-built rm was denied on CBRD-27177)
   after `results.md` is written; keep the regression dir of §6.
 - Delete cores you analyzed; delete `~/optdebug/CUBRID-cbrd<N>-*` after the final report unless
   another issue shares the sha.

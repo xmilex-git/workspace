@@ -91,6 +91,11 @@ own fix suggestions — it only prints them.
 - **Never write scratch to `/tmp` or `$TMPDIR`** (the host's `/tmp` is tmpfs-backed and OOMs).
   CTP runs live under `/home/<user>/ctp-run-out/<tooling-repo>/` (see `ctp-run` above: pruned per run, `just ctp-prune` for old runs); use this tooling repository's `.git_ignored_dir/scratch/` for other local tooling artifacts. See `.agents/AGENTS.md` / `.claude/CLAUDE.md` for the full policy.
 - The locale `*.so` artifacts and `.git_ignored_dir/` are git-ignored and must never be committed.
+- **`rm -rf` takes only literal paths written out in full** — every target an absolute path typed as a
+  plain string in the command itself. No variables (not even `${X:?}`-guarded), no globs, no command
+  substitution, no loops or `xargs` building the list. Many targets → list them literally; a volatile
+  CTP dir that plain rm cannot delete → `podman unshare rm -rf <the same literal path>`. The user
+  denies any other form (2026-10-08).
 - Read `.agents/AGENTS.md` (and the longer `.claude/CLAUDE.md`) before making code changes —
   they encode the behavioral guidelines this repo's owner expects.
 
