@@ -75,9 +75,12 @@ entries, error codes), or does it only change **time, I/O, memory, logging, sche
 | R3 | R1 holds for the result and R2 holds for a separate observation (e.g. a value fix plus a leak that only a server statistic shows) | **both** — one sql case for the value, one shell case for the observation | both trees |
 | R4 | The diff changes only time / I/O / memory / logging and the result and trace text are identical before and after — no row, error, or trace token differs | **out of scope (performance only)** → Step 7 comment "성능 TC 필요" | — |
 | R5 | A value-producing function changed (R1 kind) but the new path has **no switch** (no hint, no parameter) to run the old path for a reference twin | **sql, correctness TC**: literal expected values, pre-fix build also OK; the results table says so | by issue type |
-| R6 | The behavior is observable only on a debug build (an assert), or only under a race no bounded shell loop reproduces on the fix build in 3 tries | **no TC possible** → Step 7 comment "TC 불가 사유" | — |
+| R6 | No case reproduces the defect **deterministically** on the pre-fix optdebug build: the pre run is NOK in fewer than 3 of 3 CTP runs, using only mechanisms existing shell/sql TCs already use (parameters, hints, utilities, concurrent sessions, bounded loops). A debug assert that fires deterministically on optdebug is observable, since CI runs optdebug; a race that fires only sometimes is not | **no TC possible** → Step 7 comment "TC 불가 사유" naming the triggers tried | — |
 
 Rules apply in order R6, R4, R3, R2, R1/R5. Write the chosen rule number into `judge.md`.
+R6 is about determinism (user, 2026-10-08: "확정적으로 재현하는 tc가 아니라면 굳이 추가해야하나"). Before
+choosing it for a race, survey how existing private-ex shell TCs force similar timing and try that; a
+probabilistic case (CBRD-27293: pre NOK in 2 of 3 CTP runs) is not added.
 R4 is decided by **reading the code**, never by the issue type alone: CBRD-27181 (LIKE fast path)
 is an "improvement" whose changed function compares strings, so it is R5, not R4 (user, 2026-10-08).
 A memory leak at a fixed allocation site is R2, not R4: judge it with `enable_memory_monitoring=yes` and
