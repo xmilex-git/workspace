@@ -105,7 +105,9 @@ A pre build that is expected to crash runs with `NO_ABORT_ON_CORE=1`, otherwise 
 shard at the first core and the case writes no `.result` (CBRD-26930).
 CTP reruns a failed shell case once inside the same run: `test_local.log` holds both executions
 (`TEST START` blocks) but the `.result` holds only the last, and the runner still fails the run on
-cores. For a probabilistic case, read every execution (CBRD-27293).
+cores. For a probabilistic case, read every execution (CBRD-27293). A multi-round crash probe through
+CTP leaves two cores per hit (cub_server and cub_admin): with `NO_ABORT_ON_CORE=1` also raise
+`CTP_CRASH_LOOP_CORES` and `CTP_MAX_SHARD_CORES`, or the watchdog stops the shard.
 
 ## §3 Run the three builds in parallel (one foreground command)
 

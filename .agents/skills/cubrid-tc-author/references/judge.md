@@ -80,7 +80,13 @@ entries, error codes), or does it only change **time, I/O, memory, logging, sche
 Rules apply in order R6, R4, R3, R2, R1/R5. Write the chosen rule number into `judge.md`.
 R6 is about determinism (user, 2026-10-08: "확정적으로 재현하는 tc가 아니라면 굳이 추가해야하나"). Before
 choosing it for a race, survey how existing private-ex shell TCs force similar timing and try that; a
-probabilistic case (CBRD-27293: pre NOK in 2 of 3 CTP runs) is not added.
+probabilistic case (CBRD-27293: pre NOK in 2 of 3 CTP runs) is not added. A run counts as NOK when the
+runner fails it — a NOK line or a core; CTP reruns a failed shell case, so the `.result` alone can read OK.
+Mechanisms existing shell TCs use, and their limits: parameters and restarts, concurrent sessions,
+bounded loops, `fault_injection_test` (random aborts on btree/log paths only), `kill -STOP` (stops a
+client such as cub_cas, never a server thread), `checkpoint_sleep_msecs` (slows every build alike); no TC
+attaches gdb. A race that needs a server thread held inside a short wait is R6 when none of these can
+widen that wait (CBRD-27293: backup checkpoint flush wait vs shutdown wakeup).
 R4 is decided by **reading the code**, never by the issue type alone: CBRD-27181 (LIKE fast path)
 is an "improvement" whose changed function compares strings, so it is R5, not R4 (user, 2026-10-08).
 A memory leak at a fixed allocation site is R2, not R4: judge it with `enable_memory_monitoring=yes` and
