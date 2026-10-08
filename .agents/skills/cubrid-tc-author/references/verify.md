@@ -181,6 +181,16 @@ expected** is a develop regression, not a TC defect. Procedure:
 3. Do **not** open the PR. Go to Step 7 with the regression comment (pr-and-jira.md §5 kind 3).
    The wayfinder ticket stays open and assigned; note "회귀 대기" in its body.
 
+## §6b A result change the fix itself made
+
+When a shape gives a different result on post than on pre and dev agrees with post, but the issue
+promised unchanged results (CBRD-27041: a page-copy scan reads stale values of rows its own statement
+changed later on the same page), it is neither an R5 pass nor a §6 regression. **STOP** and report.
+The user's answer for CBRD-27041 (2026-10-08), the default unless told otherwise: keep the shape out
+of the TC, push the TC branch to the fork without a PR, file a workspace issue for the result change,
+post one JIRA comment on the issue that describes the change (repro SQL, three-point table) and says the
+TC PR follows once it is resolved, linking the fork branch; the wayfinder ticket stays open as 회귀 대기.
+
 ## §6a Probing an install before writing a shell case
 
 Try the planned checks on the pre and dev installs before writing the case:
@@ -209,6 +219,12 @@ Try the planned checks on the pre and dev installs before writing the case:
 - **A specified limit where the old and new paths differ is a path probe in CI**: when the issue fixes
   such a limit (CBRD-27181: 101 backtracking points give -623 on the old loop and a result on the new
   one), put one probe per dispatch condition (collation, ESCAPE) into the TC; it outlives a gdb proof.
+- **Path proof without gdb**: when the fix logs with `er_log_debug` (on by default in optdebug), count
+  its lines between markers. SA: `select * from mark_<x>;` leaves `Unknown class "dba.mark_<x>"` in the
+  job's csql.err. CS: a duplicate-key insert into `t_mark` leaves `key: N` and the statement in the
+  server log. Parallel paths log once per worker (CBRD-27041).
+- **fast-sa runs with --no-auto-commit**: a CTP case that relies on autocommit needs `commit;` after its
+  setup, or the case's own rollback undoes the setup.
 - **See estimates and predicate order**: CTP masks digits, so margins are invisible there. Add
   `;plan detail` to a fast-sa input: it prints each predicate's selectivity and the check order
   (CBRD-27100 measured every margin this way).

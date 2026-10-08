@@ -171,6 +171,11 @@ drop table t_outer, t_inner;
 24. An index scan with no key range cannot be forced: `USING INDEX` is ignored and the heap is scanned.
     IN-list elements use values present in the data; an absent value can make a histogram estimate
     fall back (CBRD-27100).
+25. `ORDER BY` on the tested table's primary key lets the optimizer read through the index and skip the
+    sort, which bypasses a heap-scan path (CBRD-27041 hid its result change this way). Heap-path cases
+    use a table without an index or order by a non-indexed column.
+26. Many paths, header ≤ 30 lines: group close shapes as several test/twin pairs inside one case
+    (CBRD-27041: 18 cases → 15).
 
 ## Cases
 
