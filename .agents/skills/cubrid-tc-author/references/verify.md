@@ -63,10 +63,11 @@ own server parameters, so the install's conf does not matter for CTP.
 ```bash
 TC=~/dev/cubrid-tc-worktree/cbrd_<N>            # or the tc/pr-<PR> worktree
 DIR=<scenario-relative case dir, e.g. _36_guava/cbrd_<N> or _13_issues/_26_2h>
+RUN=$DIR                                        # _13_issues: RUN=$DIR/cases/cbrd_<N>.sql (see below)
 echo PLACEHOLDER > "$TC/sql/$DIR/answers/cbrd_<N>.answer"      # no answer = case skipped but PASSED
 cd /home/cubrid/dev/workspace
 CTP_ARGS="--testcases-as-is --testcases $TC" CTP_KEEP_COPIES=1 BUILD=~/optdebug/CUBRID-cbrd<N>-fix \
-  just ctp sql $DIR 2>&1 | tee .git_ignored_dir/scratch/tc-author/CBRD-<N>/gen.log
+  just ctp sql $RUN 2>&1 | tee .git_ignored_dir/scratch/tc-author/CBRD-<N>/gen.log
 ```
 
 The runner prints its run directory (`/home/cubrid/ctp-run-out/<tooling-repo>/sql-<timestamp>-<pid>`).
@@ -79,6 +80,9 @@ case is NOK, which is expected here. Then:
 2. Read **every** block against the case's intent: twin blocks identical, the trace token present where
    the header promises it, no `Error:` block except the designed error cases, no `-493`, no `-1071`.
 3. For `_13_issues` cases only: the `.result` of a flat `cases/` dir sits in the same run dir path.
+   Pass the case file as `RUN`, never the flat dir: the runner then selects exactly that file. The flat
+   dir holds other issues' cases, and one fixed after this issue's fix can core the pre or fix build
+   and poison this case (CBRD-27327, 2026-10-08).
 4. `cp <result> "$TC/sql/$DIR/answers/cbrd_<N>.answer"`.
 
 Shell has no answer: run `CTP_ARGS="--testcases-as-is --testcases $TCEX" CTP_KEEP_COPIES=1 BUILD=<fix> just ctp shell <dir>`
@@ -91,7 +95,7 @@ cd /home/cubrid/dev/workspace
 R=.git_ignored_dir/scratch/tc-author/CBRD-<N>
 for p in pre fix dev; do
   CTP_ARGS="--testcases-as-is --testcases $TC" CTP_KEEP_COPIES=1 BUILD=~/optdebug/CUBRID-cbrd<N>-$p \
-    just ctp sql $DIR > "$R/run-$p.log" 2>&1 &
+    just ctp sql $RUN > "$R/run-$p.log" 2>&1 &
 done; wait
 for p in pre fix dev; do echo "== $p"; grep -E 'RESULT:|\[NOK\]|\[OK\]|core' "$R/run-$p.log" | head -20; done
 ```
