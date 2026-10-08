@@ -174,5 +174,8 @@ Read only; do not edit files. Use tools/code-index/code-index <workspace> body <
    An error path that needs one specific row to be the lost or duplicated one (unique violation, PK
    NULL, FK orphan) is not deterministic across points when which rows are affected follows each
    build's split and buffer: exclude it and judge by counts (CBRD-26799).
+   A loop over key-range predicates runs in predicate-number order, and the numbers follow ascending
+   selectivity: design its first, middle and last positions from default selectivities and confirm them
+   with `;plan detail` (CBRD-27100).
    Write the merged list as `R<n> | condition (file:line) | case | exclusion`, so a later round can
    replace rows by number. The lead, not the agents, decides what becomes a case.

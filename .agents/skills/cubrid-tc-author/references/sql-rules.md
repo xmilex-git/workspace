@@ -168,6 +168,9 @@ drop table t_outer, t_inner;
     `count(col)`. Prove margins with variants: a 1/3-size table that still prints the parallel line
     proves a 3x page margin, a 6x-wider key that still prints `hash: true` proves the memory margin;
     first check that the detector line has no other source.
+24. An index scan with no key range cannot be forced: `USING INDEX` is ignored and the heap is scanned.
+    IN-list elements use values present in the data; an absent value can make a histogram estimate
+    fall back (CBRD-27100).
 
 ## Cases
 

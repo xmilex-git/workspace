@@ -187,6 +187,9 @@ finish
     missing measurement (no memmon output) is a failure, never 0 (cbrd_27217 `loop_verdict`).
 21. A loop whose statements must fail on every execution runs `csql -e` (`--error-continue`); without it
     csql exits at the first error.
+22. The b-tree user-page count the server checks is one more than `SHOW INDEX CAPACITY`'s
+    `Num_total_page` for a non-empty index (3→4, 2→3); a page-count check asserts a range, not an
+    exact value (CBRD-27100).
 
 ## Checklist before saving
 

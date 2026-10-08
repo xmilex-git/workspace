@@ -147,7 +147,9 @@ A behavior whose setup statement exists only on develop (its syntax changed afte
 develop-only file `cbrd_<N>_<topic>.sql`: its pre and post rows read "해당 없음 (<문법>이 수정 뒤 도입,
 <commit>)", dev is OK ×3, and the PR cites the probe that showed the same behavior on the post point with
 the old syntax (user, 2026-10-08, CBRD-27100 histograms: ANALYZE TABLE ... UPDATE HISTOGRAM → UPDATE
-STATISTICS, 532ce4b6d).
+STATISTICS, 532ce4b6d). Run pre and post with the common file's path, not the directory (the directory
+would run the develop-only file there and fail). The surest post-point proof is an old-syntax copy of
+the file run on post, compared block by block with the develop answer.
 
 An R5 issue that also specifies result changes keeps two files: `cbrd_<N>.sql` (correctness, pre OK)
 and `cbrd_<N>_spec_change.sql` (the specified changes, pre NOK by design), so each row of the table
@@ -207,6 +209,9 @@ Try the planned checks on the pre and dev installs before writing the case:
 - **A specified limit where the old and new paths differ is a path probe in CI**: when the issue fixes
   such a limit (CBRD-27181: 101 backtracking points give -623 on the old loop and a result on the new
   one), put one probe per dispatch condition (collation, ESCAPE) into the TC; it outlives a gdb proof.
+- **See estimates and predicate order**: CTP masks digits, so margins are invisible there. Add
+  `;plan detail` to a fast-sa input: it prints each predicate's selectivity and the check order
+  (CBRD-27100 measured every margin this way).
 - **Draft fast, then CTP**: run a draft case on the three installs with `tools/fast-gate/fast-sa.sh`
   (csql -S, about 3 s each) to compare twin blocks and points; locale-loaded collations (utf8_gen*,
   utf8_de_exp_ai_ci) are unknown in SA and show only in CTP.
