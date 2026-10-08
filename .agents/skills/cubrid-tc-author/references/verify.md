@@ -198,6 +198,14 @@ The user's answer for CBRD-27041 (2026-10-08), the default unless told otherwise
 of the TC, push the TC branch to the fork without a PR, file a workspace issue for the result change,
 post one JIRA comment on the issue that describes the change (repro SQL, three-point table) and says the
 TC PR follows once it is resolved, linking the fork branch; the wayfinder ticket stays open as 회귀 대기.
+Two kinds, decided by whether the TC needs the changed shape:
+- **The TC must pin the changed shape** (CBRD-27041's page-copy result; CBRD-27071's two inputs) → the
+  default above: hold the PR on the fork, the ticket waits as 회귀 대기.
+- **The changed shape is a defect outside an otherwise complete TC** (CBRD-26722: SELECT ... FOR UPDATE
+  under a parallel index scan takes no row locks; the TC never needed that shape) → open the PR now with
+  the shape excluded, and STOP only to let the user decide how the defect is filed (2026-10-09: JIRA
+  CBRD-27593 with a Regress link to the feature, title picked by the user). The PR body names the JIRA
+  key where it lists what the TC leaves out; the check is added after that issue is fixed.
 
 ## §6a Probing an install before writing a shell case
 
