@@ -170,5 +170,8 @@ Read only; do not edit files. Use tools/code-index/code-index <workspace> body <
    parallel scan opens only on the outermost spec, and `scan_ptr` / `dptr_list` subtrees (join inner
    sides, correlated subqueries) are forced serial on every point
    (`process_xasl_node_recursive_force_cannot_parallel`), so rows about their rescans are excluded (CBRD-27217).
+   An error path that needs one specific row to be the lost or duplicated one (unique violation, PK
+   NULL, FK orphan) is not deterministic across points when which rows are affected follows each
+   build's split and buffer: exclude it and judge by counts (CBRD-26799).
    Write the merged list as `R<n> | condition (file:line) | case | exclusion`, so a later round can
    replace rows by number. The lead, not the agents, decides what becomes a case.

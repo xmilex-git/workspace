@@ -151,6 +151,16 @@ drop table t_outer, t_inner;
     (one per worker) before the fix and +1 after.
 19. Hints apply per query block: a reference twin puts `no_parallel_scan` on every block (derived
     tables, subqueries), not only the outermost.
+20. **Row placement for branches that need a neighbour on the same page**: size rows so exactly two fit a
+    page (two rows + unfill ≤ page < three rows), e.g. a skipped row then the key row, and prove the
+    placement with gdb branch counts. csql cannot print OIDs of a REUSE_OID table, and develop's heap
+    capacity output counts the header page (3001 vs 3000) (CBRD-26799).
+21. **Keys longer than a sort page** (~16 KB) never fit the sort buffer, so every parallel worker's first
+    row takes the long-record path: build them from ~136 SHA-512 digests with `group_concat` (raise
+    `group_concat_max_len`; its ORDER BY takes only the argument or a position) and set them by UPDATE
+    after the load so home slots stay put (CBRD-26799).
+22. `FORCE INDEX` with a predicate only on a non-leading column of a composite index falls back to a
+    heap scan; `INDEX_SS` reads every key, including keys with a NULL leading column.
 
 ## Cases
 

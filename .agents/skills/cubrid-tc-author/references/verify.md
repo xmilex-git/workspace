@@ -194,7 +194,9 @@ Try the planned checks on the pre and dev installs before writing the case:
   CBRD-27217 `probe3/`).
 - **A path with no trace token** (e.g. CREATE INDEX): CTP OK does not prove the case reaches the fixed
   branch. Run the case's SQL on a host server under `gdb` with `dprintf` on the fixed branch and on the
-  worker start, on the dev install at least (CBRD-26799: a CHAR-padded design ran serial on develop
+  worker start, on the dev install at least. On optdebug a `dprintf` that prints a local
+  ("value has been optimized out") aborts the gdb script and the detach kills the server: print only
+  `$_thread`, arguments or globals, and group the hits per call (CBRD-26799 `pc2/summarize.py`). (CBRD-26799: a CHAR-padded design ran serial on develop
   and CTP still said OK). Local-build confs carry the campaign `parallelism=24`; set the value CTP pins.
   A path shared with SA can be proved with `csql -S` under gdb in the fast-sa namespaces. Set `dprintf`
   by `file:line` (a function name binds the PLT stub), and separate queries with
