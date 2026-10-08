@@ -69,6 +69,10 @@ the engine PR's body (judge.md §1) and must not be overwritten. Template (every
 |---|---|---|---|
 | 1 | <...> | <...> | <직전 빌드의 답 또는 "동일"> |
 
+## 커버리지에서 뺀 것
+
+- <코드 조사 목록에서 케이스가 되지 못한 행과 이유: 지점 사이 drift, 알려진 develop assert, 결정성 부족. 작업 중 찾은 결함은 JIRA 키로 적고, 해결 뒤 더할 검사를 한 줄로.>
+
 ## 검증 (optdebug, CTP `sql` 단일 디렉터리)
 
 | 지점 | 커밋 | 결과 |
@@ -91,8 +95,8 @@ gh api -X POST repos/CUBRID/<repo>/pulls/<n>/reviews --input review.json
 # review.json: {"event":"COMMENT","body":"","comments":[{"path":"sql/.../cbrd_<N>.sql","line":<n>,"side":"RIGHT","body":"<title>\n\n<paragraph>"}, ...]}
 ```
 
-A 504 from this POST can still have created the review: `gh api repos/CUBRID/<repo>/pulls/<n>/reviews`
-before posting again.
+A 504 or a `stream error: stream ID 1; CANCEL` from this POST can still have created the review:
+`gh api repos/CUBRID/<repo>/pulls/<n>/reviews` before posting again (#3686).
 
 ## §4 Reviewer — exactly one, from the team
 
