@@ -96,28 +96,33 @@ before posting again.
 Team (reviewer pool; the author `xmilex-git` is excluded): `shparkcubrid`, `HyunukLee`,
 `soheejung-cs`, `youngjinj`, `Hamkua`, `jihyekim-0` (user, 2026-10-08).
 
-The reviewer is chosen by **current review load first** (user, 2026-10-08: picking by engine-PR
-participation sent every TC PR to shparkcubrid, who already had 12 open review requests).
+The reviewer is a team member **who reviewed the engine PR**, and among them the one with the
+**fewest pending review requests now** (user, 2026-10-08). Load alone sent TC PRs to people who never
+saw the fix; participation alone sent every TC PR to shparkcubrid, who already had 12 open requests.
 
 ```bash
 cd /home/cubrid/dev/workspace
-# 1. load: pending review requests on open PRs in the engine repo and both TC repos
-for repo in CUBRID/cubrid CUBRID/cubrid-testcases CUBRID/cubrid-testcases-private-ex; do
-  gh pr list -R $repo --state open --limit 500 --json reviewRequests -q '.[].reviewRequests[] | select(.login != null) | .login'
-done | /usr/bin/grep -xE 'shparkcubrid|HyunukLee|soheejung-cs|youngjinj|Hamkua|jihyekim-0' | sort | uniq -c | sort -n
-# 2. tie-break: participation in the engine PR, then who approved it
+# 1. candidates: team members with review comments or reviews on the engine PR (count = participation)
 { gh api repos/CUBRID/cubrid/pulls/<PR>/comments --paginate -q '.[].user.login';
   gh api repos/CUBRID/cubrid/pulls/<PR>/reviews  --paginate -q '.[].user.login'; } \
   | /usr/bin/grep -xE 'shparkcubrid|HyunukLee|soheejung-cs|youngjinj|Hamkua|jihyekim-0' | sort | uniq -c | sort -rn
+# 2. load: pending review requests on open PRs in the engine repo and both TC repos
+for repo in CUBRID/cubrid CUBRID/cubrid-testcases CUBRID/cubrid-testcases-private-ex; do
+  gh pr list -R $repo --state open --limit 500 --json reviewRequests -q '.[].reviewRequests[] | select(.login != null) | .login'
+done | /usr/bin/grep -xE 'shparkcubrid|HyunukLee|soheejung-cs|youngjinj|Hamkua|jihyekim-0' | sort | uniq -c | sort -n
+# 3. tie-break: who approved the engine PR
 gh api repos/CUBRID/cubrid/pulls/<PR>/reviews --paginate -q '.[] | select(.state=="APPROVED") | .user.login' | sort -u
 ```
 
-1. Pick the team member with the **fewest pending review requests** summed over the three repos
-   (a member with no request counts 0; `uniq -c` omits them, so list all six).
-2. Tie → the one with the most review comments + reviews on the engine PR; still tied → the one
-   who **APPROVED** it; still tied → the first in the team list order above.
-3. Record the counts and the choice in `<rundir>/reviewer.md` (the PR body does not mention them).
-4. `gh pr edit <tc-pr> -R CUBRID/<repo> --add-reviewer <login>`; verify with
+1. Candidates = the team members listed by command 1 (at least one review or review comment on the
+   engine PR). Nobody from the team reviewed it → every team member is a candidate.
+2. Pick the candidate with the **fewest pending review requests** summed over the three repos
+   (a member with no request counts 0; `uniq -c` omits them).
+3. Tie → the one with more participation on the engine PR (command 1); still tied → the one who
+   **APPROVED** it; still tied → the first in the team list order above.
+4. Record the candidates, the counts and the choice in `<rundir>/reviewer.md` (the PR body does not
+   mention them).
+5. `gh pr edit <tc-pr> -R CUBRID/<repo> --add-reviewer <login>`; verify with
    `gh pr view <tc-pr> -R CUBRID/<repo> --json reviewRequests`.
 
 ## §5 JIRA comment — three kinds only
