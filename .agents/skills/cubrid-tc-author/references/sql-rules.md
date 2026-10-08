@@ -161,6 +161,13 @@ drop table t_outer, t_inner;
     after the load so home slots stay put (CBRD-26799).
 22. `FORCE INDEX` with a predicate only on a non-leading column of a composite index falls back to a
     heap scan; `INDEX_SS` reads every key, including keys with a NULL leading column.
+23. **Hash GROUP BY internals** (CBRD-27177): each group's first row (all list columns) goes to the main
+    sort input, and partial results (key + accumulators) of groups with 2+ rows go to the partial list;
+    both sorts print one shared `parallel workers` line. Hash memory counts the first row and the key, so
+    a wide column in the key counts twice; to grow only the main sort input, read the wide column with
+    `count(col)`. Prove margins with variants: a 1/3-size table that still prints the parallel line
+    proves a 3x page margin, a 6x-wider key that still prints `hash: true` proves the memory margin;
+    first check that the detector line has no other source.
 
 ## Cases
 

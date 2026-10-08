@@ -162,6 +162,7 @@ function | condition | SQL | observable as | note. Then list the boundaries of e
 the new or changed code (input just below, at and just above it; both sides of every fallback or
 dispatch guard; early exit at the first, a middle and the last position) as rows of the same table.
 First line of your output: RESULT: <row count>.
+Thresholds under CTP sql (test_mode=yes): parallel heap scan 32 pages, parallel sort and hash join floor 2 pages; defaults outside CTP differ (e.g. parallel_scan_page_threshold 2048 before 7355bcec7). Draw page boundaries from these values, not from defaults.
 Read only; do not edit files. Use tools/code-index/code-index <workspace> body <function> for context.
 ```
 
