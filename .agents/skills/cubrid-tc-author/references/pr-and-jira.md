@@ -96,20 +96,27 @@ before posting again.
 Team (reviewer pool; the author `xmilex-git` is excluded): `shparkcubrid`, `HyunukLee`,
 `soheejung-cs`, `youngjinj`, `Hamkua`, `jihyekim-0` (user, 2026-10-08).
 
+The reviewer is chosen by **current review load first** (user, 2026-10-08: picking by engine-PR
+participation sent every TC PR to shparkcubrid, who already had 12 open review requests).
+
 ```bash
 cd /home/cubrid/dev/workspace
+# 1. load: pending review requests on open PRs in the engine repo and both TC repos
+for repo in CUBRID/cubrid CUBRID/cubrid-testcases CUBRID/cubrid-testcases-private-ex; do
+  gh pr list -R $repo --state open --limit 500 --json reviewRequests -q '.[].reviewRequests[] | select(.login != null) | .login'
+done | /usr/bin/grep -xE 'shparkcubrid|HyunukLee|soheejung-cs|youngjinj|Hamkua|jihyekim-0' | sort | uniq -c | sort -n
+# 2. tie-break: participation in the engine PR, then who approved it
 { gh api repos/CUBRID/cubrid/pulls/<PR>/comments --paginate -q '.[].user.login';
   gh api repos/CUBRID/cubrid/pulls/<PR>/reviews  --paginate -q '.[].user.login'; } \
   | /usr/bin/grep -xE 'shparkcubrid|HyunukLee|soheejung-cs|youngjinj|Hamkua|jihyekim-0' | sort | uniq -c | sort -rn
 gh api repos/CUBRID/cubrid/pulls/<PR>/reviews --paginate -q '.[] | select(.state=="APPROVED") | .user.login' | sort -u
 ```
 
-1. Pick the login with the **highest count** (review comments + reviews on the engine PR).
-2. Tie → the one who **APPROVED** the engine PR; still tied → the first in the team list order above.
-3. Nobody from the team touched the engine PR → the team member with the **fewest open review
-   requests** across both TC repos:
-   `gh pr list -R CUBRID/cubrid-testcases --state open --json reviewRequests -q '.[].reviewRequests[].login'`
-   (and private-ex), counted the same way; tie → list order.
+1. Pick the team member with the **fewest pending review requests** summed over the three repos
+   (a member with no request counts 0; `uniq -c` omits them, so list all six).
+2. Tie → the one with the most review comments + reviews on the engine PR; still tied → the one
+   who **APPROVED** it; still tied → the first in the team list order above.
+3. Record the counts and the choice in `<rundir>/reviewer.md` (the PR body does not mention them).
 4. `gh pr edit <tc-pr> -R CUBRID/<repo> --add-reviewer <login>`; verify with
    `gh pr view <tc-pr> -R CUBRID/<repo> --json reviewRequests`.
 
