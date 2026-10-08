@@ -26,6 +26,11 @@ develop: `sql/_36_guava/cbrd_27465/cases/cbrd_27465.sql` (reference twins, trace
   thresholds 0 → raised to 2 pages by `compute_parallel_degree` (an input list must span 2+ pages).
   Data sized at the threshold flakes: give every threshold ≥2× margin (#3661: 64k vs 32k
   `max_hash_list_scan_size`; #4312: 500 rows = 1 page fell under the 2-page floor).
+- **A constant LIKE pattern never reaches the matcher**: `qo_rewrite_like_terms` turns it into `=`,
+  `BETWEEN` or `IS NOT NULL`. A case about LIKE evaluation keeps its patterns in a table column (join)
+  or in the select list (CBRD-27181).
+- **Invalid byte sequences**: a varchar column drops a truncated last character on insert; build the
+  bytes with `from_base64()` at evaluation time (there is no `unhex()`; `hex()` prints them).
 - **Heap order is not insertion order.** A later INSERT fills free space left in earlier pages, and
   the placement differs between builds (CBRD-27177: 1701 vs 1710 distinct keys among the first 2000
   rows scanned). A property that depends on the first N rows read (hash aggregation giving up, LIMIT

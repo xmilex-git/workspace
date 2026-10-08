@@ -139,6 +139,10 @@ a threshold at the edge) → back to Step 3; never widen the answer.
 | dev | <sha> | cbrd_<N> | OK | 0 | OK | yes |
 ```
 
+An R5 issue that also specifies result changes keeps two files: `cbrd_<N>.sql` (correctness, pre OK)
+and `cbrd_<N>_spec_change.sql` (the specified changes, pre NOK by design), so each row of the table
+has one expectation (CBRD-27181).
+
 | verdict (judge.md) | pre | fix | dev (merged mode) | dev (open mode) |
 |---|---|---|---|---|
 | R1 / R2 / R3 | **NOK** | OK | OK | NOK, same diff as pre (fix not merged yet) |
@@ -179,6 +183,9 @@ Try the planned checks on the pre and dev installs before writing the case:
   branch. Run the case's SQL on a host server under `gdb` with `dprintf` on the fixed branch and on the
   worker start, on the dev install at least (CBRD-26799: a CHAR-padded design ran serial on develop
   and CTP still said OK). Local-build confs carry the campaign `parallelism=24`; set the value CTP pins.
+  A path shared with SA can be proved with `csql -S` under gdb in the fast-sa namespaces. Set `dprintf`
+  by `file:line` (a function name binds the PLT stub), and separate queries with
+  `select repeat('M', <case line>)` markers (CBRD-27181).
 
 ## §7 Hygiene
 
