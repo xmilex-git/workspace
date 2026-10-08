@@ -35,6 +35,13 @@ develop: `sql/_36_guava/cbrd_27465/cases/cbrd_27465.sql` (reference twins, trace
   the placement differs between builds (CBRD-27177: 1701 vs 1710 distinct keys among the first 2000
   rows scanned). A property that depends on the first N rows read (hash aggregation giving up, LIMIT
   without ORDER BY) must hold in any order, e.g. by capping how many rows repeat a key.
+- **Estimates move with sampling and heap placement.** Statistics and histograms are built from
+  samples, and record placement in the heap differs between builds and runs, so an estimated row count
+  or selectivity is never exact. Any case whose expected plan or parallel decision depends on an
+  estimate keeps it far from the threshold on both sides: at least 5x above (or 1/5 below) the
+  threshold, never near it, with uniform data so no single page or sample decides it. Use
+  `update statistics on <t> with fullscan` where the build allows, and run every point 3 times
+  before trusting it (user, 2026-10-08, CBRD-27100 histograms).
 - A recursive CTE stops at 2000 rows (`cte_max_recursions`); generate big tables by cross join:
   `insert into t select rownum, mod(rownum, 6) from db_class a, db_class b, db_class c, db_class d limit 100000;`
 
