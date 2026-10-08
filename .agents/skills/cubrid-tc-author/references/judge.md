@@ -118,7 +118,13 @@ Sources, in this order, each item one row:
 2. the engine PR body's list of behaviors;
 3. **branches in the diff**: each hint, parameter, type family (int / numeric / string / date),
    partitioned vs not, parallel on vs off, empty input, NULL, error path;
-4. the repro itself (always case 1 or the first case after setup).
+4. **boundaries of every changed branch**, read from the code, not from the issue: for each condition
+   in the new or changed function, the input just below, at, and just above it (a limit N → N and
+   N+1; a length check → shorter, equal, longer; a loop that can stop early → stop at the first, a
+   middle and the last position; a fallback or dispatch guard → both sides). One row per condition,
+   naming the line it tests. The issue's scenarios come from the author and miss the author's own
+   blind spots (user, 2026-10-08, CBRD-27181: depth tested at 150/300 but not 256/257);
+5. the repro itself (always case 1 or the first case after setup).
 
 Rows without a case need a reason a reviewer accepts: "timing only (R4)", "needs debug assert",
 "covered by case 3", "CBRD-27572 assert on develop makes it crash CI". A row with neither blocks Step 3.
