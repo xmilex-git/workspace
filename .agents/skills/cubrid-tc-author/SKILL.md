@@ -88,6 +88,11 @@ Follow [references/pr-and-jira.md](references/pr-and-jira.md) §5. Post only for
 
 Done when the comment URL is recorded, or `results.md` says "JIRA comment: none (normal PR)".
 
+## After the PR — bot reviews
+
+Greptile or Codex comments on an opened TC PR: [references/pr-and-jira.md](references/pr-and-jira.md) §6
+(check the reviewed commit and existing replies first; a real gap goes through Steps 3-4 again).
+
 ## Final report (same turn as the last step)
 
 Print: verdict + rule, TC path(s), the three-build table, PR URL, reviewer, JIRA comment URL or

@@ -172,6 +172,9 @@ Deviations and what they mean:
 - **fix NOK** → the case or the answer is wrong (reread the diff of `.result` vs `.answer`), or a
   develop assert fired (a core: read `console.log` for `Assertion`; a server abort poisons every
   later statement with -581/-669/-677 — judge only the statements before it).
+- **pre run by directory after an abort**: the next file's setup fails with -581, so it runs over the
+  previous file's tables and its traces are null (CBRD-27299: the subquery file summed the hash-join
+  file's `t_mid`). Read pre's per-case behavior from per-file runs or standalone probes.
 - **dev differs from fix** → §6.
 
 ## §6 Latest-develop regression

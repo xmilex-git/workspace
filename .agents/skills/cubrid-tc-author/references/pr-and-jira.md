@@ -179,3 +179,18 @@ Post (dry run first, then send; record the comment URL in `results.md`):
 cubrid-jira comment CBRD-<N> --body-file <rundir>/jira-comment.txt --from jira          # prints what would be sent
 cubrid-jira comment CBRD-<N> --body-file <rundir>/jira-comment.txt --from jira --yes
 ```
+
+## §6 Bot review replies (greptile, codex) on a TC PR
+
+1. List every bot item: inline comments, reviews, and the summary comment. Read the summary's "Last
+   reviewed commit": a comment made on an older commit may already be covered by the head.
+2. List the existing replies of each thread (`gh api repos/<repo>/pulls/<n>/comments`, filter by
+   `in_reply_to_id`). If the author already replied accurately and the head pins the claim, record that
+   reply URL and post nothing new (CBRD-27181: the boundary redo answered all three threads).
+3. Otherwise verify each claim (covered on head / real gap / invalid, with evidence). A real gap is
+   fixed by the normal Steps 3-4 (answer on post, pre once, post 3 times, dev once), pushed to the fork
+   branch, the PR body updated for every changed part, and one Korean plain-text reply per thread with
+   the commit, the case and the three-point result. A probe that exposes an engine defect stops the
+   change and goes to the user.
+4. A commit that lands after the PR is opened (boundary redo) answers the bot threads it resolves in the
+   same pass, and `results.md` records those thread ids.

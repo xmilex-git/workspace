@@ -117,6 +117,9 @@ drop table t_outer, t_inner;
    engine PR numbers are fine.
 5. An engine function named in a comment must exist: `tools/code-index/code-index ~/dev/cubrid-worktree/develop definition <name>`
    (#3642 named a function that does not exist).
+   A pre-build abort whose position varies between runs (cross-thread free: Case 3 in one run, Case 11
+   in the next, CBRD-27299) is described by its shape and every case number that has the shape, never by
+   one case number.
 6. English, `*  ` two-space indent after the star, as the model files.
 
 ## Setup
@@ -202,6 +205,11 @@ drop table t_outer, t_inner;
     quotes or apostrophes inside, numbered from 1 without gaps. A `;` inside the quotes is fine.
 12. Every tested query: one line, `/*+ recompile <hints> */`. `recompile` makes each `show trace`
     print its own plan; without it a plan left by an earlier case can be printed (cbrd_27509, 2026-09-30).
+    Exception: a case that tests plan invalidation or clone reuse runs the same text without `recompile`,
+    when the text exists only in this file and its first run compiles over this file's own tables and
+    functions. `show trace` after a cached run prints the session's last compiled plan text, so judge by
+    the Trace Statistics tokens and say why in a `--` comment (CBRD-27299 hash-join Case 9: dropping and
+    restoring PARALLEL_ENABLE recompiles the cached plan on post and develop alike).
 13. Each case = tested query → `show trace;` → the **reference twin** (same query, old path forced:
     `NO_UNNEST` in the subquery, `parallel(0)`, `no_parallel_scan`, or the parameter set to 0/off and
     back). The two result blocks must be identical. A twin is what catches a wrong value; a trace
@@ -212,11 +220,20 @@ drop table t_outer, t_inner;
 15. Assert the new path by a **token** in the trace (rule: masked digits). If the token appears only
     when something happened at runtime (`MEMOIZE` prints only with hits), design the data so it must
     happen (repeated keys).
+15a. A DML statement under test is followed by a select of its target rows **before any cleanup**,
+    and that block must equal the select after the twin DML: an affected-row count alone passes a wrong
+    value with the same count (CBRD-26931 Case 8, greptile). A DML WHERE that matches 0 rows proves only
+    the trace line (a NULL subquery value also matches 0 rows): give each DML at least one statement
+    whose matched rows depend on the exact value.
 16. Error cases: the error block (`Error:-NNN`) is the result; still run the twin so the error comes
     from the same place in both (cbrd_26711 cases 19/22: an error raised in a serial fallback would
     pass a parallel-merge bug).
 17. Partition, NULL key, empty input, and the parameter-off fallback are separate cases when the
     diff has a branch for them (judge.md §3).
+17a. A case that checks that sibling blocks stay parallel puts the tainted block (e.g. an undeclared
+    function) in a **later** derived table, not the first: the main thread runs the first block itself,
+    so a checker that misses that position changes neither the trace nor the result. The parallel
+    subquery executor exists only with 2 or more clean sibling blocks (CBRD-27299 Case 10).
 18. A case that would hit a **known develop assert on optdebug** (CTP CI is optdebug) is left out with
     the exclusion reason naming the JIRA key (CBRD-27572 kept GROUP BY subqueries out of cbrd_27567).
 
@@ -237,7 +254,8 @@ drop table t_outer, t_inner;
 - `/usr/bin/grep -o "evaluate 'Case [0-9]*" <file>` → consecutive numbers from 1
 - `/usr/bin/grep -c 'set trace on' <file>` = `/usr/bin/grep -c 'set trace off' <file>` and the last
   `set trace` in the file is `off`
-- every traced `select` has `recompile`; every multi-row select has `order by`
+- every traced `select` has `recompile` (or a `--` comment for the rule 12 plan-cache exception); every
+  multi-row select has `order by`
 - every `@var` deallocated; every `set system parameters` has a `=default` later; every table dropped
 - no digits in identifiers; no float printed unrounded
 - the twin exists for every tested query, or the header says "pre-fix build also passes (correctness TC)"
