@@ -180,7 +180,10 @@ finish
     `parallel_scan_page_threshold` to 2048 pages, so a 200k-row table is not scanned in parallel there;
     lower it with `change_db_parameter` when the pre point is older. The gather of plain LIMIT/ROWNUM
     queries changed from row by row to a mergeable list at e4a79972c (CBRD-27135); check the trace on the
-    pre and dev installs before picking the query (cbrd_27217).
+    pre and dev installs before picking the query (cbrd_27217). Without `test_mode`, develop opens a
+    parallel **index** scan only when the b-tree's user pages reach `parallel_scan_page_threshold` (256
+    since 7355bcec7): a 110-page index stays serial on develop but runs in parallel on May-2026 points.
+    Set `parallel_scan_page_threshold=16` in shell cases and probes of index scans (CBRD-26722).
 19. **Margins** (user, 2026-10-08): a check whose outcome rests on an estimate (statistics, histograms,
     selectivity) keeps it ≥5x above or ≤1/5 of the threshold, and a page or row count ≥3x its threshold.
     Histograms and statistics come from samples and heap placement differs between builds and runs, so a

@@ -164,6 +164,7 @@ dispatch guard; early exit at the first, a middle and the last position) as rows
 First line of your output: RESULT: <row count>.
 Thresholds under CTP sql (test_mode=yes): parallel heap scan 32 pages, parallel sort and hash join floor 2 pages; defaults outside CTP differ (e.g. parallel_scan_page_threshold 2048 before 7355bcec7). Draw page boundaries from these values, not from defaults.
 A fix that caches page or record contents on a read path must be probed with statements that write rows they have not read yet (a stored function's DML in the select list, NEXT_VALUE while reading db_serial, INSERT ... SELECT into the same table): CBRD-27041's page copy changed their results.
+A fix that opens a new parallel read path must be probed with SELECT ... FOR UPDATE: the rows it reads must stay locked against another session's UPDATE (CBRD-26722: the parallel index scan dropped the row locks while the heap path fell back to serial).
 Read only; do not edit files. Use tools/code-index/code-index <workspace> body <function> for context.
 ```
 

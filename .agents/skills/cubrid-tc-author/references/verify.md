@@ -228,6 +228,10 @@ Try the planned checks on the pre and dev installs before writing the case:
   its lines between markers. SA: `select * from mark_<x>;` leaves `Unknown class "dba.mark_<x>"` in the
   job's csql.err. CS: a duplicate-key insert into `t_mark` leaves `key: N` and the statement in the
   server log. Parallel paths log once per worker (CBRD-27041).
+- **Locks need two sessions**: a fix that opens a new parallel read path gets a throwaway shell probe
+  where session 1 runs `SELECT ... FOR UPDATE` on that path and session 2 runs `set transaction lock
+  timeout 1` and UPDATEs a selected row; it must time out on every point, as with the `no_parallel_scan`
+  twin. A single-session sql TC cannot see a lost lock (CBRD-26722 `probe/lockprobe.sh`).
 - **fast-sa runs with --no-auto-commit**: a CTP case that relies on autocommit needs `commit;` after its
   setup, or the case's own rollback undoes the setup.
 - **See estimates and predicate order**: CTP masks digits, so margins are invisible there. Add

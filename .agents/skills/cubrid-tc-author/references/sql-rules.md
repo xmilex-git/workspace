@@ -137,7 +137,8 @@ drop table t_outer, t_inner;
     (CBRD-26663/26956), and CHAR is capped at 2048 bytes (CBRD-26799).
 12. `USING INDEX` must be the last clause, after WHERE, so it cannot be combined with GROUP BY or
     ORDER BY (-493). Force an index with `FROM t FORCE INDEX (idx)` and build the heap twin with
-    `IGNORE INDEX (idx)`.
+    `IGNORE INDEX (idx)`. May-2026 points ignore `USING INDEX` on a narrow 2-column table and scan the
+    heap while develop honors it: use `FORCE INDEX` when an old point must read the index (CBRD-26722).
 13. A parallel index scan opens only under a buildvalue or mergeable-list gather (an aggregate without
     GROUP BY). An `int` sum over 100k rows overflows (-458): sum `cast(k as bigint)` (CBRD-27100).
 14. To get the default (non-histogram) selectivity on a build that keeps histograms, end the range at a
@@ -152,6 +153,12 @@ drop table t_outer, t_inner;
     the outer `SCAN (temp ...)` parallel line over a large hash-join or analytic result list (printed by
     Sep-2026 points only), and `EXISTS` rewritten into a semi join on develop (CBRD-27299). Keep traced
     join and analytic results small, and use scalar correlated subqueries instead of `EXISTS`.
+    Under a mergeable-list gather, `ORDER BY` over a small result prints the parallel sort line only when
+    the merged list spans 2+ pages, which depends on how many workers returned rows and changes run to
+    run: check gathered rows through a derived table with aggregates outside, or keep the sorted list
+    well above 2 pages. On May-2026 points a 3-level nested derived query over a parallel heap scan
+    prints `fetch: -?` in its top SELECT line where develop prints a count: trace list shapes at 2
+    levels (CBRD-26722).
 17. MIN/MAX over an indexed column reads one key (`noscan`, `agl:`) and opens no scan; a case that needs
     the scan keeps that column unindexed.
 18. **Execution counts in sql**: put `(select s.next_value from db_root) * 0` in the subquery and read
