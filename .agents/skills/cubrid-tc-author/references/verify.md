@@ -103,6 +103,9 @@ The case's own logs are gone after `do_cleanup`; the measured values are in the 
 `<run dir>/shard_0/CTP/result/shell/current_runtime_logs/test_local.log` (`+ workers=2` lines).
 A pre build that is expected to crash runs with `NO_ABORT_ON_CORE=1`, otherwise the runner stops the
 shard at the first core and the case writes no `.result` (CBRD-26930).
+CTP reruns a failed shell case once inside the same run: `test_local.log` holds both executions
+(`TEST START` blocks) but the `.result` holds only the last, and the runner still fails the run on
+cores. For a probabilistic case, read every execution (CBRD-27293).
 
 ## §3 Run the three builds in parallel (one foreground command)
 

@@ -129,7 +129,11 @@ finish
    `cubrid server stop/deletedb` **before** createdb too (a crashed earlier run leaves it registered).
 4. **Parameters** only through `change_db_parameter "k=v"` (restored by `finish`); never edit
    `cubrid.conf` by hand. Add `change_db_parameter "call_stack_dump_on_error=no"` when the case
-   provokes errors on purpose.
+   provokes errors on purpose. Pin every parameter the tested path depends on: installs from
+   `just build` carry the campaign conf (`double_write_buffer_size=0`, `log_max_archives=0`,
+   `log_buffer_size=256M`), archive installs and CI carry the stock one. A case that depends on page
+   flushing sets `double_write_buffer_size=2097152` (bytes only; `2M` makes createdb fail with
+   "Value type does not match parameter type").
 5. **First check is a positive control**: prove the tested path is reached (`parallel workers: N`
    with N ≥ 2, the new statistic name, the trace token). If it fails, `write_nok` with the measured
    values plus `nproc` and the relevant parameter, then cleanup and `exit 0` — the remaining checks
@@ -150,7 +154,9 @@ finish
     iterations, each iteration's verdict one line, aggregated by `check_results` as in cbrd_27484.
 12. **Crash detectors** around the risky phase: server pid before/after, core count delta
     (`$CUBRID`, `./`, `/data/core`), `grep -ic assertion` on the error-log delta. These are their own
-    numbered checks.
+    numbered checks. In CTP containers an optdebug assert's text never reaches
+    `$CUBRID/log/server/<db>_*.err` (stderr is lost), so the core-count delta is the detector that
+    works (CBRD-27293: 3 server cores, 0 assertion lines).
 13. **Verdict count**: lines in `<case>.result` = number of `write_ok`/`write_nok` calls that ran.
     Check it after the first CTP run (`CTP_KEEP_COPIES=1`).
 14. **Every exit path** reaches `do_cleanup` then `finish`; the normal path ends `do_cleanup; finish`.

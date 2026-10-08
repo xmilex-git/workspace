@@ -148,7 +148,7 @@ Templates (fill, save as `<rundir>/jira-comment.txt`):
 
 ```
 *TC 작성 판단*
-이 이슈는 <관측 조건: 디버그 빌드의 assert | N회 시도에서 재현되지 않는 경합>에서만 드러나 CTP sql·shell 테스트케이스로 판별할 수 없다 (<pre sha 9> / <fix sha 9> optdebug 빌드에서 <무엇을> 시도).
+이 이슈는 <관측 조건: 디버그 빌드의 assert | N회 시도에서 재현되지 않는 경합>에서만 드러나 CTP sql·shell 테스트케이스로 판별할 수 없다 (<pre sha 9> / <fix sha 9> optdebug 빌드에서 <무엇을> 시도; 공유 비교 지점을 썼으면 수정 커밋과의 관계를 함께 적는다).
 테스트케이스를 추가하지 않는다. <대안이 있으면 한 줄>.
 ```
 
