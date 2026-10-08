@@ -112,7 +112,8 @@ drop table t_outer, t_inner;
 7. One `drop table if exists a, b, c;` first; `create` + `insert` per table with a one-line `--`
    comment saying why this shape; `update statistics on <tables> with fullscan;` once; `set trace on;` once.
 8. Table and column names contain **no digits** (`t_outer`, `col_a`): masking turns `t2` into `t?`
-   and two tables can become indistinguishable in the answer.
+   and two tables can become indistinguishable in the answer. A table alias equal to a column name
+   fails with -494.
 9. Data gives every group a **different row count** and a count that equals no group's average:
    a wrong memo key or a dropped group then changes the output (#3655 bot: totals 108 and 24 hid
    a missing `o0.g` in the key because the groups averaged out).
@@ -131,6 +132,18 @@ drop table t_outer, t_inner;
     subquery (`k > (select c from t_bound)`); every point then estimates it the same way (CBRD-27100).
 15. An overflow key is longer than DB_PAGESIZE/8 (2,048 bytes on 16K pages). `repeat(md5(...))` compresses
     to a short key; join distinct md5 values with `group_concat` after raising `group_concat_max_len`.
+16. **The answer comes from the post point, but CI runs develop.** Before writing traced queries, run
+    the planned shapes with a placeholder answer on pre, post and dev, and trace only shapes whose
+    post and dev output match. Shapes that moved after mid-2026: GROUPBY lines (readrows, parallel sort
+    lines), hash joins, the parallelism of an outer index scan keyed by a subquery, and the `IS NOT NULL`
+    CBRD-27058 (e23a9e513) adds to a MIN/MAX subquery with WHERE in `rewritten query` (CBRD-26931).
+17. MIN/MAX over an indexed column reads one key (`noscan`, `agl:`) and opens no scan; a case that needs
+    the scan keeps that column unindexed.
+18. **Execution counts in sql**: put `(select s.next_value from db_root) * 0` in the subquery and read
+    the serial's current value as a result row (rows are not masked) — CBRD-26931 counted +4 per query
+    (one per worker) before the fix and +1 after.
+19. Hints apply per query block: a reference twin puts `no_parallel_scan` on every block (derived
+    tables, subqueries), not only the outermost.
 
 ## Cases
 
