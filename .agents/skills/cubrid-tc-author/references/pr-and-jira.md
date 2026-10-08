@@ -130,10 +130,10 @@ gh api repos/CUBRID/cubrid/pulls/<PR>/reviews --paginate -q '.[] | select(.state
 
 ## §5 JIRA comment — three kinds only
 
-Post a JIRA comment **only** for: (1) "성능 TC 필요" — out of scope, performance only (R4), **or** a
-correctness TC PR (R5) for an issue whose goal is performance (its acceptance criteria name a time,
-I/O or memory target): the PR covers the results, the comment says which performance TC is still
-needed (user, 2026-10-08, CBRD-27181); (2) no TC possible (R6); (3) latest-develop regression
+Post a JIRA comment **only** for: (1) "성능 TC 필요" — out of scope, performance only (R4), **or** any
+TC PR (R1, R2, R3, R5) for an issue whose acceptance criteria name a time, I/O or memory target: the PR
+covers the results, the comment says which performance TC is still needed (user, 2026-10-08,
+CBRD-27181 R5 and CBRD-26931 R1); (2) no TC possible (R6); (3) latest-develop regression
 (verify.md §6). Any other TC PR gets **no** JIRA comment — the reviewer request is the notification.
 Any other JIRA write is forbidden.
 
