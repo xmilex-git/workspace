@@ -117,6 +117,12 @@ drop table t_outer, t_inner;
 12. `USING INDEX` must be the last clause, after WHERE, so it cannot be combined with GROUP BY or
     ORDER BY (-493). Force an index with `FROM t FORCE INDEX (idx)` and build the heap twin with
     `IGNORE INDEX (idx)`.
+13. A parallel index scan opens only under a buildvalue or mergeable-list gather (an aggregate without
+    GROUP BY). An `int` sum over 100k rows overflows (-458): sum `cast(k as bigint)` (CBRD-27100).
+14. To get the default (non-histogram) selectivity on a build that keeps histograms, end the range at a
+    subquery (`k > (select c from t_bound)`); every point then estimates it the same way (CBRD-27100).
+15. An overflow key is longer than DB_PAGESIZE/8 (2,048 bytes on 16K pages). `repeat(md5(...))` compresses
+    to a short key; join distinct md5 values with `group_concat` after raising `group_concat_max_len`.
 
 ## Cases
 

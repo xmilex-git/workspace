@@ -34,8 +34,10 @@ The commit message ends with the attribution trailer the harness prescribes for 
 ## §2 Title
 
 `[CBRD-<N>] Add sql testcase for <what the case pins, English, lower case after the first word>`
-(`shell testcase` for shell; `sql and shell testcases` for R3). The JIRA title is not reused here —
-the TC PR names the test, not the fix.
+(`shell testcase` for shell). R3 in merged mode opens two PRs, sql in cubrid-testcases and shell in
+private-ex: each title names its own suite, each body links the other in its first lines, and §4 picks
+each PR's reviewer afresh (the first request raises that member's load by one; CBRD-27100). The JIRA
+title is not reused here — the TC PR names the test, not the fix.
 
 ## §3 Body — 합니다체, the user's own TC PR form (cubrid-testcases#3552), tone_guide rules
 
