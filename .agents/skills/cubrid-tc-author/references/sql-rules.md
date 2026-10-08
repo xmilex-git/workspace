@@ -26,6 +26,10 @@ develop: `sql/_36_guava/cbrd_27465/cases/cbrd_27465.sql` (reference twins, trace
   thresholds 0 → raised to 2 pages by `compute_parallel_degree` (an input list must span 2+ pages).
   Data sized at the threshold flakes: give every threshold ≥2× margin (#3661: 64k vs 32k
   `max_hash_list_scan_size`; #4312: 500 rows = 1 page fell under the 2-page floor).
+- **Heap order is not insertion order.** A later INSERT fills free space left in earlier pages, and
+  the placement differs between builds (CBRD-27177: 1701 vs 1710 distinct keys among the first 2000
+  rows scanned). A property that depends on the first N rows read (hash aggregation giving up, LIMIT
+  without ORDER BY) must hold in any order, e.g. by capping how many rows repeat a key.
 - A recursive CTE stops at 2000 rows (`cte_max_recursions`); generate big tables by cross join:
   `insert into t select rownum, mod(rownum, 6) from db_class a, db_class b, db_class c, db_class d limit 100000;`
 

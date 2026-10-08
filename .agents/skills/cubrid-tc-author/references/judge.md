@@ -70,7 +70,7 @@ entries, error codes), or does it only change **time, I/O, memory, logging, sche
 
 | # | Observation from the diff and the issue | Verdict | Where |
 |---|---|---|---|
-| R1 | A user-visible value or error changes, AND the new path shows a non-numeric trace token (`gather: buildvalue`, `MEMOIZE`, `semi join`, `method: hybrid`, `PARTITION`) or a plan shape, AND no server restart / second session / server-side observation is needed | **sql** | by issue type (table below) |
+| R1 | A user-visible value or error changes — or the values stay and a non-numeric trace line appears or disappears (CBRD-27177: GROUPBY gains `parallel workers`) — AND the new path shows a non-numeric trace token (`gather: buildvalue`, `MEMOIZE`, `semi join`, `method: hybrid`, `PARTITION`) or a plan shape, AND no server restart / second session / server-side observation is needed | **sql** | by issue type (table below) |
 | R2 | The change needs any of: a `cubrid.conf` parameter that `SET SYSTEM PARAMETERS` cannot change, a server restart, two or more concurrent sessions, backup/restore or another utility, a count of workers/pages/readkeys (CTP masks every digit in a plan/trace), server pid / core / error-log observation | **shell** | by issue type |
 | R3 | R1 holds for the result and R2 holds for a separate observation (e.g. a value fix plus a leak that only a server statistic shows) | **both** — one sql case for the value, one shell case for the observation | both trees |
 | R4 | The diff changes only time / I/O / memory / logging and the result and trace text are identical before and after — no row, error, or trace token differs | **out of scope (performance only)** → Step 7 comment "성능 TC 필요" | — |
