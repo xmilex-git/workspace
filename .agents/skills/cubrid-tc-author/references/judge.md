@@ -80,6 +80,9 @@ entries, error codes), or does it only change **time, I/O, memory, logging, sche
 Rules apply in order R6, R4, R3, R2, R1/R5. Write the chosen rule number into `judge.md`.
 R4 is decided by **reading the code**, never by the issue type alone: CBRD-27181 (LIKE fast path)
 is an "improvement" whose changed function compares strings, so it is R5, not R4 (user, 2026-10-08).
+A memory leak at a fixed allocation site is R2, not R4: judge it with `enable_memory_monitoring=yes` and
+`cubrid memmon`, summing the `<file>.c:` lines of two idle snapshots taken after a warm-up (tc-ex
+cbrd_25717_sector_memleak, cbrd_25854, cbrd_27217). R4 stays for time and footprint changes.
 
 Placement by **issue type** (QA rule, CUBRIDQA-1486 — two PRs were sent back for a version-based
 placement; a Sub-task takes its parent's type):

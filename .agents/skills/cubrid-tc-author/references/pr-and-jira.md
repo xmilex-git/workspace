@@ -40,7 +40,8 @@ the TC PR names the test, not the fix.
 ## §3 Body — 합니다체, the user's own TC PR form (cubrid-testcases#3552), tone_guide rules
 
 Read `.agents/skills/cubrid-pr-create/tone_guide.md` first: Korean prose, facts the diff supports,
-no filler, no padded sections. Template (every `<...>` filled, every section kept):
+no filler, no padded sections. Save the body as `<rundir>/tc-pr-body.md`; `pr-body.md` already holds
+the engine PR's body (judge.md §1) and must not be overwritten. Template (every `<...>` filled, every section kept):
 
 ```markdown
 - Issue: http://jira.cubrid.org/browse/CBRD-<N>

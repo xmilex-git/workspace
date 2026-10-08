@@ -158,6 +158,16 @@ finish
 15. No `.answer` files and no `compare_result_between_files` for new cases: judge with computed
     invariants through `write_ok`/`write_nok` (both model files; QA merged them).
 16. No hardcoded paths (`/tmp`, `/home/...`); `$CUBRID`, `$init_path`, cwd only.
+17. **Trace counters** (readkeys, rows, lookup rows, cache hits): compare the parallel run with its
+    `NO_PARALLEL_SCAN` twin **and** with the count the data fixes. Never use fetch or ioread: they differ
+    between parallel and serial runs even when both are right. Per-worker caches (SUBQUERY_CACHE,
+    MEMOIZE) are fixed only as hit+miss. Worker XASL stats merge only when the gather is buildvalue or a
+    mergeable list (cbrd_27184).
+18. **Old comparison points**: trees before 7355bcec7 (CBRD-27326, 2026-09-09) default
+    `parallel_scan_page_threshold` to 2048 pages, so a 200k-row table is not scanned in parallel there;
+    lower it with `change_db_parameter` when the pre point is older. The gather of plain LIMIT/ROWNUM
+    queries changed from row by row to a mergeable list at e4a79972c (CBRD-27135); check the trace on the
+    pre and dev installs before picking the query (cbrd_27217).
 
 ## Checklist before saving
 

@@ -162,6 +162,17 @@ expected** is a develop regression, not a TC defect. Procedure:
 3. Do **not** open the PR. Go to Step 7 with the regression comment (pr-and-jira.md §5 kind 3).
    The wayfinder ticket stays open and assigned; note "회귀 대기" in its body.
 
+## §6a Probing an install before writing a shell case
+
+Try the planned checks on the pre and dev installs before writing the case:
+- **Through CTP**: copy a throwaway script into your TC worktree, run it with §3's command, delete it.
+  A bare scratch tree is refused (no `shell/config/...excluded_list`).
+- **Host server**: build a symlink tree over the install with private copies of `conf/`, `log/`, `tmp/`,
+  `var/` and `databases/`, and give it its own port. Point `CUBRID_TMP` at a short symlink: the socket
+  path must fit in 107 bytes, and the scratch path gives 114. Stop the server with the
+  cubrid-server-control wrapper, and its cub_master with SIGTERM after checking that the CUBRID value in
+  `/proc/<pid>/environ` is your tree. Never `cubrid service stop` or pkill (CBRD-27184).
+
 ## §7 Hygiene
 
 - Read `provenance.txt` before deleting any run dir; delete this skill's run dirs
