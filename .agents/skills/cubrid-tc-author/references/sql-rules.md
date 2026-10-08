@@ -24,7 +24,8 @@ develop: `sql/_36_guava/cbrd_27465/cases/cbrd_27465.sql` (reference twins, trace
 - `test_mode=yes` in CTP's `sql.conf` lowers thresholds: `parallel_scan_page_threshold` 32 pages
   (≈100,000 rows of `(int, int)` is enough for a parallel heap scan), parallel sort / hash-join
   thresholds 0 → raised to 2 pages by `compute_parallel_degree` (an input list must span 2+ pages).
-  Data sized at the threshold flakes: give every threshold ≥2× margin (#3661: 64k vs 32k
+  Data sized at the threshold flakes, and heap placement changes page counts between builds: give
+  every page threshold ≥3× margin (#3661: 64k vs 32k
   `max_hash_list_scan_size`; #4312: 500 rows = 1 page fell under the 2-page floor).
 - **A constant LIKE pattern never reaches the matcher**: `qo_rewrite_like_terms` turns it into `=`,
   `BETWEEN` or `IS NOT NULL`. A case about LIKE evaluation keeps its patterns in a table column (join)
@@ -176,3 +177,5 @@ drop table t_outer, t_inner;
 - no digits in identifiers; no float printed unrounded
 - the twin exists for every tested query, or the header says "pre-fix build also passes (correctness TC)"
 - header 20–30 lines, `Coverage:` rows = `evaluate` count
+- every plan, parallel or hash decision that rests on an estimate or a page count states its margin in
+  `Setup:`: an estimate ≥5x above or ≤1/5 of its threshold, a page count ≥3x its threshold

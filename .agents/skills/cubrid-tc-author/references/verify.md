@@ -128,7 +128,9 @@ container start). Each run has `provenance.txt` naming the install; cite it in `
 
 Run §3's command with `for p in fix fix fix` (log names `run-fix-1..3`). All three must be `OK`.
 A diff between them = nondeterministic output (heap order without `order by`, timing in a trace,
-a threshold at the edge) → back to Step 3; never widen the answer.
+a threshold at the edge) → back to Step 3; never widen the answer. A case whose plan or parallel
+decision rests on an estimate or a page count also runs 3 times on pre and dev (sampling and heap
+placement move between runs); any flip → back to Step 3 with larger margins (sql-rules, shell-rules 19).
 
 ## §5 Expected verdicts — fill the table and compare
 
