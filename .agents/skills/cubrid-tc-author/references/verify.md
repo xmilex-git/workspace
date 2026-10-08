@@ -198,7 +198,14 @@ Try the planned checks on the pre and dev installs before writing the case:
   and CTP still said OK). Local-build confs carry the campaign `parallelism=24`; set the value CTP pins.
   A path shared with SA can be proved with `csql -S` under gdb in the fast-sa namespaces. Set `dprintf`
   by `file:line` (a function name binds the PLT stub), and separate queries with
-  `select repeat('M', <case line>)` markers (CBRD-27181).
+  `select repeat('M', <case line>)` markers; count only markers whose number is a select line, since
+  `repeat()` in the data fires the same dprintf (CBRD-27181).
+- **A specified limit where the old and new paths differ is a path probe in CI**: when the issue fixes
+  such a limit (CBRD-27181: 101 backtracking points give -623 on the old loop and a result on the new
+  one), put one probe per dispatch condition (collation, ESCAPE) into the TC; it outlives a gdb proof.
+- **Draft fast, then CTP**: run a draft case on the three installs with `tools/fast-gate/fast-sa.sh`
+  (csql -S, about 3 s each) to compare twin blocks and points; locale-loaded collations (utf8_gen*,
+  utf8_de_exp_ai_ci) are unknown in SA and show only in CTP.
 
 ## §7 Hygiene
 

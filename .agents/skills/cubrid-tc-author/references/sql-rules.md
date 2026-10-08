@@ -30,6 +30,13 @@ develop: `sql/_36_guava/cbrd_27465/cases/cbrd_27465.sql` (reference twins, trace
 - **A constant LIKE pattern never reaches the matcher**: `qo_rewrite_like_terms` turns it into `=`,
   `BETWEEN` or `IS NOT NULL`. A case about LIKE evaluation keeps its patterns in a table column (join)
   or in the select list (CBRD-27181).
+- **ESCAPE twins**: a twin for escape semantics replaces the escape character in both target and
+  pattern with a multi-byte character absent from the data (replacing it only in the pattern changes
+  `!!`). The old loop decides "last escape" by the next byte, so a multi-byte escape at the end is never
+  trailing: trailing-escape shapes get literal values (CBRD-27181).
+- **Never** put a binary-collation pattern whose escaped byte is followed by a trailing escape in the
+  same literal run: `lang_strmatch_binary` asserts (`size1 == 0 || size2 == 0`) on optdebug, and develop
+  still reaches it with ESCAPE '_' or '%' (found on CBRD-27181, a separate defect).
 - **Invalid byte sequences**: a varchar column drops a truncated last character on insert; build the
   bytes with `from_base64()` at evaluation time (there is no `unhex()`; `hex()` prints them).
 - **Heap order is not insertion order.** A later INSERT fills free space left in earlier pages, and

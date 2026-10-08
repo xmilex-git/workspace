@@ -169,4 +169,6 @@ Read only; do not edit files. Use tools/code-index/code-index <workspace> body <
    reasons), and writes the coverage list of §3. Mark a row unreachable when SQL cannot get there: a
    parallel scan opens only on the outermost spec, and `scan_ptr` / `dptr_list` subtrees (join inner
    sides, correlated subqueries) are forced serial on every point
-   (`process_xasl_node_recursive_force_cannot_parallel`), so rows about their rescans are excluded (CBRD-27217). The lead, not the agents, decides what becomes a case.
+   (`process_xasl_node_recursive_force_cannot_parallel`), so rows about their rescans are excluded (CBRD-27217).
+   Write the merged list as `R<n> | condition (file:line) | case | exclusion`, so a later round can
+   replace rows by number. The lead, not the agents, decides what becomes a case.
