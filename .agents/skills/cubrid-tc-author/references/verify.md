@@ -141,6 +141,12 @@ a threshold at the edge) → back to Step 3; never widen the answer.
 | dev | <sha> | cbrd_<N> | OK | 0 | OK | yes |
 ```
 
+A behavior whose setup statement exists only on develop (its syntax changed after the fix) gets a
+develop-only file `cbrd_<N>_<topic>.sql`: its pre and post rows read "해당 없음 (<문법>이 수정 뒤 도입,
+<commit>)", dev is OK ×3, and the PR cites the probe that showed the same behavior on the post point with
+the old syntax (user, 2026-10-08, CBRD-27100 histograms: ANALYZE TABLE ... UPDATE HISTOGRAM → UPDATE
+STATISTICS, 532ce4b6d).
+
 An R5 issue that also specifies result changes keeps two files: `cbrd_<N>.sql` (correctness, pre OK)
 and `cbrd_<N>_spec_change.sql` (the specified changes, pre NOK by design), so each row of the table
 has one expectation (CBRD-27181).
