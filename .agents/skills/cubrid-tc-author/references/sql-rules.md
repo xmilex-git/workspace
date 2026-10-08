@@ -102,6 +102,12 @@ drop table t_outer, t_inner;
 10. Float-producing aggregates (`AVG`, `STDDEV*`, `VAR*`) are wrapped: `round(avg(v), 2)` or
     compared as integers. The CCI driver prints floats with another precision, and this avoids a
     second `.answer_cci` (cbrd_26711 needed one; user decision 2026-10-08: no CCI runs here).
+11. Row and key size come from incompressible values: concatenated `sha2(...,512)` hex or `BIT(n)`.
+    Never rely on CHAR padding: develop stores CHAR as variable-length and compressed
+    (CBRD-26663/26956), and CHAR is capped at 2048 bytes (CBRD-26799).
+12. `USING INDEX` must be the last clause, after WHERE, so it cannot be combined with GROUP BY or
+    ORDER BY (-493). Force an index with `FROM t FORCE INDEX (idx)` and build the heap twin with
+    `IGNORE INDEX (idx)`.
 
 ## Cases
 

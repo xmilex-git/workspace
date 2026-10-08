@@ -142,7 +142,7 @@ a threshold at the edge) → back to Step 3; never widen the answer.
 | verdict (judge.md) | pre | fix | dev (merged mode) | dev (open mode) |
 |---|---|---|---|---|
 | R1 / R2 / R3 | **NOK** | OK | OK | NOK, same diff as pre (fix not merged yet) |
-| R5 correctness TC | OK (results identical) | OK | OK | OK |
+| R5 correctness TC | OK (results identical); **NOK** when the data triggers the defect deterministically (CBRD-26799) | OK | OK | OK |
 
 Deviations and what they mean:
 - **pre OK where NOK expected** → the case does not reach the fixed path. Return to Step 3 (data
@@ -175,6 +175,10 @@ Try the planned checks on the pre and dev installs before writing the case:
   path must fit in 107 bytes, and the scratch path gives 114. Stop the server with the
   cubrid-server-control wrapper, and its cub_master with SIGTERM after checking that the CUBRID value in
   `/proc/<pid>/environ` is your tree. Never `cubrid service stop` or pkill (CBRD-27184).
+- **A path with no trace token** (e.g. CREATE INDEX): CTP OK does not prove the case reaches the fixed
+  branch. Run the case's SQL on a host server under `gdb` with `dprintf` on the fixed branch and on the
+  worker start, on the dev install at least (CBRD-26799: a CHAR-padded design ran serial on develop
+  and CTP still said OK). Local-build confs carry the campaign `parallelism=24`; set the value CTP pins.
 
 ## §7 Hygiene
 
