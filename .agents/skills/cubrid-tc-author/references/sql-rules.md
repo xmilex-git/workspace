@@ -220,6 +220,12 @@ drop table t_outer, t_inner;
 15. Assert the new path by a **token** in the trace (rule: masked digits). If the token appears only
     when something happened at runtime (`MEMOIZE` prints only with hits), design the data so it must
     happen (repeated keys).
+15b. A case asserting that a shape stays **serial for an ordering reason** (ORDER BY skip, analytic
+    skip sort, KEYLIMIT, ROWNUM) reads distinct keys spread over many leaves with different row counts per
+    key: a range inside one or two leaves still comes back in index order when read in parallel, so a lost
+    serial fallback would pass. Prove the rows with a control probe: the same scan without the ORDER BY or
+    analytic, under `PARALLEL(n)`, prints a parallel line and returns keys out of order (CBRD-26722:
+    `a >= 3961` came back in order 3/3; `a >= 0 and mod(a, 400) = 1` out of order 5/6 on post, 6/6 on dev).
 15a. A DML statement under test is followed by a select of its target rows **before any cleanup**,
     and that block must equal the select after the twin DML: an affected-row count alone passes a wrong
     value with the same count (CBRD-26931 Case 8, greptile). A DML WHERE that matches 0 rows proves only

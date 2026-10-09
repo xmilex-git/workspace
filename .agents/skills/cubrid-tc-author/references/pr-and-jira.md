@@ -194,7 +194,9 @@ cubrid-jira comment CBRD-<N> --body-file <rundir>/jira-comment.txt --from jira -
 3. Otherwise verify each claim (covered on head / real gap / invalid, with evidence). A real gap is
    fixed by the normal Steps 3-4 (answer on post, pre once, post 3 times, dev once), pushed to the fork
    branch, the PR body updated for every changed part, and one Korean plain-text reply per thread with
-   the commit, the case and the three-point result. A probe that exposes an engine defect stops the
+   the commit, the case and the three-point result. When a bot asks to "widen the range / add distinct
+   values", run the widened shape against the faulty path (a control probe on post and dev): a shape the
+   faulty path still answers the same way does not close the gap (CBRD-26722 Case 15). A probe that exposes an engine defect stops the
    change and goes to the user.
 4. A commit that lands after the PR is opened (boundary redo) answers the bot threads it resolves in the
    same pass, and `results.md` records those thread ids.

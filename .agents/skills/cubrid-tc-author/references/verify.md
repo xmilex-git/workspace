@@ -219,7 +219,9 @@ Try the planned checks on the pre and dev installs before writing the case:
   `/proc/<pid>/environ` is your tree. Never `cubrid service stop` or pkill (CBRD-27184).
 - **Many candidate shapes**: one throwaway probe script with a `probe <tag> <query>` helper measures
   every shape's trace and counters on all three points in one parallel CTP run (about 25 s a point;
-  CBRD-27217 `probe3/`). Always run probes with `NO_ABORT_ON_CORE=1` and put last the shapes that can
+  CBRD-27217 `probe3/`). A throwaway dir inside the TC worktree (`sql/<dir>_probe/cases` + a placeholder
+  answer) runs alone through `just ctp sql <dir>_probe`, in parallel with the answer run; remove it before
+  the commit. Always run probes with `NO_ABORT_ON_CORE=1` and put last the shapes that can
   hit a known develop assert (NL inner GROUP BY or analytic correlated subqueries, CBRD-27572): a core
   stops the shard and loses every shape after it (CBRD-27184).
 - **A path with no trace token** (e.g. CREATE INDEX): CTP OK does not prove the case reaches the fixed
