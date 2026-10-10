@@ -91,11 +91,18 @@ the engine PR's body (judge.md §1) and must not be overwritten. Template (every
 
 Write what the table shows; a "직전 OK" row in an R5 PR gets the sentence from `판별`.
 
-**Inline design comments** — one review (event `COMMENT`) on the TC PR, 합니다체, **plain text**:
-a short title line, a blank line, one paragraph; no inline code, no bold (the GitHub Android app
-clips paragraphs holding inline code — #3590, 2026-09-28). Case-file lines carry the design reason
-("왜 이 데이터·힌트인가"); answer lines carry what the pre-fix build printed there. Anchor only
-facts verified in `results.md`.
+**Inline design comments** — one review (event `COMMENT`) on the TC PR, **plain text**, in the voice
+of `.agents/skills/cubrid-pr-review/voice-guide.md`: no title line, 1–3 lines per comment, the way a
+team member explains a choice to a reviewer ("~라서 ~로 두었습니다", "수정 전에는 ~가 나왔습니다").
+Engine terms stay in English as the code spells them (cached scan, fixed scan, key filter, covering
+index, NEXT_VALUE). Never this skill's working words (참조 쌍둥이 → "force index로 읽는 비교 질의",
+판정, 지점) and never a narrated heading ("~를 타던 모양입니다", "~는 값으로 고정합니다")
+(user, 2026-10-11, cubrid-testcases#3690: titled paragraphs full of working words read as machine
+prose and were rewritten). No inline code, no bold (the GitHub Android app clips paragraphs holding
+inline code — #3590, 2026-09-28). Case-file lines carry the design reason ("왜 이 데이터·힌트인가");
+answer lines carry what the pre-fix build printed there in one sentence ("수정 전에는 10, 55, 55였습니다.").
+Anchor only facts verified in `results.md`. A posted comment is fixed in place with
+`gh api -X PATCH repos/CUBRID/<repo>/pulls/comments/<id> -f body=...`.
 
 ```bash
 gh api -X POST repos/CUBRID/<repo>/pulls/<n>/reviews --input review.json
