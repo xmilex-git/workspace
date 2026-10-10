@@ -105,7 +105,7 @@ gh api -X POST repos/CUBRID/<repo>/pulls/<n>/reviews --input review.json
 A 504 or a `stream error: stream ID 1; CANCEL` from this POST can still have created the review:
 `gh api repos/CUBRID/<repo>/pulls/<n>/reviews` before posting again (#3686).
 
-## §4 Reviewer — exactly one, from the team
+## §4 Reviewer — at most one, from the team
 
 Team (reviewer pool; the author `xmilex-git` is excluded): `shparkcubrid`, `HyunukLee`,
 `soheejung-cs`, `youngjinj`, `Hamkua`, `jihyekim-0` (user, 2026-10-08).
@@ -129,7 +129,9 @@ gh api repos/CUBRID/cubrid/pulls/<PR>/reviews --paginate -q '.[] | select(.state
 ```
 
 1. Candidates = the team members listed by command 1 (at least one review or review comment on the
-   engine PR). Nobody from the team reviewed it → every team member is a candidate.
+   engine PR). Nobody from the team reviewed it → no candidate: leave the TC PR without a reviewer,
+   write "no reviewer: no team member reviewed the engine PR" in `reviewer.md`, and skip steps 2-5
+   (user, 2026-10-11).
 2. Pick the candidate with the **fewest pending review requests** summed over the three repos
    (a member with no request counts 0; `uniq -c` omits them).
 3. Tie → the one with more participation on the engine PR (command 1); still tied → the one who
