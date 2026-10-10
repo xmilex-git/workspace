@@ -26,7 +26,7 @@ House rules: never write to /tmp; scratch goes under /home/cubrid/dev/workspace/
 | point | merged mode | open mode |
 |---|---|---|
 | **pre** (직전) | `git -C ~/dev/cubrid-worktree/develop rev-parse <merge_commit>^` | `git -C ~/dev/cubrid-worktree/develop merge-base origin/develop <head_sha>` |
-| **fix** (직후) | `<merge_commit>` | `<head_sha>` — build the PR head locally |
+| **fix** (직후) | `<merge_commit>` | `<head_sha>` — build the PR head (before the PR exists: the local engine branch head) locally |
 | **dev** (최신) | `git -C ~/dev/cubrid-worktree/develop fetch -q origin develop && git rev-parse origin/develop` | same |
 
 Record all three **full** shas in `results.md`. Two issues may share a point (CBRD-27217 fix =

@@ -17,8 +17,13 @@ git -C ../cbrd_<N> push -u fork cbrd_<N>
 
 The commit message ends with the attribution trailer the harness prescribes for this session.
 
-**Open mode** — the TC rides the bot's branch of the engine PR:
+**Open mode** — the TC rides the bot's branch of the engine PR. This includes every TC change made
+while the issue is being fixed (SKILL.md Step 0): new cases and changes to existing TC files alike.
 
+0. Engine PR not opened yet: write and verify on a local branch, never pushed to the fork —
+   `git worktree add -b tc-cbrd_<N> ../tc-cbrd_<N> origin/develop` in the repo that holds the file;
+   CTP runs it with `--testcases-as-is` (verify.md §0). Commit locally. Once the engine PR is opened,
+   do steps 1-3 and `git cherry-pick` those commits onto the `tc/pr-<PR>` worktree instead of writing again.
 1. Wait until `git ls-remote origin refs/heads/tc/pr-<PR>` exists **and** its head is the bot's
    "chore: Initialize TC branch" commit (the bot creates the branch by API first and force-pushes the
    commit about a minute later; pushing before that rejects the bot's push and no draft PR is made —
@@ -27,9 +32,11 @@ The commit message ends with the attribution trailer the harness prescribes for 
    `git worktree add ../tc-pr-<PR> origin/tc/pr-<PR>`; write, verify, commit as above;
    `git push origin HEAD:tc/pr-<PR>` (pushing to this upstream branch is the one allowed exception
    to the fork-only rule — it already exists and belongs to the engine PR).
-3. The TC PR already exists as the bot's draft (`[CBRD-x] Draft: TC changes for PR CUBRID/cubrid#<PR>`):
-   `gh pr list -R CUBRID/cubrid-testcases --head tc/pr-<PR> --json number,url`. Edit its title and body
-   (§2–§3) with `gh pr edit <n> -R <repo> --title ... --body-file ...`; leave draft status to the engine PR owner.
+3. The TC PR already exists as the bot's draft (`[CBRD-x] Draft: TC changes for PR CUBRID/cubrid#<PR>`)
+   in each of the two TC repos: `gh pr list -R CUBRID/<cubrid-testcases|cubrid-testcases-private-ex> --head tc/pr-<PR> --json number,url`.
+   Edit the title and body (§2–§3) of each one that received commits with
+   `gh pr edit <n> -R <repo> --title ... --body-file ...`; a repo with no TC change keeps the bot's empty
+   draft. The body explains every added and every changed file. Leave draft status to the engine PR owner.
 
 ## §2 Title
 

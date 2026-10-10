@@ -1,7 +1,7 @@
 # Shell testcase rules (CTP `shell` suite, cubrid-testcases-private-ex)
 
 Work in the TC worktree from [pr-and-jira.md](pr-and-jira.md) §1 (`~/dev/cubrid-tc-ex-worktree/cbrd_<N>`
-in merged mode). Model files on private-ex develop: `shell/_06_issues/_26_2h/cbrd_27484/cases/cbrd_27484.sh`
+in merged mode, the private-ex `tc/pr-<PR>` worktree in open mode). Model files on private-ex develop: `shell/_06_issues/_26_2h/cbrd_27484/cases/cbrd_27484.sh`
 (concurrent sessions, pid/core/assert detectors) and `shell/_06_issues/_26_2h/cbrd_27486/cases/cbrd_27486.sh`
 (parameter + per-session observation). CTP's own guide: `~/cubrid-testtools/doc/shell_guide.md` §5.
 

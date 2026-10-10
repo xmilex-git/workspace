@@ -22,8 +22,17 @@ Run directory for everything that is not the TC itself:
    the CBRD key is the `[CBRD-N]` prefix of the title.
 2. Mode: `mergedAt` non-null → **merged mode**; `state == OPEN` → **open mode**. `--mode merged|open`
    in the arguments overrides. Several PRs for one key: take the merged one; if none is merged, the open one.
-3. Write `mode`, `issue`, `pr`, `merge_commit` (merged mode) or `head_sha` + `base = origin/develop merge-base` (open mode)
-   into `<rundir>/facts.md`. Every later step reads this file.
+   No engine PR yet because the TC is written while the issue is being fixed (the fix lives on a local
+   engine branch) → **open mode** too, with `pr` = pending until the engine PR is opened.
+   **TCs made while fixing an issue ride the engine PR's bot branch** (user, 2026-10-11): every new or
+   changed TC file — a new case, an existing case or answer the fix changes, another issue's TC that
+   gains a case — goes into the `tc/pr-<PR>` branch the bot creates when the engine PR is opened, in
+   the repo that holds the file (sql → cubrid-testcases, shell → cubrid-testcases-private-ex). Never a
+   후속 TC PR from the fork for such an issue; the 후속 TC PR is only for an issue whose engine PR is
+   already merged (merged mode).
+3. Write `mode`, `issue`, `pr`, `merge_commit` (merged mode) or `head_sha` + `base = origin/develop merge-base` (open mode;
+   before the engine PR exists, `head_sha` is the local engine branch head) into `<rundir>/facts.md`.
+   Every later step reads this file.
 
 Done when `facts.md` holds mode, issue key, PR number, and the sha(s).
 
