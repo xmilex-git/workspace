@@ -604,6 +604,20 @@ _Avoid_: 워커(데몬 포함 여부가 흐려짐), 자식 스레드(상속 방�
 엔진이 한 문장의 원자성을 위해 `xtran_server_start_topop`으로 열어 그 문장이 끝날 때까지 쥐는 sysop이다. 저장 계층이 한 호출 안에서 잠깐 여닫는 내부 sysop(temp 파일 생성·확장 등)과 구분하며, 둘 다 형제 스레드가 공유하는 트랜잭션의 sysop 스택에 쌓인다.
 _Avoid_: topop(두 종류를 다 가리킴)
 
+### 페이지 복사 스캔과 문장 내 변경 (CBRD-27041, CBRD-27590 그릴링 2026-10-11)
+
+**페이지 복사 스캔 (cached scan)**:
+선행 순차 힙 스캔이 페이지에 처음 들어갈 때 그 페이지를 통째로 복사해 두고, 그 페이지의 나머지 행을 복사본에서 읽는 읽기 방식이다(CBRD-27041). 페이지 래치를 쥔 채 행을 읽는 fixed scan, 행마다 페이지를 다시 잡아 그 행만 복사하는 COPY 읽기와 구분한다.
+_Avoid_: 페이지 캐시, fixed scan(래치를 쥐는 방식과 혼동)
+
+**문장 내 변경 (in-statement change)**:
+한 문장이 실행 도중 SP나 시리얼 `NEXT_VALUE`를 통해 자기 트랜잭션으로 행을 바꾸는 일이다. CUBRID MVCC에는 문장 경계가 없어 자기 트랜잭션의 변경이 즉시 보이므로, 같은 문장의 스캔이 아직 읽지 않은 행에 영향을 준다.
+_Avoid_: 자기 변경, self-update, Halloween(UPDATE 대상 재방문 문제와 혼동)
+
+**읽는 시점 의미 (read-time visibility)**:
+문장 내 변경으로 바뀐 행이, 스캔이 그 행을 읽는 시점의 내용으로 보이는 것이다. 선행·안쪽, 힙·인덱스 같은 접근 경로와 행의 페이지 배치에 따라 달라지지 않는다. 결과는 힙 안의 행 순서에는 따른다: 이미 읽은 행이 나중에 바뀌면 그 변경은 그 스캔에 보이지 않는다(CBRD-27590 Q1).
+_Avoid_: 문장 시작 스냅샷, statement-level snapshot(PostgreSQL의 command id 의미)
+
 ### nix 개발 환경 (그릴링 2026-09-30)
 
 CUBRID CI 환경을 nix로 재현하는 추가 경로의 용어(nix 개발 환경, CI 툴체인 스냅샷, 봉인 입력, 실행 디렉터리, 샤드 등)와 결정은 [xmilex-git/cubrid-nix](https://github.com/xmilex-git/cubrid-nix)의 `CONTEXT.md`와 ADR 0001에 있다. 그 레포의 **샤드**는 컨테이너가 아니라 `unshare` 네임스페이스 하나와 1:1이다.
