@@ -1,3 +1,5 @@
+Post-code validation policy (strict user instruction, 2026-10-05): Perform validation after code work only when the user explicitly requests validation. If the user has not explicitly requested it, finish the code work without running validation, including builds, tests, linters, static analysis tools, or runtime checks. Do not infer validation permission from a request to implement, fix, or refactor code, and do not delegate unrequested validation. Follow this rule strictly. It takes precedence over conflicting validation or verification requirements in these guidelines, maps, tickets, and skills.
+
 9. when develop/execute/review CUBRID, use CUBRID_SSOT.md and justfile.
 
 CUBRID validation policy (user instruction, 2026-09-22): skip unit tests, including enabling/configuring unit-test targets and `just ctest`. Validate with the required builds, containerized CTP suites, and task-specific runtime checks instead. This supersedes unit-test gates in older maps, tickets, and skills unless the user explicitly requests unit tests later.
