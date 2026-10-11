@@ -11,7 +11,7 @@ Review a CUBRID engine pull request as one unit with what it answers to, and pro
 
 - the engine PR (the diff and its description),
 - its JIRA ticket (the body, the attachments `design.md` / `test.md` / `test_result.md`, and linked issues),
-- its two **TC PRs**: the bot-created `tc/pr-<N>` branches in `CUBRID/cubrid-testcases` and `CUBRID/cubrid-testcases-private-ex` (the term is defined in the repo's `CONTEXT.md`).
+- its two **TC PRs**: the bot-created `tc/pr-<N>` branches in `CUBRID/cubrid-testcases` and `CUBRID/cubrid-testcases-private-ex` (the term is defined in the repo's `GLOSSARY.md`).
 
 The report gives three verdicts: findings on the engine PR, the JIRA -> engine PR approval, and the TC approval. CUBRID is a multi-threaded, open-source RDBMS with a large C/C++ codebase, so reviews focus on correctness, memory safety, and concurrency.
 
@@ -332,7 +332,7 @@ Run it by invoking two skills with the Skill tool: `grilling` (the interview loo
   - What gets posted.
 - **Rounds**: ask each round's frontier at once, numbered, in Korean. Give each question a recommended answer and the SQL or code it hinges on. A verdict question waits until the findings it depends on are settled.
 - **Facts are yours**: what the code does, what CI showed, whether a scenario reproduces. Look it up or run it (Step 3c) instead of asking.
-- **domain-modeling**: when a round settles a term (a CUBRID-internal concept the report glosses, or review vocabulary such as TC PR), write it to the repo's `CONTEXT.md` at once. That file is a glossary only.
+- **domain-modeling**: when a round settles a term (a CUBRID-internal concept the report glosses, or review vocabulary such as TC PR), write it to the repo's `GLOSSARY.md` at once. That file is a glossary only.
 - **Review angle** (check every round):
   - each finding has file:line evidence with no hedging,
   - nothing pre-existing, CI-caught or out of scope leaked in,
