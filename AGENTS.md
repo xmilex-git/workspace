@@ -1,4 +1,4 @@
-If the current environment is not Rocky Linux 8, connect with `ssh cubrid@192.168.6.34` and work in `~/dev/workspace` on that host. If SSH connection fails, follow the [forticlient-reconnect skill](/Users/song-ilhanmacmini/.codex/skills/forticlient-reconnect/SKILL.md) to restore the VPN, then retry SSH and continue there.
+If the current environment is not Rocky Linux 8, connect with `ssh cubrid@192.168.6.35` and work in `~/dev/workspace` on that host. If SSH connection fails, follow the [forticlient-reconnect skill](/Users/song-ilhanmacmini/.codex/skills/forticlient-reconnect/SKILL.md) to restore the VPN, then retry SSH and continue there.
 
 # AGENTS.md — CUBRID Tooling Repo
 
@@ -22,7 +22,7 @@ looking for engine code, you are in the wrong directory.
 │   ├── AGENTS.md             # behavioral guidelines (think-before-coding, surgical changes, …)
 │   └── skills/<name>/        # canonical home of every skill (each has a SKILL.md)
 └── .claude/
-    ├── CLAUDE.md             # behavioral guidelines (the Claude-flavored, longer variant)
+    ├── CLAUDE.md             # relative symlink -> ../.agents/AGENTS.md (shared behavioral guidelines)
     ├── locale/make_locale.sh # locale .so build helper (the built *.so is git-ignored, never committed)
     └── skills/<name>         # relative symlink -> ../../.agents/skills/<name>  (skill discovery)
 ```
@@ -95,7 +95,7 @@ own fix suggestions — it only prints them.
   substitution, no loops or `xargs` building the list. Many targets → list them literally; a volatile
   CTP dir that plain rm cannot delete → `podman unshare rm -rf <the same literal path>`. The user
   denies any other form (2026-10-08).
-- Read `.agents/AGENTS.md` (and the longer `.claude/CLAUDE.md`) before making code changes —
+- Read `.agents/AGENTS.md` (also available through the `.claude/CLAUDE.md` symlink) before making code changes —
   they encode the behavioral guidelines this repo's owner expects.
 
 ## Agent skills
