@@ -187,6 +187,25 @@ CUBRID는 클라이언트/서버 lockstep 업그레이드만 지원한다. 혼�
 - 플랜 텍스트 변화(§4 Consequences 추가): 리스트가 작아져 해시조인 BUILD `hybrid→memory`, `hash temp(h)→(m)`, 병렬
   워커 판단(`parallel workers` 줄 소실)이 바뀐다 — CTP 답안 7건 갱신 대상(#194), 병렬도 감소는 #193 관찰 항목.
 
+각주 (머지 후 QA 댓글, CBRD-27365 2026-10-07):
+
+- **DIRECT 본문은 NUL 로 끝나지 않는다 (§1.1 의 귀결)**: 구 포맷의 문자열은 `data_writeval`(INT_ALIGNMENT) 표현이라
+  본문 뒤에 NUL 종료자가 있었고(`or_varchar_length_internal`), 리스트에서 peek 한 문자열을 C 문자열로 넘기던 소비자가 그
+  NUL 에 기대고 있었다. 새 포맷의 DIRECT 본문(`index_writeval`)은 NUL 없이 다음 컬럼이나 다음 튜플 헤더가 바로 잇고,
+  release 빌드는 튜플 끝 패딩도 0 으로 채우지 않는다(memset 은 `!NDEBUG` 에서만). DBLink 바인드
+  (`dblink_bind_dbval_to_param` → `cci_bind_param`, `CCI_A_TYPE_STR` 의 길이는 strlen)가 원격 INSERT/REPLACE … SELECT,
+  원격 DELETE … 서브쿼리 키, 상관 DBLink 키에 뒤 바이트를 붙여 보냈다. 규칙: peek 값 문자열의 끝은 `db_get_string_size`
+  로만 정하고, C 문자열이 필요한 소비자는 크기만큼 복사해 종료자를 붙이거나 길이를 받는 API 에 크기를 넘긴다. DBLink 는
+  바인드 지점 한 곳에서 `cci_bind_param_ex` 로 크기를 넘긴다(PR #8120 리뷰. 처음엔 Windows `cascci.def` 가 export 하지
+  않아 사본을 바인딩했으나, Windows 빌드는 guava 부터 지원하지 않는다 — CBRD-26051). 그 결과 문자열 안의 NUL 바이트도
+  원격에 그대로 간다(이전: strlen 으로 첫 NUL 에서 잘림). 포맷에 NUL 을 되살리는 안은 §1.1 잠금과 크기 이득에 반해 기각,
+  값을 모으는 쪽에서 복제하는 안은 상관 DBLink 경로를 따로 고쳐야 해 기각.
+- **리스트 스캔의 행당 비용 (cbrd_25454 성능 TC)**: 튜플 슬롯 바인딩(`qfile_retrieve_tuple` 의 슬롯 setter,
+  `scan_next_list_scan` 의 레코드 초기화, 길이 워드 마스크)으로 리스트 스캔이 행당 명령어 11개를 더 쓴다(+0.81%, release
+  A/B 35a7cddb6 → 453da49c8). 값 읽기(`fetch_val_list`)는 같다. 작은 메모리 리스트를 반복 재스캔해 크기 이득이 0인
+  질의(cbrd_25454: 74행 리스트 340만 번, 누적 2.5억 행)에서만 wall +1~3% 로 보인다. 경감 여지(초기화자·overflow 검사의
+  bswap·setter 일부, 명령어 약 0.4%)는 측정 편차보다 작고 D-189-4 를 일부 되돌려야 해 손대지 않았다.
+
 ## 3. Considered Options (기각)
 
 - **JIRA 원안: all-fixed 리스트 전용 + hidden 파라미터.** 접근자마다 포맷 분기가 남고 테스트 매트릭스가
