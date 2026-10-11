@@ -49,9 +49,8 @@ WORKSPACE="${1:?WORKSPACE required (pass the target CUBRID checkout)}"
 ```
 
 There is **no cwd fallback** — passing the wrong directory silently is worse than failing loudly
-on an unattended remote run. The skills that hard-require `$WORKSPACE` are exactly:
+on an unattended remote run. The only skill that hard-requires `$WORKSPACE` is:
 
-- **obsidian-vault** — operates on `"$WORKSPACE"/.claude/vault/`.
 - **cubrid-server-control** — starts/stops the CUBRID server living in `$WORKSPACE`.
 
 `ctp-run` keeps each run's evidence (console logs, CTP results, composed confs) on the NVMe home disk at
