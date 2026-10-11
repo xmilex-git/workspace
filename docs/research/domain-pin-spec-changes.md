@@ -106,6 +106,24 @@ execute stmt using 5.7;
 - CTP 답 변경(`a19c62dd5`): `_19_apricot/_07_analytic_clause/_18_host_vars` 의 avg 셀 32개(첫 파티션, 1~2 ulp).
 - 매뉴얼: 없음(마지막 자리 반올림).
 
+## 2b. 분석 SUM / AVG 는 첫 값부터 함수 도메인으로 합산한다 (PR 8022 b3dca26dd, 2026-10-09 사용자 결정)
+
+develop 의 분석 SUM / AVG 일반 경로(resident accumulator 가 받지 않는 FLOAT·MONETARY·문자열)는 첫 값을 제 타입으로 두고 둘째 값을 그 타입으로 더한 뒤 결과를 함수 도메인으로 바꿨다 — FLOAT 인자면 첫 덧셈 한 번만 float 로 반올림되고 셋째 값부터 DOUBLE 로 더해졌다. 엔진은 셋업(`qexec_setup_analytic_accumulator`)이 실행당 한 번 합의 도메인을 함수 도메인으로 정하고, 첫 값을 그 도메인으로 바꿔 넣는다(`first_conv`). 파티션 안에서 피연산자 타입은 바뀌지 않고, 행은 누산값의 타입을 읽지 않는다. NUMERIC 인자의 AVG 와 NUMERIC 도메인의 SUM 은 develop 처럼 합을 floating 으로 둔다(2a). accumulator 가 받는 타입(정수·NUMERIC·DOUBLE)은 accumulator 의 typed sum 그대로다.
+
+```sql
+create table t (col5 float);
+-- 111.11, 111.12, … 20 행
+select col5, avg(col5) over () from t;
+```
+
+| | develop | 새 답 |
+|---|---|---|
+| `avg(col5) over ()` | `111.20950050354004` (첫 덧셈 111.11f + 111.12f 를 float 로 반올림한 뒤 DOUBLE 합산) | `111.20950012207031` (전부 DOUBLE 합산) |
+
+- 바뀌는 것은 FLOAT 인자의 분석 AVG / SUM(함수 도메인이 DOUBLE 인 경우) 뿐이며, 8번째 유효숫자부터다. 새 답이 float 값들의 정확한 평균에 더 가깝다.
+- CTP 답 변경(`ed5133f60`): `_23_apricot_qa/_01_sql_extension3/_05_analytic_functions/_14_avg` 의 `avg_constraints`(25 셀)·`avg_null`(24 셀)·`avg_numeric`(5 셀).
+- 매뉴얼: 없음(마지막 자리 반올림).
+
 ## 3. 반복 실행이 앞 실행의 바인드에 끌려가지 않는다 (#352, `cbrd_24598`)
 
 ```sql
