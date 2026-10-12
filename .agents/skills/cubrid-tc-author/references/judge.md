@@ -132,6 +132,8 @@ Sources, in this order, each item one row:
    blind spots (user, 2026-10-08, CBRD-27181: depth tested at 150/300 but not 256/257);
 5. the repro itself (always case 1 or the first case after setup).
 
+A row whose only observable is a duration (trace time, wall time, SLEEP, a timeout) never becomes a
+case, whatever the bound: "timing — flaky under CI load (shell-rules 23)" (user, 2026-10-12, CBRD-27604).
 Rows without a case need a reason a reviewer accepts: "timing only (R4)", "needs debug assert",
 "covered by case 3", "CBRD-27572 assert on develop makes it crash CI". A row with neither blocks Step 3.
 Model for the table: cubrid-testcases#3527's "첨부 21개 시나리오 → 케이스 매핑표".

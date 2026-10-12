@@ -106,7 +106,7 @@ fi
 
 # --- Crash detectors ---------------------------------------------------------
 server_pid_before=`cubrid server status 2>&1 | grep "${dbname}" | sed -e 's/.*pid //' -e 's/[^0-9]//g'`
-core_before=`find $CUBRID ./ -maxdepth 3 \( -name "core" -o -name "core.*" \) 2>/dev/null | sort -u | wc -l`
+core_before=`find $init_path $CUBRID ${cur_path} -name "core*" -type f 2>/dev/null | wc -l`
 cat $CUBRID/log/server/${dbname}_2*.err > err_before.log 2>/dev/null
 
 # --- Cases 2..N-1 ------------------------------------------------------------
@@ -152,11 +152,16 @@ finish
     (`while [ $i -le 30 ]; do ...; sleep 1; done`), never a fixed `sleep 60` as the only synchronization.
 11. **Concurrency** only when the defect needs it (pool/LIFO races, lock timeouts): N sessions × M
     iterations, each iteration's verdict one line, aggregated by `check_results` as in cbrd_27484.
-12. **Crash detectors** around the risky phase: server pid before/after, core count delta
-    (`$CUBRID`, `./`, `/data/core`), `grep -ic assertion` on the error-log delta. These are their own
-    numbered checks. In CTP containers an optdebug assert's text never reaches
-    `$CUBRID/log/server/<db>_*.err` (stderr is lost), so the core-count delta is the detector that
-    works (CBRD-27293: 3 server cores, 0 assertion lines).
+12. **Crash detectors** around the risky phase: server pid before/after, core count delta,
+    `grep -ic assertion` on the error-log delta. These are their own numbered checks. In CTP containers
+    an optdebug assert's text never reaches `$CUBRID/log/server/<db>_*.err` (stderr is lost), so the
+    core-count delta is the detector that works (CBRD-27293: 3 server cores, 0 assertion lines).
+    **Count cores where CTP itself looks**: `find $init_path $CUBRID ${cur_path} -name "core*" -type f`,
+    the set CTP's `do_check_more_errors` (shell/init_path/shell_utils.sh) searches after every case
+    before it writes "NOK found core file". Never a host directory (`/data/core`) and never
+    `dirname` of `/proc/sys/kernel/core_pattern`: where a CI machine drops its cores is unknown, and a
+    directory named `core` matched by `-name "core"` without `-type f` counts itself (user, 2026-10-12,
+    CBRD-27604; cbrd_27484 and cbrd_27599 carried that form).
 13. **Verdict count**: lines in `<case>.result` = number of `write_ok`/`write_nok` calls that ran.
     Check it after the first CTP run (`CTP_KEEP_COPIES=1`).
 14. **Every exit path** reaches `do_cleanup` then `finish`; the normal path ends `do_cleanup; finish`.
@@ -196,6 +201,13 @@ finish
 22. The b-tree user-page count the server checks is one more than `SHOW INDEX CAPACITY`'s
     `Num_total_page` for a non-empty index (3→4, 2→3); a page-count check asserts a range, not an
     exact value (CBRD-27100).
+23. **No time checks** (user, 2026-10-12, CBRD-27604): never compare a measured duration with
+    anything — trace `time:` / `fetch_time:`, a `SLEEP()` length, wall time from `SYS_DATETIME` or
+    `date`, csql's "(N sec)", a ratio of two times, an expected timeout. CI machines swing between idle
+    and heavily loaded, so such a bound is flaky however wide it looks. cbrd_27604 dropped "trace time
+    ≤ wall × 1.1 + 100 ms and ≥ (wall − 300 ms) / 2, wall from the same session's SYS_DATETIME
+    difference so csql start-up is excluded", written to catch CBRD-26512's 3–4x over-report. A clock or
+    timing change gets no check; it goes to the "성능 TC 필요" JIRA comment (pr-and-jira.md §5 kind 1).
 
 ## Checklist before saving
 
@@ -207,3 +219,5 @@ finish
 - every background `&` has a matching `wait`; every csql in a loop has `timeout`
 - the positive control is check 1 and exits the case on failure
 - DESCRIPTION ≤ 40 lines, no workspace numbers
+- no check reads a duration (`time:`, `fetch_time:`, `SYS_DATETIME`, `date`, `SLEEP`) — rule 23
+- cores counted only with `find $init_path $CUBRID ${cur_path} -name "core*" -type f` — rule 12
