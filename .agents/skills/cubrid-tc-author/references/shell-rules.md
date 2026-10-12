@@ -208,6 +208,12 @@ finish
     ≤ wall × 1.1 + 100 ms and ≥ (wall − 300 ms) / 2, wall from the same session's SYS_DATETIME
     difference so csql start-up is excluded", written to catch CBRD-26512's 3–4x over-report. A clock or
     timing change gets no check; it goes to the "성능 TC 필요" JIRA comment (pr-and-jira.md §5 kind 1).
+24. **A check that needs the cached plan reused** runs the same text without `recompile` and proves the
+    reuse with `cubrid plandump` (never `-d`, which drops the cache): the global `Recompiles:` count and the
+    entry's `time_stored` must not change between the runs. A recompile keeps `time_stored`; a new entry
+    gets its own. The entry's `reference count` is no proof, because parallel workers raise it too. The
+    `recompile` hint is not in the plan hash text, so a `recompile` copy of the same query recompiles that
+    entry; use it as the negative control (CBRD-27100 check 5).
 
 ## Checklist before saving
 
