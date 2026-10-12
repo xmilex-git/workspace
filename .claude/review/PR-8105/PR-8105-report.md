@@ -1,36 +1,32 @@
-# PR #8105 코드 리뷰 보고서
+# PR #8105 코드 리뷰 보고서 (재리뷰)
 
 **PR:** [CUBRID/cubrid#8105](https://github.com/CUBRID/cubrid/pull/8105)
 **제목:** [CBRD-27557] Fix hash join split when temp_file_memory_size_in_pages is 0
 **작성자:** youngjinj
-**HEAD SHA:** `b68bfc22d` (develop merge-base `ecb26cda1`. 코드 커밋은 `91a8ec8d1` 1개, 나머지는 develop 머지)
+**HEAD SHA:** `dbea5c2de` (develop merge-base `58b49b39f`. 코드 커밋은 `91a8ec8d1`, `c0deddaef` 2개, 나머지는 develop 머지)
 **JIRA:** CBRD-27557 (Correct Error, Open, 첨부 없음) / 연관: CBRD-25717 (assert 도입, Regress), CBRD-26666 (Relates), CBRD-27569 (PR 본문이 근본 해결로 지목. JIRA 링크 없음)
-**TC PR:** CUBRID/cubrid-testcases#3646 (`tc/pr-8105` `58c4d4e76`, 빈 draft) / CUBRID/cubrid-testcases-private-ex#4321 (`tc/pr-8105` `1768a1b71`)
-**리뷰 일시:** 2026-10-10
-**리뷰 결정:** 엔진 PR Request changes / private-ex#4321 Comment (page buffer 고갈 구성 제안) / #3646 리뷰 없음 (빈 draft)
+**TC PR:** CUBRID/cubrid-testcases#3646 (`tc/pr-8105` `b1ff1933b`, 빈 draft) / CUBRID/cubrid-testcases-private-ex#4321 (`tc/pr-8105` `8f7b05655`)
+**리뷰 일시:** 2026-10-12 (1차 2026-10-10, Request changes)
+**리뷰 결정:** 엔진 PR Approve / private-ex#4321 Approve / #3646 리뷰 없음 (빈 draft)
 
-> **TL;DR** (Blocking): JIRA 재현(debug assert)과 develop release 의 page buffer 고갈 무응답(데이터 버퍼의 페이지 슬롯인 frame 이 모두 고정되어 질의가 멈춤)이 모두 해결된다. 다만 직렬 split `hjoin_split_qlist` 의 새 reopen 실패 분기가 에러 코드를 버린다. 그래서 membuf 0 (`temp_file_memory_size_in_pages=0`, 임시 리스트에 메모리 버퍼 페이지가 없음) 에서 split 중 취소된 질의가 적은 행을 정상 결과로 돌려준다 (리뷰 실행 20회 중 5회). 한 줄 수정이면 머지 가능하다.
+> **TL;DR** (Non-blocking): 1차 Blocking (직렬 split reopen 실패 시 에러 코드 유실) 이 `c0deddaef` 로 고쳐졌다. head release 에서 split 중 `KILL QUERY` 40회가 모두 "Has been interrupted" 로 끝났다 (수정 전 직렬 20회 중 5회 부분 count). private-ex#4321 은 제안한 page buffer 고갈 구성(9-10)을 받아들였고 head optdebug 에서 1-10 모두 OK. 남은 것은 JIRA Description 보완과 CBRD-27569 링크뿐이다.
 
 ## Summary
 
-- **변경 요약**: split 단계(해시 조인이 두 입력을 해시 키로 파티션 리스트에 나눠 쓰는 단계)의 파티션별 임시 리스트(파티션 리스트로 옮기기 전 튜플을 모으는 리스트)를 튜플마다 `qfile_reopen_list_as_append_mode` -> `qfile_add_tuple_to_list` -> `qfile_close_list` 로 쓰고, "임시 리스트는 디스크 파일이 없다" assert 를 membuf 가 있을 때로 한정
-- **주요 이슈**: `query_hash_join.c:1779` reopen 실패 시 에러 코드 유실 -> 취소된 질의가 부분 결과를 반환
-- **확인 필요 사항**: JIRA Description 에 release 무응답(파티션 수가 page buffer frame 수를 넘는 경우) 보완, CBRD-27569 링크
+- **변경 요약**: 1차 내용에 더해, 직렬 split `hjoin_split_qlist` 의 세 실패 분기(파티션별 임시 리스트 reopen, overflow 튜플 reopen, `qfile_open_list`)가 `error` 를 설정하고, 루프가 오류로 끝나면 파티션 리스트 병합을 건너뛴다
+- **주요 이슈**: 없음
+- **확인 필요 사항**: JIRA Description 의 "release 빌드에서는 발생하지 않는다" 보완, CBRD-27569 링크 (1차 요청, 미반영)
 
 ---
 
 ## Findings
 
-### Blocking (must fix)
+없음
 
-- `src/query/query_hash_join.c:1779` -- 직렬 split 의 새 reopen 실패 분기가 반환값을 `error` 에 담지 않고 `break` 한다 -> 루프 뒤 `if (scan_code == S_ERROR || error != NO_ERROR)` 를 지나 `NO_ERROR` 를 반환한다 -> 남은 튜플이 파티션에 들어가지 않은 채 조인이 진행되어, 취소된 질의가 적은 행을 정상 결과로 돌려준다.
-  ```c
-  if (qfile_reopen_list_as_append_mode (thread_p, temp_part_list_id[part_id]) != NO_ERROR)
-    {
-      break;		/* error_exit */
-    }
-  ```
-  membuf 0 에서 이 reopen 은 튜플마다 `pgbuf_fix` (페이지 버퍼 frame 을 잡는 함수) 를 부른다. `pgbuf_fix` 는 진입 시 `logtb_is_interrupted (thread_p, true, ...)` 로 사용자 취소를 검사하고 그 플래그를 지운다. 리뷰 실행(head release, membuf 0, 4k)에서 split 중 `KILL QUERY` 를 보내면 직렬은 20회 중 5회가 에러 없이 14060~86886 을 돌려주었다. 그 5회의 서버 로그에는 `page_buffer.c:2254 -4` 만 있고 `-1124` (질의 실행 오류) 가 없다. 병렬은 20회 모두 `-4` 로 끝났다. 병렬 경로 `split_task::execute` 는 같은 실패를 `handle_error` 로 올리기 때문이다. 수정: `error = qfile_reopen_list_as_append_mode (...)` 로 받은 뒤 `break`.
+`c0deddaef` 검토 내용:
+- 병합 생략 후 임시 리스트는 호출자 `hjoin_build_partitions` 의 cleanup 이 `qfile_close_list` -> `qfile_destroy_list` -> 해제한다. 누수 없음.
+- 병렬 split `split_task::execute` 도 `has_error` 이면 병합을 건너뛰므로 주석의 "as the parallel split does" 는 사실이다.
+- `qfile_open_list` 실패 분기의 `assert_release_error` 는 release 에서 `ER_FAILED_ASSERTION` 을 설정하므로 `error` 가 `NO_ERROR` 로 남지 않는다.
 
 ## JIRA -> Engine PR
 
@@ -38,44 +34,39 @@
 
 | 항목 | PR 상태 | 판정 |
 |---|---|---|
-| Expected Result: 두 질의 모두 100000 (temp_file_memory_size_in_pages=0, 256k, parallel(8) / 직렬) | CI run 37438033455 shell shard 26 `membuf_config` 3-4 OK (같은 SQL, 같은 설정) | 충족 |
+| Expected Result: 두 질의 모두 100000 (membuf 0, 256k, parallel(8) / 직렬) | gha-ci run 38204357319 `membuf_config` 3-4 OK, 리뷰 실행 3-4 OK | 충족 |
 | design.md 변경 / 미정 항목 | 첨부 없음. PR 본문 Implementation 이 대신함 | 해당 없음 |
-| PR 목적 2: page buffer 고갈 방지 (membuf 0, 파티션 수 x 워커 수 frame 고정) | 리뷰 A/B (release, data_buffer_size 16M, 파티션 1587): develop 직렬/병렬 모두 300 s 무응답, head 1.6 s 에 100000 | 충족 |
+| PR 목적 2: page buffer 고갈 방지 (membuf 0, 파티션 1587) | 1차 A/B: develop release 직렬/병렬 300 s 무응답, PR 1.6 s. 이번 TC 9-10 OK | 충족 |
+| 1차 Blocking: 취소된 직렬 split 이 부분 결과 반환 | `c0deddaef`. 리뷰 실행 직렬 20/20 interrupted | 충족 |
 
-같은 결함을 기술한 다른 JIRA 는 없다 (JQL `temp_file_memory_size_in_pages` / `split_task`). CBRD-27569 는 split 구조 개편이며 이 PR 의 assert 를 없애는 근본 해결이다.
+같은 결함을 기술한 다른 JIRA 는 없다. JIRA Description 은 아직 "release 빌드에서는 발생하지 않는다" 이고 CBRD-27569 링크도 없다 (2026-10-06 이후 변경 없음).
 
-판정: 충족. Finding 1 은 JIRA 범위 밖의 새 결함이라 여기에는 반영하지 않는다.
+판정: 충족. JIRA 보완은 승인 조건이 아니라 요청으로 남긴다.
 
 ## TC PRs
 
-기준: 시나리오가 JIRA test.md 에 있거나 TC PR(본문 또는 변경 파일)이 다루면 통과. CBRD-27557 에 test.md 가 없어 JIRA Repro 와 PR 본문의 두 목적을 시나리오로 삼는다.
+기준: 시나리오가 JIRA test.md 에 있거나 TC PR(본문 또는 변경 파일)이 다루면 통과. test.md 가 없어 JIRA Repro 와 PR 본문의 두 목적을 시나리오로 삼는다.
 
 | 시나리오 | 근거 | 판정 |
 |---|---|---|
-| JIRA Repro: membuf 0, 100000행 self join, 256k (파티션 25), parallel(8) 과 직렬 | private-ex#4321 disk-only 3-4 주석 해제 | 통과 |
-| page buffer 고갈 (membuf 0, data_buffer_size 16M, 4k -> 파티션 1587) | TC 없음. 리뷰 A/B 로만 확인 | 미포함 (#4321 에 구성 추가 제안) |
+| JIRA Repro: membuf 0, 256k (파티션 25), parallel(8) 과 직렬 | #4321 disk-only 3-4 | 통과 |
+| page buffer 고갈: membuf 0, data_buffer_size 16M, 4k (파티션 1587) | #4321 9-10 (`1102b4121`), csql `timeout 120` (`8f7b05655`) | 통과 |
 
-TC 파일 검토: #4321 은 shell 케이스 1개만 바꾼다. 결과는 `write_ok`/`write_nok` 로 남으므로 answer 파일이 없다. PR 본문 표(develop debug 서버 종료, PR debug OK workers=8 100000)는 CI 와 일치한다. #3646 은 변경 없는 draft 라 닫으면 된다.
+TC 파일 검토: #4321 은 shell 케이스 1개만 바꾼다. 결과는 `write_ok`/`write_nok` 로 남는다. 9-10 은 `change_db_parameter "data_buffer_size=16M"` 뒤 `set_membuf 0` 의 재시작으로 반영되고, 16M / 16K 페이지 = 1024 frame < 파티션 1587 이다. 회귀 시 무응답은 `timeout` 으로 NOK 가 된다. 작성자 답변(회귀 변형 optdebug 에서 `pgbuf_compute_lru_vict_target` assert 로 NOK)과 일치하는 구성이다. #3646 은 변경 없는 draft 다.
 
-판정: 부분. JIRA Repro 는 통과하고, page buffer 고갈 구성은 제안으로 남긴다 (필수 아님). #3646 은 리뷰 없음.
+판정: 통과. #4321 Approve, #3646 리뷰 없음.
 
 ## Runtime Verification
 
-- CI (head): run 37438033455, 엔진 `b68bfc22d` optdebug, TC `tc/pr-8105` (public `58c4d4e76`, private-ex `1768a1b71`). build debug/release, sql, medium, shell 통과. shard 26 `cbrd_25717_membuf_config` 1-8 OK.
-- CI (fail-before): run 37421351718 (#8103, develop 엔진 `0587d1bbe` optdebug, private-ex `tc/pr-8103` `f2c5574ba`). `membuf_config` 3-6 NOK, 코어 발생.
-- 리뷰 A/B (release, `temp_file_memory_size_in_pages=0`, `data_buffer_size=16M`, 100000행 self join): develop `ecb26cda1` (gha-ci run 37428243655) 와 head `b68bfc22d` (run 37438033455) 의 release tarball.
-
-  | 조건 | develop `ecb26cda1` | head `b68bfc22d` |
-  |---|---|---|
-  | 256k (파티션 25), 직렬 / parallel(8) | 100000 (SPLIT 27 / 25 ms) | 100000 (SPLIT 72 / 97 ms) |
-  | 4k (파티션 1587), 직렬 | 300 s 무응답. 질의 스레드가 `pgbuf_allocate_bcb` 에서 빈 frame 대기 (`hjoin_split_qlist` -> `qfile_add_tuple_to_list` -> `file_create_temp`) | 100000 (1.63 s, SPLIT 1376 ms) |
-  | 4k (파티션 1587), parallel(8) | 300 s 무응답. split 워커 2개가 `pgbuf_allocate_bcb` 대기. 클라이언트 종료 뒤에도 풀리지 않아 서버를 SIGTERM 으로 내림 | 100000 (1.65 s, SPLIT 1427 ms) |
-
-- 취소 재현 (head `b68bfc22d` release, 같은 설정, 4k, split 중 `KILL QUERY`, 직렬/병렬 번갈아 20회씩): 직렬은 interrupted 13, 정상 100000 2 (질의 종료 뒤 도착), 부분 count 5 (84236, 16413, 86886, 14060, 86313). 병렬은 20회 모두 interrupted. 증거 `.git_ignored_dir/scratch/pr8105/evidence/cancel/`.
+- CI (head): gha-ci run 38204357319, 엔진 `dbea5c2de`. build debug/release, sql, medium, shell 통과. 단 shell 은 TC `2db4bf5c1` (9-10 추가 전) 로 돌아 `membuf_config` 1-8 만 검사했다.
+- 리뷰 실행 1 (TC 9-10 보완): `just ctp shell _40_guava/cbrd_25717/cbrd_25717_membuf_config`, 엔진 `dbea5c2de` optdebug (CI tarball, libcubrid sha256 `19c72500...`), TC private-ex `tc/pr-8105` `8f7b05655`, cubridci 이미지. 1-10 모두 OK, 코어 없음, 케이스 31 s. `[disk-only-small-buffer] workers=8 parallel_count=100000 serial_count=100000`.
+- 리뷰 실행 2 (1차 Blocking 재현): 엔진 `dbea5c2de` release (CI tarball), `temp_file_memory_size_in_pages=0`, `data_buffer_size=16M`, 4k (파티션 1587). 무취소 기준 직렬 SPLIT 956 ms, 병렬(8) SPLIT 1606 ms, 둘 다 100000. split 중 `KILL QUERY` (시작 후 0.03~0.85 s) 직렬/병렬 번갈아 20회씩: 40회 모두 "Has been interrupted", 부분 count 0, 무응답 0. 직렬 로그마다 `page_buffer.c` `-4` 뒤 `-1124` 가 있다 (수정 전 부분 count 5회에는 `-1124` 가 없었다).
+- 증거: `.git_ignored_dir/scratch/pr8105/rereview/laneA-ctp/evidence/`, `.../laneB-cancel/evidence/`. 1차 증거는 `.git_ignored_dir/scratch/pr8105/evidence/`.
 
 ## Existing Comments
 
 | 코멘트 | 상태 |
 |---|---|
-| greptile 4192501136 (membuf 0 회귀 TC 요청) | 작성자 답변 4192530013 (private-ex membuf_config 가 담당). 해결됨 |
-| greptile 요약 6011256062 ("로그 버퍼 슬롯 교체와 직접 읽기 경로의 동기화 문제") | 이 PR 의 diff 와 무관 (develop 머지 쪽 변경으로 보임). 대응 안 함 |
+| 1차 inline r4238031514 (reopen 실패 에러 유실) | 작성자 답변 4244702590, `c0deddaef` 로 수정. 리뷰 실행으로 확인. 해결됨 |
+| private-ex#4321 inline r4238031628 (page buffer 고갈 구성) | 작성자 답변 4244888536, 9-10 추가. 리뷰 실행으로 확인. 해결됨 |
+| 1차 top-level (JIRA Description 보완, CBRD-27569 링크) | 답변 없음, JIRA 변경 없음. Approve 본문에서 다시 요청 |
