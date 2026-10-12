@@ -154,14 +154,17 @@ finish
     iterations, each iteration's verdict one line, aggregated by `check_results` as in cbrd_27484.
 12. **Crash detectors** around the risky phase: server pid before/after, core count delta,
     `grep -ic assertion` on the error-log delta. These are their own numbered checks. In CTP containers
-    an optdebug assert's text never reaches `$CUBRID/log/server/<db>_*.err` (stderr is lost), so the
-    core-count delta is the detector that works (CBRD-27293: 3 server cores, 0 assertion lines).
+    an optdebug assert's text never reaches `$CUBRID/log/server/<db>_*.err` (stderr is lost).
     **Count cores where CTP itself looks**: `find $init_path $CUBRID ${cur_path} -name "core*" -type f`,
     the set CTP's `do_check_more_errors` (shell/init_path/shell_utils.sh) searches after every case
     before it writes "NOK found core file". Never a host directory (`/data/core`) and never
     `dirname` of `/proc/sys/kernel/core_pattern`: where a CI machine drops its cores is unknown, and a
     directory named `core` matched by `-name "core"` without `-type f` counts itself (user, 2026-10-12,
-    CBRD-27604; cbrd_27484 and cbrd_27599 carried that form).
+    CBRD-27604; cbrd_27484 and cbrd_27599 carried that form, fixed in private-ex #4404 and tc/pr-8137).
+    The local ctp-run sets the container core_pattern to `/data/core/core.%e.%p.%h.%t`, which that find
+    (and CTP's own check) does not see: there a crash shows only as the pid change and the runner's own
+    CORE mark (cbrd_27484 on its pre-fix point 30043f492: 3 cub_server cores, core_new 0, pid check NOK).
+    So the **server pid check is the crash detector that works on every machine**; never drop it.
 13. **Verdict count**: lines in `<case>.result` = number of `write_ok`/`write_nok` calls that ran.
     Check it after the first CTP run (`CTP_KEEP_COPIES=1`).
 14. **Every exit path** reaches `do_cleanup` then `finish`; the normal path ends `do_cleanup; finish`.
