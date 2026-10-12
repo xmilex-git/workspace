@@ -160,7 +160,8 @@ finish
     before it writes "NOK found core file". Never a host directory (`/data/core`) and never
     `dirname` of `/proc/sys/kernel/core_pattern`: where a CI machine drops its cores is unknown, and a
     directory named `core` matched by `-name "core"` without `-type f` counts itself (user, 2026-10-12,
-    CBRD-27604; cbrd_27484 and cbrd_27599 carried that form, fixed in private-ex #4404 and tc/pr-8137).
+    CBRD-27604; cbrd_27599 carried that form and was fixed on tc/pr-8137; the merged cbrd_27484 keeps it,
+    a fix PR for a merged TC was closed by the user).
     The local ctp-run sets the container core_pattern to `/data/core/core.%e.%p.%h.%t`, which that find
     (and CTP's own check) does not see: there a crash shows only as the pid change and the runner's own
     CORE mark (cbrd_27484 on its pre-fix point 30043f492: 3 cub_server cores, core_new 0, pid check NOK).
