@@ -122,7 +122,13 @@ for p in pre fix dev; do echo "== $p"; grep -E 'RESULT:|\[NOK\]|\[OK\]|core' "$R
 ```
 
 Containers are isolated, so three runs at once are fine (≈45 s each for a one-case dir, most of it
-container start). Each run has `provenance.txt` naming the install; cite it in `results.md`.
+container start).
+
+**Cores of a local run are checked here, not by the case**: the local ctp-run sets the container
+core_pattern to `/data/core/core.%e.%p.%h.%t`, which a case's own core find (CTP's set, shell-rules 12)
+does not search. For every run read the runner's core report (the `CORE` mark in its output and the run's
+core store under `/bench/hdd/core/ctp/<run>/`) and count any core as a failure of that run; a pid check in
+the case is no substitute, since `auto_restart_server` brings the server back (user, 2026-10-12). Each run has `provenance.txt` naming the install; cite it in `results.md`.
 
 ## §4 Determinism on the fix build
 

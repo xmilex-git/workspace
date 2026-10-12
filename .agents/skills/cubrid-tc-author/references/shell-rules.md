@@ -162,10 +162,8 @@ finish
     directory named `core` matched by `-name "core"` without `-type f` counts itself (user, 2026-10-12,
     CBRD-27604; cbrd_27599 carried that form and was fixed on tc/pr-8137; the merged cbrd_27484 keeps it,
     a fix PR for a merged TC was closed by the user).
-    The local ctp-run sets the container core_pattern to `/data/core/core.%e.%p.%h.%t`, which that find
-    (and CTP's own check) does not see: there a crash shows only as the pid change and the runner's own
-    CORE mark (cbrd_27484 on its pre-fix point 30043f492: 3 cub_server cores, core_new 0, pid check NOK).
-    So the **server pid check is the crash detector that works on every machine**; never drop it.
+    A local run checks cores by our procedure, not by this find (verify.md §3): the local ctp-run puts
+    cores in the container's `/data/core`, outside that set (user, 2026-10-12).
 13. **Verdict count**: lines in `<case>.result` = number of `write_ok`/`write_nok` calls that ran.
     Check it after the first CTP run (`CTP_KEEP_COPIES=1`).
 14. **Every exit path** reaches `do_cleanup` then `finish`; the normal path ends `do_cleanup; finish`.
