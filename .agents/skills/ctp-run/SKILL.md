@@ -16,7 +16,7 @@ description: >-
 One entry point for every CTP suite. Two commands cover everything:
 
 ```bash
-just ctp <sql|medium|shell|ha_shell>              # whole suite (whole sql also runs whole medium beside it)
+just ctp <sql|medium|shell|ha_shell|ha_repl>      # whole suite (whole sql also runs whole medium beside it)
 just ctp sql+medium                               # the same sql + medium pair, explicitly
 just ctp <suite> <DIR> [<DIR> ...]                # subset (scenario-relative dirs)
 just ctp-rerun <PR | CircleCI job | gha-ci run URL>   # exactly what failed in CI
@@ -60,7 +60,7 @@ infer the PR from `WORKSPACE`'s branch. With none of the three it refuses rather
 than run develop testcases against a PR build. Refs are materialized as git
 worktrees, so host checkouts (and their uncommitted edits) are never touched.
 
-**medium and ha_shell are never sharded.** medium loads one mdb from a single
+**medium, ha_shell and ha_repl are never sharded.** medium loads one mdb from a single
 `data_file` tarball and its cases mutate it in place; an ha_shell shard is a
 master+slave container pair. `SHARDS>1` is refused with the reason.
 
@@ -109,6 +109,7 @@ Only the HA thin-csql port and slave broker startup remain local. See
 | `medium` | cubrid-testcases | `medium/` | always 1 | schedule `summary.xml` |
 | `shell` | cubrid-testcases-private-ex | `shell/` | 7 (per test dir) | `test_status.data` + JUnit |
 | `ha_shell` | cubrid-testcases-private | `HA/shell/` | always 1 (2 containers) | `test_status.data` + JUnit |
+| `ha_repl` | cubrid-testcases | `sql/` | always 1 (2 containers) | `test_status.data` + JUnit |
 
 A **subset defaults to 1 shard** whatever the suite: each shard costs a full copy
 of the install and a container, which pays for itself over 17k cases and not over
@@ -184,6 +185,12 @@ on git's `index.lock`. medium's runner output goes to
 `sql`/`medium` split by case FILE (two-pass materialization); `shell`/`ha_shell`
 split by test DIRECTORY, because a shell case's directory also carries the
 `.answer` files and the `.c`/`.java`/helper `.sh` it compiles at run time.
+
+**ha_repl** replays the sql cases on the same master+slave pair: CTP turns each `.sql` into a
+`.test` (a PRIMARY KEY on every table's first column, one csql session per statement, a check
+query on the slave after each DML), so a case that passes in `sql` can fail here. Its exclusion
+list is `sql/config/daily_regression_test_exclude_list_ha_repl.conf`. Pass case files or dirs as
+scenario-relative paths, e.g. `just ctp ha_repl _13_issues/_13_2h/cases/bug_bts_11921.sql`.
 
 An `ha_shell` shard is two containers: the master runs CTP, the slave runs the
 image's `node` mode (sshd + a `qa` account CTP logs into). Each gets its OWN copy

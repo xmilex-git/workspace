@@ -2,7 +2,7 @@
 #
 # ctp_run.sh — the CUBRID CTP runner: one suite, N isolated podman shards.
 #
-# Suites: sql | medium | shell | ha_shell. Each shard is one rootless-podman
+# Suites: sql | medium | shell | ha_shell | ha_repl. Each shard is one rootless-podman
 # container running the real `ctp.sh <category>` over a private, pristine copy of
 # the scenario tree / install / CTP conf. A shard's slice of the suite is
 # MATERIALIZED (only its own cases exist in its scenario copy), so CTP needs no
@@ -71,7 +71,7 @@ usage() {
   cat <<'EOF'
 ctp_run.sh — run one CUBRID CTP suite in isolated podman containers.
 
-  ctp_run.sh --suite <sql|medium|shell|ha_shell> --build <install> \
+  ctp_run.sh --suite <sql|medium|shell|ha_shell|ha_repl> --build <install> \
              --testcases <repo checkout> [--ctp <CTP_HOME>] [--out <dir>] [options]
 
 WHAT / WHY
@@ -88,6 +88,7 @@ SUITES
   shell      shardable, default 7 shards (per test dir, count-balanced)
   medium     always 1 shard  (one mdb dataset, mutated in place)
   ha_shell   always 1 shard  (a shard is a master+slave container pair)
+  ha_repl    always 1 shard  (sql cases replayed on an HA master+slave pair)
 
 WHOLE SUITE vs SUBSET
   no --only        the whole suite, split across the suite's default shard count
@@ -106,13 +107,13 @@ TESTCASE REF (never silently 'develop')
   its uncommitted edits are never touched.
 
 OPTIONS
-  --suite <s>            sql | medium | shell | ha_shell        (default sql)
+  --suite <s>            sql | medium | shell | ha_shell | ha_repl (default sql)
   --build <dir>          CUBRID install to test (required for a real run)
   --testcases <dir>      testcases repo checkout for this suite (required)
   --ctp <dir>            CTP_HOME to copy per shard      (default ~/cubrid-testtools/CTP)
   --out <dir>            run/output directory
   --only <relpath>       scenario-relative subset path (repeatable)
-  --shards <N>           override the shard count (refused for medium/ha_shell)
+  --shards <N>           override the shard count (refused for medium/ha_shell/ha_repl)
   --tc-ref / --pr / --workspace   see TESTCASE REF
   --testcases-as-is      use --testcases verbatim, skipping ref resolution
   --worktree-root <dir>  where testcase worktrees live
@@ -158,7 +159,7 @@ EOF
 #####################################################################
 ARG_BUILD=""
 ARG_TC=""
-ARG_SUITE="sql"        # CTP suite: sql | medium | shell | ha_shell
+ARG_SUITE="sql"        # CTP suite: sql | medium | shell | ha_shell | ha_repl
 ARG_TCREF=""           # explicit testcases ref (branch/tag/sha); "" = derive from --pr/--workspace
 ARG_PR=""              # engine PR number -> testcases ref tc/pr-<N>
 ARG_WS=""              # CUBRID source checkout, used to infer the PR when --pr/--tc-ref are absent
@@ -360,7 +361,14 @@ resolve_suite() {
       # HA cleanup removes $CUBRID/databases/<db>*. Keep copylog files there too,
       # or a later case reuses replication logs belonging to its previous DB.
       C_DB="$C_CUBRID/databases" ;;
-    *) usage; die "--suite must be one of: sql medium shell ha_shell (got: '$ARG_SUITE')" ;;
+    ha_repl)
+      # The sql cases, which CTP turns into .test files (a PRIMARY KEY on each table's first
+      # column, a csql session per statement) and replays on the master, comparing the slave.
+      SUITE_TCREPO="cubrid-testcases";            SUITE_SUBPATH="sql"
+      SUITE_CAT="ha_repl";  SUITE_EXT="sql";      SUITE_UNIT_DEFAULT="dir"
+      SUITE_SHARDABLE=0;    SUITE_STYLE="status";     SUITE_CONF="conf/ha_repl_ci.conf"; SUITE_HA=1
+      C_DB="$C_CUBRID/databases" ;;
+    *) usage; die "--suite must be one of: sql medium shell ha_shell ha_repl (got: '$ARG_SUITE')" ;;
   esac
   C_TCREPO="$C_WORKDIR/$SUITE_TCREPO"
   C_SCN="$C_TCREPO/$SUITE_SUBPATH"
@@ -604,7 +612,7 @@ PER_SHARD_PIDS=400
 shard_refusal_reason() {
   case "$ARG_SUITE" in
     medium)   printf 'one mdb dataset is loaded from a single data_file tarball and the cases mutate it in place' ;;
-    ha_shell) printf 'a shard is a master+slave container pair and the suite is run one bucket at a time' ;;
+    ha_shell|ha_repl) printf 'a shard is a master+slave container pair and the suite is run one bucket at a time' ;;
     *)        printf 'suite policy' ;;
   esac
 }
@@ -883,6 +891,7 @@ suite_base_exclusion_file() {
   case "$ARG_SUITE" in
     sql|medium) printf '%s' "$ARG_CTP/conf/exclusions.txt" ;;
     shell|ha_shell) printf '%s' "$SCN/config/daily_regression_test_excluded_list_linux.conf" ;;
+    ha_repl) printf '%s' "$SCN/config/daily_regression_test_exclude_list_ha_repl.conf" ;;
   esac
 }
 
