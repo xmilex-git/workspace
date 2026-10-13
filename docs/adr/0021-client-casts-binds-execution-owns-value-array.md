@@ -23,7 +23,7 @@ locked-by: xmilex-git/workspace#335 D-335-08 (2026-09-23, 사용자 승인) · #
 ## Consequences
 
 - 캐스트의 손실 정책(정수 목표 반올림 등)은 develop 그대로 클라이언트에서 일어나고 -494 시점도 develop 과 같다. 가변 POS 의 값은 캐스트 없이 그 타입이 답이다(`id IN (?, ?)` 에 1, 2.5 → 1행).
-- 계획을 함께 쓰는 문장(리터럴 형태와 바인드 형태, CTE 부질의)이 출력 목록의 바인드(UPDATE SET 값, `DEFAULT (다른 컬럼)`)에 다른 타입을 보내는 자리만 실행 전 확정이 develop 의 튜플 캐스트(`tp_value_auto_cast`)로 한 번 바꾼다(`DOMAIN_PLAN_LIST_BIND`, `qexec_convert_list_bind`, D-345-06). 캐스트가 거부한 값은 develop 처럼 튜플 쓰기에서 오류다. 비교·키는 바인드 값으로 확정하고 대입은 속성 도메인으로 바꾸므로 그 밖의 자리는 없다.
+- 계획을 함께 쓰는 문장(리터럴 형태와 바인드 형태, CTE 부질의)이 출력 목록의 바인드(UPDATE SET 값, `DEFAULT (다른 컬럼)`)에 다른 타입을 보내는 자리만 실행 전 확정이 develop 의 튜플 캐스트(`tp_value_auto_cast`)로 한 번 바꾼다(`DOMAIN_PLAN_LIST_BIND`, `qexec_convert_list_bind`, D-345-06). 캐스트가 거부한 값은 develop 처럼 튜플 쓰기에서 오류다. 비교·키는 바인드 값으로 확정하고 대입은 속성 도메인으로 바꾸므로 그 밖의 자리는 없다. 인덱스 키 한도(`key_limit_l`·`key_limit_u`) 아래의 바인드도 키와 같은 값 확정 자리다 — 스캔이 열릴 때 값 타입으로 BIGINT 변환한다(CBRD-27615: 처음 구현은 이 자리를 컴파일 타입 읽기 자리로 적어 `limit 4` 의 계획을 `limit 2147483648` 이 공유할 때 불변식 검사가 터졌다). 늦은 바인딩 노드가 리스트 바인드를 피연산자로 읽을 때 실행 전 확정이 보는 값은 변환된 POS 참조 사본이다(CBRD-27615: 원 바인드 값을 보고 CHAR 변환기를 고정해 VARCHAR 값에 썼다).
 - `host_var_expected_domains[]` 는 남는다 — prepare 응답의 파라미터 메타, PL/CSQL 보고(`method_callback.cpp`), 바인드 피크 재계획의 입력이다. PL/CSQL 선언 타입 전달(`host_var_decl_domains[]`)은 구현하지 않았다(#339).
 - 변환할 것이 없는 리터럴·상수식 쪽은 복사하지 않고 행이 그 값을 비교하며, 바인드 쪽은 공유 사본이다(#371 B). 공유 바인드를 제자리에서 바꾸던 키 상한 리밋·ORDER BY LIMIT 읽기도 지역 값으로 바뀌었다.
 - 되돌리는 길: 값 소유는 `qexec_init_resolved_domains`/`qexec_clear_resolved_domains` 한 쌍에 있어 독립 커밋으로 되돌릴 수 있고, 되돌리면 SA_MODE 별칭 문제가 돌아온다. 클라이언트 캐스트는 develop 코드 그대로라 되돌릴 것이 없다.

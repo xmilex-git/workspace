@@ -91,7 +91,7 @@ _Avoid_: "진행 중 checkpoint 대기 완료"를 fresh로 간주, 최신 checkp
 _Avoid_: 단건 정지(층위 불명), XASL_NEED_SINGLE_TUPLE_SCAN(도달하지 않는 별개 플래그)
 
 **인덱스 키 한도 (index key limit)**:
-인덱스 범위 스캔이 정해진 개수의 키를 읽고 스캔 자체를 끝내는 저장 층의 조기정지다. semi/anti inner에서는 첫 키가 곧 정답임이 보장될 때 — 인덱스 밖 필터가 없을 때 — 에만 1로 둘 수 있다.
+인덱스 범위 스캔이 정해진 개수의 키를 읽고 스캔 자체를 끝내는 저장 층의 조기정지다. semi/anti inner에서는 첫 키가 곧 정답임이 보장될 때 — 인덱스 밖 필터가 없을 때 — 에만 1로 둘 수 있다. ORDER BY LIMIT·`rownum` 범위·`KEYLIMIT` 힌트를 옵티마이저가 인덱스 스캔에 내린 상한·하한(코드 `key_limit_u`·`key_limit_l`)도 같은 기제다. 그 자리의 바인드는 비교·키처럼 값으로 확정하는 소비자다 — 스캔이 열릴 때 값 타입을 보고 BIGINT 로 한 번 바꾼다(CBRD-27615).
 _Avoid_: scan_immediately_stop(0건 전용 킬스위치), 단건 정지
 
 **재진입 게이트 (single-fetch gate)**:
@@ -597,6 +597,10 @@ _Avoid_: held value·보유값·epoch(옛 이름, 옛 코드 `DOMAIN_HELD_VALUE`
 **POS 참조 (POS reference)**:
 같은 `?`(val_pos) 를 참조하는 regu 마다 따로 두는 변환값. (val_pos, 목표 도메인, 실패 정책)이 같으면 POS 참조를 공유하고, 다르면(등식 축약·UNION 푸시다운이 다른 형제 옆에 같은 `?` 를 복사한 경우) 갈린다. 실패 정책의 NULL 은 그 POS 참조에만 들어가고 원 바인드 값은 불변이다(D-323-03·04).
 _Avoid_: 참조 자리·reference slot(옛 이름), val_pos 와 혼용, 바인드 값 배열을 제자리 변환하는 것
+
+**리스트 바인드 (list bind)** — 코드 이름 `DOMAIN_PLAN_LIST_BIND`:
+출력 목록(파생 테이블의 컬럼, UPDATE SET 값, INSERT 값)이 쓰는, 컴파일이 타입을 정한 `?`·auto-param 자리. 계획을 함께 쓰는 다른 문장이 다른 타입을 바인드할 수 있으므로 실행 전 도메인 확정이 그 POS 참조 사본을 컬럼 도메인으로 1회 변환한다(튜플 쓰기의 캐스트와 같은 변환, D-345-06). 변환을 거부당한 값은 그대로 두고 튜플 쓰기가 오류를 낸다. 이 자리를 피연산자로 읽는 늦은 바인딩 노드는 그 변환된 사본을 보고 타입을 정한다 — 원 바인드 값이 아니다(CBRD-27615).
+_Avoid_: 출력 바인드(output bind, 코드에 없는 이름), 원 바인드 값을 바꾸는 서술(원 값은 불변이고 바뀌는 것은 POS 참조 사본이다)
 
 **캐시하지 않는 피연산자 (non-cacheable operand)**:
 값이 실행 중 바뀌거나 부작용이 있는 연산자(세션변수 읽기·쓰기, 난수, serial, last_insert_id, row_count, guid 등)와 그것을 품은 식. 피연산자 3부류에 더한 넷째 부류로, 도메인은 실행 전 도메인 확정이 1회 정하되 값은 행마다 읽어 확정 변환기로 맞춘다(D-323-18).
