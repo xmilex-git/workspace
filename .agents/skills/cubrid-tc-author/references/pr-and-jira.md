@@ -112,10 +112,11 @@ gh api -X POST repos/CUBRID/<repo>/pulls/<n>/reviews --input review.json
 A 504 or a `stream error: stream ID 1; CANCEL` from this POST can still have created the review:
 `gh api repos/CUBRID/<repo>/pulls/<n>/reviews` before posting again (#3686).
 
-## §4 Reviewer — exactly one, from the team (TC for an earlier engine PR)
+## §4 Reviewer — exactly one, from the team (merged mode only)
 
-Only for `with_fix: no` in `facts.md`. A TC written together with the engine PR (`with_fix: yes`) gets
-no reviewer and skips this section (user, 2026-10-11).
+Only for `mode: merged` in `facts.md` — the engine PR is already in develop and the TC is a 후속 TC
+PR. Open mode (TC on the engine PR's bot branch) and review mode (another author's TC PR judged by
+this skill) get no reviewer and skip this section (user, 2026-10-11 and 2026-10-14).
 
 Team (reviewer pool; the author `xmilex-git` is excluded): `shparkcubrid`, `HyunukLee`,
 `soheejung-cs`, `youngjinj`, `Hamkua`, `jihyekim-0` (user, 2026-10-08).

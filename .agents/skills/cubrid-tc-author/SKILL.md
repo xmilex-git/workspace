@@ -1,13 +1,13 @@
 ---
 name: cubrid-tc-author
-description: Author a CUBRID CTP testcase (sql or shell) for one CBRD issue or engine PR end to end — judge sql / shell / both / out of scope from the fix diff, write the case, prove it on the pre-fix, fix and latest-develop optdebug builds with containerized CTP, open the TC PR with a results table, assign one reviewer (none when the TC is written together with the engine PR), and leave the JIRA comment the outcome calls for. Use when asked to "write a TC", "tc 만들어", "테스트케이스 작성", "add a testcase for CBRD-N / PR #N", or when a wayfinder ticket says to follow the TC authoring skill.
+description: Author a CUBRID CTP testcase (sql or shell) for one CBRD issue or engine PR end to end — judge sql / shell / both / out of scope from the fix diff, write the case, prove it on the pre-fix, fix and latest-develop optdebug builds with containerized CTP, open the TC PR with a results table, assign one reviewer (only when the engine PR is already merged into develop), and leave the JIRA comment the outcome calls for. Also the yardstick for reviewing another author's TC PR (review mode: judge and pitfalls only, no reviewer, nothing pushed). Use when asked to "write a TC", "tc 만들어", "테스트케이스 작성", "add a testcase for CBRD-N / PR #N", to review a TC PR against these rules, or when a wayfinder ticket says to follow the TC authoring skill.
 ---
 
 # cubrid-tc-author
 
-Input: `CBRD-NNNNN` or an engine PR `#N` (CUBRID/cubrid). Output: one TC PR per issue with a
-three-build results table and a reviewer (none when the TC is written together with the engine PR),
-or a JIRA comment saying why there is no TC.
+Input: `CBRD-NNNNN` or an engine PR `#N` (CUBRID/cubrid); or another author's TC PR to review.
+Output: one TC PR per issue with a three-build results table and a reviewer (merged engine PR only),
+or a JIRA comment saying why there is no TC; in review mode, a review report and nothing else.
 Everything runs without asking the user. Stop only at a **STOP** line below.
 
 Every step ends with a `Done when` line. Do not start the next step before it holds.
@@ -31,14 +31,15 @@ Run directory for everything that is not the TC itself:
    the repo that holds the file (sql → cubrid-testcases, shell → cubrid-testcases-private-ex). Never a
    후속 TC PR from the fork for such an issue; the 후속 TC PR is only for an issue whose engine PR is
    already merged (merged mode).
-3. Situation: `with_fix: yes` when this TC is written in the same work as the engine fix (the engine
-   PR is being written now, or was just opened for this fix); `with_fix: no` when the TC is for an
-   engine PR done earlier. Step 6 depends on it.
-4. Write `mode`, `with_fix`, `issue`, `pr`, `merge_commit` (merged mode) or `head_sha` + `base = origin/develop merge-base` (open mode;
+   **A TC PR by another author given to review** → **review mode**: Steps 1–3 are the yardstick
+   (ground the issue, judge the verdict and coverage, walk the pitfall rules against the PR's files);
+   Step 4 only where the review needs runtime evidence. Steps 5–7 never run: no push, no PR, no
+   reviewer, no JIRA comment — the output is the review report.
+3. Write `mode`, `issue`, `pr`, `merge_commit` (merged mode) or `head_sha` + `base = origin/develop merge-base` (open mode;
    before the engine PR exists, `head_sha` is the local engine branch head) into `<rundir>/facts.md`.
    Every later step reads this file.
 
-Done when `facts.md` holds mode, with_fix, issue key, PR number, and the sha(s).
+Done when `facts.md` holds mode, issue key, PR number, and the sha(s).
 
 ## Step 1 — ground (read everything, decide nothing yet)
 
@@ -89,19 +90,18 @@ title, body template, inline design comments).
 
 Done when the PR URL is in `<rundir>/results.md` and the inline review is posted.
 
-## Step 6 — assign one reviewer (TC for an earlier engine PR only)
+## Step 6 — assign one reviewer (merged mode only)
 
-`with_fix: yes` in `facts.md` (the TC is written together with the engine PR) → skip this step: the
-TC PR gets no reviewer (user, 2026-10-11). Write "no reviewer: TC written with the engine fix" in
-`<rundir>/reviewer.md`.
+A reviewer is assigned only when the engine PR is already merged into develop (`mode: merged` in
+`facts.md`, user 2026-10-14). Open mode (the TC rides the engine PR's bot branch) and review mode
+get no reviewer: write "no reviewer: <open mode|review mode>" in `<rundir>/reviewer.md`.
 
-`with_fix: no` (a TC for an engine PR done earlier) → follow
-[references/pr-and-jira.md](references/pr-and-jira.md) §4. Exactly one reviewer from the team list:
+`mode: merged` → follow [references/pr-and-jira.md](references/pr-and-jira.md) §4. Exactly one reviewer from the team list:
 among the members who reviewed the engine PR, the one with the fewest pending review requests now
 (engine + both TC repos); nobody from the team reviewed it → the whole team.
 
-Done when `reviewer.md` holds the skip line (`with_fix: yes`), or `gh pr view <tc-pr> --json
-reviewRequests` lists the chosen team login (`with_fix: no`). The QA logins CODEOWNERS requests at
+Done when `reviewer.md` holds the skip line (open or review mode), or `gh pr view <tc-pr> --json
+reviewRequests` lists the chosen team login (merged mode). The QA logins CODEOWNERS requests at
 PR creation (e.g. kwonhoil, ssihil) stay; never remove them.
 
 ## Step 7 — JIRA comment (only three kinds)
