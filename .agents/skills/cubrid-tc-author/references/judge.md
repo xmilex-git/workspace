@@ -135,7 +135,12 @@ Sources, in this order, each item one row:
 A row whose only observable is a duration (trace time, wall time, SLEEP, a timeout) never becomes a
 case, whatever the bound: "timing — flaky under CI load (shell-rules 23)" (user, 2026-10-12, CBRD-27604).
 Rows without a case need a reason a reviewer accepts: "timing only (R4)", "needs debug assert",
-"covered by case 3", "CBRD-27572 assert on develop makes it crash CI". A row with neither blocks Step 3.
+"covered by case 3", "CBRD-27572 assert on develop makes it crash CI", "unobservable from SQL: <why>".
+A reason about the **post point alone** ("post asserts", "the fix build crashes here") is not one:
+the row gets a develop-only file (verify.md §5; sql-pitfalls Rule 4). A file or function the diff
+**adds** always has a case or a develop-only file — the reviewer opens the new file first (CBRD-26722,
+2026-10-13: `px_scan_index_overflow_*` was excluded as "post asserts by a race" and the PR's own new
+code went untested). A row with neither blocks Step 3.
 Model for the table: cubrid-testcases#3527's "첨부 21개 시나리오 → 케이스 매핑표".
 
 ## §4 Parallel code reading before the coverage list — every issue

@@ -217,3 +217,6 @@ cubrid-jira comment CBRD-<N> --body-file <rundir>/jira-comment.txt --from jira -
    change and goes to the user.
 4. A commit that lands after the PR is opened (boundary redo) answers the bot threads it resolves in the
    same pass, and `results.md` records those thread ids.
+5. Every real gap — bot or human — is also a past-case line under its rule in
+   `references/sql-pitfalls.md` (`CBRD-N (date, caught by reviewer|greptile): wrote → ran or missed →
+   fix`), committed in the tooling repo with the fix; a gap that fits no rule gets a new rule.

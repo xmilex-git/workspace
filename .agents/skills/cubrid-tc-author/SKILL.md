@@ -60,12 +60,16 @@ every row has a case number or an exclusion reason. Verdict `out of scope` → g
 
 ## Step 3 — write the case(s)
 
-- sql: [references/sql-rules.md](references/sql-rules.md). shell: [references/shell-rules.md](references/shell-rules.md).
+- sql: [references/sql-rules.md](references/sql-rules.md) (the form) and
+  [references/sql-pitfalls.md](references/sql-pitfalls.md) (seven rules, each with the past cases that
+  made it — read before writing). shell: [references/shell-rules.md](references/shell-rules.md).
 - Placement is decided by the **issue type** (judge.md §2 table), never by version.
-- Before saving, run the checklist at the end of the rules file and fix every miss.
+- Before saving, walk the seven pitfall rules against every sql file and write `<rundir>/pitfalls.md`
+  (one row per rule per file: `n/a`, `clear` with the answer token or probe as evidence, or `hit →
+  case`); then run the checklist at the end of the rules file and fix every miss.
 
-Done when the file(s) exist in the TC worktree, the checklist has no miss, and `git status` in that
-worktree shows only the new files.
+Done when the file(s) exist in the TC worktree, `<rundir>/pitfalls.md` has its 7 rows per sql file
+with no open `hit`, the checklist has no miss, and `git status` in that worktree shows only the new files.
 
 ## Step 4 — verify on three builds
 
@@ -107,10 +111,14 @@ Follow [references/pr-and-jira.md](references/pr-and-jira.md) §5. Post only for
 
 Done when the comment URL is recorded, or `results.md` says "JIRA comment: none (normal PR)".
 
-## After the PR — bot reviews
+## After the PR — reviews
 
 Greptile or Codex comments on an opened TC PR: [references/pr-and-jira.md](references/pr-and-jira.md) §6
 (check the reviewed commit and existing replies first; a real gap goes through Steps 3-4 again).
+A human reviewer's find goes the same way. Every miss a review or a three-point run exposes adds
+one past-case line under its rule in `references/sql-pitfalls.md` (or shell-rules.md), in the
+tooling repo, in the same work that fixes the TC: `CBRD-N (date, caught by ...): wrote → ran or
+missed → fix`. A find that fits no rule gets a new rule, never a loose fact.
 
 ## Final report (same turn as the last step)
 

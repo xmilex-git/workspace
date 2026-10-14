@@ -136,7 +136,7 @@ Run §3's command with `for p in fix fix fix` (log names `run-fix-1..3`). All th
 A diff between them = nondeterministic output (heap order without `order by`, timing in a trace,
 a threshold at the edge) → back to Step 3; never widen the answer. A case whose plan or parallel
 decision rests on an estimate or a page count also runs 3 times on pre and dev (sampling and heap
-placement move between runs); any flip → back to Step 3 with larger margins (sql-rules, shell-rules 19).
+placement move between runs); any flip → back to Step 3 with larger margins (sql-pitfalls Rule 3, shell-rules 19).
 Points before 58aa0eddf (CBRD-27287, 2026-10-07) can drop the CAS connection when one statement calls an
 undeclared stored function tens of thousands of times ("pending transmission reached IOV_MAX",
 `change_exec_rights` -2). CQT reconnects and reruns, so the rows still match but later `show trace`
@@ -154,13 +154,20 @@ comparisons are evaluated first); read a null trace by grepping the server log f
 | dev | <sha> | cbrd_<N> | OK | 0 | OK | yes |
 ```
 
-A behavior whose setup statement exists only on develop (its syntax changed after the fix) gets a
-develop-only file `cbrd_<N>_<topic>.sql`: its pre and post rows read "해당 없음 (<문법>이 수정 뒤 도입,
-<commit>)", dev is OK ×3, and the PR cites the probe that showed the same behavior on the post point with
-the old syntax (user, 2026-10-08, CBRD-27100 histograms: ANALYZE TABLE ... UPDATE HISTOGRAM → UPDATE
-STATISTICS, 532ce4b6d). Run pre and post with the common file's path, not the directory (the directory
-would run the develop-only file there and fail). The surest post-point proof is an old-syntax copy of
-the file run on post, compared block by block with the develop answer.
+A behavior the **post point cannot run** gets a develop-only file `cbrd_<N>_<topic>.sql`: its
+answer comes from develop, dev is OK ×3, and its pre and post rows read "해당 없음 (<reason>)". Two
+reasons so far:
+- the setup syntax changed after the fix — "해당 없음 (<문법>이 수정 뒤 도입, <commit>)"; the PR cites
+  the probe that showed the same behavior on the post point with the old syntax (user, 2026-10-08,
+  CBRD-27100 histograms: ANALYZE TABLE ... UPDATE HISTOGRAM → UPDATE STATISTICS, 532ce4b6d). The surest
+  post-point proof is an old-syntax copy of the file run on post, compared block by block with the
+  develop answer;
+- the post point asserts or misbehaves on that path and a later develop commit fixed it — "해당 없음
+  (직후 assert, CBRD-<M>에서 완화)"; the PR body's verification section quotes post's assert line
+  (CBRD-26722: `overflow_chain_pool::try_publish`, relaxed by CBRD-26863; the new engine code of the
+  PR was otherwise untested).
+Such a file is never an exclusion reason in the coverage list (judge.md §3). Run pre and post with the
+common file's path, not the directory (the directory would run the develop-only file there and fail).
 
 An R5 issue that also specifies result changes keeps two files: `cbrd_<N>.sql` (correctness, pre OK)
 and `cbrd_<N>_spec_change.sql` (the specified changes, pre NOK by design), so each row of the table
