@@ -150,6 +150,14 @@ finish
    as whole strings, never substrings of `ps` lines.
 10. **Bounded waiting**: `timeout ${csql_timeout} csql ...` on every csql in a loop; poll with a counter
     (`while [ $i -le 30 ]; do ...; sleep 1; done`), never a fixed `sleep 60` as the only synchronization.
+    A utility that must run beside a statement (`cubrid statdump -i`) runs as
+    `timeout -s INT <bound> cubrid ... &` and stops with `kill -INT` on that pid: `cubrid` (and CTP's
+    wrapper) only wait for their cub_admin child, so a signal to their pid never reaches it, while
+    `timeout` passes it to its whole process group. "The statement is running" is an event, not a
+    delay: poll `cubrid tranlist -f <db>` for its text. Such a check needs a statement that runs for many
+    seconds, and run time counts: the user dropped CBRD-27604's statdump-during-a-statement checks
+    (three ~1-minute statements took the case from 18 s to 2-3.5 min) and put the behavior in the JIRA
+    spec instead (2026-10-14).
 11. **Concurrency** only when the defect needs it (pool/LIFO races, lock timeouts): N sessions × M
     iterations, each iteration's verdict one line, aggregated by `check_results` as in cbrd_27484.
 12. **Crash detectors** around the risky phase: server pid before/after, core count delta,
@@ -198,6 +206,11 @@ finish
 20. **Checks of one shape share one helper** (trace path check, warm-up, loop, measured delta), but each
     check keeps its own trace guard, so a plan change cannot make it pass without testing anything; a
     missing measurement (no memmon output) is a failure, never 0 (cbrd_27217 `loop_verdict`).
+    A check that passes on a value near 0 (a statdump delta "< 1/5") passes just as well when its
+    session ran nothing: prove the workload ran (its rows printed) in the same guard.
+    CBRD-27604 (2026-10-14, caught by Codex on private-ex #4399): check 5 read only the statdump delta
+    around 4 untraced scans → a csql timeout without an ERROR line would have passed → the 4 scans must
+    print 200000.
 21. A loop whose statements must fail on every execution runs `csql -e` (`--error-continue`); without it
     csql exits at the first error.
 22. The b-tree user-page count the server checks is one more than `SHOW INDEX CAPACITY`'s
