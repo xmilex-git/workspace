@@ -33,7 +33,7 @@ PR 8022 는 "언제 정하나" 를 로드 도출과 실행 전 도메인 확정 
 ## Consequences
 
 - 스트림 레이아웃(카탈로그 스트림 포함)이 바뀐다. develop 의 디스크 호환 수준은 이미 11.5 이고 미출시이므로 11.5 GA 전에 넣고 구 레이아웃 코덱은 두지 않는다.
-- 캐시 키 텍스트의 호스트 변수 토큰에 타입이 붙어 plandump·SQL_ID TC 답이 바뀐다: ` ?:0 ` → ` ?:0:22 `(DB_TYPE 번호), 문자열 ` ?:0:25.5.1 `(타입.codeset.collation id), `;bind_var_cnt=N` 은 그대로. 자동 파라미터도 타입·collation 을 찍으므로 `a = 1`/`a = 1.5`, SET NAMES 가 다른 세션은 항목이 갈린다(develop 은 리터럴 collation 을 플랜에 굽고도 키에 없었다). CBRD-27490(바인드 변형)과 키 형식을 맞춘다.
+- 캐시 키 텍스트의 호스트 변수 토큰에 타입이 붙어 plandump·SQL_ID TC 답이 바뀐다: `where [dba.t].[n]= ?:0 ?193=…;bind_var_cnt=1` → `… ?:0:22 ?193=…`(DB_TYPE 번호), 문자열 ` ?:0:25.3.0 `(타입.codeset.collation id; plandump 실측 2026-10-16, JIRA 사양 변경 1 에 전문). `;bind_var_cnt=N` 은 그대로. 자동 파라미터도 타입·collation 을 찍으므로 `a = 1`/`a = 1.5`, SET NAMES 가 다른 세션은 항목이 갈린다(develop 은 리터럴 collation 을 플랜에 굽고도 키에 없었다). CBRD-27490(바인드 변형)과 키 형식을 맞춘다.
 - 숫자 컬럼과 비교하는 `?` 에 변환 불가 값을 주면 행의 -181 대신 바인드 시점 오류이고, 실행되지 않는 분기의 항도 같이 오류다(사양 변경).
 - 합격 기준: CTP sql/medium 전수·shell 이 develop 과 같음(사양 변경 제외), 실행당 명령 수가 모든 벤치 셀에서 develop 이하, 문장당 서명 수·캐시 메모리 분포 기록, 체크섬 assert 0.
 - 진행: 최신 develop 위 구조 뼈대 PR(fork `xmilex-git/cubrid#262`) → 구조 승인 → 같은 PR 에서 전체 구현. 뼈대 2차(2026-10-16 `1eadfe436`)가 위 모양이고, 파생 자리·드라이버 경로의 서명 재컴파일·값 없는 PREPARE 의 XASL 생략은 전체 구현에서.
