@@ -163,6 +163,72 @@ method_callback.cpp·method_query_util.cpp(클라이언트 메서드), jsp_cl.cp
 (플랜 하나가 서명 하나, 바인드는 컴파일된 도메인으로 도착, `vd->dbval_ptr` 는 const). 처리는 design.md 4.10.
 `fetch_arith_ops.c` 로 옮겨간 `fetch_peek_arith` 본문의 자리는 §2~§3 의 `fetch.c` 행이 그대로 적용된다(함수 이름이 같다).
 
-| 지점 | 처리 | 결정을 싣는 곳 |
+채운 날 2026-10-16 (구현자, 브랜치 CBRD-27583-impl, develop `3beb7654b`). 줄 번호는 그 develop 기준. 타입이 서명별 플랜에서 고정이므로
+아래 tp_* 호출은 전부 원 타입·목표 타입이 컴파일에 알려진 변환·비교다 — **E** 는 없다. 프로그램 번역은 노드의 결정 필드에서 변환기·비교 함수를
+가져오고(design 4.10), 해석기(`fetch_arith_ops.c`)와 같은 필드를 읽는다.
+
+### 13-1. `tp_*` 호출 (expr_compile.c 13, fetch_arith_ops.c 23)
+
+| 지점 | 호출 | 무엇을 | 처리 | 결정을 싣는 곳 |
+|---|---|---|---|---|
+| expr_compile.c:290 `expr_coerce_result_to_domain` | `tp_value_coerce` | 커널 결과를 노드 도메인으로 (`qdata_coerce_result_to_domain` 거울) | C | 연산자 노드의 결과 변환기 (4.2, 4.6 `qdata_coerce_result_to_domain` 과 같은 필드) |
+| expr_compile.c:674 `expr_k_cast` | `tp_value_cast_force` | CAST/CAST_WRAP 를 고정 목표로 | C | CAST 노드의 변환기 (4.2 `domain_operand_cast_target`) |
+| expr_compile.c:690 `expr_k_cast_strict` | `tp_value_cast` | STRICT CAST_WRAP | C | 같음 (엄격 모드 변환기) |
+| expr_compile.c:820 `expr_k_nullif` | `tp_value_compare_with_error` | NULLIF 의 두 값 비교 | C | NULLIF 노드의 비교 결정 (4.1 과 같은 `DOMAIN_COMPARE`) |
+| expr_compile.c:829 `expr_k_nullif` | `tp_value_cast` | 왼쪽 값을 결과 도메인으로 | C | NULLIF 노드의 가지 변환기 (4.2) |
+| expr_compile.c:939 `expr_pred_generic_cmp` | `tp_value_compare_with_error` | fast_type 이 없는 비교의 일반 경로 | C | 비교 항 `compare` (4.1): 결정된 항은 연산자별 함수, 일반 경로 없음 |
+| expr_compile.c:1062 `expr_pred_eval` | `tp_value_compare_with_error` | CASE/IF 술어의 비교 | C | 같음 (4.1) |
+| expr_compile.c:1082 `expr_pred_eval` | `tp_value_compare_with_error` | 같음(다른 연산자) | C | 같음 (4.1) |
+| expr_compile.c:1336 `expr_k_case_pub_cast` | `tp_value_auto_cast` | CASE 가지 값을 CASE 도메인으로 | C | CASE 노드의 가지 변환기 (4.2) |
+| expr_compile.c:1377 `expr_k_predicate_cast` | `tp_value_auto_cast` | 술어 결과(정수)를 노드 도메인으로 | C | 연산자 노드의 결과 변환기 (4.2) |
+| expr_compile.c:2937 `expr_scan_pred_build` | `tp_more_general_type` | 숫자 상수 쪽을 더 일반 타입으로 고정할지 | C | 비교 항 `cmp_target` (4.1): 어느 쪽을 바꾸는지는 항이 안다 — 번역은 결정 없이 항의 변환기로 상수를 한 번 바꾼다(평가) |
+| expr_compile.c:2945 `expr_scan_pred_build` | `tp_value_coerce` | 그 상수 변환 | C | 같음 (항의 변환기) |
+| expr_compile.c:3670 `expr_compile_pred_impl` | (fast_type = UNKNOWN → `tp_value_compare_with_error`) | 직접 비교 타입이 없으면 일반 비교 | C | 비교 항 `compare` 의 직접 비교 타입 (4.1) |
+| fetch_arith_ops.c:112 `fetch_session_read_value` | `tp_value_cast` | 세션변수 값의 타입 검사(8022 -1384) | D | 세션변수 타입은 첫 SET 고정·키에 있음 (4.8) — 함수째 삭제 |
+| fetch_arith_ops.c:301 `fetch_cast_operand` | `tp_value_cast_with_converter` | CAST 피연산자를 결정된 변환기로 | C | CAST 노드의 변환기 (4.2) — 지금은 8022 표에서 찾음 |
+| fetch_arith_ops.c:311 `fetch_cast_operand` | `tp_value_cast_with_converter` | 같음(값 타입으로 찾기) | C | 같음 |
+| fetch_arith_ops.c:315 `fetch_cast_operand` | `tp_value_cast`/`tp_value_cast_force` | 결정 없는 CAST 의 폴백 | C | 같음 — 폴백 삭제 |
+| fetch_arith_ops.c:1464 `fetch_op_octet_length` | `tp_value_cast` | 인자를 VARBIT 로 | C | 연산자 노드의 피연산자 변환기 (§12 OCTET/BIT/CHAR_LENGTH) |
+| fetch_arith_ops.c:1480 `fetch_op_octet_length` | `tp_value_cast` | 인자를 CHAR 로 | C | 같음 |
+| fetch_arith_ops.c:1523 `fetch_op_bit_length` | `tp_value_cast` | 인자를 VARBIT 로 | C | 같음 |
+| fetch_arith_ops.c:1540 `fetch_op_bit_length` | `tp_value_cast` | 인자를 CHAR 로 | C | 같음 |
+| fetch_arith_ops.c:3184 `fetch_op_to_date` | `tp_value_cast` | 왼쪽 인자를 CHAR 로 | C | 연산자 노드의 피연산자 변환기 (4.2) |
+| fetch_arith_ops.c:3225 `fetch_op_to_time` | `tp_value_cast` | 같음 | C | 같음 |
+| fetch_arith_ops.c:3269 `fetch_op_to_timestamp` | `tp_value_cast` | 같음 | C | 같음 |
+| fetch_arith_ops.c:3314 `fetch_op_to_datetime` | `tp_value_cast` | 같음 | C | 같음 |
+| fetch_arith_ops.c:3562 `fetch_op_case` | `tp_value_auto_cast` | 고른 가지 값을 CASE 도메인으로 | C | CASE 노드의 가지 변환기 (4.2) |
+| fetch_arith_ops.c:3607 `fetch_op_predicate` | `tp_value_auto_cast` | 술어 결과를 노드 도메인으로 | C | 결과 변환기 (4.2) |
+| fetch_arith_ops.c:3802 `fetch_op_concat` | `tp_value_auto_cast` | 피연산자를 CONCAT 도메인으로 | C | 피연산자 변환기 (4.2) |
+| fetch_arith_ops.c:3837 `fetch_op_concat_ws` | `tp_value_auto_cast` | 구분자를 도메인으로 | C | 같음 |
+| fetch_arith_ops.c:3846 `fetch_op_concat_ws` | `tp_value_auto_cast` | 피연산자를 도메인으로 | C | 같음 |
+| fetch_arith_ops.c:3878 `fetch_op_concat_ws` | `tp_value_auto_cast` | 같음(다른 갈래) | C | 같음 |
+| fetch_arith_ops.c:4033 `fetch_op_left` | `tp_value_auto_cast` | 길이 인자를 INTEGER 로 | C | 피연산자 변환기 (4.2) |
+| fetch_arith_ops.c:4089 `fetch_op_right` | `tp_value_auto_cast` | 같음 | C | 같음 |
+| fetch_arith_ops.c:4404 `fetch_op_nullif` | `tp_value_cast` | 왼쪽 값을 결과 도메인으로 | C | NULLIF 노드의 가지 변환기 (4.2, §11 S-04) |
+| fetch_arith_ops.c:4468 `fetch_op_least` | `tp_value_cast` | 결과를 공통 도메인으로 | C | LEAST 노드의 공통 도메인·가지 변환기 (§11 S-04) |
+| fetch_arith_ops.c:4514 `fetch_op_greatest` | `tp_value_cast` | 같음 | C | GREATEST 노드 (§11 S-04) |
+| fetch_arith_ops.c:4540 `fetch_op_sys_connect_by_path` | `tp_value_auto_cast` | 경로 결과를 노드 도메인으로 | C | 결과 변환기 (4.2) |
+
+### 13-2. 8022 층을 읽는 자리 — 전부 D (design 4.10)
+
+| 지점 | 무엇을 | 처리 |
 |---|---|---|
-| (구현자가 단계 2 연산자 노드 시작 전에 호출마다 적는다: 36 줄) | C/D/E | 연산자 노드 `DOMAIN_ARITH` / 비교 항 `compare` |
+| expr_compile.c `EXPR_PROG.hv_types`·`n_hv`, `expr_prog_signature_matches`, `expr_prog_signature_ok`·`expr_scan_pred_signature_ok` 의 타입 검사·재번역 | 프로그램의 바인드 타입 서명 | D: 플랜 하나 = 서명 하나 |
+| expr_compile.c `expr_item_resolution`, `expr_arith_exec_domain`, `expr_arith_number_plan` 의 `plan_item->fixed` / 해결 표 | 숫자 커널 선택·노드 도메인 | D → 연산자 노드 `DOMAIN_ARITH` (4.2) |
+| expr_compile.c `expr_regu_exec_domain` (`qexec_get_node_domain`/`qexec_set_node_domain`) | 소비자가 읽는 노드 도메인 | D → `regu->domain` |
+| expr_compile.c `expr_pos_value_index` | resolve_domains 의 바인드 변환 사본 | D → `regu->value.val_pos` (`vd->dbval_ptr` const) |
+| expr_compile.c `DOMAIN_PLAN_LATE_BIND(_COLLATION/_COERCION)` 검사 4곳, `DOMAIN_PLAN_ITEM_COMPARES` 2곳 | 늦은 바인딩 노드 거절 | D: 서명별 플랜에 없다 |
+| fetch_arith_ops.c `qexec_get_node_domain` 3곳, `qexec_late_bind_domain` 5곳, `plan_item` 읽기 | 피연산자 도메인·해결 | D → 피연산자 regu 도메인 |
+| fetch.c (7658) `fetch_arith_constant_evaluated`, `fetch_arith_resolved_domain` 호출과 `qexec_set_node_domain` | 상수 선평가·노드 도메인 기록 | D (§8 fetch.c 행) |
+
+### 13-3. 7658 의 다른 소비자
+
+| 지점 | 무엇을 | 처리 |
+|---|---|---|
+| query_aggregate.cpp (7658) `qexec_accumulator_domain (vd, plan_item)` 비교 | SUM/AVG 누산기 공유 판정 | C → 집계 노드의 누산 도메인 (4.3) |
+| query_aggregate.cpp:`expr_prog_signature_ok` 호출 | 피연산자 프로그램 서명 검사 | D |
+| px_scan_result_handler.cpp:`expr_prog_signature_ok` 호출 (BUILDVALUE_OPT) | 같음 | D |
+| query_opfunc.c (7658) `qexec_get_node_domain`·`expr_regu_exec_domain`·`qexec_consumer_domain` | 프로그램이 내놓은 노드의 소비자 도메인 | D → `regu->domain` |
+| query_opfunc.c / query_evaluator.c `expr_prog_signature_ok`·`expr_scan_pred_signature_ok` 호출 | 서명 검사 | D |
+| query_executor.c 주석(서명 재검사) | — | 문구 정리 |
+| heap_file.c (7658) | 투영 프로그램 호출부 — 8022 층 읽기 없음 | 그대로 |
