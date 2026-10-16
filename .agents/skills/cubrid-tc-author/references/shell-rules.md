@@ -105,7 +105,7 @@ else
 fi
 
 # --- Crash detectors ---------------------------------------------------------
-server_pid_before=`cubrid server status 2>&1 | grep "${dbname}" | sed -e 's/.*pid //' -e 's/[^0-9]//g'`
+server_pid_before=`cubrid server status 2>&1 | grep "Server ${dbname} " | sed -e 's/.*pid //' -e 's/[^0-9]//g'`
 core_before=`find $init_path $CUBRID ${cur_path} -name "core*" -type f 2>/dev/null | wc -l`
 cat $CUBRID/log/server/${dbname}_2*.err > err_before.log 2>/dev/null
 
@@ -161,7 +161,12 @@ finish
 11. **Concurrency** only when the defect needs it (pool/LIFO races, lock timeouts): N sessions × M
     iterations, each iteration's verdict one line, aggregated by `check_results` as in cbrd_27484.
 12. **Crash detectors** around the risky phase: server pid before/after, core count delta,
-    `grep -ic assertion` on the error-log delta. These are their own numbered checks. In CTP containers
+    `grep -ic assertion` on the error-log delta. These are their own numbered checks.
+    **Read a pid (or check up/down) from `cubrid server status` with `grep "Server ${dbname} "`** —
+    the full server name and its trailing space. A bare `grep "${dbname}"` also matches a database
+    whose name starts with `${dbname}` (db27645 and the companion case's db27645iv): the snapshot then
+    holds two pids, and when the other case stops its server the check reports a restart that never
+    happened (CBRD-27645 TC review, 2026-10-16). In CTP containers
     an optdebug assert's text never reaches `$CUBRID/log/server/<db>_*.err` (stderr is lost).
     **Count cores where CTP itself looks**: `find $init_path $CUBRID ${cur_path} -name "core*" -type f`,
     the set CTP's `do_check_more_errors` (shell/init_path/shell_utils.sh) searches after every case
@@ -242,3 +247,4 @@ finish
 - DESCRIPTION ≤ 40 lines, no workspace numbers
 - no check reads a duration (`time:`, `fetch_time:`, `SYS_DATETIME`, `date`, `SLEEP`) — rule 23
 - cores counted only with `find $init_path $CUBRID ${cur_path} -name "core*" -type f` — rule 12
+- every `cubrid server status` lookup greps `"Server ${dbname} "` (full name + space) — rule 12
