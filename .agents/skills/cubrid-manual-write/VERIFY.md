@@ -13,7 +13,7 @@ Never reuse another session's server or `~/CUBRID`. Use the harness-specific wor
 # in the tooling repo
 just ports                                   # see existing claims + live listeners
 just port-claim <db> <effort>                # e.g. just port-claim mandb cbrd-26722-docs  → cubrid_port_id + broker block
-INSTALL_PREFIX=$HOME/release/CUBRID-<ver>.<db> WORKSPACE=/home/cubrid/dev/cubrid just rebuild release <ver>.<db>
+INSTALL_PREFIX=$HOME/release/CUBRID-<ver>.<db> WORKSPACE=/home/cubrid/dev/cubrid-worktree/develop just rebuild release <ver>.<db>
 ```
 
 Environment block — **prefix every later command with it**; an inherited `CUBRID_DATABASES` pointing
@@ -88,16 +88,31 @@ grep -rn -E -f $S/retired-names.txt ko/ en/                             # "do no
 
 ## 5. Sphinx build and render check
 
+The host Python (3.6) cannot run the manual's Sphinx, so the build uses Python from nix and the
+packages pinned in the manual's `requirements.txt` (the versions CI builds with), in a git-ignored venv
+of the tooling repo. Once per host:
+
 ```bash
-cd /home/cubrid/cubrid-manual/ko && make html 2>&1 | tee ../../.git_ignored_dir/scratch/<effort>/sphinx-ko.log | grep -E 'sql/<f>.rst|admin/<f>.rst'
-cd /home/cubrid/cubrid-manual/en && make html 2>&1 | tee ../../.git_ignored_dir/scratch/<effort>/sphinx-en.log | grep -E 'sql/<f>.rst|admin/<f>.rst'
+T=<tooling-repo>/.git_ignored_dir
+nix-build '<nixpkgs>' -A python312 -o $T/sphinx/python
+$T/sphinx/python/bin/python3 -m venv $T/sphinx/venv
+TMPDIR=$T/scratch $T/sphinx/venv/bin/pip install -r /home/cubrid/dev/cubrid-manual/requirements.txt
+```
+
+Build each language into the effort's scratch dir. `LC_ALL=C.UTF-8` because nix Python has no host
+locale archive; `sphinx-build` directly because the Makefile's `html` target first runs `find /`.
+
+```bash
+SB=$T/sphinx/venv/bin/sphinx-build O=$T/scratch/<effort>
+for l in ko en; do (cd /home/cubrid/dev/cubrid-manual/$l && LC_ALL=C.UTF-8 $SB -q -b html -d $O/$l-doctrees . $O/$l-html > $O/sphinx-$l.log 2>&1; echo "$l rc=$?"); done
+grep -E 'sql/<f>.rst|admin/<f>.rst' $O/sphinx-ko.log $O/sphinx-en.log
 ```
 
 - Gate: **zero warnings on touched files** in both languages (pre-existing warnings elsewhere are
   noted, not fixed). `sphinx-autobuild` is in `requirements.txt` if you want a live server.
-- Render check with Playwright on `_build/html/<page>.html#<anchor>`: every `:ref:` resolves, no raw
+- Render check with Playwright on `$O/<lang>-html/<page>.html#<anchor>`: every `:ref:` resolves, no raw
   markup leaks (`\`, `**`, `:ref:`), tables have the same geometry as their sibling tables, notes and
-  code blocks render as such, math renders. Any anomaly ⇒ fix it and append the rule to STYLE.md §11.
+  code blocks render as such, math renders. Any anomaly ⇒ fix it and add a case to [PITFALLS.md](PITFALLS.md).
 - Structural counts (bullets, notes, code blocks, anchors, headings) are the mechanical ko↔en gate;
   semantic comparison is the QA pass below.
 

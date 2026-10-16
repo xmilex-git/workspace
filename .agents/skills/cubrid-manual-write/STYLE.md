@@ -2,10 +2,10 @@
 
 Normative text is kept in Korean where the rule is about Korean prose (the wording the manual owner
 confirmed); headings and glue are English. This file supersedes
-`docs/research/manual-style-guide.md@research/manual-style-guide`. **§11 is append-only**: every new
-review correction or render anomaly you hit gets one bullet there, in the same session it was found.
+`docs/research/manual-style-guide.md@research/manual-style-guide`. Review corrections and render
+anomalies are recorded as cases in [PITFALLS.md](PITFALLS.md), in the same session they are found.
 
-Precedence: manual's existing text > this file > earlier PRs/drafts. Engine code > everything for facts.
+Precedence: manual's existing text > the manual's `docs/STYLE_GUIDE.ko.md` (notation standard, CUBRIDMAN-343) > this file > earlier PRs/drafts. Engine code > everything for facts.
 
 ## 1. Language and tone
 
@@ -125,43 +125,14 @@ Three places: ① the syntax literal block in the `SQL 힌트` section (pipe-sep
 
 ## 9. Vocabulary discipline (before writing any noun or verb)
 
-1. `grep -rn '<word>' /home/cubrid/cubrid-manual/ko` — if the manual already names the concept, **use that exact term and `:ref:` it** ("병합" → **View Merging** / "머지(merge)" per the `view_merge` section).
+1. `grep -rn '<word>' /home/cubrid/dev/cubrid-manual/ko` — if the manual already names the concept, **use that exact term and `:ref:` it** ("병합" → **View Merging** / "머지(merge)" per the `view_merge` section).
 2. Zero precedents ⇒ do not coin it. Rephrase with existing vocabulary ("서브라인/라인" → "항목", "병렬 처리 상세 정보", "~가 추가로 출력된다"). If a new term is truly required, ask the user first.
 3. "실체화(materialization)" is not manual vocabulary: describe a non-merged derived table as "병합되지 않는 derived table에서 임시 결과 리스트가 생성된다" and mention the **NO_MERGE** hint as the standard way to force it.
 4. Suspected developer/colloquial jargon → same grep test; zero hits ⇒ rewrite.
 
-## 10. Pre-review checklist (each item cost a review round once)
+## 10. Review pitfalls
 
-1. 질의 ○ / 쿼리 ✕.
-2. No defaults hard-coded in feature-page prose.
-3. No "등" on closed lists.
-4. Boundary values (0/1/2+) spelled out.
-5. Internal engine terms translated to user language.
-6. Feature names not over-qualified; restrictions go in prose.
-7. Example hints exist in the parser.
-8. Section titles without parent-context duplication.
-9. Escape hygiene (`**0**\ 으로`) and no duplicated particles after escapes.
-10. Gates/constraints translated into **what the user observes + what to do** ("통계가 없으면 … 선택되지 않는다. **UPDATE STATISTICS** 문으로 통계를 갱신한다"), promoted to standalone sentences when they decide availability.
-11. Non-applicability lists are **exhaustive over SQL-expressible, user-observable conditions** (derived from the engine's eligibility check function, each item code-verified) — never "~와 같은 일부 경우". Internal plan shapes are omitted.
-12. Rules with the same shape but different input metrics are "같은 형태의 규칙"/"a rule of the same shape", never "동일한 규칙"/"the same rule".
-13. Table cells never blank; upper bounds verified in code.
-14. Observable thresholds documented even when the constant is hidden; scope confirmed by code path.
-15. Multi-stage clamps in application order.
-16. Trace descriptions checked against the output gate (what is actually printed).
-17. American spelling; `aggregate function` as noun.
-
-## 11. Lessons (living, append-only — one bullet per correction, with source)
-
-- 게이트·제약 조건은 사용자 행동으로 번역해서 쓴다 (#152, 사용자 교정). 엔진 내부 게이트(예: "선택도가 히스토그램 산출일 것")를 내부 조건 나열로만 녹이지 말고, ①사용자가 관찰하는 결과와 ②그때 해야 할 행동을 명시적 문장으로 함께 쓴다. 전제조건이 기능의 사용 가능 여부를 통째로 좌우하면 불릿 속 수식어가 아니라 독립 문장으로 승격한다.
-- 매뉴얼에 없는 신조어를 만들지 않는다 (#152, 사용자 교정). 새 개념을 지칭할 어휘가 필요하면 먼저 매뉴얼 전체를 grep해 기존 어휘만 쓴다. 사례: "서브라인/라인" → 선례 0건; 기존 어휘는 "항목", "병렬 처리 상세 정보", "~가 추가로 출력된다".
-- "실체화(materialization)"는 매뉴얼 어휘가 아니다 (#152, 사용자 교정). View Merging의 반대로 서술하고 NO_MERGE 힌트를 함께 언급한다.
-- 단어를 쓰기 전에 매뉴얼의 기존 동의어를 확인하고 그대로 쓴다 (#152, 사용자 교정). 사례: "병합" → **View Merging** / "머지(merge)" + :ref:`view_merge` 상호 참조.
-- 구어체 엔진 은어를 프로즈에 쓰지 않는다 (PR #768 리뷰 1라운드). "디스크에 떨어진" → 비본질이면 삭제("부질의 등으로 생성된 임시 결과 리스트"), 본질이면 "저장된/저장되지 않은". ko에서 디스크 언급을 삭제한 문장은 en도 함께 삭제한다.
-- 기준 지표가 다른 규칙은 "같은 형태의 규칙"으로 상호 참조한다 (PR #768 리뷰 2라운드). 입력 지표(스캔 페이지 수 vs 큰 쪽 리스트 페이지 수)가 다르면 "동일"은 부정확하다.
-- 비적용·제약 조건을 "~와 같은 일부 경우"로 뭉뚱그리지 않는다 (PR #768 리뷰 2라운드). 자격 검사 함수(memoize `possible_check`, `px_scan_checker`)에서 조건을 전수 도출해 불릿으로 나열한다 — 단 사용자가 SQL로 표현·관찰할 수 있는 조건의 전수로 한정하고, 각 항목을 코드로 검증한다.
-- 파라미터 표의 셀을 빈칸으로 두지 않는다 (PR #768 리뷰 2라운드). 상한은 `system_parameter.c`의 prm 정의에서 확인; upper=NULL이면 ko '없음'/en 'none'.
-- 사용자가 관찰 가능한 임계 수치는 히든 상수라도 프로즈에 문서화한다 (PR #768 리뷰 2라운드). 예: `MIN_TUPLES_FOR_PARALLEL_SORT=500` — 단 적용 경로를 코드로 확인해 범위를 한정한다(500은 ORDER BY+LIMIT 전용).
-- 다단 클램프·조정은 적용 순서까지 명시한다 (PR #768 리뷰 2라운드). 부팅 시 조정(①코어 수 ②max_parallel_workers)은 순서 있는 불릿으로.
-- RST 이스케이프(`\ `) 편집 뒤 조사 중복을 기계 스윕한다 (PR #768 리뷰 2라운드). ":ref:`...`\에 결과에" 유형.
-- trace 관찰 서술은 출력 조건까지 코드로 확인한다 (PR #768 리뷰 2라운드). MEMOIZE는 캐시 해제 시 항목 자체가 출력되지 않으므로 `enabled: false`는 관찰 불가 — "hit>0일 때만 출력" 같은 게이트 기준으로 서술한다.
-- 리뷰어가 "제약 삭제"를 제안해도 코드+실측으로 재검증한 뒤 판단한다 (PR #768 리뷰 1라운드). "JOIN 첫번째 드라이빙 테이블" 제약은 실존했다(px_scan_checker.cpp) — 삭제 대신 사용자 관점 재서술 + 유도 힌트(ORDERED/USE_HASH) 안내로 응답했다.
+Where drafts went wrong despite the rules above (each case a review round on #152, #768 or #772) is
+kept in [PITFALLS.md](PITFALLS.md): five rules with their cases, walked before every push. A new
+review correction becomes a case line there, not a rule here, unless it changes how the manual is
+written in general.

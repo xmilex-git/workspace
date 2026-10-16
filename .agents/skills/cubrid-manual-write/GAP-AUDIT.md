@@ -22,7 +22,7 @@ hint that had been reverted, a "hint bypasses threshold" claim that was false).
 ### Engine PR sweep (how to find what changed since the last documented version)
 
 ```bash
-cd /home/cubrid/dev/cubrid
+cd /home/cubrid/dev/cubrid-worktree/develop
 git log <last-release-branch-point>..develop --oneline --grep '<feature-keyword>'   # then read each PR body
 git diff <branch-point>..develop -- src/base/system_parameter.c                   # new/renamed parameters
 git diff <branch-point>..develop -- src/parser/                                    # new/renamed hints

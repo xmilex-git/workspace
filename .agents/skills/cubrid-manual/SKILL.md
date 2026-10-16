@@ -17,7 +17,7 @@ Search the CUBRID official manual repository for documentation on SQL syntax, fu
 
 ## Manual Location
 
-The manual lives at `/home/cubrid/cubrid-manual` with two language directories:
+The manual lives at `/home/cubrid/dev/cubrid-manual` with two language directories:
 - `en/` — English documentation
 - `ko/` — Korean documentation
 
@@ -45,12 +45,12 @@ Map the user's question to the relevant directory/file based on the structure ab
 Use Grep to search across the manual RST files:
 
 ```
-Grep pattern="<search_term>" path="/home/cubrid/cubrid-manual/en" glob="*.rst"
+Grep pattern="<search_term>" path="/home/cubrid/dev/cubrid-manual/en" glob="*.rst"
 ```
 
 For Korean docs:
 ```
-Grep pattern="<search_term>" path="/home/cubrid/cubrid-manual/ko" glob="*.rst"
+Grep pattern="<search_term>" path="/home/cubrid/dev/cubrid-manual/ko" glob="*.rst"
 ```
 
 ### Step 3: Read relevant sections

@@ -2,7 +2,7 @@
 
 ## Repos and branches
 
-- Local clone `/home/cubrid/cubrid-manual`: `origin` = the user's fork (`xmilex-git/cubrid-manual`,
+- Local clone `/home/cubrid/dev/cubrid-manual`: `origin` = the user's fork (`xmilex-git/cubrid-manual`,
   push target), `upstream` = `CUBRID/cubrid-manual` (PR target). `git fetch upstream` before branching.
 - **Base is always `develop`** — there is no `release/11.5`-style branch to target for the next version.
   Release-branch copies are separate copycat PRs opened *after* the develop merge (out of scope here;
@@ -34,6 +34,7 @@
 3. Every audit work-list item is present (grep a marker per item); every "do not document" name has 0 hits.
 4. Every example's ticket log row has a captured output; trace blocks in the RST are byte-identical to the captures.
 5. Fork pushed; branch rebased on current `upstream/develop`; untouched files unchanged (`git diff --stat upstream/develop`).
+6. `<scratch>/<effort>/pitfalls.md` holds a verdict with evidence for every [PITFALLS.md](PITFALLS.md) rule on every touched pair.
 
 ## HITL approval (exactly once)
 
@@ -43,6 +44,10 @@ first was the style/example policy).
 
 ## Review response protocol
 
+- **Collect from all three places.** Start and end every round with `scripts/review-sweep.sh <pr>`:
+  inline threads without your reply, conversation-tab comments, review bodies. The round is done when
+  every comment it lists has a reply naming the change and commit (or the reason for no change);
+  conversation-tab and review-body comments get a quote reply in the conversation tab.
 - **Verify before accepting.** Every factual claim in a review comment — "this constraint no longer
   exists", "the entry is suppressed", "the clamp order is X" — is checked against engine code (and on
   the test server when observable) before the reply. Reviewers were right on most claims in #768 and
@@ -51,9 +56,9 @@ first was the style/example policy).
   instead of deleting it.
 - Accept wording suggestions verbatim when they are the house voice (STYLE.md §1) — then sweep the rest
   of the diff for the same pattern and fix all occurrences, en included.
-- One commit per review round per file; reply on every thread with what changed and the commit hash;
-  rebuild Sphinx and re-run the sweeps.
-- Every correction becomes a bullet in STYLE.md §11 in the same session.
+- One commit per review round per file; rebuild Sphinx, re-run the sweeps, and walk
+  [PITFALLS.md](PITFALLS.md) on the round's diff before pushing.
+- Every correction becomes a case line under its rule in [PITFALLS.md](PITFALLS.md) in the same session.
 - Track the round in the tracking ticket: reviewer, count, verdicts, commits, remaining threads.
 
 ## Done

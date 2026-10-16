@@ -6,11 +6,14 @@ description: Author or update CUBRID user-manual pages (RST, ko+en) for an upstr
 # CUBRID Manual Writing (LLM contributor rulebook)
 
 **Boundary with `cubrid-manual`:** that skill *consumes* the manual (search `en/`/`ko/` RST to answer
-questions). This skill *produces* it: the rules for changing `/home/cubrid/cubrid-manual` and getting
+questions). This skill *produces* it: the rules for changing `/home/cubrid/dev/cubrid-manual` and getting
 the change merged upstream. Use `cubrid-manual` inside this skill whenever you need to look something up.
 
-Every rule here was paid for by a review round or a user correction on upstream PR
-[#768](https://github.com/CUBRID/cubrid-manual/pull/768) (CBRD-26722, 11.5 parallel query + memoize).
+Every rule here was paid for by a review round or a user correction on upstream PRs
+[#768](https://github.com/CUBRID/cubrid-manual/pull/768) (CBRD-26722, 11.5 parallel query + memoize) and
+[#772](https://github.com/CUBRID/cubrid-manual/pull/772) (CBRD-27299, PARALLEL_ENABLE). The misses that
+got past the rules anyway are the cases in [PITFALLS.md](PITFALLS.md): read it before writing, walk it
+before every push.
 Where a rule and this file disagree with the tree's own precedent, **the manual's existing text wins**;
 where they disagree with the engine code, **the code wins**.
 
@@ -18,8 +21,8 @@ where they disagree with the engine code, **the code wins**.
 
 1. **Code is the source of truth.** JIRA, design docs, earlier PRs, and even the current manual can be
    stale. Every parameter default/range, hint name, trace label, threshold, and constraint you write is
-   verified in the engine checkout (`/home/cubrid/dev/cubrid`, `system_parameter.c`, parser, trace
-   handlers) before it goes in.
+   verified in the engine checkout (`/home/cubrid/dev/cubrid-worktree/develop`, `system_parameter.c`,
+   parser, trace handlers; look symbols up with `tools/code-index/code-index`) before it goes in.
 2. **No example without an execution.** Every SQL block was run on a server you control; every trace or
    conf output is the captured text, unrounded and unedited. See [VERIFY.md](VERIFY.md).
 3. **ko first, en mirrors it** paragraph for paragraph (same anchors, bullets, notes, code blocks).
@@ -36,21 +39,21 @@ Work the phases in order; each has a checklist in its reference file.
 |---|---|---|
 | 1. Audit | Inventory the user surface (parameters, hints, trace, activation/fallback semantics) from JIRA link web + engine PR sweep + code; grade the manual `없음`/`부실·낡음`/`충분`; decide placement by precedent; emit a section-level work list. | [GAP-AUDIT.md](GAP-AUDIT.md) |
 | 2. Environment | Claim a port (`just port-claim <db> <effort>`), isolated install via `INSTALL_PREFIX`, create the db, start it through `cubrid-server-control`. | [VERIFY.md](VERIFY.md) §1 |
-| 3. Write ko | Follow the templates and vocabulary rules; grep the manual before coining any term. | [STYLE.md](STYLE.md) |
+| 3. Write ko | Follow the templates and vocabulary rules; grep the manual before coining any term. | [STYLE.md](STYLE.md), [PITFALLS.md](PITFALLS.md) |
 | 4. Run examples | Generate data with catalog cross joins, capture traces verbatim, log SQL+output per example in the ticket. | [VERIFY.md](VERIFY.md) §2–3 |
 | 5. Mirror en | Paragraph-level mirror, American spelling; then `scripts/rst-symmetry.sh -d <base> ko/<f> en/<f>`. | [STYLE.md](STYLE.md) §8 |
-| 6. Verify | `scripts/rst-lint.sh`, Sphinx build with zero warnings on touched files, Playwright render check, 3-pass en QA. | [VERIFY.md](VERIFY.md) §4–6 |
-| 7. PR | Semantic commits, one ko+en PR to `develop`, user approval before opening, code-first review responses. | [PR.md](PR.md) |
+| 6. Verify | `scripts/rst-lint.sh`, Sphinx build with zero warnings on touched files, Playwright render check, 3-pass en QA; walk the pitfall rules into `<scratch>/<effort>/pitfalls.md`. | [VERIFY.md](VERIFY.md) §4–6, [PITFALLS.md](PITFALLS.md) |
+| 7. PR | Semantic commits, one ko+en PR to `develop`, user approval before opening, code-first review responses; every round starts and ends with `scripts/review-sweep.sh <pr>`. | [PR.md](PR.md) |
 
 ## Quick start
 
 ```bash
 S=<tooling-repo>/.agents/skills/cubrid-manual-write/scripts      # this skill's scripts
-cd /home/cubrid/cubrid-manual && git fetch upstream && git switch -c <jira-key>-docs upstream/develop
+cd /home/cubrid/dev/cubrid-manual && git fetch upstream && git switch -c <jira-key>-docs upstream/develop
 # ... audit, write ko, run examples, mirror en ...
 $S/rst-symmetry.sh -d upstream/develop ko/sql/foo.rst en/sql/foo.rst   # ko/en structural delta must match
 $S/rst-lint.sh     -d upstream/develop ko/sql/foo.rst en/sql/foo.rst   # house-style sweeps on added lines
-(cd ko && make html 2>&1 | grep 'sql/foo.rst'); (cd en && make html 2>&1 | grep 'sql/foo.rst')   # expect nothing
+# Sphinx build (venv, both languages): VERIFY.md §5 — expect no warning on sql/foo.rst
 ```
 
 Both scripts also run without `-d` (whole-file mode) — the right gate for a page you wrote end to end.
