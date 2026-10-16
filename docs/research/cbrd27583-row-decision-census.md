@@ -154,3 +154,15 @@ method_callback.cpp·method_query_util.cpp(클라이언트 메서드), jsp_cl.cp
 | OCTET/BIT/CHAR_LENGTH 의 인자 캐스트 | C | 연산자 노드의 피연산자 변환기 (`domain_operand_cast_target`) |
 | collation 늦은 바인딩 노드의 VARCHAR/CHAR 변환기 선택 | D | 서명별 플랜에서 피연산자 타입이 고정이라 변환기가 하나 |
 | `db_*` 함수 원시 연산 내부의 인자 타입 검사 | C (Q43) | 연산자·함수 노드가 타입별 구현을 가리킴 |
+
+## 13. develop `b8199438e` CBRD-27215 (2026-10-16 머지) 가 더한 스텝 프로그램의 자리 — 구현자가 채운다
+
+`expr_compile.c`(6250 줄) 와 `fetch_arith_ops.c`(5640 줄, `fetch_peek_arith` 본문 이동) 는 이 전수조사의 기준(`be683e04c^`) 뒤에 들어와 §1~§12 에 없다.
+실측(b8199438e, `tp_value_cast|tp_value_auto_cast|tp_value_coerce|tp_value_compare|tp_more_general_type` 호출 줄): `expr_compile.c` 13, `fetch_arith_ops.c` 23.
+8022 층을 읽는 자리 16 곳(`expr_prog_signature_matches`, `expr_item_resolution`, `expr_arith_exec_domain`, `expr_regu_exec_domain` 의 `qexec_get/set_node_domain`, `expr_pos_value_index`, `fetch_arith_ops.c` 의 `qexec_get_node_domain` 3 곳)은 전부 **D** 다
+(플랜 하나가 서명 하나, 바인드는 컴파일된 도메인으로 도착, `vd->dbval_ptr` 는 const). 처리는 design.md 4.10.
+`fetch_arith_ops.c` 로 옮겨간 `fetch_peek_arith` 본문의 자리는 §2~§3 의 `fetch.c` 행이 그대로 적용된다(함수 이름이 같다).
+
+| 지점 | 처리 | 결정을 싣는 곳 |
+|---|---|---|
+| (구현자가 단계 2 연산자 노드 시작 전에 호출마다 적는다: 36 줄) | C/D/E | 연산자 노드 `DOMAIN_ARITH` / 비교 항 `compare` |

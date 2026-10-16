@@ -36,6 +36,7 @@ PR 8022 는 "언제 정하나" 를 로드 도출과 실행 전 도메인 확정 
 - 캐시 키 텍스트의 호스트 변수 토큰에 타입이 붙어 plandump·SQL_ID TC 답이 바뀐다: `where [dba.t].[n]= ?:0 ?193=…;bind_var_cnt=1` → `… ?:0:22 ?193=…`(DB_TYPE 번호), 문자열 ` ?:0:25.3.0 `(타입.codeset.collation id; plandump 실측 2026-10-16, JIRA 사양 변경 1 에 전문). `;bind_var_cnt=N` 은 그대로. 자동 파라미터도 타입·collation 을 찍으므로 `a = 1`/`a = 1.5`, SET NAMES 가 다른 세션은 항목이 갈린다(develop 은 리터럴 collation 을 플랜에 굽고도 키에 없었다). CBRD-27490(바인드 변형)과 키 형식을 맞춘다.
 - 숫자 컬럼과 비교하는 `?` 에 변환 불가 값을 주면 행의 -181 대신 바인드 시점 오류이고, 실행되지 않는 분기의 항도 같이 오류다(사양 변경).
 - 합격 기준: CTP sql/medium 전수·shell 이 develop 과 같음(사양 변경 제외), 실행당 명령 수가 모든 벤치 셀에서 develop 이하, 문장당 서명 수·캐시 메모리 분포 기록, 체크섬 assert 0.
-- 진행: 최신 develop 위 구조 뼈대 PR(fork `xmilex-git/cubrid#262`) → 구조 승인 → 같은 PR 에서 전체 구현. 뼈대 2차(2026-10-16 `1eadfe436`)가 위 모양이고, 파생 자리·드라이버 경로의 서명 재컴파일·값 없는 PREPARE 의 XASL 생략은 전체 구현에서.
+- 진행: 최신 develop 위 구조 뼈대 PR(fork `xmilex-git/cubrid#262`) → 구조 승인(2026-10-16 `91947b4d3`) → 전체 구현은 CUBRID/cubrid develop 을 향한 PR 하나(뼈대를 cherry-pick 한 `CBRD-27583-impl`). 파생 자리·드라이버 경로의 서명 재컴파일·값 없는 PREPARE 의 XASL 생략은 전체 구현에서.
+- develop `b8199438e`(CBRD-27215, 2026-10-16 머지)의 식 스텝 프로그램(`expr_compile.c`·`fetch_arith_ops.c`)은 유지한다. 프로그램 번역은 노드 결정 필드의 낮추기이지 결정이 아니다: 자체 바인드 타입 서명·재컴파일과 8022 해결 표 읽기는 지우고(플랜 하나가 서명 하나), 커널의 tp_* 결정 호출은 해석기와 같은 노드 변환기로 바꾸며, 번역 시점도 실행 중 결정 카운터의 예외가 아니다. 되돌리기(약 12,000 줄)는 하지 않는다: 7658 이 바꾼 답은 이미 develop 의 답이고, 프로그램이 노드 필드만 읽으면 원칙 1~3 과 충돌하지 않는다. 자세한 것은 design.md 4.10, 전수조사 §13.
 - 스모크에서 드러난 것: 변환 실패 메시지가 EXECUTE 경로에서 타입 이름을 비운다("Cannot coerce host var to type .", `do_cast_host_variables_to_expected_domain` 이 도메인 포인터를 이름 자리에 넘김) — 전체 구현에서 고친다.
 - 전수조사: `docs/research/cbrd27583-row-decision-census.md`.
