@@ -232,3 +232,43 @@ method_callback.cpp·method_query_util.cpp(클라이언트 메서드), jsp_cl.cp
 | query_opfunc.c / query_evaluator.c `expr_prog_signature_ok`·`expr_scan_pred_signature_ok` 호출 | 서명 검사 | D |
 | query_executor.c 주석(서명 재검사) | — | 문구 정리 |
 | heap_file.c (7658) | 투영 프로그램 호출부 — 8022 층 읽기 없음 | 그대로 |
+
+### 13-4. regu 도메인 읽기 — 생산 / 소비 (2026-10-16, D-21 따름 규칙, 브랜치 CBRD-27583-impl 작업 트리)
+
+D-21 뒤 regu 의 `domain` 은 **소비자가 받는 도메인**(변환 뒤)이고 `original_domain` 은 regu 가 값을 **만드는/읽는 도메인**이다(`conv` 가 그 사이).
+regu 자체가 값을 만드는 자리(노드 계산, 노드 값의 collation 적용, 함수 결과)가 `regu->domain` 을 결과 타입으로 읽으면 변환 regu 에서 소비자 타입으로 계산해
+값이 `original_domain` 과 달라진다(첫 CTP 의 `fetch_convert_regu_value` assert 와 NULLIF·CAST 오답). 그런 **생산 읽기**는 `regu_produced_domain (regu)`
+(`conv != NULL ? original_domain : domain`; 실행 중 만든 regu 는 `original_domain` 이 NULL 이라 필드 대신 함수)로, fetch 한 값의 타입을 읽는 **소비 읽기**는 `domain` 그대로 둔다.
+8022 층(늦은 바인딩 노드 도메인 설정·보고)은 변환 regu 의 `domain` 이 늘 고정이라 닿지 않고 (d) 에서 지운다.
+
+| 지점 | 함수 | 읽는 것 | 분류 | 처리 |
+|---|---|---|---|---|
+| fetch.c:106·111 | `fetch_agg_expr_type_group` | 묶어 계산하는 산술 노드의 타입군 | 생산 | `regu_produced_domain` |
+| fetch.c:189·194 | `fetch_is_agg_expr_int_source` | CAST_WRAP 피연산자(fetch 한 값) 타입 | 소비 | 그대로 |
+| fetch.c:234-236 | `fetch_is_agg_expr_wrap_leaf` | CAST_WRAP 노드 자기 결과 타입 | 생산 | `regu_produced_domain` |
+| fetch.c:248-250 | `fetch_is_agg_expr_wrap_leaf` | CAST_WRAP 피연산자 타입 | 소비 | 그대로 |
+| fetch.c:482 | `fetch_agg_expr_eval_int` | 노드 결과 범위 검사 | 생산 | `regu_produced_domain` |
+| fetch.c (`fetch_is_agg_expr_node`) | 묶음 경로 | 변환하는 안쪽 노드 | 생산 | 묶지 않음(fetch 하지 않으면 변환이 안 돈다) |
+| fetch.c:728 | `fetch_arith_node_domains` | 연산자의 결과 도메인 (`a->domain`) | 생산 | `regu_produced_domain` |
+| fetch.c:766·843·1669·1675 | `fetch_arith_node_resolve`·`_end`·`fetch_read_plan_domain` | VARIABLE 노드의 실행 도메인 설정 | 8022 | 변환 regu 는 닿지 않음, (d) 삭제 |
+| fetch.c:1694-1721 | `fetch_convert_regu_value` | 변환 목표 | 소비 | 그대로 |
+| fetch.c:2096 | `fetch_peek_dbval_slow` | COLLATE 로 붙이는 collation | 생산 | `regu_produced_domain` |
+| fetch.c:2144-2153 | `fetch_peek_dbval_slow` (VALUES 행) | 행 값과 첫 행의 fetch 한 타입 비교 | 소비 | 그대로 |
+| fetch.c:2547 | `fetch_peek_leftmost_numeric_regu` | fetch 한 값의 NUMERIC 여부 | 소비 | 그대로 |
+| fetch_arith_ops.c:301-307 | `fetch_cast_operand` | CAST 피연산자의 fetch 한 타입 | 소비 | 그대로 |
+| fetch_arith_ops.c:1389·4074·4240 | SUBSTRING·RIGHT·MID | 왼쪽 피연산자의 fetch 한 타입(BIT 여부) | 소비 | 그대로 |
+| fetch_arith_ops.c:3666·3729·4392·4470·4516 | NVL·NVL2·NULLIF·LEAST·GREATEST | 미해결 보고의 컴파일 도메인 | 8022 | (d) 삭제 |
+| query_opfunc.c:5540·5545 | `qdata_get_valptr_type_list` | 출력 열 타입(regu 가 내놓는 값) | 소비 | 그대로 |
+| query_opfunc.c:6121 | `qdata_convert_table_to_set` | TYPE_FUNC 자기 결과 도메인 | 생산 | `regu_produced_domain` |
+| query_opfunc.c:6330·6334·6664·6667 | CONNECT_BY_ROOT·SYS_CONNECT_BY_PATH | 인자 열의 소비자 도메인 | 소비 | 그대로 |
+| expr_compile.c:1467 | `expr_k_relabel` | COLLATE 노드 값의 collation | 생산 | `regu_produced_domain` |
+| expr_compile.c:2471 | `expr_arith_exec_domain` | 프로그램이 계산하는 노드의 도메인 | 생산 | `regu_produced_domain` |
+| expr_compile.c:2506·2520 | `expr_regu_exec_domain` | 프로그램 노드를 읽는 소비자의 도메인 | 소비 | 그대로 (8022 부분은 (d)) |
+| expr_compile.c:2574·2576·2673·2677 | `expr_leaf_type`·`expr_scan_operand_type` | 잎·피연산자를 fetch 한 타입 | 소비 | 그대로 |
+| expr_compile.c:3771·4480 | `expr_compile_node`·`_impl` | VARIABLE 판정 | 8022 | 변환 regu 는 고정, (d) 삭제 |
+| query_evaluator.c:408 | `eval_report_resolved_side` | 디버그 보고 | 8022 | (d) |
+| scan_manager.c:8473·8481 | `scan_plan_list_scan_domains` | 목록 스캔 피연산자 노드 도메인 | 8022 | (d) |
+| scan_manager.c:9368·9369 | `check_hash_list_scan` | 해시 키 값 타입 | 소비 | 그대로 |
+| query_aggregate.cpp:1152·1177·2838·2921·3786 | 집계 피연산자 | fetch 한 피연산자 타입 | 소비 | 그대로 (4.3) |
+| query_executor.c:21454·27128·28056·28104 | group by 인덱스·top-N·집계 해시 | 목록·키에 쓰는 값 타입 | 소비 | 그대로 |
+| px_scan_result_handler.cpp:1466 | BUILDVALUE_OPT | 집계 피연산자 타입 | 소비 | 그대로 |
