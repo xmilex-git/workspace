@@ -10,7 +10,7 @@ judges §5–§6. Only optdebug is used — release hides asserts and once produ
 
 ```
 Delegation execution contract:
-- Finite gate work (incremental build, unit, smoke — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
+- Finite gate work (incremental build, smoke rerun, targeted CTP — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
 - The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
 
 CTP execution rule (every suite):
@@ -197,7 +197,7 @@ expected** is a develop regression, not a TC defect. Procedure:
 1. Rerun `dev` alone once (flake check: DST windows, PL socket flake, placement leaks are known
    false alarms — see `docs/ci-flaky-cases.md`).
 2. If it repeats: keep that run dir, copy `console.log`, the `.result` diff and `provenance.txt` into
-   `<rundir>/regression/`; for a core, have the worker take a backtrace with gdb against the extracted
+   `<rundir>/regression/`; for a core, take a backtrace with gdb against the extracted
    install (`gdb <install>/bin/cub_server <core> -batch -ex bt`) and save it there.
 3. Do **not** open the PR. Go to Step 7 with the regression comment (pr-and-jira.md §5 kind 3).
    The wayfinder ticket stays open and assigned; note "회귀 대기" in its body.

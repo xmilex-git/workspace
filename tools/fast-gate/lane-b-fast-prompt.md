@@ -1,7 +1,7 @@
 You are a runtime worker for the CUBRID tooling repo at /home/cubrid/dev/workspace (read its AGENTS.md house rules first: never write scratch to /tmp or $TMPDIR). Scratch: T=<TICKET SCRATCH, e.g. /home/cubrid/dev/workspace/.git_ignored_dir/scratch/312-343> (exists; subdir counters/). Do NOT commit, push, or post anything. Do not edit any source file, test case or script. This is lane B of three gate lanes the lead launched at the same time (the others run the whole CTP suite on the install and a release build with stand-alone probes); do not touch their work.
 
 Delegation execution contract (verbatim; obey strictly):
-- Finite gate work (incremental build, unit, smoke — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
+- Finite gate work (incremental build, smoke rerun, targeted CTP — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
 - The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
 
 No CTP in this lane.

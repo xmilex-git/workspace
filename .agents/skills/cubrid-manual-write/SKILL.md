@@ -57,12 +57,13 @@ Both scripts also run without `-d` (whole-file mode) — the right gate for a pa
 
 ## Delegation
 
-Build, server start/stop, data generation, query/trace capture, and ko↔en semantic comparison are
-delegated using the harness-specific worker policy in `.agents/AGENTS.md` (Codex: Luna/max,
-fast when supported; Claude Code: Sonnet/xhigh via the `Workflow` tool). Include the delegation execution contract from
+Builds and the ko↔en semantic comparison are delegated using the harness-specific worker policy
+in `.agents/AGENTS.md` (Codex: Luna/max, fast when supported; Claude Code: Sonnet/xhigh via the
+`Workflow` tool). Include the delegation execution contract from
 `.agents/AGENTS.md` verbatim, the scratch rule (`.git_ignored_dir/scratch/`, never `/tmp`), and the
 `cubrid-server-control` requirement in every delegation prompt. The lead keeps: the audit verdicts,
-the prose, the mechanical sweeps, and the PR.
+the prose, the mechanical sweeps, the PR, and the example runs on the built install (server
+start/stop, data generation, query/trace capture), which are smoke per that file's division of labor.
 
 ## Worked example (provenance)
 

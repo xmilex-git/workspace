@@ -244,7 +244,7 @@ Reuse evidence before producing it: CI statuses and the gha-ci artifact server a
 - a linked ticket's repro,
 - a scenario the PR claims but CI does not cover.
 
-The runs follow the repository's execution rules: runtime work goes to the delegated worker that this repo's CLAUDE.md names, and every CTP run goes through `just ctp` containers. Recipes, artifact-server paths and cleanup are in `runtime.md`.
+The runs follow the repository's execution rules: builds and CTP go to the delegated worker that this repo's CLAUDE.md names (smoke-sized checks stay with the lead), and every CTP run goes through `just ctp` containers. Recipes, artifact-server paths and cleanup are in `runtime.md`.
 
 Completion: every Expected Result row and every TC scenario row has evidence (CI, the author's attached result, or a run), and the Runtime Verification section names each source with its build sha, build type and testcase ref.
 
