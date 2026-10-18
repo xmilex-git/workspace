@@ -692,6 +692,10 @@ _Avoid_: 세션변수 타입을 캐시 키에 찍는다는 서술(폐기안), �
 세션 변수는 처음 대입된 값의 타입(문자열은 codeset 까지)을 DROP 될 때까지 지킨다. 다른 타입의 대입은 오류(-1386)다. NULL 은 타입을 주지도 받지도 않는다(D-27583-13).
 _Avoid_: 세션 변수 deprecate(별도 제안), 대입마다 타입이 바뀐다는 서술(옛 동작).
 
+**floating point numeric** — 코드 `tp_domain_resolve_default (DB_TYPE_NUMERIC)` = `tp_Numeric_domain` = NUMERIC(`DB_DEFAULT_NUMERIC_PRECISION` 40, 0):
+자릿수(precision/scale)가 정해지지 않은 NUMERIC 도메인. 값이 자기 자릿수를 지니고(저장 길이는 값 머리의 바이트 수, 스트림 길이 17 고정) 도메인은 "NUMERIC"만 말한다. 사용자가 선언할 수 있는 최대 자릿수는 38(`DB_MAX_FIXED_NUMERIC_PRECISION`)이라 40은 선언된 열·CAST 에 나타나지 않는 표식이다. 산술 결과·SUM/AVG 누산·해시 키의 기본(CBRD-27575)·`TYPEOF` 의 'numeric' 표기가 이 도메인이고, CBRD-27583 부터 값 타입 자리에 바인드된 NUMERIC 의 컴파일 도메인도 이것이다(D-58: 서명은 타입만 들므로 첫 값의 자릿수로 플랜을 굳히면 다음 값이 잘린다).
+_Avoid_: NUMERIC(-1)·`TP_FLOATING_PRECISION_VALUE` 의 NUMERIC(그 표식은 문자열·비트열의 것이다 — `tp_domain_match` 가 NUMERIC 은 정확 일치만, `tp_domain_disk_size` 가 NUMERIC 의 -1 을 assert, `tp_domain_check` 의 floating 허용은 CHAR/BIT 길이 검사), "정밀도 40 의 고정 NUMERIC" 이라는 서술, NUMERIC(38,x) 와 혼용.
+
 ### 바인드 값과 캐시된 플랜 (CBRD-27582, PR 8176 리뷰 그릴링 2026-10-16)
 
 **bind-peeking**:
