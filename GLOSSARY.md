@@ -688,13 +688,25 @@ _Avoid_: 프로그램이 타입을 정한다는 서술, 프로그램만의 서�
 세션변수(`@a`)를 읽거나 대입하는 문장. 플랜을 캐시하지 않고 실행마다 컴파일한다(CBRD-27583 사양 변경 10, 2026-10-16). 컴파일은 세션의 고정 타입을 변수마다 한 번 묻는다.
 _Avoid_: 세션변수 타입을 캐시 키에 찍는다는 서술(폐기안), 실행마다 타입을 다시 묻는다는 서술(폐기안).
 
-**세션 변수의 고정 타입 (session variable fixed type)**:
-세션 변수는 처음 대입된 값의 타입(문자열은 codeset 까지)을 DROP 될 때까지 지킨다. 다른 타입의 대입은 오류(-1386)다. NULL 은 타입을 주지도 받지도 않는다(D-27583-13).
-_Avoid_: 세션 변수 deprecate(별도 제안), 대입마다 타입이 바뀐다는 서술(옛 동작).
+**문장의 세션변수 타입 (statement session variable type)**:
+한 문장 안에서 세션변수가 갖는 하나의 타입(문자열은 codeset 까지). 문장이 그 변수에 대입하면 대입 식의 타입이고, 아니면 컴파일 때의 세션 값 타입이다. 별도의 SET 문장은 타입을 바꿀 수 있고, NULL 은 타입을 주지도 받지도 않는다(CBRD-27583 D-40).
+_Avoid_: 세션 변수의 고정 타입·"처음 대입된 값의 타입을 DROP 까지 지킨다"(2026-10-16 안, D-40 으로 폐기), 세션 변수 deprecate(별도 제안), 한 문장 안에서 대입마다 타입이 바뀐다는 서술(develop 의 동작, 이 이슈에서 오류).
 
 **floating point numeric** — 코드 `tp_domain_resolve_default (DB_TYPE_NUMERIC)` = `tp_Numeric_domain` = NUMERIC(`DB_DEFAULT_NUMERIC_PRECISION` 40, 0):
 자릿수(precision/scale)가 정해지지 않은 NUMERIC 도메인. 값이 자기 자릿수를 지니고(저장 길이는 값 머리의 바이트 수, 스트림 길이 17 고정) 도메인은 "NUMERIC"만 말한다. 사용자가 선언할 수 있는 최대 자릿수는 38(`DB_MAX_FIXED_NUMERIC_PRECISION`)이라 40은 선언된 열·CAST 에 나타나지 않는 표식이다. 산술 결과·SUM/AVG 누산·해시 키의 기본(CBRD-27575)·`TYPEOF` 의 'numeric' 표기가 이 도메인이고, CBRD-27583 부터 값 타입 자리에 바인드된 NUMERIC 의 컴파일 도메인도 이것이다(D-58: 서명은 타입만 들므로 첫 값의 자릿수로 플랜을 굳히면 다음 값이 잘린다).
 _Avoid_: NUMERIC(-1)·`TP_FLOATING_PRECISION_VALUE` 의 NUMERIC(그 표식은 문자열·비트열의 것이다 — `tp_domain_match` 가 NUMERIC 은 정확 일치만, `tp_domain_disk_size` 가 NUMERIC 의 -1 을 assert, `tp_domain_check` 의 floating 허용은 CHAR/BIT 길이 검사), "정밀도 40 의 고정 NUMERIC" 이라는 서술, NUMERIC(38,x) 와 혼용.
+
+**컴파일 오류 (compile error)**:
+파싱, 타입 검사, XASL 생성이 문장 텍스트와 바인드의 타입만 보고 내는 오류. 코드는 -493(Syntax:) 과 -494(Semantic:) 이고, 리터럴로 쓴 타입 오류도 여기에 속한다.
+_Avoid_: "semantic check 오류"(의미 검사 단계 이름이지만 타입 검사와 XASL 생성의 오류도 -494 로 나온다), 의미 오류.
+
+**바인드 시점 오류 (bind-time error)**:
+클라이언트가 바인드 값을 그 자리의 기대 도메인으로 바꾸다 실패한 오류. 서버에 보내기 전에 나므로 행이 없거나 그 항에 닿지 않아도 난다. 문구는 몇 번째 자리인지와 값의 타입을 적고 값 자체는 적지 않는다(CBRD-27583 D-63).
+_Avoid_: 실행 오류로 서술(서버에 가기 전이다), 컴파일 오류로 서술(문장이 아니라 값의 실패다).
+
+**실행 오류 (execution error)**:
+서버가 어떤 값을 계산하는 행에서 내는 오류. 그 행이나 가지에 닿지 않으면 나지 않고, 오류마다 고유 코드(-181, -1118, -1386 등)를 쓴다.
+_Avoid_: 런타임 오류(바인드 시점 오류와 섞인다), 실행 전 오류(CBRD-27510 이 넣은 로드 시점 보고 — CBRD-27583 이 없앤다).
 
 ### 바인드 값과 캐시된 플랜 (CBRD-27582, PR 8176 리뷰 그릴링 2026-10-16)
 
