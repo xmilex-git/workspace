@@ -657,7 +657,7 @@ _Avoid_: 키 쌍 표(key pair table, 옛 이름 — 키가 인덱스 키로 읽�
 ### 바인드 타입별 플랜 (CBRD-27583, 그릴링 2026-10-11·10-16)
 
 **바인드 타입 서명 (bind type signature)**:
-플랜 캐시 키 텍스트가 호스트 변수 자리마다 찍는 타입 토큰의 열(` ?:0:22 `, 문자열은 ` ?:0:25.3.0 ` = 타입 번호.codeset.collation id; plandump 의 sql hash text 에 그대로 보인다). 사용자 바인드와 자동 파라미터 리터럴을 같은 형식으로 찍고, 문자열은 CHAR/VARCHAR·codeset·collation 까지(리터럴의 collation 은 텍스트가 아니라 SET NAMES 가 정한다), NUMERIC 은 정밀도·스케일 없이 하나, NULL 은 NULL. 다만 NULL 이 답을 바꾸지 못하는 자리 — 타입 무관 자리, 열·상수와 비교하는 피연산자, NULL 을 빼고 결과 타입을 정하는 인자(NVL·IFNULL·COALESCE·NVL2 의 인자) — 에서는 NULL 이 서명을 나누지 않는다(D-70). 같은 문장이 같은 서명으로 실행되면 같은 타입 변형 플랜을 쓴다.
+플랜 캐시 키 텍스트가 호스트 변수 자리마다 찍는 타입 토큰의 열(` ?:0:22 `, 문자열은 ` ?:0:25.3.0 ` = 타입 번호.codeset.collation id; plandump 의 sql hash text 에 그대로 보인다). 사용자 바인드와 자동 파라미터 리터럴을 같은 형식으로 찍고, 문자열은 CHAR/VARCHAR·codeset·collation 까지(리터럴의 collation 은 텍스트가 아니라 SET NAMES 가 정한다), NUMERIC 은 정밀도·스케일 없이 하나, NULL 은 NULL. 다만 NULL 이 답을 바꾸지 못하는 자리 — 타입 무관 자리, 열·상수와 비교하는 피연산자, NULL 을 빼고 결과 타입을 정하는 인자(NVL·IFNULL·COALESCE·NVL2 의 인자; 그 노드의 결과 도메인이 NULL 일 때와 정밀도·스케일·collation 까지 같은 플랜에서만) — 에서는 NULL 이 서명을 나누지 않는다(D-70, D-72). 같은 문장이 같은 서명으로 실행되면 같은 타입 변형 플랜을 쓴다.
 _Avoid_: 키와 별개의 서명 문자열·접미사(서명은 키 텍스트 자체다; 2026-10-11 의 "키의 일부가 아니다" 와 collation 제외는 폐기), 값 서명·히스토그램 지문(bind sensitivity 의 값 버킷 — 다른 축)과 혼용.
 
 **타입 변형 플랜 (typed plan)**:
