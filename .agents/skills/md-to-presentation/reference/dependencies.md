@@ -32,7 +32,8 @@ or `ToolSearch` for `mcp__playwright__playwright_navigate` (if it resolves, it's
 If missing, tell the user:
 
 > Playwright MCP 서버가 없습니다. 추가해 주세요 (예시):
-> `claude mcp add playwright -- npx -y @executeautomation/mcp-playwright`
+> `claude mcp add -s user playwright -- npx -y @executeautomation/playwright-mcp-server`
+> (`@executeautomation/mcp-playwright`는 npm에 없는 이름이다 — 404, 2026-10-19 확인)
 > 그런 다음 세션을 재시작/리로드한 뒤 다시 요청해 주세요.
 > (검증 단계에서 `mcp__playwright__playwright_navigate / playwright_resize / playwright_evaluate / playwright_screenshot / playwright_console_logs` 를 사용합니다.)
 
