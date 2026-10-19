@@ -145,6 +145,10 @@ finish
    safe if the case never calls `xkill` between setting and reading it.
 8. **One write per result line**: `echo "${count:-NO_RESULT}"`, `awk '... {print $1; exit}'`; never
    `printf` + `echo` pairs. Background sessions: `run_session ... > out_N.log 2> session_N.err &`.
+   `write_ok`/`write_nok` echo their message unquoted (`echo ... $1 >> $result_file`), so the message
+   carries no glob character (`*`, `?`, `[`): write the SQL in words ("(bind + 1) times n").
+   CBRD-27215 (2026-10-15, caught by the first CTP run): wrote `write_ok "(? + 1) * n on every
+   execution"` → the `*` expanded into the case directory listing in every `.result` line → words only.
 9. **Grep anchors**: counts with `^[[:space:]]*19200[[:space:]]*$`; literal dots escaped
    (`grep -o "0\.00"` — an unescaped `0.00` matched pid 40000, cbrd_26123 2026-10-07); pids compared
    as whole strings, never substrings of `ps` lines.
@@ -239,6 +243,7 @@ finish
 
 - `bash -n <file>` → no output
 - `/usr/bin/grep -nE '^\s*(result_file|case_name|case_no|cur_path|run_mode|answer_no)=' <file>` → nothing
+- `/usr/bin/grep -nE 'write_(ok|nok) "[^"]*[*?[]' <file>` → nothing (rule 8)
 - `/usr/bin/grep -c 'write_ok\|write_nok' <file>` equals the `Test:` numbered lines (+ the abort paths)
 - every function body: variables declared `local`
 - `finish` is the last command of the file and of every `exit` path; `exit 0` after `finish`, never before
