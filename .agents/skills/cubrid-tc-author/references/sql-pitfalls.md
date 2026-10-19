@@ -229,6 +229,11 @@ post point asserts" is not one — that is Rule 4's develop-only file.
   has a branch for them.
 - Many paths and a header capped at 30 lines: group close shapes as several test/twin pairs inside
   one case (CBRD-27041: 18 cases → 15).
+- CBRD-27664 (2026-10-19, caught by the A/B bench, scenarios 6 and 25): the TC had GROUP_CONCAT only
+  without SEPARATOR → a SEPARATOR left a regu in the scan regu list that the new path reads (develop
+  reads it only for hash aggregation), so the operand landed in the group key slot → when the diff
+  starts reading an existing XASL list on a new path, each aggregate takes every argument form
+  (SEPARATOR, ORDER BY, DISTINCT, two arguments), with an int and a string operand.
 
 ## Rule 6 — The session leaves as it came
 
