@@ -148,3 +148,7 @@ develop은 list·hash·식 파티션에서 `k = some {null}`에 실행 오류(#1
 ### D-90 보충 (2026-10-20): NULL형으로 결정된 식도 통일 도메인을 받는다 (사양 변경 25)
 
 의미 검사가 넣은 대상 미정 캐스트(`T_CAST(j AS ?)`, 도메인 NULL)는 리터럴 NULL과 같이 통일 도메인을 받는다. 그래서 JSON 열과 문자열 바인드의 집합 연산이 develop의 -181(값 없는 컴파일의 한계) 대신 리터럴과 같은 문자열 행을 낸다 — 타입 있는 바인드는 같은 타입의 리터럴과 같은 답이라는 사양 1의 전제를 따른다. 계산하지 않는 regu만 바꾸는 안은 NULL형 리스트가 남아 develop이 답하던 문장에 -456을 내므로 기각.
+
+### D-91 (2026-10-20): SQL 수준 prepared 문장의 서명별 컴파일은 연결 범위로 보관한다 (S3-41)
+
+값 없는 PREPARE는 XASL을 만들지 않으므로(D-31) 매 EXECUTE가 재컴파일하던 것을, 드라이버 경로와 같은 서명별 컴파일 목록을 kept tree에 두어 없앤다. 그런데 csql은 문장마다 DB_SESSION을 열고 닫으므로 소유 세션에 매단 kept tree는 EXECUTE가 끝나면 닫힌다(develop의 히스토그램 kept tree도 csql에서는 재사용된 적이 없다). 목록을 클라이언트 연결 전역으로 올리고 prepared 이름으로 찾되, 항목에 서버 세션 식별을 두어 같은 세션일 때만 맞추고 shutdown·restart·재접속·CAS 세션 리셋·DEALLOCATE·재PREPARE에서 비운다. 서버 prepared 문장에 서명별 XASL을 두는 안(프로토콜 변경)과 csql을 한 세션으로 바꾸는 안은 기각.
