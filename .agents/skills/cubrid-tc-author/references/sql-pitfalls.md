@@ -78,6 +78,10 @@ using 10, 100, 50, 200;`).
   result. The parallel subquery executor exists only with 2 or more clean sibling blocks.
 - A path with no trace token (CREATE INDEX, a page-copy branch) is proved under gdb or by
   `er_log_debug` counts: verify.md §6a.
+- CBRD-27664 (2026-10-19, caught by the lead's smoke): a GROUP BY skip inside a correlated subquery
+  written as `where g = outer.k group by g` → the trace showed `SORT (group by)` with `hash: true`:
+  a key bound by equality leaves nothing to skip → a range `g between outer.k and outer.k + 3`,
+  checked for `group by nosort: true` in the subquery's plan.
 
 ## Rule 2 — The data must change the output when the path is wrong
 
@@ -118,6 +122,10 @@ path.
   end is never trailing: trailing-escape shapes get literal values.
 - Invalid byte sequences: a varchar column drops a truncated last character on insert; build the
   bytes with `from_base64()` at evaluation time (there is no `unhex()`; `hex()` prints them).
+- CBRD-27664 (2026-10-19): a group order the outer query cannot see (thousands of groups summed into
+  one row) is made visible by weighing each group by its position: `rownum r` in a middle derived
+  table and `sum(r * key)` outside it (`rownum * col` in one expression is rejected); a probe with the
+  opposite order must print a different sum.
 
 ## Rule 3 — Stay far from every threshold, estimate and placement
 
