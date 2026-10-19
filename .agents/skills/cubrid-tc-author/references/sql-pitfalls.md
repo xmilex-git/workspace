@@ -211,6 +211,10 @@ verify.md §6b.
 - A pre-build abort whose position varies between runs (cross-thread free: Case 3 in one run, Case
   11 in the next, CBRD-27299) is described in the header by its shape and every case number that has
   the shape, never by one case number.
+- CBRD-27548 (2026-10-19, caught by the lead's smoke): a left outer hash join and a merge join over
+  3-row tables printed `(parallel workers: ...)` on their two input subqueries (`SUBQUERY` /
+  `MERGELIST`), a line worker reservation can drop under load → their traces were left out, the
+  results stay compared, and the plan shape (`HASH JOIN (left outer join)`) is a probe in the PR body.
 
 ## Rule 5 — Coverage comes from the code, and new code always has a case
 
@@ -234,6 +238,11 @@ post point asserts" is not one — that is Rule 4's develop-only file.
   reads it only for hash aggregation), so the operand landed in the group key slot → when the diff
   starts reading an existing XASL list on a new path, each aggregate takes every argument form
   (SEPARATOR, ORDER BY, DISTINCT, two arguments), with an int and a string operand.
+- CBRD-27548 (2026-10-19, caught by the lead's smoke): the TC PR excluded SELECT ... FOR UPDATE as
+  "a locking scan is not a select scan, the fix does not reach it" → FOR UPDATE opens with
+  scan_op_type S_SELECT (only mvcc_select_lock_needed differs), and a zero-partition FOR UPDATE failed
+  on pre like a plain select; INSERT ... SELECT failed there too → an exclusion that names an engine
+  path is checked by running the shape on pre, never by the statement's SQL kind.
 
 ## Rule 6 — The session leaves as it came
 
