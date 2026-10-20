@@ -81,8 +81,8 @@ _Avoid_: 런타임 해시 상태, hash: true/partial
 _Avoid_: 리스트 병합(복사 경로와 이어붙이기 경로를 뭉뚱그림), swap
 
 **TPC-H SF10 측정 자산**:
-이 호스트에 현존하는 TPC-H SF10 작업 자산 — DB `tpch_sf10`(`CUBRID_DATABASES=~/databases/pr7866`), 질의 `tpch-sspq/queries/`, 측정 conf `.git_ignored_dir/conf/pr7866.conf`, 하네스 `tpch-sspq/harness/`. 적재 이력이 기록돼 있지 않으므로 온디스크 포맷이 바뀐 빌드로 재는 측정에는 재적재가 선행돼야 한다(CUBRID_SSOT §3-18).
-_Avoid_: `~/databases/tpch/`·DB `tpch_sf10_q1`(2026-09-19 기준 호스트에 없음), `.vscode/TPC-H`
+이 호스트의 TPC-H SF10 측정 자산 — `~/databases/tpch/`의 DB `tpch_sf10`(`CUBRID_DATABASES=~/databases/tpch`, 자체 `databases.txt`), 측정 conf `conf/tpch.conf`, 러너 `run_tpch.sh`, 질의 `tpch-sspq/queries/`. 적재 빌드·출처는 그 디렉터리의 `README.md`에 있고, 온디스크 포맷이 바뀐 빌드로 재는 측정에는 재적재가 선행돼야 한다(CUBRID_SSOT §3-18).
+_Avoid_: `~/databases/pr7866`(2026-10-11 삭제)·`.git_ignored_dir/conf/pr7866.conf`(옛 측정 conf)·`tpch-sspq/harness/`(옛 하네스), DB `tpch_sf10_q1`, `.vscode/TPC-H`
 
 **신선한 체크포인트 (fresh checkpoint)**:
 온라인 FULL 백업 진입 시점에 capture한 append LSA(T) 이후에 완료되어 redo LSA(R) ≥ T를 만족하는 checkpoint다. 백업 진입 전부터 진행 중이던 checkpoint는 R이 T보다 앞설 수 있으므로 아무리 기다려도 fresh로 인정하지 않는다.
