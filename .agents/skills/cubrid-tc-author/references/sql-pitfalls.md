@@ -252,6 +252,11 @@ post point asserts" is not one — that is Rule 4's develop-only file.
   scan_op_type S_SELECT (only mvcc_select_lock_needed differs), and a zero-partition FOR UPDATE failed
   on pre like a plain select; INSERT ... SELECT failed there too → an exclusion that names an engine
   path is checked by running the shape on pre, never by the statement's SQL kind.
+- CBRD-27668 (2026-10-20, caught by the engine PR reviewer): the fix changed an existing answer's
+  column header only (cbrd_22979: `null` → `cast( to_number(null) as integer)`) and the TC took it as
+  cosmetic → the same change renamed `t_1` of `(values (null),(1)) t`, so `t.t_1`, `"null"`, CTAS and
+  view columns broke → an answer whose header changes is a behavior change: run references to the
+  old name (derived table, CTE, CTAS, view) on pre and post, and pin them in a case.
 
 ## Rule 6 — The session leaves as it came
 
