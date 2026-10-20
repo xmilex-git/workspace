@@ -46,7 +46,7 @@ stage() {
 for suite in shell ha_shell; do
   stage "$suite" "$suite" all
   # Mimic resetCUBRID_linux before a case that does not call do_make_locale.
-  rm "$OUT/shard_0/CUBRID/lib/libcubrid_all_locales.so"
+  rm -f "$OUT/shard_0/CUBRID/lib/libcubrid_all_locales.so"
   if grep -qEv '^[[:space:]]*(#|$)' "$OUT/shard_0/CUBRID/conf/cubrid_locales.txt"; then
     fail "$suite: staged conf still requires locale libraries deleted by CTP"
   fi

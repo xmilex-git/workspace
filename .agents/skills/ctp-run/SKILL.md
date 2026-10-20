@@ -261,6 +261,12 @@ customized locale configs are unchanged. With that inherited preset, omit
 `--overlay`: normalization requires a writable install copy and refuses to edit
 the shared lower directory.
 
+Shell/HA shards also get no prebuilt `libcubrid_all_locales.so`: the runner skips the
+injection and removes the copy and the early-exit guard of `make_locale.sh` that a
+`just build` install carries (`just install-locale`), because cases that delete and
+rebuild the locale library fail "make_locale failed" against them. A build with
+those files needs a writable copy, so omit `--overlay` there too.
+
 ## Output
 
 ### Storage: NVMe runs, pruned working copies, explicit cleanup

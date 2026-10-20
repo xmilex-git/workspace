@@ -1488,6 +1488,22 @@ prepare_shell_locale_conf() {
   info "locale: reset inherited all-locales preset in the $ARG_SUITE install copy (CTP deletes generated libraries)."
 }
 
+# Shell/HA cases delete and rebuild the locale library with make_locale.sh, which needs
+# a stock install: a `just build` install carries the prebuilt .so and the early-exit
+# make_locale.sh (justfile install-locale), and those cases then fail "make_locale
+# failed" (workspace #457). Remove both from the private install copy.
+strip_prebuilt_locale() {
+  [ "$SUITE_STYLE" = status ] || return 0
+  local so="$1/lib/libcubrid_all_locales.so" sh="$1/bin/make_locale.sh"
+  local guard='^if \[ -e "\$CUBRID/lib/libcubrid_\$SELECTED_LOCALE\.so" ]; then$'
+  [ -e "$so" ] || grep -q "$guard" "$sh" 2>/dev/null || return 0
+  [ "$ARG_OVERLAY" -eq 0 ] \
+    || die "shell/HA needs a stock locale setup but this build has the prebuilt locale lib; omit --overlay"
+  rm -f "$so"
+  sed -i "\\%$guard%,/^fi\$/d" "$sh"
+  info "locale: removed the prebuilt locale lib and the early-exit make_locale.sh guard from the $ARG_SUITE install copy."
+}
+
 build_shard_workdir() {
   local i="$1" d="$OUT/shard_${i}"
   mkdir -p "$d"
@@ -1496,6 +1512,7 @@ build_shard_workdir() {
   # build -> CUBRID (writable copy absorbs CTP's conf rewrites; F3)
   if [ "$ARG_OVERLAY" -eq 1 ]; then
     prepare_shell_locale_conf "$ARG_BUILD"
+    strip_prebuilt_locale "$ARG_BUILD"
     info "shard $i: --overlay set; build mounted via podman :O overlay (no copy)."
   else
     # --reflink=auto: on a CoW filesystem (this host's /home is XFS reflink=1) the
@@ -1503,6 +1520,7 @@ build_shard_workdir() {
     # it is an ordinary copy. 16 plain copies took 37s of a run's setup.
     cp -a --reflink=auto "$ARG_BUILD" "$d/CUBRID"
     prepare_shell_locale_conf "$d/CUBRID"
+    strip_prebuilt_locale "$d/CUBRID"
     # Locale speedup (D6): CTP keeps need_make_locale=yes, but make_locale is the
     # single slowest startup step (~60-90s of gcc, repeated in EVERY shard). Ship a
     # prebuilt libcubrid_all_locales.so + an early-exit make_locale.sh so CTP's
@@ -2293,6 +2311,11 @@ LOCALE_SO=""
 LOCALE_SCRIPT=""
 resolve_locale() {
   local bundled="$SELF_DIR/../locale/make_locale.sh"
+  if [ "$SUITE_STYLE" = status ]; then
+    # shell/HA cases rebuild locales themselves (strip_prebuilt_locale): no injection
+    info "locale: $ARG_SUITE gets no prebuilt locale lib (its cases rebuild locales); shards run make_locale."
+    return 0
+  fi
   if [ -n "$ARG_LOCALE_DIR" ]; then
     [ -d "$ARG_LOCALE_DIR" ] || die "--locale-dir does not exist: $ARG_LOCALE_DIR"
     [ -r "$ARG_LOCALE_DIR/libcubrid_all_locales.so" ] \
