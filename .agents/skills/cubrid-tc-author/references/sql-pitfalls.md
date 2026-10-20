@@ -126,6 +126,15 @@ path.
   one row) is made visible by weighing each group by its position: `rownum r` in a middle derived
   table and `sum(r * key)` outside it (`rownum * col` in one expression is rejected); a probe with the
   opposite order must print a different sum.
+- CBRD-27668 (2026-10-20, caught by greptile): "a typed NULL keeps its type" was checked with
+  `cast(null as int)` next to `2` and `cast(null as varchar(3))` next to `'abcdef'`, values only →
+  an untyped NULL also gives an INT column there, and VARCHAR versus CHAR shows only in the type →
+  a type claim pairs the typed value with a value of another type (DOUBLE next to `3`) and prints
+  `typeof(a)`.
+- CBRD-27668 (2026-10-20, caught by greptile): "the NUMERIC(3,2) domain is kept" was checked with
+  the literal `3.25` → develop's `typeof` prints a numeric literal as plain `numeric` without
+  precision and scale (11.4 printed them) → a domain claim uses an explicit
+  `cast(3.25 as numeric(5,2))`, which `typeof` prints as `numeric (5, 2)`.
 
 ## Rule 3 — Stay far from every threshold, estimate and placement
 
