@@ -70,8 +70,12 @@ cubrid-testkit의 `TESTKIT_SLOT_VOLATILE`과 같은 방식이다. rootful podman
 업그레이드는 필요 없다. 이 호스트 측정에서 autocommit INSERT 5,000건이 9.08초에서
 5.73초로, 디바이스 flush가 5,642회에서 59회로 줄었다.
 - **대가:** 호스트가 run 중에 죽으면 그 run의 DB는 버려야 한다. 원래 다시 만드는 DB다.
-- **범위:** shell/ha_shell은 케이스마다 자기 디렉터리에 DB를 만들어 적용하지 않았다.
-  `--overlay`도 제외했다.
+- **범위:** 처음에는 shell/ha_shell을 제외했다(케이스마다 자기 디렉터리에 DB를 만든다).
+  2026-10-20 사용자 결정으로 shell도 켠다: 케이스가 DB를 만드는 세 곳(testcases 사본,
+  `CUBRID_DATABASES`, `$CUBRID/databases`)을 모두 volatile overlay로 둔다. 케이스의
+  `.result`/`.log`는 샤드의 `volatile/…/upper/`에 남고, 러너가 읽는 JUnit 리포트와 CTP 로그는
+  다른 bind라 영향이 없다. ha_shell/ha_repl은 master와 slave 컨테이너가 한 volatile
+  workdir를 나눠 쓰게 되어(두 번 마운트 불가) 제외가 남는다. `--overlay`도 제외했다.
 - **되돌리기:** `CTP_VOLATILE=0` 또는 `--no-volatile`로 이전의 plain bind로 돌아간다.
   entrypoint 포크는 여전히 HA 보완 두 건만 가진다(D2). 이 기능은 별도 래퍼다.
 

@@ -224,7 +224,7 @@ HA derives `conf/ha_shell_ci.conf` from `shell_ci.conf`. Inspect these generated
 files, not just the stock conf, when diagnosing scope. `CONF=` engine parameters
 are still merged into the shard's stock conf before upstream copies it.
 
-## Volatile databases (sql/medium, default on)
+## Volatile databases (sql/medium/shell, default on)
 
 CTP creates sql's `basic` and medium's `mdb` under `$CUBRID/databases`. Every autocommit
 statement then waits for the log fsync. By default that directory is an overlayfs mounted
@@ -242,9 +242,15 @@ This is the mechanism cubrid-testkit uses for `TESTKIT_SLOT_VOLATILE`
   `shard_N/console.log`, and `volatile=` in `provenance.txt`/`.tsv`.
 - `CTP_VOLATILE=0` (or `--no-volatile` in `CTP_ARGS`) restores the plain bind. It is
   read by the runner, so it applies to `just ctp` and `just ctp-rerun` alike.
-- Not applied to shell/ha_shell, whose cases create databases in their own case dirs,
-  or with `--overlay`.
-- Writes land in `shard_N/volatile/_home_CUBRID_databases/upper/`. That is where a
+- shell overlays the three dirs its cases create databases in: the testcases copy
+  (`/home/cubrid-testcases-private-ex`), `CUBRID_DATABASES` (`/home/CUBRID_DB`) and
+  `$CUBRID/databases` (user, 2026-10-20). So a case's `.result`/`.log` files are in
+  `shard_N/volatile/_home_cubrid-testcases-private-ex/upper/...`, not in
+  `shard_N/testcases`; the JUnit reports and CTP logs the runner reads are on separate
+  binds and unaffected.
+- Not applied to ha_shell/ha_repl (master and slave would share one volatile workdir,
+  which cannot be mounted twice) or with `--overlay`.
+- Writes land in `shard_N/volatile/<target with / as _>/upper/`. That is where a
   `--keep-copies` run's database files are.
 - A used volatile workdir keeps a mode-000 `work/` that plain `rm` cannot remove. The
   runner's prune and `just ctp-prune` fall back to `podman unshare rm -rf`. It also

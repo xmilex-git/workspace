@@ -1,6 +1,6 @@
 #!/bin/bash
-# volatile_entry.sh — container entrypoint for shards whose database dir is
-# volatile (sql/medium by default; CTP_VOLATILE=0 or --no-volatile turns it off).
+# volatile_entry.sh — container entrypoint for shards whose database dirs are
+# volatile (sql/medium/shell by default; CTP_VOLATILE=0 or --no-volatile turns it off).
 #
 # CTP creates its database under $CUBRID/databases (sql/bin/run.sh sets
 # cubrid_root_dir=$CUBRID), and every autocommit statement then waits for the log

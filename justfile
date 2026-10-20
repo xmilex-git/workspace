@@ -280,8 +280,8 @@ ctest mode="debug":
 #                        stops after CTP_CRASH_LOOP_CORES=5 cores with no passing case, or CTP_MAX_SHARD_CORES=20
 #   CTP_ARTIFACT_MOUNT=<mount>  disk for runs (default /home = NVMe; must be mounted)
 #   CTP_KEEP_COPIES=1    keep shard install/CTP/testcases/DB copies after the run (default: pruned)
-#   CTP_VOLATILE=0       keep sql/medium's database dir on a plain bind mount. Default 1: it is a
-#                        volatile overlay whose fsyncs return at once (ADR 0017 D7); also for ctp-rerun
+#   CTP_VOLATILE=0       keep the database dirs of sql/medium/shell on plain bind mounts. Default 1: they
+#                        are volatile overlays whose fsyncs return at once (ADR 0017 D7); also for ctp-rerun
 #   CTP_WITH_MEDIUM=0    a whole `just ctp sql` runs sql alone (default: medium's 1 shard runs beside it)
 #   CTP_PIN_PARAMS=0     keep the install's server params. Default: every CTP server runs the engine
 #                        defaults data_buffer_size=512M parallelism=4 max_parallel_workers=100, plus

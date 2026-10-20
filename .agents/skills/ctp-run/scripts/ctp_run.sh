@@ -129,10 +129,11 @@ OPTIONS
   --overlay              mount the install via overlay instead of copying it
   --keep                 do not remove the containers afterwards
   --keep-copies          keep each shard's install/CTP/testcases/DB copies after the run
-  --volatile             mount sql/medium's database dir as a volatile overlay: its
-                         fsyncs return at once (default ON; CTP_VOLATILE=0 or
-                         --no-volatile turns it off). Not applied to shell/ha_shell
-                         or with --overlay
+  --volatile             mount the dirs the suite writes its databases in as volatile
+                         overlays: their fsyncs return at once (default ON; CTP_VOLATILE=0
+                         or --no-volatile turns it off). sql/medium: $CUBRID/databases;
+                         shell: the testcases copy, CUBRID_DATABASES and $CUBRID/databases.
+                         Not applied to ha_shell/ha_repl or with --overlay
   --no-volatile          keep the database dir on a plain bind mount
   --abort-on-core        stop every shard on the first real core dump (default ON)
   --no-abort-on-core     keep collecting cores; a shard still stops after
@@ -384,7 +385,11 @@ resolve_suite() {
 # inside the container as an overlayfs with the kernel's `volatile` option
 # (scripts/volatile_entry.sh), so every fsync there returns at once. sql/medium
 # create basic/mdb under $CUBRID/databases (run.sh: cubrid_root_dir=$CUBRID).
-# shell/ha_shell cases create databases in their own case dirs, so nothing is
+# shell cases create their databases in their own case dir (the testcases copy),
+# in CUBRID_DATABASES or under $CUBRID/databases, so all three are overlaid
+# (user, 2026-10-20); case output files then land in the volatile upper, not in
+# shard_N/testcases. ha_shell/ha_repl run a master and a slave container that
+# would share one volatile workdir, which cannot be mounted twice, so nothing is
 # applied there. With --overlay the install is podman's own overlay, so it is
 # skipped too.
 VOLATILE_TARGETS=""
@@ -396,6 +401,7 @@ resolve_volatile() {
   [ "$ARG_VOLATILE" -eq 1 ] || return 0
   case "$ARG_SUITE" in
     sql|medium) VOLATILE_TARGETS="$C_CUBRID/databases" ;;
+    shell)      VOLATILE_TARGETS="$C_TCREPO $C_DB $C_CUBRID/databases" ;;
     *) return 0 ;;
   esac
   if [ "$ARG_OVERLAY" -eq 1 ]; then
@@ -527,7 +533,7 @@ build_provenance() {
   PROVENANCE="$(printf 'install=%s image=%s ctp=%s testcases=%s@%s(%.12s) suite=%s shards=%s ref-src=%s volatile=%s pinned=%s plan=%s' \
     "${ARG_BUILD:-<none>}" "$ARG_IMAGE" "$(ctp_revision)" \
     "$SUITE_TCREPO" "$TC_REF" "${TC_SHA:-unknown}" "$ARG_SUITE" "$NSHARDS" "${TC_REF_SRC:-n/a}" \
-    "${VOLATILE_TARGETS:-off}" "$(pinned_label | tr ' ' ',')" "$(printf '%s' "$PLAN_LABEL" | tr ' ' '_')")"
+    "$(printf '%s' "${VOLATILE_TARGETS:-off}" | tr ' ' ',')" "$(pinned_label | tr ' ' ',')" "$(printf '%s' "$PLAN_LABEL" | tr ' ' '_')")"
 }
 ctp_revision() {
   git -C "$ARG_CTP" rev-parse --short HEAD 2>/dev/null || echo "unknown"
