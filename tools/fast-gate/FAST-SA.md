@@ -47,6 +47,19 @@ bash $V/fast-sa.sh <out-dir> <label> <install> <sql> [<label> <install> <sql> ..
 - run-probe.sh와 다른 점: label마다 DB 하나가 아니라 작업마다 새 DB다. 각 파일이 자기가 읽을 것을 직접 만들어야 동등하다(#343 프로브와 CTP 케이스는 그렇다).
 - 동시 실행: `FAST_SA_JOBS`(기본 16).
 
+## 레인 D — 브로커 + JDBC
+
+```
+bash $V/fast-cs-jdbc.sh <out-dir> <label> <install> <Main.java> [<label> <install> <Main.java> ...]
+# 예: FAST_CS_PLANDUMP=1 FAST_CS_JDBC_ARGS="200000 12" bash $V/fast-cs-jdbc.sh out dev $D Bench.java v12 $R Bench.java
+```
+
+- 작업마다 네임스페이스(사용자·마운트·IPC·PID·네트워크)를 따로 두고 새 DB, 서버, 브로커를 띄운다. 포트와 SHM 키가 다른 작업이나 호스트와 겹치지 않는다.
+- 프로그램은 그 install의 `jdbc/cubrid_jdbc.jar`로 컴파일하고 실행한다. `args[0]`이 JDBC URL이고, `FAST_CS_JDBC_ARGS`가 그 뒤에 붙는다.
+- 출력: `<label>.<Main>.out` / `.err`, `.plandump`(`FAST_CS_PLANDUMP=1`이면 실행 뒤 `cubrid plandump -o`), `.createdb.log`, `.server.log`, `.broker.log`, `.rc`, `.rel`. 기존 출력은 덮어쓰지 않는다.
+- csql 바인드와 JDBC 바인드는 값의 타입이 다르다(`setString`은 VARCHAR, `setBytes`는 고정 BIT). 드라이버 경로의 차이는 이 레인으로 본다(PR 8213, 2026-10-23).
+- 작업 디렉터리 `<out-dir>/.fast-cs-jdbc/<run>/`에 DB 볼륨이 남는다. 러너는 지우지 않으니 리터럴 경로로 지운다.
+
 ## 정리
 
 - 프로세스·마운트: 따로 할 일이 없다(네임스페이스와 함께 사라진다).
