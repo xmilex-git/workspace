@@ -1018,6 +1018,11 @@ function run_test ()
     sed -i "s|^testcase_timeout_in_secs=.*|testcase_timeout_in_secs=$CTP_SHELL_TIMEOUT|" "$CTP_HOME/$CTP_CONF"
     echo "[conf] testcase_timeout_in_secs=$CTP_SHELL_TIMEOUT (CTP_SHELL_TIMEOUT)"
   fi
+  # --env CTP_SHELL_RETRY=<n> overrides how often CTP reruns a NOK case (shell_ci.conf: 1).
+  if [ -n "${CTP_SHELL_RETRY:-}" ] && grep -q '^testcase_retry_num=' "$CTP_HOME/$CTP_CONF" 2>/dev/null; then
+    sed -i "s|^testcase_retry_num=.*|testcase_retry_num=$CTP_SHELL_RETRY|" "$CTP_HOME/$CTP_CONF"
+    echo "[conf] testcase_retry_num=$CTP_SHELL_RETRY (CTP_SHELL_RETRY)"
+  fi
 
   pin_testcase_source
 
