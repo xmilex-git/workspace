@@ -25,7 +25,7 @@ just ctp-rerun <PR | CircleCI job | gha-ci run URL>   # exactly what failed in C
 Env knobs: `PR=<n>` / `TC_REF=<ref>` (testcase ref), `SHARDS=<n>`, `BUILD=<install>`,
 `CONF=<file>`, `EXCLUDE=<file>`, `NO_ABORT_ON_CORE=1` (+ `CTP_CRASH_LOOP_CORES`, `CTP_MAX_SHARD_CORES`),
 `CTP_VOLATILE=0` (see "Volatile databases"), `CTP_PIN_PARAMS=0` (see below),
-`CTP_HANG_SECS=<s>` (see "Diagnosing a bad run"), `CTP_ARGS="…"`, `TESTCASES_ROOT=<dir>`.
+`CTP_HANG_SECS=<s>` (see "Diagnosing a bad run"), `CTP_ARGS="--env CTP_SHELL_TIMEOUT=<s>"` (shell per-case timeout, default 720), `CTP_ARGS="…"`, `TESTCASES_ROOT=<dir>`.
 
 **Every CTP server runs the engine's own defaults for `data_buffer_size=512M`, `parallelism=4`
 and `max_parallel_workers=100`** (ADR 0017 D8). `data_buffer_size=512M` is 32768 pages of 16K.

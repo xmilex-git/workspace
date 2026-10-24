@@ -1013,6 +1013,12 @@ function run_test ()
     "$CONF_WRITER"
   fi
 
+  # --env CTP_SHELL_TIMEOUT=<secs> overrides the per-case shell timeout (shell_ci.conf: 720).
+  if [ -n "${CTP_SHELL_TIMEOUT:-}" ] && grep -q '^testcase_timeout_in_secs=' "$CTP_HOME/$CTP_CONF" 2>/dev/null; then
+    sed -i "s|^testcase_timeout_in_secs=.*|testcase_timeout_in_secs=$CTP_SHELL_TIMEOUT|" "$CTP_HOME/$CTP_CONF"
+    echo "[conf] testcase_timeout_in_secs=$CTP_SHELL_TIMEOUT (CTP_SHELL_TIMEOUT)"
+  fi
+
   pin_testcase_source
 
   if [ -n "$MEMORY_LEAK" ]; then
