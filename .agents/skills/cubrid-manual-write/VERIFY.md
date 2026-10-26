@@ -110,9 +110,19 @@ grep -E 'sql/<f>.rst|admin/<f>.rst' $O/sphinx-ko.log $O/sphinx-en.log
 
 - Gate: **zero warnings on touched files** in both languages (pre-existing warnings elsewhere are
   noted, not fixed). `sphinx-autobuild` is in `requirements.txt` if you want a live server.
-- Render check with Playwright on `$O/<lang>-html/<page>.html#<anchor>`: every `:ref:` resolves, no raw
-  markup leaks (`\`, `**`, `:ref:`), tables have the same geometry as their sibling tables, notes and
-  code blocks render as such, math renders. Any anomaly ⇒ fix it and add a case to [PITFALLS.md](PITFALLS.md).
+- **Render check with Playwright — every touched page, ko and en, after the last edit.** Serve the
+  build over HTTP (`file://` blocks `fetch`): `(cd $O && python3 -m http.server <port> --bind 127.0.0.1)`
+  in the background, then with the Playwright MCP tools:
+  1. `playwright_navigate` (headless) to `http://127.0.0.1:<port>/ko-html/<any page>.html`.
+  2. `playwright_evaluate` with [scripts/render-check.js](scripts/render-check.js), `PAGES` = every touched
+     page and `PROBES` = one string from each new code/output block plus `#<anchor>` for each new `:ref:`.
+     Gate: `sysmsg=0`, every probe `pre`/`text`/`true` as intended, no leak in a line the change touched.
+  3. For each new note, nested code block, table or long output block: scroll to it
+     (`scrollIntoView` in `playwright_evaluate`), `playwright_screenshot`, and look at the image. Notes and
+     code blocks render as such, a code block nested in a note bullet stays inside the note, tables keep
+     their sibling tables' geometry.
+  4. `playwright_close`, stop the HTTP server.
+  Any anomaly ⇒ fix it, rebuild, rerun 1–3, and add a case to [PITFALLS.md](PITFALLS.md).
 - Structural counts (bullets, notes, code blocks, anchors, headings) are the mechanical ko↔en gate;
   semantic comparison is the QA pass below.
 

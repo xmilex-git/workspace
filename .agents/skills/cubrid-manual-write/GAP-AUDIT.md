@@ -55,6 +55,34 @@ and structure donors, not fact sources.
 - **Independent features** do not share a page just because they shipped together (memoize is not in
   `parallel.rst`: readers would infer it needs parallelism).
 
+## 3a. Behavior changes woven into existing sections
+
+When an engine change alters behavior the manual already describes (types, errors, timing, plan cache,
+driver rules) and no new section is wanted, the audit is per changed rule, not per new surface.
+
+- **Baseline is the last release users run, not develop.** A JIRA "spec change" table compares against
+  develop, which may hold unreleased changes. Run each item's example on the release install
+  (`~/release/CUBRID-<ver>`) and on the new build with `tools/fast-gate/fast-cs-csql.sh out r <release> p.sql
+  n <new> p.sql` (JDBC-only items: `tools/fast-gate/fast-cs-jdbc.sh`) and diff. Classify: **changed** (document),
+  **same as release** (drop: the change only undid an unreleased develop state), **defect fix** (release
+  note, not manual, unless the manual states the old behavior), **kept from an earlier unreleased change**
+  (document the final state in the same sentence).
+- **Find every place, then re-run what is there.** Grep `ko/` for the feature's nouns (호스트 변수, 사용자
+  정의 변수, the function names, the plandump field names) and read each hit. Re-run every existing example
+  on a touched page and in any section that states the changed rule; a stale output is replaced by a
+  capture (PITFALLS Rule 2), a now-failing example is rewritten so it shows the new rule.
+- **Placement.** The rule goes into the section that defines the feature (the function's own entry, the
+  conversion rules, the statement page). Caveats (when an error appears, when a plan is printed, extra
+  compiles, what is refused) go into that section's `.. note::`. No new section, no "변경 사항" heading, no
+  version names (STYLE.md §3). Link related places with `:ref:` instead of repeating the rule.
+- **Scope of edits.** Unchanged meaning keeps its words (PITFALLS Rule 3). A pre-existing inaccuracy is
+  fixed only when the change alters that sentence's meaning (CBRD-27583: "SQL_ID is the MD5 of the
+  original query" became wrong to leave once SQL_ID varies by bind type; the code hashes the sql hash
+  text). Other drift (stale plandump stats format) is recorded as an observation.
+
+Worked example: CBRD-27583 (PR 8213) — 29 develop-relative items reclassified against 11.4.6 into 12
+documented changes across 10 ko/en page pairs; audit `.git_ignored_dir/scratch/cbrd27583-manual/audit.md`.
+
 ## 4. "Do not document" list
 
 Write down every retired or renamed name found during the sweep (old hint names, renamed parameters,
