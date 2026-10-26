@@ -54,6 +54,10 @@ first was the style/example policy).
   wrong on one (a constraint they proposed deleting was still enforced); the reply cited the checker
   source and a measured 30 s vs 0.2 s comparison, and rewrote the sentence from the user's point of view
   instead of deleting it.
+- **Reply wording** follows the "리뷰 답글" section of `cubrid-pr-create/tone_guide.md` (PR #8096
+  tone): open with the verified fact, then previous text -> changed text -> commit, cite the source or
+  the measured number, state what was run flatly and hedge only what was not run, no praise or thanks,
+  no label prefixes, one reply per thread.
 - Accept wording suggestions verbatim when they are the house voice (STYLE.md §1) — then sweep the rest
   of the diff for the same pattern and fix all occurrences, en included.
 - One commit per review round per file; rebuild Sphinx, re-run the sweeps, and walk

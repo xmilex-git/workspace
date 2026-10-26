@@ -147,6 +147,7 @@ The report is read by the PR author under time pressure — and the author may b
 - **One idea per sentence.** Short, declarative Korean. If a finding needs three sentences, the second and third belong as evidence (code excerpt) — not as more prose.
 - **Lead with the defect, then the cause, then the consequence.** "에러 경로에서 `pgbuf_unfix` 누락 -> 페이지 핀이 영구히 잠긴 채 남아 다른 트랜잭션이 해당 페이지를 잡을 수 없음" beats "전반적으로 살펴보니 ... 가능성이 있어 보입니다." The consequence clause is what tells the author *why* this is blocking, not just *what* is wrong.
 - **No hedging or filler.** Drop "~인 것 같습니다", "혹시", "전반적으로", "본 리뷰에서는". State the fact: "에러 경로에서 `pgbuf_unfix` 누락."
+- **Words and logic follow the PR #8096 tone** (`cubrid-pr-create/tone_guide.md`, "사람처럼 읽히는 이유"): the subject of a sentence is the thing that acts (스레드, vacuum, 호출자), the verb shows what it does (쥐다, 놓다, 잠들다, 건너뛰다; not 수행·처리·보장), a hedge appears only where the fact is probabilistic, every number carries its default, unit, build or row count, and no evaluative word (효과적으로, 안정적으로, 핵심, 전반적으로) or label prefix (문제:, 원인:) appears. The consequence is what the user sees, split by `debug 빌드 / release 빌드` when it differs.
 - **Keep code identifiers as-is.** Function names, file paths, macros stay in their original English form inside backticks. Don't translate them.
 - **Show, don't summarize.** When a finding hinges on a few lines of code, paste those lines (1-5 lines) instead of describing them.
 - **Gloss CUBRID-internal terms on first use.** On the first mention of an internal-only concept in the report (`OOS`, `pgbuf_*`, `recdes`, `OR_VAR_*`, "6곳 룰", build-mode names like `SERVER_MODE`/`SA_MODE`, latch protocols), add a one-clause aside in parentheses: "`pgbuf_unfix` (페이지 버퍼 핀 해제)", "6곳 룰 (새 에러 코드는 `error_code.h`, `error_code.c` 등 6개 파일을 모두 갱신해야 함)", "`SERVER_MODE` (서버 프로세스 빌드 모드)". After the first gloss, use the term raw. Universal C/DB vocabulary (`malloc`, `mutex`, `assert`) does not need glossing. If `reference.md` already has the long-form explanation, gloss in one clause and link by name.
@@ -156,7 +157,7 @@ The report is read by the PR author under time pressure — and the author may b
 Two artifacts, two voices — do not mix them:
 
 - **`PR-<NUMBER>-report.md`** (analysis, local-only): the terse, declarative **Plain Language** style above — defect -> cause -> consequence, no hedging. For the reviewer/maintainer to assess shippability.
-- **`PR-<NUMBER>-comments.md`** (post-ready, Step 6): the CUBRID human-reviewer voice defined in **`voice-guide.md`** — question / assertion / suggestion endings (`~지 않나요?`, `~인 것 같습니다`, `~는 어떨까요?`), `NIT:` for minor items, identifiers kept English, no AI tells / emoji / English verdict labels. The hedged tone that Plain Language bans in the report is *expected* here, because these are the words the author actually reads.
+- **`PR-<NUMBER>-comments.md`** (post-ready, Step 6): the CUBRID human-reviewer voice defined in **`voice-guide.md`** — question / assertion / suggestion endings (`~지 않나요?`, `~는 어떨까요?`), `NIT:` for minor items, identifiers kept English, no AI tells / emoji / English verdict labels. A hedge is allowed here only where the report could not verify the fact (voice-guide 1 and 1b): what the reviewer read in the code or ran on a build is stated flatly, a doubt becomes a question, a proposal becomes a suggestion. Comments longer than two lines open with the normal behavior at that spot, then the deviation, then what the user sees.
 
 `voice-guide.md` is the single source of truth for comment voice. When the two conflict, Plain Language governs the report and `voice-guide.md` governs the comments.
 
@@ -341,7 +342,8 @@ Run it by invoking two skills with the Skill tool: `grilling` (the interview loo
   - the length budget holds,
   - no emoji or non-BMP characters,
   - every CUBRID-internal term is glossed on first use,
-  - every blocking finding states defect -> cause -> impact.
+  - every blocking finding states defect -> cause -> impact,
+  - every sentence has an acting subject and a concrete verb; no evaluative word, label prefix or unverified hedge; every number carries its default, build or row count (Plain Language, voice-guide 1b).
 
 Completion: the frontier is empty and the user has confirmed. Then revise the report in place, drop what the grill dropped, and fill the `**리뷰 결정:**` header line. The only skip is the user saying "skip grill" (or "no grill", "just push it") in the message that triggered this skill.
 

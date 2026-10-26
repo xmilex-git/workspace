@@ -212,7 +212,9 @@ cubrid-jira comment CBRD-<N> --body-file <rundir>/jira-comment.txt --from jira -
 3. Otherwise verify each claim (covered on head / real gap / invalid, with evidence). A real gap is
    fixed by the normal Steps 3-4 (answer on post, pre once, post 3 times, dev once), pushed to the fork
    branch, the PR body updated for every changed part, and one Korean plain-text reply per thread with
-   the commit, the case and the three-point result. When a bot asks to "widen the range / add distinct
+   the commit, the case and the three-point result, worded per the "리뷰 답글" section of
+   `cubrid-pr-create/tone_guide.md` (verified fact first, then what changed and the commit, measured
+   results stated flatly, no praise or label prefixes). When a bot asks to "widen the range / add distinct
    values", run the widened shape against the faulty path (a control probe on post and dev): a shape the
    faulty path still answers the same way does not close the gap (CBRD-26722 Case 15). A probe that exposes an engine defect stops the
    change and goes to the user.
