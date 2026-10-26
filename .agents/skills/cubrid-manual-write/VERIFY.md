@@ -122,6 +122,9 @@ grep -E 'sql/<f>.rst|admin/<f>.rst' $O/sphinx-ko.log $O/sphinx-en.log
      code blocks render as such, a code block nested in a note bullet stays inside the note, tables keep
      their sibling tables' geometry.
   4. `playwright_close`, stop the HTTP server.
+  If `playwright_navigate` fails with "Executable doesn't exist at …/chromium_headless_shell-<N>/…", the MCP
+  server expects another browser build than the one installed: symlink
+  `~/.cache/ms-playwright/chromium_headless_shell-<N>` to the installed `chromium_headless_shell-<M>` and retry.
   Any anomaly ⇒ fix it, rebuild, rerun 1–3, and add a case to [PITFALLS.md](PITFALLS.md).
 - Structural counts (bullets, notes, code blocks, anchors, headings) are the mechanical ko↔en gate;
   semantic comparison is the QA pass below.
