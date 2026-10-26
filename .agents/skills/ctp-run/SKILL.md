@@ -16,11 +16,16 @@ description: >-
 One entry point for every CTP suite. Two commands cover everything:
 
 ```bash
-just ctp <sql|medium|shell|ha_shell|ha_repl>      # whole suite (whole sql also runs whole medium beside it)
+just ctp <sql|medium|sql_by_cci|shell|ha_shell|ha_repl>  # whole suite (whole sql also runs whole medium beside it)
 just ctp sql+medium                               # the same sql + medium pair, explicitly
 just ctp <suite> <DIR> [<DIR> ...]                # subset (scenario-relative dirs)
 just ctp-rerun <PR | CircleCI job | gha-ci run URL>   # exactly what failed in CI
 ```
+
+`sql_by_cci` runs the sql cases through CTP's CCI driver: a case compares against its `.answer_cci`
+when one exists, else its `.answer`. It takes the sql testcase ref and dirs, shards like sql, and
+refuses `EXCLUDE` (the image's entrypoint rejects `TEST_EXCLUDE` for it). Failed cases come from
+`CTP/result/sql_by_cci/**/summary.info` (`:NOK:`).
 
 Env knobs: `PR=<n>` / `TC_REF=<ref>` (testcase ref), `SHARDS=<n>`, `BUILD=<install>`,
 `CONF=<file>`, `EXCLUDE=<file>`, `NO_ABORT_ON_CORE=1` (+ `CTP_CRASH_LOOP_CORES`, `CTP_MAX_SHARD_CORES`),

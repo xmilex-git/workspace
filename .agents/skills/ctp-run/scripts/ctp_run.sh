@@ -71,7 +71,7 @@ usage() {
   cat <<'EOF'
 ctp_run.sh — run one CUBRID CTP suite in isolated podman containers.
 
-  ctp_run.sh --suite <sql|medium|shell|ha_shell|ha_repl> --build <install> \
+  ctp_run.sh --suite <sql|medium|sql_by_cci|shell|ha_shell|ha_repl> --build <install> \
              --testcases <repo checkout> [--ctp <CTP_HOME>] [--out <dir>] [options]
 
 WHAT / WHY
@@ -87,6 +87,8 @@ SUITES
   sql        shardable, default 7 shards (bulk + measured-time split)
   shell      shardable, default 7 shards (per test dir, count-balanced)
   medium     always 1 shard  (one mdb dataset, mutated in place)
+  sql_by_cci the sql cases through CTP's CCI driver (.answer_cci, else .answer);
+             shardable like sql (count-balanced), no --exclude
   ha_shell   always 1 shard  (a shard is a master+slave container pair)
   ha_repl    always 1 shard  (sql cases replayed on an HA master+slave pair)
 
@@ -107,7 +109,7 @@ TESTCASE REF (never silently 'develop')
   its uncommitted edits are never touched.
 
 OPTIONS
-  --suite <s>            sql | medium | shell | ha_shell | ha_repl (default sql)
+  --suite <s>            sql | medium | sql_by_cci | shell | ha_shell | ha_repl (default sql)
   --build <dir>          CUBRID install to test (required for a real run)
   --testcases <dir>      testcases repo checkout for this suite (required)
   --ctp <dir>            CTP_HOME to copy per shard      (default ~/cubrid-testtools/CTP)
@@ -160,7 +162,7 @@ EOF
 #####################################################################
 ARG_BUILD=""
 ARG_TC=""
-ARG_SUITE="sql"        # CTP suite: sql | medium | shell | ha_shell | ha_repl
+ARG_SUITE="sql"        # CTP suite: sql | medium | sql_by_cci | shell | ha_shell | ha_repl
 ARG_TCREF=""           # explicit testcases ref (branch/tag/sha); "" = derive from --pr/--workspace
 ARG_PR=""              # engine PR number -> testcases ref tc/pr-<N>
 ARG_WS=""              # CUBRID source checkout, used to infer the PR when --pr/--tc-ref are absent
@@ -279,6 +281,8 @@ parse_args() {
   fi
 
   resolve_suite
+  [ "$ARG_SUITE" = "sql_by_cci" ] && [ "$ARG_EXCLUDE_SET" -eq 1 ] \
+    && die "--exclude does not apply to sql_by_cci: the image's entrypoint refuses TEST_EXCLUDE for it, so CTP always uses conf/exclusions.txt."
   resolve_volatile
   resolve_server_params
   case "$HANG_SECS" in
@@ -351,6 +355,13 @@ resolve_suite() {
       SUITE_TCREPO="cubrid-testcases";            SUITE_SUBPATH="medium"
       SUITE_CAT="medium";   SUITE_EXT="sql";      SUITE_UNIT_DEFAULT="dir"
       SUITE_SHARDABLE=0;    SUITE_STYLE="sqlresult";  SUITE_CONF="conf/medium_dev.conf" ;;
+    sql_by_cci)
+      # The sql cases through CTP's CCI driver (run.sh with sql_interface_type=cci),
+      # compared against .answer_cci when one exists, else .answer. Results land in
+      # CTP/result/sql_by_cci, and the entrypoint refuses TEST_EXCLUDE for it.
+      SUITE_TCREPO="cubrid-testcases";            SUITE_SUBPATH="sql"
+      SUITE_CAT="sql_by_cci"; SUITE_EXT="sql";    SUITE_UNIT_DEFAULT="dir"
+      SUITE_SHARDABLE=1;    SUITE_STYLE="sqlresult";  SUITE_CONF="conf/sql_by_cci.conf" ;;
     shell)
       SUITE_TCREPO="cubrid-testcases-private-ex"; SUITE_SUBPATH="shell"
       SUITE_CAT="shell";    SUITE_EXT="sh";       SUITE_UNIT_DEFAULT="dir"
@@ -369,7 +380,7 @@ resolve_suite() {
       SUITE_CAT="ha_repl";  SUITE_EXT="sql";      SUITE_UNIT_DEFAULT="dir"
       SUITE_SHARDABLE=0;    SUITE_STYLE="status";     SUITE_CONF="conf/ha_repl_ci.conf"; SUITE_HA=1
       C_DB="$C_CUBRID/databases" ;;
-    *) usage; die "--suite must be one of: sql medium shell ha_shell ha_repl (got: '$ARG_SUITE')" ;;
+    *) usage; die "--suite must be one of: sql medium sql_by_cci shell ha_shell ha_repl (got: '$ARG_SUITE')" ;;
   esac
   C_TCREPO="$C_WORKDIR/$SUITE_TCREPO"
   C_SCN="$C_TCREPO/$SUITE_SUBPATH"
@@ -400,7 +411,7 @@ resolve_volatile() {
   esac
   [ "$ARG_VOLATILE" -eq 1 ] || return 0
   case "$ARG_SUITE" in
-    sql|medium) VOLATILE_TARGETS="$C_CUBRID/databases" ;;
+    sql|medium|sql_by_cci) VOLATILE_TARGETS="$C_CUBRID/databases" ;;
     shell)      VOLATILE_TARGETS="$C_TCREPO $C_DB $C_CUBRID/databases" ;;
     *) return 0 ;;
   esac
@@ -580,7 +591,7 @@ host_preflight() {
   # CQT on it. An install built while the engine's cubrid-jdbc submodule was missing
   # has no jdbc/, and CTP would only die after the container, createdb and javac.
   case "$ARG_SUITE" in
-    sql|medium)
+    sql|medium|sql_by_cci)
       [ -e "$ARG_BUILD/jdbc/cubrid_jdbc.jar" ] \
         || die "--build has no jdbc/cubrid_jdbc.jar: $ARG_BUILD (CTP $ARG_SUITE needs the JDBC driver; 'just build' or 'just incr' restores the cubrid-jdbc submodule and installs it)" ;;
   esac
@@ -895,7 +906,7 @@ BASE_FILE=""       # the original CTP exclusions.txt (verbatim base list)
 # split invariant) disagrees with what CTP actually runs.
 suite_base_exclusion_file() {
   case "$ARG_SUITE" in
-    sql|medium) printf '%s' "$ARG_CTP/conf/exclusions.txt" ;;
+    sql|medium|sql_by_cci) printf '%s' "$ARG_CTP/conf/exclusions.txt" ;;
     shell|ha_shell) printf '%s' "$SCN/config/daily_regression_test_excluded_list_linux.conf" ;;
     ha_repl) printf '%s' "$SCN/config/daily_regression_test_exclude_list_ha_repl.conf" ;;
   esac
@@ -1742,7 +1753,9 @@ shard_envs() {
     # Upstream options operate on the private, already partitioned scenario.
     -e "TEST_SCENARIO=${C_SCN}"
   )
-  if [ "$ARG_EXCLUDE_SET" -eq 1 ] && [ -z "$ARG_EXCLUDE" ]; then
+  if [ "$ARG_SUITE" = "sql_by_cci" ]; then
+    :  # the entrypoint refuses TEST_EXCLUDE here; CTP applies conf/exclusions.txt itself
+  elif [ "$ARG_EXCLUDE_SET" -eq 1 ] && [ -z "$ARG_EXCLUDE" ]; then
     e+=( -e "TEST_EXCLUDE=" )
   else
     e+=( -e "TEST_EXCLUDE=${C_CTP}/conf/ctprun_exclusions.txt" )
@@ -1851,7 +1864,7 @@ WATCHDOG_PID=""
 # the container, so this is the only chance. Saved under shard_N/hang/.
 capture_hang_evidence() {
   local i="$1" name="${SHARD_NAMES[$1]}" h="$OUT/shard_$1/hang" db=""
-  case "$ARG_SUITE" in sql) db=basic ;; medium) db=mdb ;; esac
+  case "$ARG_SUITE" in sql|sql_by_cci) db=basic ;; medium) db=mdb ;; esac
   mkdir -p "$h"
   podman logs --timestamps --tail 40 "$name" > "$h/console.tail.txt" 2>&1 || :
   podman exec -e DB="$db" "$name" bash -c '
@@ -2120,6 +2133,13 @@ emit_failed_list() {
           }
           /<(failure|error)[ >]/ { if (pend!="") { print pend; pend="" } }
         ' "$x"
+      done >> "$out"
+    elif [ "$ARG_SUITE" = "sql_by_cci" ]; then
+      # CCI marks a failed case ":NOK:" in summary.info ("TestCase: <path> :NOK: ...");
+      # the path is absolute inside the container, so cut it back to <repo>-relative.
+      find "$d/CTP/result" -name 'summary.info' -type f 2>/dev/null | while read -r x; do
+        grep -h ':NOK:' "$x" | sed 's/^TestCase:[[:space:]]*//; s/[[:space:]]*:NOK:.*//' \
+          | sed "s#^.*/$SUITE_TCREPO/##"
       done >> "$out"
     else
       # sql/medium: CTP writes NO per-case JUnit here (the entrypoint's collector

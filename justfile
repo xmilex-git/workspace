@@ -291,7 +291,7 @@ ctest mode="debug":
 # ---------------------------------------------------------------------------
 
 # Run a CTP suite (whole, or just the given scenario-relative dirs) in podman.
-[doc("Run a CTP suite in isolated podman: just ctp <sql|medium|sql+medium|shell|ha_shell|ha_repl> [DIRS...]")]
+[doc("Run a CTP suite in isolated podman: just ctp <sql|medium|sql+medium|sql_by_cci|shell|ha_shell|ha_repl> [DIRS...]")]
 ctp SUITE *DIRS:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -330,10 +330,11 @@ ctp SUITE *DIRS:
     case "{{SUITE}}" in
         sql)      repo=dev/cubrid-tc-worktree/develop ;;
         medium)   repo=dev/cubrid-tc-worktree/develop ;;
+        sql_by_cci) repo=dev/cubrid-tc-worktree/develop ;;
         shell)    repo=dev/cubrid-tc-ex-worktree/develop ;;
         ha_shell) repo=dev/cubrid-testcases-private ;;
         ha_repl)  repo=dev/cubrid-tc-worktree/develop ;;
-        *) echo "ERROR: suite must be sql | medium | sql+medium | shell | ha_shell | ha_repl (got '{{SUITE}}')" >&2; exit 1 ;;
+        *) echo "ERROR: suite must be sql | medium | sql+medium | sql_by_cci | shell | ha_shell | ha_repl (got '{{SUITE}}')" >&2; exit 1 ;;
     esac
     tc="${TESTCASES_ROOT:-$HOME}/$repo"
     [ -d "$tc" ] || { echo "ERROR: testcases checkout not found: $tc" >&2; exit 1; }
