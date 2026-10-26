@@ -7,7 +7,7 @@ description: Write a concise, paste-ready CUBRID JIRA issue body in Korean using
 
 Write a CUBRID JIRA issue that QA, decision-makers, and developers can understand without reading a code-level design document.
 
-Read [`tone_guide.md`](./tone_guide.md) before drafting. It is authoritative for wording, detail level, and JIRA wiki markup.
+Read [`tone_guide.md`](./tone_guide.md) before drafting. It is authoritative for wording, detail level, and JIRA wiki markup. In short: 합니다체; explain normal behavior before the defect or change; gloss every term at first use; give every number its unit, default, or source; short sentences with a real actor as subject; no evaluative words, labels, or closing summaries.
 
 ## Output
 
@@ -98,7 +98,7 @@ Use the labels and order below. Mark section labels with JIRA bold syntax such a
 - `Specification Changes`: Describe user-visible behavior, supported and excluded cases, settings, compatibility, and other facts needed by QA or manual writers. Use `N/A` when no specification changes exist. There is no fixed length limit when a support matrix, SQL example, or constraint list is necessary.
 - `Implementation`: State only the central implementation concept and affected scope in one to three short paragraphs. Do not enumerate function-by-function flow, data structures, file/line changes, pseudocode, internal error paths, or a detailed test design.
 - `Acceptance Criteria`: Give at most three observable results that determine whether the work is acceptable. Do not repeat the specification section.
-- `Definition of done`: Normally include only `Acceptance Criteria를 만족한다.` and, when applicable, `QA 테스트를 통과한다.`
+- `Definition of done`: Normally include only `* Acceptance Criteria 만족` and, when applicable, `* QA 테스트 통과` (list items end in noun form; prose is 합니다체, see `tone_guide.md`).
 
 Never invent a performance target. Use a number only when the user or an authoritative source supplied the target and its basis. If a numeric target is essential but missing, ask the user.
 

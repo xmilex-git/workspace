@@ -33,10 +33,11 @@ Create GitHub pull requests for the CUBRID project in the author's hand-written 
 
 **Read [tone_guide.md](./tone_guide.md) before drafting. It is the single source of truth for body style.** In short:
 
-- JIRA link (`<http://jira.cubrid.org/browse/CBRD-XXXXX>`) at the very top.
-- `### Purpose` — always. Korean prose, 1 sentence to 3 paragraphs depending on change size.
-- `### Implementation` — only when the change spans multiple files/modules or adds new structures. Omit for one-or-two-function fixes.
-- `### Remarks` — exceptional; only for constraints/follow-ups a reviewer must know.
+- JIRA link (`http://jira.cubrid.org/browse/CBRD-XXXXX`) at the very top, then a one-sentence summary ("~하는 PR입니다.") when Purpose runs two paragraphs or more.
+- Write for a reviewer who has never seen this code: normal behavior → the defect → what the user sees (debug / release), then the fix. Short sentences, one fact each, 합니다체, plain Korean verbs, every term glossed at first use, every number with its unit/default/source.
+- `### Purpose` — always. Scale with the change: one sentence for a one-function fix, up to three paragraphs plus text diagrams (annotated code excerpt, `└ ├ │` call tree) for a mechanism-level fix.
+- `### Implementation` — numbered by concern (not by file), each with a bold one-line heading, "what + why", and a note on how untouched paths behave. Omit for one-or-two-function fixes.
+- `### Remarks` — bullets, when any apply: 동작 변화 (what is visible and what is unchanged), TODO with its follow-up issue, review-aid commits to drop before merge.
 - A 6-line body with a one-sentence Purpose is a normal, correct PR. Never pad.
 
 ## Execution Steps
@@ -88,7 +89,9 @@ If there are uncommitted changes, warn the user and ask whether to proceed or co
      --assignee xmilex-git \
      --title "[CBRD-XXXXX] Title" \
      --body "$(cat <<'EOF'
-   <http://jira.cubrid.org/browse/CBRD-XXXXX>
+   http://jira.cubrid.org/browse/CBRD-XXXXX
+
+   <한 문장 요약 (Purpose가 두 문단 이상일 때)>
 
    ### Purpose
 
@@ -103,4 +106,4 @@ If there are uncommitted changes, warn the user and ask whether to proceed or co
 - If a PR already exists for the branch, show it instead of creating a duplicate.
 - For multi-commit PRs, summarize the overall change rather than listing each commit message.
 - Always use heredoc for the body to handle multi-line Korean text correctly.
-- Style reference corpus: [`pr-corpus/`](./pr-corpus/) — 76 hand-written PRs (#4432–#6911), one file per PR with diff summary + verbatim body.
+- Size reference corpus: [`pr-corpus/`](./pr-corpus/) — 76 hand-written PRs (#4432–#6911), one file per PR with diff summary + verbatim body. Use it to judge how long a body of a given diff size should be; for sentence style and structure, tone_guide.md (standard: PR #8096) wins.
