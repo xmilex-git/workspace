@@ -10,23 +10,6 @@ GNU/Linux build host) without dragging along the database source tree.
 It is **not** a CUBRID engine checkout. There is no `CMakeLists.txt`, no `src/`. If you are
 looking for engine code, you are in the wrong directory.
 
-## Layout
-
-```
-.
-├── AGENTS.md                 # this file (the repo guide; CLAUDE.md is a symlink to it)
-├── CLAUDE.md -> AGENTS.md     # so Claude, Codex, and other harnesses all read the same guide
-├── cubrid.conf               # campaign cubrid.conf — single source of truth; `just conf` copies it
-├── justfile                  # build/test/dev recipes (uses $HOME, ~/CUBRID, ~/cubrid-testtools/CTP)
-├── .agents/
-│   ├── AGENTS.md             # behavioral guidelines (think-before-coding, surgical changes, …)
-│   └── skills/<name>/        # canonical home of every skill (each has a SKILL.md)
-└── .claude/
-    ├── CLAUDE.md             # relative symlink -> ../.agents/AGENTS.md (shared behavioral guidelines)
-    ├── locale/make_locale.sh # locale .so build helper (the built *.so is git-ignored, never committed)
-    └── skills/<name>         # relative symlink -> ../../.agents/skills/<name>  (skill discovery)
-```
-
 ## Skills
 
 Every skill is a markdown prompt under `.agents/skills/<name>/SKILL.md`. Harnesses discover
@@ -78,12 +61,6 @@ Every hit carries `{server,sa,cs}` — the libraries that compile its file — a
 conditions around it (e.g. `[#else of !defined(NDEBUG)]`); read both before following a call into
 server code. Reach for rg when the target is a comment, a string, a regex, or a name code-index
 reports as not found.
-
-## Diagnostics
-
-Run `cubrid-deps-check <workspace>` to get a read-only `[OK]/[MISS]/[WARN]` report of the build
-and test prerequisites for a CUBRID checkout. It never mutates anything and never executes its
-own fix suggestions — it only prints them.
 
 ## House rules
 

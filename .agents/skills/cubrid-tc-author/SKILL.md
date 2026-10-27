@@ -1,6 +1,7 @@
 ---
 name: cubrid-tc-author
-description: Author a CUBRID CTP testcase (sql or shell) for one CBRD issue or engine PR end to end — judge sql / shell / both / out of scope from the fix diff, write the case, prove it on the pre-fix, fix and latest-develop optdebug builds with containerized CTP, open the TC PR with a results table, assign one reviewer (only when the engine PR is already merged into develop), and leave the JIRA comment the outcome calls for. Also the yardstick for reviewing another author's TC PR (review mode: judge and pitfalls only, no reviewer, nothing pushed). Use when asked to "write a TC", "tc 만들어", "테스트케이스 작성", "add a testcase for CBRD-N / PR #N", to review a TC PR against these rules, or when a wayfinder ticket says to follow the TC authoring skill.
+description: >-
+  Author a CUBRID CTP testcase (sql or shell) for one CBRD issue or engine PR end to end — judge sql / shell / both / out of scope from the fix diff, write the case, prove it on the pre-fix, fix and latest-develop optdebug builds with containerized CTP, open the TC PR with a results table, assign one reviewer (only when the engine PR is already merged into develop), and leave the JIRA comment the outcome calls for. Also the yardstick for reviewing another author's TC PR (review mode: judge and pitfalls only, no reviewer, nothing pushed). Use when asked to "write a TC", "tc 만들어", "테스트케이스 작성", "add a testcase for CBRD-N / PR #N", to review a TC PR against these rules, or when a wayfinder ticket says to follow the TC authoring skill.
 ---
 
 # cubrid-tc-author
