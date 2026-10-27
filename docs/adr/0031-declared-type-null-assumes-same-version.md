@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0032
 date: 2026-10-20
 issue: CBRD-27679
 ---
