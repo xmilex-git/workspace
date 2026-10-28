@@ -28,6 +28,7 @@ Create GitHub pull requests for the CUBRID project in the author's hand-written 
 
 - JIRA ticket number **required**. Extract from branch name (e.g., `cbrd-26583-oos-compact` → `CBRD-26583`) or ask.
 - Description = the **JIRA ticket title as-is**. Do not compose a new one. Get it via `/jira CBRD-XXXXX`; if the ticket cannot be fetched, ask the user for the ticket title.
+- An existing JIRA ticket keeps its title, Korean or not: the PR title is `[CBRD-XXXXX] <current JIRA title>` verbatim, and no replacement title is offered unless the user asks for a rename. (P1)
 
 ### Body
 
@@ -79,7 +80,9 @@ If there are uncommitted changes, warn the user and ask whether to proceed or co
 
 ### Step 5: Push and Create PR
 
-1. Push: `git push <fork-remote> <branch> -u` (skip if already pushed).
+0. Before every push to the engine branch, run CI's formatter over every changed source file and commit its diff: `export PATH=/etc/dev4_skeleton/install/bin:$PATH` (GNU indent 2.2.11, as in CI), then `for f in $(git diff --name-only <pushed-base> HEAD -- 'src/*.c' 'src/*.h' 'src/*.cpp' 'src/*.hpp'); do bash .github/workflows/codestyle.sh $f; done` and `git diff --stat` must be empty (a whitespace-only commit needs no build); in zsh loop over `$(cat list)` or literal names, never `for f in $F`, and treat "no `file~` backups appeared" as the formatter not having run. (P2)
+   C++ constructs inside a `.c` file (`template <...>`, `if constexpr`, `std::index_sequence`) make GNU indent lose its declaration state and rewrite every later function, so exactly that block is wrapped in `/* *INDENT-OFF* */` … `/* *INDENT-ON* */` (as `object_primitive.c` does), checked with `indent -l120 -lc120 -st <file>` against the file (never in place) and compared with the develop base to tell the PR's hunks from pre-existing ones, in its own whitespace-only commit. (P3)
+1. Push: `git push <fork-remote> <branch> -u` (skip if already pushed). The push target is the user's fork, never `CUBRID/cubrid` directly.
 2. Create:
    ```bash
    gh pr create --repo CUBRID/CUBRID \
@@ -100,6 +103,8 @@ If there are uncommitted changes, warn the user and ask whether to proceed or co
    )"
    ```
 3. Print the resulting PR URL.
+
+The PRs behind each `(P<n>)` are in `PITFALLS.md`; a new lesson goes there as a case under its rule, or as a new rule added to both files in one commit.
 
 ## Tips
 

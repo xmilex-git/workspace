@@ -17,6 +17,9 @@ Read [`tone_guide.md`](./tone_guide.md) before drafting. It is authoritative for
 - Write only the JIRA Description field body in the file. Do not put the proposed Summary/title in it.
 - In the completion message, report the file path, issue type, proposed Summary, and whether `design.md`/`test.md` were written or skipped (with the reason) separately.
 - If `.git_ignored_dir/jira/` does not exist, stop and ask the user to create it. The per-ticket directory may be created as needed.
+- Nothing is created, commented, attached or linked in JIRA unless the user asked for that specific item; a defect found along the way goes to this repo's own tracker (`gh issue create` on xmilex-git/workspace) and the report names which tracker was used; up to the ask, the work stops at the draft body under `.git_ignored_dir/jira/<KEY>/`. (P1)
+
+The tickets behind each `(P<n>)` are in `PITFALLS.md`; a new lesson goes there as a case under its rule, or as a new rule added to both files in one commit.
 
 ## Attachments-only mode
 
@@ -28,6 +31,7 @@ Company policy: at work completion, `design.md` and `test.md` must be attached t
 
 - Write both files to `.git_ignored_dir/jira/<TICKET_KEY>/design.md` and `.git_ignored_dir/jira/<TICKET_KEY>/test.md`.
 - Follow the fixed templates in [`attachment_templates.md`](./attachment_templates.md) exactly. Do not invent alternative section layouts; the uniform template is deliberate token optimization.
+- A design document for this user spells names out (`DOMAIN_PLAN`, `RESOLVED_DOMAIN`, never `dplan`/`dgate`), reuses the code's dominant words and file prefixes (`resolve`, `qexec_`, `scan_`, `stx_build_`), adds no unit-test section, puts every execution-time decision before `qexec_execute_mainblock` and treats mainblock/scan code as read-only, shows where `qexec_execute_mainblock` sits in the XASL tree with the traversal explicit, is one self-contained `.md` in the repo sent with SendUserFile, and answers each finding of the user's own static review in the next version. (P4)
 - Contents are Markdown, in Korean, point-focused: the consumer on the other side is also an LLM. `design.md` carries the code-level design detail banned from the JIRA body. `test.md` is a QA TC authoring guide for `cubrid-testcases`/`cubrid-testcases-private-ex` — scenarios and pass/fail points, never internal verification records (measurement campaigns, sanitizer/diagnostic builds).
 - Skip both files only when, in your judgment, the design is still undecided AND the implementation approach is undecided. If either is settled, write both files. When skipping, state the skip and its reason in the completion message.
 - Attach the written files to the issue via the JIRA REST API (credentials in `~/.config/cubrid-skills/jira.env`):
@@ -41,7 +45,7 @@ Company policy: at work completion, `design.md` and `test.md` must be attached t
     "$JIRA_BASE_URL/rest/api/2/issue/<TICKET_KEY>/attachments"
   ```
 
-  Verify with `GET .../issue/<TICKET_KEY>?fields=attachment`. For an unfiled draft (`CBRD-XXXXX`), skip the upload and tell the user to attach after filing.
+  Verify with `GET .../issue/<TICKET_KEY>?fields=attachment`. For an unfiled draft (`CBRD-XXXXX`), skip the upload and tell the user to attach after filing. The upload itself is a JIRA write and happens only under P1's per-item ask.
 
 ## Choose the template by work, not hierarchy
 
@@ -122,12 +126,14 @@ Keep it in the ticket directory and reference it briefly from `Additional Inform
 
 ## Workflow
 
+0. For a new ticket, only the title is settled with the user first (English, short, result-style — "after ALTER … rows are missing and rebuild makes segfault"; a regression as `[Regression][<feature>] <result clause>`; drivers `[JDBC] ` / `[CCI] ` in APIS), a read-only JQL duplicate search runs before drafting, and every build cited in *Test Build* or an evidence table is a develop build (a gha-ci archive `builds/develop/<sha>/{debug,release}/CUBRID.tar.gz`, stamp from `strings lib/libcubrid.so.11.5`), never a branch install. (P2) Several tickets at once: one subagent per issue, each with its own draft dir under `.git_ignored_dir/jira/`; a workspace issue whose defect is now in JIRA is closed with a comment carrying the key.
 1. Resolve the ticket key and issue type. If the issue body already exists, switch to attachments-only mode.
 2. Read relevant user material, source code, analysis, and existing JIRA context. Prefer checking available evidence over asking the user.
 3. Ask only for missing facts that materially affect correctness, such as the issue type, exact repro, changed specification, or an agreed performance target.
 4. Draft the minimum complete body using the appropriate template and `tone_guide.md` (skip in attachments-only mode).
 5. Decide whether the design and implementation approach are settled. If settled, write `design.md` and `test.md` from `attachment_templates.md`; otherwise skip both and note the reason.
-6. Save the body and any justified attachment, then upload `design.md`/`test.md` to the issue via the REST API and verify the attachment list.
+6. Save the body and any justified attachment, then (under P1's ask) upload `design.md`/`test.md` to the issue via the REST API and verify the attachment list.
+   Filing uses the proven payload shape (project CBRD; issuetype ids 40 Correct Error, 41 Improve, 47 Development Subject, 126 Internal Management, 171 Refactoring, 10500 Task, 5 Sub-task with `"parent"`; `versions` = Affects Version/s; `customfield_210565` QA Scenario "Not Yet"/"Required"; assignee as the user names it, `ilhansong` only by default), credentials from `~/.config/cubrid-skills/jira.env` (`JIRA_BASE_URL`/`JIRA_USERNAME`/`JIRA_PASSWORD`) or `CUBRID_JIRA_USER`/`CUBRID_JIRA_PASSWORD` passed to curl on stdin (`printf 'user = "%s:%s"\n' … | curl -K -`), never on argv; links via `/rest/api/2/issueLink` with `inwardIssue` = the issue whose page shows the type's outward text (a defect D caused by feature F: `{"type":{"name":"Regress"},"inwardIssue":D,"outwardIssue":F}`), read back on both issues; attachments replaced by POST then `cmp` then DELETE of the old id; the body rendered before filing with POST `/rest/api/1.0/render` (`rendererType: atlassian-wiki-renderer`) to check `code-sql` panels and the `emoticon` count, escaping prose `\{1, 2\}` and `\(*)`. (P3) `cubrid-jira link --type Relates|Blocks …` covers the simple links; `cubrid-jira update/comment-update` cannot upload attachments. APIS (driver) tickets use the same ids and template with the driver's unreleased version (JDBC-11.4.0, CCI-11.3.0) or `guava`.
 7. Verify the structure, JIRA markup, verbosity, template conformance of `design.md`/`test.md`, and absence of invented details before reporting the result.
 
 `grill-with-docs` is not mandatory. Use it only when the user requests it.
