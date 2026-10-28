@@ -205,3 +205,9 @@ How the consumer waits when there is no event is a design decision:
 
 - A design that demands "fast" without stating the CPU cost is incomplete. busy-spin **buys latency with CPU** — stealing another worker's core can be a net loss for the system.
 - DB equivalents: log-flush wait, worker-pool job wait, latch spin limits. CUBRID's spin-then-block parameters live on this axis.
+
+## PAR-17 — Worker statistics accumulate thread-locally and merge once
+
+Every worker type that touches statistics (px_scan, px_query, hash join, external_sort / btree_sort, histogram sampler) keeps a private array whenever stats are collected (watching, not only under `on_trace`), merges it into the parent once at the worker's end on every exit path (normal end, close, error), allocates nothing when nobody watches, and pads per-worker slices in a shared block so neighbours share no cache line. (P9)
+
+- A shared counter array written by workers with a non-atomic `+=` loses counts and ping-pongs the line (MEM-03); a worker array destroyed at the end (sort workers' `m_px_stats` in `external_sort.c`) loses them entirely. One writer per line (COH-04), ownership handed over once (COH-12), no per-increment atomics (PAR-01).

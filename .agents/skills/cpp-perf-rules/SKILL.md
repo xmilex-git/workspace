@@ -25,6 +25,7 @@ they can be cited across both.
 9. **Read rate and count together; report median and dispersion together.** A miss *rate* that moves says nothing without `cache-references`/`instructions` (MEAS-06); a mean that improves with a fat tail is not an improvement (MEAS-07). Wall-clock median decides; counters only explain.
 10. **Choose the chapter by the complaint.** Runtime (slow query, no scaling) → §0–§19. Build time, "one header rebuilds everything", "can't test this module alone", cyclic includes → §20 PHYS. When the two collide on a **hot path, performance wins** (PHYS-05 / CPP-09); on cold/init paths PHYS wins.
 11. **Reuse verified low-level code before writing it.** Lock-free queues, ring buffers, spin/backoff loops (PAR-15/16): find the engine's existing implementation first; the rules are review criteria, not a build order.
+13. **A perf finding carries its number.** Before writing an efficiency finding, read the function to its end (allocation, shrink, free), take the actual size or count from a running process (gdb `p`, perf attribution) or an existing measurement, and put the number in the finding; items disproved by measurement stay listed under "측정 후 빼거나 작다고 판정한 것" so the next reader does not re-raise them. (P10)
 12. **Two builds are two ELFs.** Before attributing any hot-loop timing delta to a source change, run the hot-symbol layout gate (MEAS-08, Appendix E). A cold-path edit that shrinks a function by 7 bytes can shift 8,000 symbols by 16 bytes and cost 1.5–10 % on an executor loop (CC-08). Mitigate by the CC-09 ladder — never blanket `-falign-functions`.
 
 ## Recurring failure axes in this repository (CUBRID)
@@ -48,6 +49,9 @@ When writing or reviewing perf-path code, **skim [CHECKLIST.md](CHECKLIST.md) fi
 | **Build-dir move treated as free** | PHYS-06 | `CMakeCache` bakes paths into compile lines → one full rebuild is a fixed cost (2026-08-27 `.50` 1358 targets, 08-28 `.52`) |
 | **Cold-path edit moved the hot path (link-phase regression)** | CC-08/09, MEAS-08, A80–A83 | CBRD-26382: `std::function`→lambda in `scope_exit` (recovery only) shrank a GCC 8 cold fragment 7 B → 8,287 symbols −16 B → executor `%32` phase flipped → +1.5 % (stable PC) / +10.56 % (QA) on `COUNT(*)`; 7-byte NOP padding control restored addresses and timing |
 | **Header change rebuilds the world / module untestable alone** | PHYS-01/05 | Insulation missing, heavy layering — measure CCD (Appendix D) before refactoring |
+| **Perf finding from a partial read** | MEAS-01, usage protocol 13 | `domain_key_pairs_make` read as 2·n²·72 B left allocated; the function's last lines `realloc` it down — gdb showed 141 KB (2026-10-04) |
+| **Worker stats written to a shared array** | PAR-17 | trace counts lost by px workers' non-atomic `+=` and by sort workers' discarded `m_px_stats` (workspace#428) |
+| **Measurement on the host's traps** | MEAS-09..16 | install-copy RPATH, `perf stat -p` attach drift, sample throttling, page-cache regimes — every one cost a lane rerun |
 
 ## Priority decision procedure (when handed a perf problem)
 
@@ -71,12 +75,13 @@ Condensed — full text in [PRIORITY.md](PRIORITY.md). Work top-down; stop at th
 | File | Sections |
 |---|---|
 | [COSTS.md](COSTS.md) | §0 Cost baselines (cycles) + hardware constants — memorize the orders of magnitude |
-| [MEASUREMENT.md](MEASUREMENT.md) | §1 MEAS — measurement procedure, verdict baselines, benchmark hygiene, rate-vs-count (MEAS-06), tail/dispersion (MEAS-07), code-layout confound gate + padding control (MEAS-08) |
+| [MEASUREMENT.md](MEASUREMENT.md) | §1 MEAS — measurement procedure, verdict baselines, benchmark hygiene, rate-vs-count (MEAS-06), tail/dispersion (MEAS-07), code-layout confound gate + padding control (MEAS-08), A/B isolation and attribution (MEAS-09/10), gate margins from variance (MEAS-11), page-cache regimes (MEAS-12), busy-host benches (MEAS-13), this host's traps (MEAS-14), inlining proof (MEAS-15), JCC padding (MEAS-16) |
+| [PITFALLS.md](PITFALLS.md) | the measurements behind MEAS-09..16, PAR-17 and usage protocol 13 (`P<n>` cases) |
 | [MEMORY-COHERENCY.md](MEMORY-COHERENCY.md) | §2 MEM (memory access — top category, incl. cache warming MEM-10), §3 COH (cache coherency, MESI, false sharing) |
 | [ALIASING.md](ALIASING.md) | §4 ALIAS — strict aliasing, restrict, the biggest C optimization lever |
 | [BRANCHES-ALLOCATION.md](BRANCHES-ALLOCATION.md) | §5 BR (branches, dispatch, condition order BR-07, error-flag + cold handler BR-08), §6 ALLOC (allocation, arenas) |
 | [FP-GLOBALS.md](FP-GLOBALS.md) | §7 FP (floating point, comparators, float/double mixing FP-08), §8 GLOB (global/static/TLS state) |
-| [PARALLEL.md](PARALLEL.md) | §9 PAR — atomics, memory order, NUMA, sync selection, single-producer ring (PAR-15), wait strategy (PAR-16) |
+| [PARALLEL.md](PARALLEL.md) | §9 PAR — atomics, memory order, NUMA, sync selection, single-producer ring (PAR-15), wait strategy (PAR-16), thread-local stats merged once (PAR-17) |
 | [CPP-CLOW.md](CPP-CLOW.md) | §10 CPP (C++ feature costs, compile-time dispatch CPP-09), §11 CLOW (C low-level techniques) |
 | [DATA-STRINGS-SERIAL.md](DATA-STRINGS-SERIAL.md) | §12 DS (data structures), §13 STR (strings), §14 SER (serialization) |
 | [COMPILER-SYSTEM.md](COMPILER-SYSTEM.md) | §15 CC (compiler flags, PGO, vectorization, code-layout sensitivity CC-08, alignment/ordering mitigation ladder CC-09), §16 SYS (I/O & system, TCP_NODELAY SYS-05) |
