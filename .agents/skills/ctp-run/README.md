@@ -1,7 +1,6 @@
 # ctp-run — runtime and design notes
 
-The user-facing workflow is [SKILL.md](SKILL.md). The design decision is
-[ADR 0017](../../../docs/adr/0017-ctp-runner-on-cubridci-image.md).
+The user-facing workflow is [SKILL.md](SKILL.md); the runs behind its rules are in [PITFALLS.md](PITFALLS.md).
 All commands below run from the standalone tooling repository, not an engine checkout.
 
 ## Image update (2026-09-11)

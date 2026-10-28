@@ -15,6 +15,23 @@ description: >-
 
 One entry point for every CTP suite. Two commands cover everything:
 
+## Terms
+
+- **run**: one `just ctp` / `just ctp-rerun` invocation; its evidence lives in one run dir under `~/ctp-run-out/<tooling-repo>/`.
+- **shard**: one container running one slice of a suite on its own copy of the install.
+- **gate**: a CTP run whose verdicts decide whether a build may be pushed or merged; it compares against a **baseline** (the last run of the reference build, same build type).
+- **build type**: `optdebug` (asserts on) or `release` (asserts compiled out); never compared across.
+- **TC ref**: the cubrid-testcases commit the run materializes (`PR=` → `tc/pr-N`, or `TC_REF=`).
+- **skew**: an engine tip and a TC ref that were paired with different develop commits; it fails cases that have nothing to do with the change.
+- **false NOK**: a NOK the runner environment or a `just build` install produces on develop and branch alike.
+- **stopped shard**: a shard the hang or crash-loop watchdog ended; its verdicts are only in its feedback.log.
+
+## Preconditions (checkable)
+
+- `podman run --rm --cgroupns=private docker.io/library/alpine true` exits 0 — the runner passes `--cgroupns=private` because a rootless run without it fails on this cgroup-v1 host (`stat /sys/fs/cgroup/systemd/user.slice/...: no such file`); any one-off container you start for a comparison needs the same flag.
+- `ls <install>/jdbc/cubrid_jdbc.jar` exists (see Non-negotiables).
+- `head -1 <run>/provenance.txt` shows `pinned=data_buffer_size=512M,...` after a run; every server any session starts on this host runs `data_buffer_size=512M` (70 GiB host, two full gates ran it out at 16 × ~1 GB per lane).
+
 ```bash
 just ctp <sql|medium|sql_by_cci|shell|ha_shell|ha_repl>  # whole suite (whole sql also runs whole medium beside it)
 just ctp sql+medium                               # the same sql + medium pair, explicitly
@@ -31,9 +48,11 @@ Env knobs: `PR=<n>` / `TC_REF=<ref>` (testcase ref), `SHARDS=<n>`, `BUILD=<insta
 `CONF=<file>`, `EXCLUDE=<file>`, `NO_ABORT_ON_CORE=1` (+ `CTP_CRASH_LOOP_CORES`, `CTP_MAX_SHARD_CORES`),
 `CTP_VOLATILE=0` (see "Volatile databases"), `CTP_PIN_PARAMS=0` (see below),
 `CTP_HANG_SECS=<s>` (see "Diagnosing a bad run"), `CTP_ARGS="--env CTP_SHELL_TIMEOUT=<s> --env CTP_SHELL_RETRY=<n>"` (shell per-case timeout, default 720; NOK reruns, default 1), `CTP_ARGS="…"`, `TESTCASES_ROOT=<dir>`.
+Env knobs go before `just`; recipe parameters go after the recipe name, positionally — see P15.
+The image's stock `CTP/conf/sql.conf` already sets `java_stored_procedure=yes` and `stored_procedure=yes`, so runs with and without a `CONF=` that only adds them are comparable. (P18)
 
 **Every CTP server runs the engine's own defaults for `data_buffer_size=512M`, `parallelism=4`
-and `max_parallel_workers=100`** (ADR 0017 D8). `data_buffer_size=512M` is 32768 pages of 16K.
+and `max_parallel_workers=100`** (decided with the runner migration, 2026-09). `data_buffer_size=512M` is 32768 pages of 16K.
 Without the pin, the campaign cubrid.conf that `just conf` puts into installs would apply,
 with `parallelism=24`. sql/medium servers also get `max_clients=20`:
 - CQT holds one connection, and no sql/medium case mentions `max_clients`.
@@ -76,6 +95,30 @@ while the engine's `cubrid-jdbc` submodule was missing lacks the jar.
 `just build`, `just rebuild` and `just incr` restore the submodule and fail when
 the jar is not installed (2026-09-29).
 
+## Gates
+
+A gate is evidence only when everything except the change matches the baseline run. Before launching one:
+
+- A gate runs on the **optdebug** install and is compared only against a baseline of the same build type; every failure count is reported with its build type. (P1)
+- The whole shell suite never runs locally; a local shell subset runs once, right after a crash fix, with the exact dirs that crashed — every other shell verdict comes from upstream CI (`/run all`). (P2) The local gate is sql (whole, which brings medium) plus the targeted sql set.
+- Before a gate, fetch upstream develop for both the engine and cubrid-testcases and build from an engine tip paired with the TC ref; a NOK, hang or off-by-one catalog count shared by the branch and the develop baseline is skew, not "develop common", until `git log <engine-base>..origin/develop` shows no engine PR paired with that case's TC commit. (P3)
+- Before delegating a gate, `cmp` the install's `conf/cubrid.conf` and `conf/cubrid_broker.conf` against the reference state (`just incr` reinstalls the factory templates and does not re-apply `just conf`; a smoke that writes install confs restores them), and read `parallelism` in the install conf before suspecting a patch for a PX trace failure. (P4)
+- Treat a crash-recovery anomaly seen under a `just conf` / `port-claim` install as "double write buffer off" until it reproduces with a conf holding only `cubrid_port_id`. (P5)
+- When runs share an install another session may rebuild, run with `CTP_KEEP_COPIES=1` and report `sha256sum shard_0/CUBRID/lib/libcubrid.so libcubridsa.so` per run; warn the sessions running CTP on an install before rebuilding it. (P6)
+- CTP sql/medium databases are utf8 (`utf8_bin` in error messages, although the conf line reads `db_charset=en_US`), so a smoke that stands in for CTP on string, collation, name or client/server value-transfer paths runs on an `en_US.utf8` database through a CS client (csql -C or JDBC), never only on an `en_US` (iso88591) SA database. (P12)
+- Counter and SA probe lanes of a gate run through `tools/fast-gate/` (`fast-counters.sh`, `fast-sa.sh`, prompts `lane-b-fast-prompt.md` / `lane-c-fast-prompt.md`), not through CTP; they are overlay-namespace runners with no fsync.
+
+### Delegated runs
+
+CTP runs are delegated to a worker (Sonnet Workflow or Luna). The worker prompt carries these lines verbatim (source: .agents/AGENTS.md):
+
+- Finite gate work (incremental build, smoke rerun, targeted CTP — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
+- The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
+- Every CTP run, whole or subset, by the lead or any delegated worker, goes through `just ctp <sql|medium|shell|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe.
+- The testcase ref is never implicit: pass `PR=<n>` or `TC_REF=<ref>`, or let it infer the PR from `WORKSPACE`. A run with none of the three refuses rather than validate a PR against develop testcases.
+
+The worker reports: run dir, `provenance.txt` first line (install, TC ref, `pinned=`), build type, per-suite OK/NOK counts from CTP's own log lines (P7), `failed.list`, stopped shards, core paths with pids. The lead reads the logs; a worker summary alone is not a verdict.
+
 ## Layout
 
 | path | what |
@@ -103,8 +146,8 @@ output). The image includes gcc for locale and testcase helper compilation. Our 
 The default pull/run reference includes the full digest; `--image` explicitly
 overrides it. Since the 2026-09-11 update, scope, testcase source pinning, DB
 permissions and start/end provenance come from upstream (PRs #120, #121, #123).
-Only the HA thin-csql port and slave broker startup remain local. See
-`docs/adr/0017-ctp-runner-on-cubridci-image.md` for the migration decision.
+Only the HA thin-csql port and slave broker startup remain local. The runner moved onto the
+upstream cubridci image (2026-09) so that image updates never require a local image build.
 
 ## Suites
 
@@ -120,7 +163,9 @@ A **subset defaults to 1 shard** whatever the suite: each shard costs a full cop
 of the install and a container, which pays for itself over 17k cases and not over
 a handful of dirs. `SHARDS=N` splits a big subset anyway.
 
-**sql splits by cases dir** (ADR 0017 D9). The user confirmed that no case fails from
+A small CTP check runs candidate and control at the same time, puts `CTP_KEEP_COPIES=1` in the first command whenever the `.result` is needed, passes `EXCLUDE=''` when the case is in `dirsplit_exclusions.txt`, and the worker prompt carries only the commands and the facts to report. (P17) A single-case run costs ≈45 s of container setup around a 1 s case; sequencing A then B, or repeating A for a missing `.result`, is what makes "one case" take ten minutes.
+
+**sql splits by cases dir** (user decision at the runner migration, 2026-09). The user confirmed that no case fails from
 order effects at dir granularity. `CTP_ARGS='--by-category'` restores the old bulk split.
 - The 16-shard default comes from the measured weights: 2,668s of cases / 16 ≈ 167s per
   shard.
@@ -236,8 +281,7 @@ statement then waits for the log fsync. By default that directory is an overlayf
 with the kernel's `volatile` option inside the shard container, so every fsync there
 returns at once. The database is thrown away with the shard, and a killed server loses
 nothing because its writes are in the page cache. Only a host crash mid-run could matter.
-This is the mechanism cubrid-testkit uses for `TESTKIT_SLOT_VOLATILE`
-([ADR 0017](../../../docs/adr/0017-ctp-runner-on-cubridci-image.md) D7).
+This is the mechanism cubrid-testkit uses for `TESTKIT_SLOT_VOLATILE`.
 
 - The shard container gets `--cap-add SYS_ADMIN` for the mount only.
   `scripts/volatile_entry.sh` mounts the overlay, checks `/proc/self/mountinfo` for
@@ -299,6 +343,9 @@ with two rules that keep the disk from filling:
    [KEEP]` deletes all but the newest KEEP (default 3), never a run whose container
    is still up. Read `console.log` / `cores/` first — a deleted run is gone. Remove
    generated `tc-worktrees` with `git worktree remove` before deleting their parent.
+   - Right after a run's evidence is read (verdicts, diffs, census extracts copied to scratch), delete the run and its analyzed cores — record a core's backtrace or assert text first — keep only the latest passing baseline, `podman rm` the run's exited `ctprun_*` containers first, and list other sessions' cores for the user instead of touching them. (P16)
+   - Before `rm -rf` of a run dir or its `/bench/hdd/core/ctp/<run>` store, `head -1 <run>/provenance.txt` and match `install=` to your own install and `testcases=` to your ref; delete only the runs you started, never "the ones near my timestamp". (P14) The run root is shared by every session on this host. `rm -rf` takes only literal absolute paths written out in full — no variables, globs or command substitution (source: AGENTS.md house rules).
+   - Recipe parameters go after the recipe name, positionally (`just ctp-prune 3`); env knobs (`BUILD=`, `TC_REF=`, `SHARDS=`) go before `just` — `just ctp-prune KEEP=3` does not bind KEEP. (P15)
 
 Merged SQL/medium reports stay in `<run>/webconsole/`; the runner does not copy
 them into the source `CTP_HOME/sql/result`.
@@ -342,6 +389,8 @@ It always uses 1 shard and re-runs whole test DIRECTORIES, not single cases: sql
 cases in one directory share state, so a case run without its directory-mates
 fails for reasons that have nothing to do with the change.
 
+For a gha-ci shard that stops printing, read the last `Testing … (n/N) [OK]` line of the job log, take case n+1 from the `tc/pr-N` tree, and check that case's engine pair against the PR head before blaming the last visible case. (P13) Case diffs: `http://192.168.1.48:30080/runs/<run id>/<suite>/shard/<nn>/artifacts/feedback.log`; before classifying a CI NOK, `git log` the case's answer file on TC develop after the PR base (P3).
+
 ## Diagnosing a bad run
 
 1. `provenance.txt` — right install? right testcase ref?
@@ -372,6 +421,14 @@ fails for reasons that have nothing to do with the change.
    this, a database that crashed again in recovery on every restart kept its
    shard running for hours: each remaining case waited out a 3-minute connect
    timeout (2026-09-23).
+7. Verdicts and counts:
+   - Take verdicts from CTP's `[OK]`/`[NOK]` lines (sql/medium: `shard_N/CTP/sql/log/sql_*.log`, pairing each `Testing <path>` with the next verdict token; shell: `shard_N/out/result/shell/current_runtime_logs/feedback.log`), never from a raw `.answer` vs `.result` diff, and strip the `sql/` prefix before comparing two case lists. (P7) A stopped shard's NOKs are missing from `failed.list` and the console.
+   - A server that stops on a debug assert is respawned, and every later case in that shard fails -581 then -669/-677 — run with `NO_ABORT_ON_CORE=1`, find the `Assertion` lines in `console.log`, and rerun the poisoned cases alone; a core is charged to the case running when it finished writing, so confirm a charged case by running it alone on the same build. (P9)
+   - Compare a branch shell run only against a develop install built the same way (`just build`), and read these before calling a shell NOK the change's: DBLink 2PC cases (no `SUPPORT_XA`), cases reading `cm.conf` or counting `cubrid service` lines (no CUBRID Manager), cases editing `$CUBRID/databases/databases.txt` (the runner sets `CUBRID_DATABASES=/home/CUBRID_DB`), `grep -wc 100` on the container IP, `wait_until` (absent from the image's CTP db90747), and answer files named `*.result` (the runner's rsync excludes them). (P8)
+   - A timezone case that flips between runs minutes apart is checked against the DST transitions of the zones it names at the run's UTC time, and develop is rerun in the same window before a commit is suspected. (P10)
+   - A census over `shard_N/out/cubrid-log/server/*.err` selects files with `-newermt '<run start, from the run dir name>'` and skips the `*_latest.err` symlinks, because the install's existing server logs are copied into every shard. (P11)
+
+The runs behind each `P<n>` are in `PITFALLS.md`; a new lesson goes there as a case under its rule, or as a new rule added to both files in one commit.
 
 Run `bash .agents/skills/ctp-run/test/run_tests.sh` from the tooling repo after
 touching the runner. The fixtures cover split invariants, runtime conf isolation,
