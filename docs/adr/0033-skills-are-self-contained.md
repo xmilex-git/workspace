@@ -19,7 +19,7 @@ date: 2026-10-28
 - **메모리를 그대로 두고 스킬이 메모리를 가리키게 한다**: 기각. 메모리는 하네스·호스트 종속이라 워커와 다른 clone에 없다.
 - **GLOSSARY를 스킬 폴더로 복사한다**: 기각. 958줄 중 스킬 하나가 쓰는 용어는 열 개 안쪽이다.
 - **공통 계약을 스킬에서 참조만 하고 복제하지 않는다**: 기각. 위임 프롬프트는 스킬 본문에서 만들어지므로 본문에 없는 문장은 프롬프트에도 빠진다.
-- **진단 절차를 새 `cubrid-diagnose` 스킬로 분리한다**: 기각. 트리거 문구가 갈라져 발견성이 떨어진다. `diagnosing-bugs`에 `CUBRID specifics` 절을 둔다.
+- **`diagnosing-bugs`에 `CUBRID specifics` 절을 둔다**: 기각(같은 날 번복). Matt Pocock 스킬 8개(diagnosing-bugs, domain-modeling, grill-with-docs, grilling, research, setup-matt-pocock-skills, wayfinder, writing-for-agents)는 업스트림 그대로 두라는 사용자 지시(2026-10-28)로, 진단 절차는 새 `cubrid-diagnose` 스킬에 두고 설명문이 `diagnosing-bugs`의 동반 스킬임을 밝힌다. wayfinder·writing-for-agents·grilling으로 가려던 6건은 `.agents/AGENTS.md` 계약 줄로 간다.
 
 ## Consequences
 
