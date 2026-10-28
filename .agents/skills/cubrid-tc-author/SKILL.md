@@ -16,6 +16,8 @@ All paths are literal; `<N>` is the CBRD number, `<PR>` the engine PR number.
 Run directory for everything that is not the TC itself:
 `/home/cubrid/dev/workspace/.git_ignored_dir/scratch/tc-author/CBRD-<N>/` (create it; never /tmp).
 
+Terms: **pre / fix / dev** = the three optdebug builds a case is proven on (the commit before the fix, the fix, latest develop); **bot branch** = `tc/pr-<N>`, created by app/cubrid-tc-sync-bot when engine PR N opens, in each testcases repo; **positive control** = the answer line or control probe that proves the server saw the shape the case claims (`key range:` count, `rewritten query`, `parallel workers`, …); **negative control** = a deliberately failing variant proving the case can fail; **three-point run** = the case directory on pre, fix and dev in parallel containers. The rules between steps and the TCs behind them are in `PITFALLS.md` (`(P<n>)` below); the sql form rules with their cases are `references/sql-pitfalls.md`.
+
 ## Step 0 — resolve the input and the mode
 
 1. `CBRD-<N>` given: find the engine PR with
@@ -48,6 +50,8 @@ Follow [references/judge.md](references/judge.md) §1. Produces `<rundir>/ground
 QA fields, repro SQL, acceptance criteria, attachment list (each read or marked unread with reason),
 the fix diff file list, and the spec changes the PR describes.
 
+When a TC convention is in question (placement by issue type, header length, ORDER BY, cleanup, determinism), the QA team's own skills are the source: `git -C ~/dev/cubrid-agent pull` (clone of github.com/tw-kang/cubrid-agent) and read `skills/qa/create-sql/SKILL.md`, `skills/qa/author-testcase/SKILL.md`, `skills/qa/review-testcase/SKILL.md` (the lint our TC PRs face) and `skills/in-progress/create-shell/SKILL.md`; cite them and the CUBRIDQA ticket numbers. (P3)
+
 Done when `ground.md` has every section of the §1 template filled or explicitly "none".
 
 ## Step 2 — judge: sql / shell / both / out of scope
@@ -56,6 +60,9 @@ Follow [references/judge.md](references/judge.md) §2 (the decision table) and �
 Every issue, small or large: run §4, the parallel Opus code reading through the Workflow tool,
 before writing the coverage list (user, 2026-10-08). The coverage list comes from the code, not only
 from the issue's scenarios.
+
+- A re-execution, prologue or cached-program defect is probed through `csql -C` (a CS client) and written as a CTP **shell** case, because a CTP sql case runs through JDBC and `csql -S` does not pack values, so both can pass on a server that returns the previous execution's value. (P1)
+- When the fix commit is from 2026-06/07 and a check needs a parallel temp or list scan, probe the fix build first with a throwaway shell probe copied into the TC worktree (then removed) — a check that passes only on latest develop cannot separate pre from fix. (P2)
 
 Done when `<rundir>/judge.md` states one verdict with its rule number, and a coverage list whose
 every row has a case number or an exclusion reason. Verdict `out of scope` → go to Step 7 (JIRA comment).
@@ -66,6 +73,7 @@ every row has a case number or an exclusion reason. Verdict `out of scope` → g
   [references/sql-pitfalls.md](references/sql-pitfalls.md) (seven rules, each with the past cases that
   made it — read before writing). shell: [references/shell-rules.md](references/shell-rules.md).
 - Placement is decided by the **issue type** (judge.md §2 table), never by version.
+- A check on a traced `fetch:` count compares it with `SHOW EXEC STATISTICS ALL` `data_page_fetches` of a second, trace-off execution of the same plan (`set @collect_exec_stats = 1`; within 0.8..1.25; one csql run cannot give both, because SHOW TRACE / SHOW EXEC STATISTICS restart the watch), and hash-join parallelism is read from the line after `PROBE (`, not from the `HASHJOIN (` line. (P4)
 - Before saving, walk the seven pitfall rules against every sql file and write `<rundir>/pitfalls.md`
   (one row per rule per file: `n/a`, `clear` with the answer token or probe as evidence, or `hit →
   case`); then run the checklist at the end of the rules file and fix every miss.
@@ -79,6 +87,7 @@ Follow [references/verify.md](references/verify.md): obtain the pre-fix, fix and
 optdebug installs, generate the answer on the fix build, run the case directory on all three in
 parallel containers, run the fix build 3 times for determinism, and read verdicts from the runner.
 Builds and CTP are delegated to a Workflow worker with the contract text from verify.md §0 pasted verbatim.
+To prove a shell case records failures, build a negative control without a worktree — `read-tree` into a temporary `GIT_INDEX_FILE`, `hash-object -w` the changed file, `update-index --cacheinfo`, `write-tree`, `commit-tree` — force one check to fail (its expected value +1), never push the commit, run it with `TC_REF=<that sha>`, then `git worktree remove` the runner's tc-worktree for that sha; and count the `.result` lines against the number of `write_ok`/`write_nok` calls (one line per check). (P5)
 
 Done when `<rundir>/results.md` holds the table (build, sha, OK/NOK per case, cores) and the
 expectation column matches the rule in verify.md §5 for every row. A **latest-develop regression**
@@ -88,6 +97,7 @@ expectation column matches the rule in verify.md §5 for every row. A **latest-d
 
 Follow [references/pr-and-jira.md](references/pr-and-jira.md) §1–§3 (branch and push per mode,
 title, body template, inline design comments).
+Push to `tc/pr-<N>` only once its head is the bot's "chore: Initialize TC branch" commit (or the draft TC PR exists); fetch it with `+refs/heads/tc/pr-N:refs/remotes/origin/tc/pr-N`; after an engine PR close/reopen the branches are recreated without the TC commits, so cherry-pick the old commit onto the new branch and copy the old PR's title, body and inline comments; when the bot's private-ex job times out (branch == develop, no chore commit), push the TC commits first and then `gh run rerun <run> -R CUBRID/cubrid --failed`. (P6)
 
 Done when the PR URL is in `<rundir>/results.md` and the inline review is posted.
 
@@ -116,7 +126,8 @@ Done when the comment URL is recorded, or `results.md` says "JIRA comment: none 
 
 Greptile or Codex comments on an opened TC PR: [references/pr-and-jira.md](references/pr-and-jira.md) §6
 (check the reviewed commit and existing replies first; a real gap goes through Steps 3-4 again).
-A human reviewer's find goes the same way. Every miss a review or a three-point run exposes adds
+A human reviewer's find goes the same way.
+When the engine commit is unchanged and only shell TC files changed, post `/run rerun <previous run id>` on the engine PR — it reruns just that run's cases on the latest TC branch content in minutes; a full `/run shell` (~2 h) only when the engine commit changed or a case outside the previous run needs coverage. (P7) Every miss a review or a three-point run exposes adds
 one past-case line under its rule in `references/sql-pitfalls.md` (or shell-rules.md), in the
 tooling repo, in the same work that fixes the TC: `CBRD-N (date, caught by ...): wrote → ran or
 missed → fix`. A find that fits no rule gets a new rule, never a loose fact.

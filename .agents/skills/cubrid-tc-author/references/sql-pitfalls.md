@@ -34,7 +34,7 @@ shape: the number of ranges in `key range:`, the `rewritten query` line, `INDEX 
 `parallel workers` line, `PARTITION`. When no answer line shows it, a control probe does: the same
 data under the opposite setting (no ORDER BY, `PARALLEL(n)`, the hint dropped) must change the
 result, and the PR body records the probe. The claim is otherwise hollow, and the three-point run
-still says OK (the shell analogue is the first check of every shell case; GLOSSARY "양성 대조").
+still says OK (the shell analogue is the first check of every shell case; this is the case's positive control, 양성 대조).
 
 The usual reason the shape never arrives: **the client rewrites constants before the server sees
 the query.** Overlapping constant ranges are merged into one, a constant LIKE becomes `=`, `BETWEEN`
