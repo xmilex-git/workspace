@@ -135,6 +135,14 @@ path.
   the literal `3.25` → develop's `typeof` prints a numeric literal as plain `numeric` without
   precision and scale (11.4 printed them) → a domain claim uses an explicit
   `cast(3.25 as numeric(5,2))`, which `typeof` prints as `numeric (5, 2)`.
+- CBRD-27802 (2026-10-28, caught by the §4 readers and the full sql gate): a NO_HASH_AGGREGATE twin was
+  used for order-dependent aggregates (`JSON_ARRAYAGG`, `JSON_OBJECTAGG`, tie values of `MIN`/`MAX`) on a
+  one-page table and matched → "hash equals the sort GROUP BY" was written into the spec, but the sort
+  re-orders the rows of a group (`json_host_variables`: input `order by 1 desc, 2 desc` gave another
+  value) and shows equal-but-different keys from the group's last sorted row → a sort twin is valid
+  for order-dependent aggregates only on the data it was run on; state such a twin's limit in the
+  header, and before changing aggregation order grep the suite for these aggregates (5 existing
+  answers changed).
 
 ## Rule 3 — Stay far from every threshold, estimate and placement
 
