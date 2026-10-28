@@ -58,7 +58,7 @@ Done when `ground.md` has every section of the §1 template filled or explicitly
 
 Follow [references/judge.md](references/judge.md) §2 (the decision table) and §3 (coverage list).
 Every issue, small or large: run §4, the parallel Opus code reading through the Workflow tool,
-before writing the coverage list (user, 2026-10-08). The coverage list comes from the code, not only
+before writing the coverage list (user, 2026-10-08 — a standing explicit request, which is the exception AGENTS.md allows to the lead-reads-source rule). The coverage list comes from the code, not only
 from the issue's scenarios.
 
 - A re-execution, prologue or cached-program defect is probed through `csql -C` (a CS client) and written as a CTP **shell** case, because a CTP sql case runs through JDBC and `csql -S` does not pack values, so both can pass on a server that returns the previous execution's value. (P1)
@@ -127,7 +127,7 @@ Done when the comment URL is recorded, or `results.md` says "JIRA comment: none 
 Greptile or Codex comments on an opened TC PR: [references/pr-and-jira.md](references/pr-and-jira.md) §6
 (check the reviewed commit and existing replies first; a real gap goes through Steps 3-4 again).
 A human reviewer's find goes the same way.
-When the engine commit is unchanged and only shell TC files changed, post `/run rerun <previous run id>` on the engine PR — it reruns just that run's cases on the latest TC branch content in minutes; a full `/run shell` (~2 h) only when the engine commit changed or a case outside the previous run needs coverage. (P7) Every miss a review or a three-point run exposes adds
+(`/run rerun <id>` reruns only the cases that failed in run `<id>`, on the same engine head and the latest TC branch.) When the engine commit is unchanged and only shell TC files changed, post `/run rerun <previous run id>` on the engine PR — it reruns just that run's cases on the latest TC branch content in minutes; a full `/run shell` (~2 h) only when the engine commit changed or a case outside the previous run needs coverage. (P7) Every miss a review or a three-point run exposes adds
 one past-case line under its rule in `references/sql-pitfalls.md` (or shell-rules.md), in the
 tooling repo, in the same work that fixes the TC: `CBRD-N (date, caught by ...): wrote → ran or
 missed → fix`. A find that fits no rule gets a new rule, never a loose fact.

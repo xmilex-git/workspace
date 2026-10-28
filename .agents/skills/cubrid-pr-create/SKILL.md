@@ -80,6 +80,8 @@ If there are uncommitted changes, warn the user and ask whether to proceed or co
 
 ### Step 5: Push and Create PR
 
+Run every command of this step inside the engine worktree (`cd <worktree>`; `.github/workflows/codestyle.sh` is the engine repo's script). `<pushed-base>` is the last pushed head, or for a first push `git merge-base HEAD origin/develop`. Run the formatter before showing the draft (Step 4), so the body describes the commits that will be pushed.
+
 0. Before every push to the engine branch, run CI's formatter over every changed source file and commit its diff: `export PATH=/etc/dev4_skeleton/install/bin:$PATH` (GNU indent 2.2.11, as in CI), then `for f in $(git diff --name-only <pushed-base> HEAD -- 'src/*.c' 'src/*.h' 'src/*.cpp' 'src/*.hpp'); do bash .github/workflows/codestyle.sh $f; done` and `git diff --stat` must be empty (a whitespace-only commit needs no build); in zsh loop over `$(cat list)` or literal names, never `for f in $F`, and treat "no `file~` backups appeared" as the formatter not having run. (P2)
    C++ constructs inside a `.c` file (`template <...>`, `if constexpr`, `std::index_sequence`) make GNU indent lose its declaration state and rewrite every later function, so exactly that block is wrapped in `/* *INDENT-OFF* */` … `/* *INDENT-ON* */` (as `object_primitive.c` does), checked with `indent -l120 -lc120 -st <file>` against the file (never in place) and compared with the develop base to tell the PR's hunks from pre-existing ones, in its own whitespace-only commit. (P3)
 1. Push: `git push <fork-remote> <branch> -u` (skip if already pushed). The push target is the user's fork, never `CUBRID/cubrid` directly.

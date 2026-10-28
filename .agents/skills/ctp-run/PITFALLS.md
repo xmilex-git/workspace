@@ -46,15 +46,16 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Source: memory:campaign-conf-disables-dwb
 
 ### P6 — fingerprint the install the shards copied
-- Rule: When runs share an install another session may rebuild, run with `CTP_KEEP_COPIES=1` and report `sha256sum shard_0/CUBRID/lib/libcubrid.so libcubridsa.so` per run; warn the sessions running CTP on an install before rebuilding it.
+- Rule: When runs share an install another session may rebuild, run with `CTP_KEEP_COPIES=1` and report `sha256sum shard_*/CUBRID/lib/libcubrid.so shard_*/CUBRID/lib/libcubridsa.so` for every shard of every run (a swap can hit any shard); warn the sessions running CTP on an install before rebuilding it.
 - Applies at: Gates
 - Case (2026-10-20, CBRD-27583 dev14-a): seven runs launched in the same second from one install; one shard copy carried b187's libraries and six carried b188's — another session had overwritten the install during the copy window. The install's mtime, ctime and `cubrid_rel` still named the old build; provenance.txt records only the install path.
+- Case (2026-10-28, dry run): the rule named `shard_0` only, while its own case had one mixed shard among seven — hashing every shard closes that.
 - Source: memory:ctp-install-swapped-mid-copy, SSOT §3.1
 
 ## Reading a run
 
 ### P7 — verdicts come from CTP's own log lines
-- Rule: Take verdicts from CTP's `[OK]`/`[NOK]` lines (sql/medium: `shard_N/CTP/sql/log/sql_*.log`, pairing each `Testing <path>` with the next verdict token; shell: `shard_N/out/result/shell/current_runtime_logs/feedback.log`), never from a raw `.answer` vs `.result` diff, and strip the `sql/` prefix before comparing two case lists.
+- Rule: Take verdicts from CTP's `[OK]`/`[NOK]` lines (sql/medium: `shard_N/out/log/sql_*.log` after the prune, `shard_N/CTP/sql/log/sql_*.log` with kept copies, pairing each `Testing <path>` with the next verdict token; shell: `shard_N/out/result/shell/current_runtime_logs/feedback.log`), never from a raw `.answer` vs `.result` diff, and strip the `sql/` prefix before comparing two case lists.
 - Applies at: Diagnosing a bad run
 - Case (2026-09-21, #285/#295): a "29 new regressions" claim came from a release list used as the baseline of an optdebug run, lists that disagreed on the `sql/` prefix (so every case looked new), and a raw answer/result diff that over-reported 16 whitespace-only differences in 17,466. An hour of bisect and two runtime tasks before the premise was checked.
 - Case (2026-10-20, CBRD-27583 i1): a shard stopped by the crash-loop watchdog (rc=137) was missing from `failed.list` and the console — `bug_bts_14651` NOK was in neither; feedback.log had it. Its `HH:MM:SS----<case>/cases--- time=N` lines map a core's epoch to its case; CTP reruns a NOK case at the end, so a late core can belong to an early case.
@@ -101,7 +102,7 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 ## Storage and cleanup
 
 ### P14 — provenance before rm
-- Rule: Before `rm -rf` of a run dir or its `/bench/hdd/core/ctp/<run>` store, `head -1 <run>/provenance.txt` and match `install=` to your own install and `testcases=` to your ref; delete only the runs you started, never "the ones near my timestamp".
+- Rule: Before `rm -rf` of a run dir or its `/bench/hdd/core/ctp/<run>` store, `head -1 <run>/provenance.txt` and match `install=` to your own install and `testcases=` to your ref; delete only the runs you started — identified by the `plan written to <OUT>` line of your own launch output (medium's from its `medium-beside-sql-*.log`), never "the ones near my timestamp" — by literal path; `just ctp-prune` keeps the newest N regardless of owner, so it is not used while other sessions' runs share the root.
 - Applies at: Output → Storage
 - Case (2026-10-08): `sql-20261008T063936Z-975762` / `medium-…-975761`, deleted as "my gate worker's leftover reruns", were another session's PR 7834 gate evidence (`install=…/pr7834/install/head-optdebug testcases=cubrid-testcases@tc/pr-7834`). Its console.log, verdicts and reports were lost; the user was told. `/home/cubrid/ctp-run-out/workspace/` is shared by every session on this host and gate timestamps overlap.
 - Source: memory:ctp-run-dir-check-provenance-before-rm

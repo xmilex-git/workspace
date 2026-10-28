@@ -98,6 +98,7 @@ Reporting rules:
 A comparison is made only after `env -i` isolation, a warmup and a median of N runs (for example warmup 2 + median 5), with both sides on the same conf and the same build type (confirmed in `CMakeCache.txt`) and parameter fairness confirmed with `cubrid paramdump` (for example the effective `sort_buffer_size`); a run that stopped on an error has no time to report. (P1)
 
 - Cold cache, a config-load error from the previous run and a polluted `PATH` each look like a structural difference.
+- Each variant is a release build in its own `INSTALL_PREFIX` (the `cubrid-build` skill), never a `cp -a` copy of another install (MEAS-14); the measurement itself is delegated to the runtime worker.
 - A `just build` never runs beside a measurement or parity run on the same install (cubrid-build P4/P6).
 
 ## MEAS-10 — Attribute a regression by profile and counter-experiment, never by assumption
@@ -108,6 +109,7 @@ A perf regression is attributed by a profile (per-file breakdown: VTune, perf, s
 
 Before a gate is fixed, a pilot run measures the per-run CoV and the paired standard deviation and the pair count needed to resolve the margin at that variance is computed; a non-inferiority pass requires the bootstrap CI's upper bound ≤ the margin; a FAIL without that power holds the merge but is no evidence that a regression exists, and no per-commit attribution is built on it. (P3)
 
+- When the wall-clock median cannot resolve the margin at the measured variance, the verdict is "unresolved": no regression is claimed, counters only explain.
 - A loss-count axis is a sign test: it detects a small positive effect regardless of the margin — say so.
 
 ## MEAS-12 — Large index-build timing is a page-cache regime, not a code delta
@@ -144,4 +146,4 @@ To explain why a function stopped being inlined, compile that TU alone with its 
 
 ## MEAS-16 — JCC-erratum padding is not a CUBRID build flag
 
-`-mbranches-within-32B-boundaries` (JCC erratum padding) is never proposed as a CUBRID build flag nor used for measurement pairs — MySQL, PostgreSQL, MariaDB, Fedora/RHEL and Debian release defaults do not carry it; layout noise on this host's Cascade Lake is recorded as such and judged by exact instruction counts plus the existing `-falign-functions=64` pair. (P8)
+`-mbranches-within-32B-boundaries` (JCC erratum padding) is never proposed as a CUBRID build flag nor used for measurement pairs — MySQL, PostgreSQL, MariaDB, Fedora/RHEL and Debian release defaults do not carry it; layout noise on this host's Cascade Lake is recorded as such and judged by exact instruction counts (and, when needed, both sides rebuilt with `-falign-functions=64` as a layout control). (P8)

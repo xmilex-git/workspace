@@ -33,6 +33,12 @@ If a run partially succeeds, fix the reported conflict or permission problem and
 
 An engine PR at `mergeStateStatus: BLOCKED` with an approved review and a `Check TC PRs` FAILURE titled "TC changes are not on TC develop yet" is the TC Merge Gate's 15-minute `resweep` posting into another check suite on the same head — a later gate success lands elsewhere and never clears it; the fix is moving the head (any push, for example this sync's merge), and after an engine PR close/reopen the recreated empty draft TC PRs block the gate until they are closed and the failed gate job is re-run. (P4)
 
+## Local checkouts and CI
+
+- Engine worktrees live under `~/dev/cubrid-worktree/<name>` (`develop` is the shared base), public TC under `~/dev/cubrid-tc-worktree/<name>`, private-ex under `~/dev/cubrid-tc-ex-worktree/<name>`; for a local merge, add a worktree for the PR's branch (`git -C ~/dev/cubrid-worktree/develop worktree add ../pr-<N> <branch>`) rather than checking out in a peer's worktree. Remotes: `origin` = CUBRID (push disabled), `fork` = xmilex-git; engine PR branches push to `fork`, `tc/pr-<N>` branches push to `origin` of the TC repos. Pushes are fast-forward only; nothing is force-pushed.
+- A single-repo merge that is already on the remote is left in place (no force-push); the sync then brings the other two repos to the same develop tips.
+- `/run all` is posted with `gh pr comment <N> -R CUBRID/cubrid --body '/run all'`; report the comment URL and read the run's verdicts once it finishes (`gh pr checks <N> -R CUBRID/cubrid`, per-case results on the gha-ci artifact server — `cubrid-pr-review/runtime.md`).
+
 ## Overlap
 
 Merge locally against the develop tips the `STOPPED` line prints, and push only what has built and passed:

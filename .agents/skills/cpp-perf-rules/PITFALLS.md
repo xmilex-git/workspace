@@ -53,7 +53,7 @@ A new rule gets a MEAS/PAR ID in the rule file and a `P<n>` here in the same com
 - Source: memory:gcc-inline-decision-single-tu-dump
 
 ### P8 — JCC padding
-- Rule: `-mbranches-within-32B-boundaries` (JCC erratum padding) is never proposed as a CUBRID build flag nor used for measurement pairs — MySQL, PostgreSQL, MariaDB, Fedora/RHEL and Debian release defaults do not carry it; layout noise on this host's Cascade Lake is recorded as such and judged by exact instruction counts plus the existing `-falign-functions=64` pair.
+- Rule: `-mbranches-within-32B-boundaries` (JCC erratum padding) is never proposed as a CUBRID build flag nor used for measurement pairs — MySQL, PostgreSQL, MariaDB, Fedora/RHEL and Debian release defaults do not carry it; layout noise on this host's Cascade Lake is recorded as such and judged by exact instruction counts (and, when needed, both sides rebuilt with `-falign-functions=64` as a layout control).
 - Applies at: MEASUREMENT.md MEAS-16
 - Case (2026-09-28, #372): the bench host's Xeon Silver 4216 made timing swing ±5–10 % with layout alone; the user: "다른데도 안하면 우리도 그 옵션넣어서 빌드하지말고 그냥 이런 이유다~ 만 기록하고 넘어가자". Findings: MySQL `-ffunction-sections -fdata-sections` only; PostgreSQL `-fno-strict-aliasing -fwrapv -fexcess-precision=standard`; 0 hits for the flag in the three repos; Intel advises selective use after measuring; Mozilla closed its JIT mitigation WONTFIX. Front-end counts showed equal MITE shares for dpin and develop, so the uop-cache mechanism was not supported either.
 - Source: memory:jcc-mitigation-not-a-release-flag

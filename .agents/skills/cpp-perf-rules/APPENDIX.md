@@ -307,5 +307,5 @@ Reading it:
   number of bytes to restore is `−Δsize`, rounded to whatever brings the hot symbols' `% 32` back to A.
 - A shift that is uniform (e.g. every hot symbol `−16`) is one cascade; mixed shifts mean several independent
   size changes, each of which needs its own control.
-- Run this as a PR gate on the release toolchain (the CentOS 6 / devtoolset-8 build), not on the developer
+- Run this as a PR gate on the release toolchain (this host's `gcc (GCC) 8.5.0` is the CI release compiler), not on the developer
   compiler: a different compiler produces a different layout and a different verdict (CC-08 §6).

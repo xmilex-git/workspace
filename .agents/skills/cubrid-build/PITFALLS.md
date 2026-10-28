@@ -37,14 +37,14 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Source: memory:install-copy-rpath-loads-original-libs, memory:bench-measurement-pitfalls
 
 ### P5 — `just build` has no SUPPORT_XA
-- Rule: A DBLink DML check needs `cmake --preset optdebug -DCMAKE_INSTALL_PREFIX=<prefix> -DSUPPORT_XA=true` before `just build optdebug` (or a gha-ci archive build, which has XA), verified with `nm -D lib/libcascci.so | grep cci_xa_prepare`; a plain `just build` fails every remote-DML case with "N rows affected" and an unchanged remote.
+- Rule: A DBLink DML check needs `cmake --preset optdebug -DCMAKE_INSTALL_PREFIX=<prefix> -DSUPPORT_XA=true` before `just build optdebug` (or a gha-ci archive build, which has XA), verified with `nm -D lib/libcascci.so | grep cci_xa_prepare`; a plain `just build` fails every remote-DML case with "N rows affected" and an unchanged remote; `just rebuild` wipes the build tree and with it the cached `-DSUPPORT_XA=true`, so configure again before it, for every build type the check runs on.
 - Applies at: Commands
 - Case (2026-10-07, CBRD-27365): the first candidate optdebug build had no `dblink_2pc_*` symbols and its libcascci lacked `cci_xa_prepare`; the remote CAS log showed `end_tran ROLLBACK` with no `xa_prepare`, so remote DML cases were NOK on the fixed engine. CI's build.sh passes `-DSUPPORT_XA=true`.
 - Case (2026-10-20 and 2026-10-27, CBRD-27583 i1 / PR 8213 v36): a gha archive develop (XA on) was compared with a just-built branch (XA off), and later dblink shell cases were listed in a gate prompt on a reused `just incr` install — false NOKs both times (cbrd_27365, cbrd_26851 #16, cbrd_26921, cbrd_24501). In SA gdb: after the sink, `log_commit` never calls `dblink_2pc_get_participants`.
 - Source: memory:just-build-lacks-support-xa
 
 ### P6 — a build resets the conf
-- Rule: `build` and `rebuild` reinstall `conf/cubrid.conf` from the source template and then re-apply `just conf` (the campaign conf: `double_write_buffer_size=0`, `parallelism=24`, `log_buffer_size=256M`); `incr` reinstalls the factory template and does **not** re-apply it — after any build, read `parallelism`, `data_buffer_size`, `stored_procedure` and `max_plan_cache_entries` in the install's conf before using it, and restore a gate install's conf to the reference state.
+- Rule: every build reinstalls `conf/cubrid.conf` from the source template; `build` then re-applies `just conf` (the campaign conf: `double_write_buffer_size=0`, `parallelism=24`, `log_buffer_size=256M`), `rebuild` and `incr` do **not** — after any build, read `parallelism`, `data_buffer_size`, `stored_procedure` and `max_plan_cache_entries` in the install's conf before using it, and restore a gate install's conf to the reference state.
 - Applies at: Commands
 - Case (workspace#157): CMake's install step reinstalls `conf/cubrid.conf` on every build, silently reverting whatever was there; `just build` now re-derives it, `just incr` does not.
 - Case (2026-10-07, PR 8022 review #389): a develop install and its `-pc0` hardlink variant shared one `conf/cubrid.conf` (same inode), so the base ran with `max_plan_cache_entries=0` and a plan-reuse probe looked like a PR-only defect. Before an A/B: `rg -n '^(max_plan_cache_entries|plus_as_concat|return_null_on_function_errors)' <install>/conf/cubrid.conf` on both, `ls -i` the two conf files, and break a hardlink (`cp -p` to a temp name, `mv` back) before editing one.
@@ -57,9 +57,10 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Source: memory:comment-only-change-no-build
 
 ### P8 — syntax-only with both compile commands
-- Rule: For every changed TU, run `-fsyntax-only` with the compile command from **both** `build_preset_optdebug/compile_commands.json` and `build_preset_release/compile_commands.json` (`-o` removed, ` -fsyntax-only -fmax-errors=0` appended), because `-Werror=maybe-uninitialized` needs optimization and only the release command carries it; and when inserting a check into a long function, read the lines above it to confirm every variable it reads is assigned there.
+- Rule: For every changed TU, run the optdebug compile command from `build_preset_optdebug/compile_commands.json` with ` -fsyntax-only -fmax-errors=0` and the release command from `build_preset_release/compile_commands.json` with `-o /dev/null` (a real `-c` compile, not syntax-only), because `-Werror=maybe-uninitialized` needs the optimizer and only the release flags carry it; and when inserting a check into a long function, read the lines above it to confirm every variable it reads is assigned there.
 - Applies at: Smoke before a delegated build
 - Case (2026-10-23, PR 8213 gate v16): a check read `statement->xasl_id` about 30 lines before `statement = session->statements[stmt_ndx]`; the optdebug syntax-only pass was clean, the release build stopped with `-Werror=maybe-uninitialized`, and the optdebug install crashed every CAS at the first statement of every CTP case (16 shards stalled, one gate lost).
+- Case (2026-10-28, dry run): GCC's `-fsyntax-only` does not run the optimizer, so the release command as syntax-only cannot raise `-Wmaybe-uninitialized`; the rule now compiles the release command for real into `/dev/null`.
 - Source: memory:syntax-compile-with-release-command
 
 ### P9 — the compiler is the census
