@@ -25,5 +25,6 @@ develop 의 해시 GROUP BY 는 그룹마다 첫 행 사본을 두고 둘째 행
 
 ## Consequences
 
+- 그룹이 hash 표를 여러 번 나가 partial 여럿으로 나뉘면 partial 끼리 합치는 순서가 정렬 GROUP BY 와 다르다. 그래서 DOUBLE 합·분산은 그런 그룹에서 develop 처럼 NO_HASH_AGGREGATE 와 마지막 자릿수가 다를 수 있다(smoke: 30만 행 STDDEV/VARIANCE/SUM(DOUBLE), develop 과 같은 차이).
 - SUM(SMALLINT) 처럼 누산 중 범위를 넘는 질의는 develop 해시에서 값을 냈어도 수정 뒤에는 정렬 GROUP BY 처럼 오류를 낼 수 있다.
 - TC 는 `cbrd_27802_spec_change.sql` 이 위 표를 고정한다(직전 빌드 NOK 가 정상).
