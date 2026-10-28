@@ -93,7 +93,7 @@ _Avoid_: 런타임 해시 상태, hash: true/partial
 _Avoid_: 리스트 병합(복사 경로와 이어붙이기 경로를 뭉뚱그림), swap
 
 **TPC-H SF10 측정 자산**:
-이 호스트의 TPC-H SF10 측정 자산 — `~/databases/tpch/`의 DB `tpch_sf10`(`CUBRID_DATABASES=~/databases/tpch`, 자체 `databases.txt`), 측정 conf `conf/tpch.conf`, 러너 `run_tpch.sh`, 질의 `tpch-sspq/queries/`. 적재 빌드·출처는 그 디렉터리의 `README.md`에 있고, 온디스크 포맷이 바뀐 빌드로 재는 측정에는 재적재가 선행돼야 한다(CUBRID_SSOT §3-18).
+이 호스트의 TPC-H SF10 측정 자산 — `~/databases/tpch/`의 DB `tpch_sf10`(`CUBRID_DATABASES=~/databases/tpch`, 자체 `databases.txt`), 측정 conf `conf/tpch.conf`, 러너 `run_tpch.sh`, 질의 `tpch-sspq/queries/`. 적재 빌드·출처는 그 디렉터리의 `README.md`에 있고, 온디스크 포맷이 바뀐 빌드로 재는 측정에는 재적재가 선행돼야 한다 — 새 코드는 레거시 체인을 손상으로 취급하고, release는 assert 없이 오독하거나(CBRD-24094 2026-08-27, CBRD-26459 2026-09-22 뒤의 옛 `tpch_sf10`은 -1381로 부팅 거부) 아예 부팅을 거부한다. 재적재는 CS 모드 빠른 경로(`loaddb_worker_count=32`, PK·FK를 `-i` 단계로 옮겨 `--no-logging-index`)로 약 5분이며, 적재용 `conf/load.conf`·측정용 `conf/tpch.conf`(data_buffer 16G)는 `CUBRID_CONF_FILE=`로 지정해 install의 conf를 건드리지 않는다. 포트 등록은 `1706 tpch_shared`.
 _Avoid_: `~/databases/pr7866`(2026-10-11 삭제)·`.git_ignored_dir/conf/pr7866.conf`(옛 측정 conf)·`tpch-sspq/harness/`(옛 하네스), DB `tpch_sf10_q1`, `.vscode/TPC-H`
 
 **신선한 체크포인트 (fresh checkpoint)**:
@@ -427,6 +427,64 @@ _Avoid_: 잡큐(CAS 시절의 이름), 서버 수용 대기(서버 `max_clients`
 **핸드셰이크 예산 (handshake budget)**:
 SSL 드라이버가 접속 응답을 받은 뒤 서버의 ServerHello를 기다려 주는 시간. JDBC는 1초(`BrokerHandler.TIMEOUT_UNIT`), CCI는 블로킹 `SSL_connect`라 상한이 없다. 접속 응답은 이 예산이 시작되기 전에 서버가 fd를 쥐고 있어야 한다는 제약을 낳는다.
 _Avoid_: connectTimeout(접속 응답까지의 예산 — 다른 타이머다), 로그인 타임아웃
+
+### 스킬 공통 용어 (ADR 0033, 2026-10-28) — 각 스킬 SKILL.md `Terms` 절의 원본
+
+**게이트 (gate)**:
+변경을 push·머지하기 전에 통과해야 하는 검증으로, optdebug 설치본의 CTP sql+medium(+대상 집합)과 같은 빌드 타입의 기준 실행(baseline) 비교다. shell 은 upstream CI 의 몫이다.
+_Avoid_: 검증(범위가 넓음), 스모크(구현 루프의 리드 자체 확인 — 게이트 증거가 아님)
+
+**빌드 타입 (build type)**:
+`optdebug`(assert 켜짐, gha-ci 의 "debug" 슬롯)와 `release`(assert 제거)의 둘. 실패 수·코어 수는 반드시 빌드 타입과 함께 적고, 서로 다른 타입끼리는 비교하지 않는다.
+_Avoid_: debug(plain debug 프리셋은 폐기됨), 모드
+
+**지문 (fingerprint)**:
+`sha256sum lib/libcubrid.so.11.5`(SA 는 `libcubridsa.so` 포함)로 두 빌드를 구별하는 값. `bin/cub_server`(런처)와 버전 문자열(`just incr` 는 `version.h` 를 다시 만들지 않음)은 지문이 아니다.
+_Avoid_: cub_server 해시, cubrid_rel
+
+**엔진·TC 어긋남 (skew)**:
+엔진 커밋과 TC ref 가 서로 다른 develop 시점과 짝지어진 상태. 변경과 무관한 케이스가 실패하며, 브랜치와 develop 기준선이 같이 실패해도 `git log <base>..origin/develop` 에 짝 엔진 PR 이 없음을 확인하기 전까지는 "develop 공통"이 아니다.
+_Avoid_: 환경 문제, develop 공통
+
+**거짓 NOK (false NOK)**:
+러너 환경이나 `just build` 설치본(SUPPORT_XA 없음, CUBRID Manager 없음, 이미지의 CTP 리비전)이 develop 과 브랜치에서 똑같이 만드는 NOK. 변경의 결함이 아니다.
+_Avoid_: 플레이크(flake — CI 에서 무관한 PR 들에도 간헐 실패하는 케이스)
+
+**플레이크 (flake)**:
+무관한 PR 이나 develop dispatch 에서도 실패하는 CI 케이스. `/run rerun <run id>` 로 다시 돌리며 리뷰 지적이 아니다. 한 head 에서만 2/2 실패하면 플레이크가 아니라 신호다.
+_Avoid_: 거짓 NOK
+
+**정지된 샤드 (stopped shard)**:
+hang 또는 crash-loop 감시자가 끝낸 샤드. 그 판정은 `failed.list` 와 콘솔에 없고 `feedback.log` 에만 있다.
+
+**판별 행 (discriminating row)**:
+주장한 메커니즘이 참일 때만 매치되는 탐침 데이터의 행. develop 동작을 말하기 전에 이 행을 넣은 탐침을 develop 빌드에서 돌린다.
+_Avoid_: 예시 행
+
+**구동 행 (driver row)**:
+`/*+ ordered use_nl */` 의 한 행짜리 외부 테이블로, 내부 테이블의 모든 방출을 루트 행 하나 안에 두어 행마다 dptr 를 초기화하지 않는 결함을 드러낸다.
+
+**음성 대조 (negative control)**:
+케이스가 실패할 수 있음을 보이는 고의 실패 변형(기대값 +1 등). shell TC 의 `.result` 줄 수가 `write_ok`/`write_nok` 호출 수와 같은지도 함께 센다.
+_Avoid_: 양성 대조(실행 경로를 증명하는 검사)
+
+**아카이브 빌드 (archive build)**:
+gha-ci 가 `http://192.168.1.48:30080/builds/develop/<sha>/{debug,release}/CUBRID.tar.gz` 에 남기는 develop 빌드. 창은 약 한 달이라 `curl -sfI` 로 먼저 확인하고, RPATH 가 `/home/CUBRID/lib` 라 `LD_LIBRARY_PATH` 로 띄운다.
+_Avoid_: CI 빌드(PR 빌드 `builds/pr/<sha>` 와 혼동)
+
+**릴리스 라인 설치본 (release-line install)**:
+ftp.cubrid.org 의 공식 릴리스를 `~/release/CUBRID-<stamp>` 에 푼 것. "어느 버전부터" 를 답할 때 쓰며 conf 는 포트만 바꾼다.
+
+**네임스페이스 잡 (namespace job)**:
+`tools/fast-gate/fast-sa.sh` / `fast-cs-*.sh` 가 `unshare -Urmipnf` 아래 휘발성 overlay 로 설치본과 새 DB 를 덮어 띄우는 탐침 실행. fsync 없음, 포트·shm 사유, 설치본에 아무것도 쓰지 않음, 안에서는 사용자가 `root`.
+_Avoid_: fast-sa(스크립트 이름), 컨테이너(podman 의 CTP 샤드와 혼동)
+
+**봇 브랜치 (bot branch)**:
+엔진 PR N 이 열릴 때 app/cubrid-tc-sync-bot 이 두 TC 저장소에 만드는 `tc/pr-N`. 봇의 "chore: Initialize" 커밋이 올라온 뒤에만 push 한다.
+_Avoid_: TC 브랜치
+
+**위임 빌드 (delegated build)**:
+설치본을 만드는 모든 빌드(`just build|rebuild|incr`)로, 워커(Sonnet Workflow 또는 Luna)가 위임 실행 계약 아래 수행한다. 리드는 변경 TU 의 `-fsyntax-only` 까지만 직접 한다.
 
 ### CTP 실행 도구 (컨테이너 격리 러너)
 
