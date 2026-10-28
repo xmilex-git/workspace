@@ -84,6 +84,11 @@ build mode="debug" version=ver: _submodules
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
     dest="${INSTALL_PREFIX:-$HOME/$mode/CUBRID-{{version}}}"
     echo "install dest: $dest${INSTALL_PREFIX:+  (INSTALL_PREFIX override — ~/CUBRID untouched)}"
+    if [ -z "${INSTALL_PREFIX:-}" ]; then
+        if [ -d "$HOME/CUBRID" ] && [ ! -L "$HOME/CUBRID" ]; then
+            echo "ERROR: ~/CUBRID is a real directory (live databases/tmp/var of other sessions), not a symlink — it cannot be repointed. Pass INSTALL_PREFIX=<dedicated dir> (cubrid-build skill P2)." >&2; exit 1
+        fi
+    fi
     mkdir -p "$dest"
     ( cd "$ws" && cmake --preset $mode -DCMAKE_INSTALL_PREFIX="$dest" \
                 && cmake --build "build_preset_$mode" -j {{jobs}} --target install )
@@ -142,6 +147,9 @@ use mode="debug" version=ver:
     mode="{{mode}}"; if [ "$mode" = debug ]; then mode=optdebug; fi
     dest="$HOME/$mode/CUBRID-{{version}}"
     [ -d "$dest" ] || { echo "ERROR: not installed: $dest (build it first)" >&2; exit 1; }
+    if [ -d "$HOME/CUBRID" ] && [ ! -L "$HOME/CUBRID" ]; then
+        echo "ERROR: ~/CUBRID is a real directory (live databases/tmp/var of other sessions), not a symlink — it cannot be repointed. Pass INSTALL_PREFIX=<dedicated dir> (cubrid-build skill P2)." >&2; exit 1
+    fi
     ln -sfn "$dest" "$HOME/CUBRID"
     echo "~/CUBRID -> $(readlink "$HOME/CUBRID")"
 
@@ -155,6 +163,11 @@ rebuild mode="debug" version=ver: _submodules
     [ -f "$ws/CMakePresets.json" ] || { echo "ERROR: '$ws' is not a CUBRID source checkout (no CMakePresets.json)." >&2; exit 1; }
     dest="${INSTALL_PREFIX:-$HOME/$mode/CUBRID-{{version}}}"
     echo "install dest: $dest${INSTALL_PREFIX:+  (INSTALL_PREFIX override — ~/CUBRID untouched)}"
+    if [ -z "${INSTALL_PREFIX:-}" ]; then
+        if [ -d "$HOME/CUBRID" ] && [ ! -L "$HOME/CUBRID" ]; then
+            echo "ERROR: ~/CUBRID is a real directory (live databases/tmp/var of other sessions), not a symlink — it cannot be repointed. Pass INSTALL_PREFIX=<dedicated dir> (cubrid-build skill P2)." >&2; exit 1
+        fi
+    fi
     ( cd "$ws" && rm -rf "build_preset_$mode" )
     mkdir -p "$dest"
     ( cd "$ws" && cmake --preset $mode -DCMAKE_INSTALL_PREFIX="$dest" \
