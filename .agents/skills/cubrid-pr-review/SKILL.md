@@ -11,9 +11,22 @@ Review a CUBRID engine pull request as one unit with what it answers to, and pro
 
 - the engine PR (the diff and its description),
 - its JIRA ticket (the body, the attachments `design.md` / `test.md` / `test_result.md`, and linked issues),
-- its two **TC PRs**: the bot-created `tc/pr-<N>` branches in `CUBRID/cubrid-testcases` and `CUBRID/cubrid-testcases-private-ex` (the term is defined in the repo's `GLOSSARY.md`).
+- its two **TC PRs**: the bot-created `tc/pr-<N>` branches in `CUBRID/cubrid-testcases` and `CUBRID/cubrid-testcases-private-ex`.
 
 The report gives three verdicts: findings on the engine PR, the JIRA -> engine PR approval, and the TC approval. CUBRID is a multi-threaded, open-source RDBMS with a large C/C++ codebase, so reviews focus on correctness, memory safety, and concurrency.
+
+## Terms
+
+- **TC PR**: the testcase PR a bot opens for an engine PR N, on branch `tc/pr-N` cut from the testcases repo's current develop; one in `cubrid-testcases` (public sql/medium) and one in `cubrid-testcases-private-ex` (shell). A branch may exist with no PR, or as an empty draft.
+- **merge-base**: the develop commit the PR branch forked from; the PR's own CI tests the head as-is against `tc/pr-N`, never a merge with develop.
+- **build type**: `optdebug` (asserts on; gha-ci's "debug" slot) or `release` (asserts compiled out). An A/B compares one build type only.
+- **fail-before / pass-after**: the same case run on the merge-base build (expected NOK) and on the head build (expected OK), each on a fresh server.
+- **skew**: an engine base and a `tc/pr-N` tip paired with different develop commits; it fails cases unrelated to the PR.
+- **flake**: a case that fails on unrelated PRs or develop dispatches; it gets `/run rerun <run id>`, not a finding.
+- **review event**: the GitHub review type posted per PR — Approve / Comment / Request changes.
+- **pre-existing**: a defect develop already shows on the equivalent plan; out of scope unless the PR adds a new way into it.
+
+The lessons behind every `(P<n>)` below are in `PITFALLS.md`; a new lesson goes there as a case under its rule, or as a new rule added to both files in one commit.
 
 ## When to Use
 
@@ -53,53 +66,7 @@ Write the report to `.claude/review/PR-<NUMBER>/PR-<NUMBER>-report.md` in the re
 
 ### Report Template
 
-```markdown
-# PR #<NUMBER> 코드 리뷰 보고서
-
-**PR:** [<OWNER>/<REPO>#<NUMBER>](https://github.com/<OWNER>/<REPO>/pull/<NUMBER>)
-**제목:** <PR title>
-**작성자:** <author>
-**HEAD SHA:** `<head_sha>` (develop merge-base `<sha>`)
-**JIRA:** <CBRD-XXXXX (type, status)> / 연관: <linked issues, 없으면 없음>
-**TC PR:** <CUBRID/cubrid-testcases#N (`tc/pr-<NUMBER>` sha)> / <CUBRID/cubrid-testcases-private-ex#M, 또는 PR 없음 + 변경 여부>
-**리뷰 일시:** <today's date>
-**리뷰 결정:** <grill에서 정한 PR별 리뷰 이벤트: 엔진 PR, TC PR 각각>
-
-> **TL;DR** (<Verdict>): 1-3 문장으로 결론과 핵심 이슈 1-2개.
-
-## Summary
-
-- **변경 요약**: 한 줄로 PR이 무엇을 바꾸는지
-- **주요 이슈**: 가장 중요한 1-2 항목 (없으면 "없음")
-- **확인 필요 사항**: 작성자가 확인/응답해야 할 질문 (없으면 "없음")
-
----
-
-## Findings
-
-<see Findings Rules below. 발견 사항이 전혀 없으면 이 섹션 본문을 `없음` 한 줄로 대체하고 아래 세 subsection은 모두 생략한다. 일부 카테고리만 비어 있다면 채워진 카테고리만 남기고 비어 있는 subsection은 통째로 생략한다.>
-
-### Blocking (must fix)
-<버그, 메모리/동시성 안전성 위반 등 머지 전에 반드시 수정되어야 하는 항목.>
-
-### Non-blocking (should consider)
-<수정을 권하지만 머지를 막지는 않는 사항.>
-
-### Questions for the author
-<작성자에게 확인이 필요한 질문.>
-
-## JIRA -> Engine PR
-<Approval Criteria의 JIRA 기준 문장, 항목별 표, 판정 한 줄. JIRA 없으면 섹션 생략.>
-
-## TC PRs
-<Approval Criteria의 TC 기준 문장, 시나리오별 표, TC 파일 검토 한두 줄, 판정 한 줄.>
-
-## Runtime Verification
-<재사용한 CI 증거와 새로 돌린 실행(빌드 sha와 종류, 테스트케이스 ref, 결과). 새로 돌린 것이 없으면 CI 증거만.>
-
-## Existing Comments
-<PR에 달려 있고 작성자/메인테이너 답변이 없는 top-level 코멘트(`in_reply_to_id == null` 인 것 중 author/maintainer 답글이 없는 것)만 짧은 표로 정리. 없으면 섹션 생략.>
-```
+The section skeleton is `report-template.md` (title block, TL;DR, Summary, Findings, JIRA -> Engine PR, TC PRs, Runtime Verification, Existing Comments). Rules for filling it follow.
 
 ### Top-of-Report Summary Rules
 
@@ -157,7 +124,7 @@ The report is read by the PR author under time pressure — and the author may b
 Two artifacts, two voices — do not mix them:
 
 - **`PR-<NUMBER>-report.md`** (analysis, local-only): the terse, declarative **Plain Language** style above — defect -> cause -> consequence, no hedging. For the reviewer/maintainer to assess shippability.
-- **`PR-<NUMBER>-comments.md`** (post-ready, Step 6): the CUBRID human-reviewer voice defined in **`voice-guide.md`** — question / assertion / suggestion endings (`~지 않나요?`, `~는 어떨까요?`), `NIT:` for minor items, identifiers kept English, no AI tells / emoji / English verdict labels. A hedge is allowed here only where the report could not verify the fact (voice-guide 1 and 1b): what the reviewer read in the code or ran on a build is stated flatly, a doubt becomes a question, a proposal becomes a suggestion. Comments longer than two lines open with the normal behavior at that spot, then the deviation, then what the user sees.
+- **`PR-<NUMBER>-comments.md`** (post-ready, Step 6): the CUBRID human-reviewer voice defined in **`voice-guide.md`** — question / assertion / suggestion endings (`~지 않나요?`, `~는 어떨까요?`), `NIT:` for trivial items only (P18), identifiers kept English, no AI tells / emoji / English verdict labels. A hedge is allowed here only where the report could not verify the fact (voice-guide 1 and 1b): what the reviewer read in the code or ran on a build is stated flatly, a doubt becomes a question, a proposal becomes a suggestion. Comments longer than two lines open with the normal behavior at that spot, then the deviation, then what the user sees.
 
 `voice-guide.md` is the single source of truth for comment voice. When the two conflict, Plain Language governs the report and `voice-guide.md` governs the comments.
 
@@ -195,6 +162,8 @@ Run these in parallel. Downloads and scratch files go under `.git_ignored_dir/sc
 6. **Read `reference.md`** (sibling file in this skill's directory) for CUBRID-specific review knowledge: error-code six-place rule, memory/error-handling conventions, lock/page-buffer/WAL/MVCC protocols, build-mode guards, key data structures, false-positive guidance. If `reference.md` is missing on this checkout, warn the user once and proceed using only the review categories listed in Step 3 below — do not invent CUBRID-specific rules.
 7. **Read any CLAUDE.md / AGENTS.md** in directories containing changed files. Use Glob to walk ancestor directories of each changed file looking for these context files.
 8. **Read `voice-guide.md`** (sibling file) for the CUBRID human-reviewer tone applied when rendering post-ready comments in Step 6. If `voice-guide.md` is missing, render comments in the report's Plain Language style instead and note the fallback once.
+9. **Develop drift.** Early in every review, run `git log --oneline <merge-base>..origin/develop -- <changed dirs>`; when a commit there touches the same subsystem, run the PR's TC dirs on the latest develop CI tarball as well, and a NOK caused by a TC branch older than the engine's develop base gets no comment. (P1)
+10. **TC-only PR.** A TC-only PR is reviewed on gha-ci evidence from a draft CI-only engine PR (one `--allow-empty` commit on develop pushed to the fork, `tc/pr-<M>` filled after the bot's init commit lands, `/run sql` or `/run shell`), never on a local run alone; re-fetch the TC PR head right before posting and close the engine PR afterwards. (P2)
 
 ### Step 3: Review
 
@@ -210,6 +179,13 @@ Focus on these high-signal categories for CUBRID. One sentence each — the deta
 
 If the diff touches the SQL parser, broker protocol, or CCI client interface, also check buffer/integer overflow and unchecked input. Skip generic security checklists otherwise.
 
+Rules that past reviews paid for:
+- For every new assert in the diff, name its call sites and the state at each; an invariant that cannot be shown from the code is a finding asking the author to drop it or narrow it to the branch where it holds. (P3)
+- In PX reviews, "a transaction inside a system operation runs its query serially" is settled — its false positives (nondeterministic degree, missing `parallel workers` trace lines) are not findings, while a worker-spawning path that skips the sysop gate is. (P4)
+- In worker→leader error propagation, the leader adopts a worker's error only after its wait for every worker, in its own thread (the px_scan pattern: the worker moves its message into a holder; the leader swaps it into its thread-local error context afterwards) — a swap from the worker into a running leader is a finding. (P5)
+- A field added to the `regu_variable` / arith / `pred_expr` / domain stream must answer disk compatibility (filter-index `pred_stream` and function-index `expr_stream` are stored in the catalog with the same `stx_*` codec; only the XASL header and access-spec layouts are memory-only), and a "should never happen" boundary must not reuse `ER_QPROC_INVALID_XASLNODE`, which makes the client drop the xasl_id and silently recompile. (P6)
+- A statement about what develop does is made only after running it on a develop build with a discriminating row (a value that matches only if the claimed mechanism is true), and a root-cause ask is answered with the code-level cause, the fix and the gate in one pass. (P9)
+
 Fill the Approval Criteria tables while reading. The JIRA rows come from `design.md` and `test.md` read against the diff; the TC rows come from `test.md` and the TC PRs.
 
 **LSP analysis (optional).** If `compile_commands.json` is available, run `lsp_diagnostics` on changed files for clangd warnings on changed lines. Definitions and callers come from code-index (above), including every caller of a function whose signature changed. Skip silently if LSP is unavailable.
@@ -218,7 +194,7 @@ If `reference.md` is present and flags a rule (e.g., new error code -> 6 places)
 
 ### Step 3b: Sanity Check (mandatory)
 
-After the main review pass, run a focused sanity scan over the diff yourself. This repository keeps source reading with the lead (the division of labor in its CLAUDE.md), so the scan is not delegated. It is mandatory and cannot be skipped — it catches convention violations that `codestyle.sh` and CI do not enforce. Inputs: the full PR diff, the `reference.md` "Comment & Convention Hygiene" section, and any `CLAUDE.md` from directories of changed files.
+After the main review pass, run a focused sanity scan over the diff yourself. Source reading stays with the lead (workers build and run; they do not read for findings), so the scan is not delegated. It is mandatory and cannot be skipped — it catches convention violations that `codestyle.sh` and CI do not enforce. Inputs: the full PR diff, the `reference.md` "Comment & Convention Hygiene" section, and any `CLAUDE.md` from directories of changed files.
 
 The scan checks **only** these categories (logic/concurrency/memory belong to the main review):
 
@@ -228,11 +204,12 @@ The scan checks **only** these categories (logic/concurrency/memory belong to th
 4. **Commented-out code blocks** — `#if 0` or large `/* ... */` dead code blocks in new code.
 5. **`#include` order violations** — `config.h` must come first, then system, then CUBRID headers.
 6. **Magic numbers** — bare numeric literals (other than 0, 1, -1, NULL) without a named constant.
+7. **Prototype order** — In a CUBRID `.c` file the static prototype block lists functions in definition order, grouped by topic with blank lines — a relocated declaration goes where its definition falls, and the whole PR is grepped for the same pattern so one comment fixes every instance. (P8)
 
 Merge its hits (file:line + one sentence) into the main report's Findings section under the appropriate severity:
 - Stale file:line refs and incomprehensible comments -> **Non-blocking (should consider)**
 - Missing license header -> **Blocking (must fix)**
-- Commented-out code, include order, magic numbers -> **Non-blocking (should consider)**
+- Commented-out code, include order, magic numbers, prototype order -> **Non-blocking (should consider)**
 
 With no hits, no sanity items appear in the report.
 
@@ -245,7 +222,15 @@ Reuse evidence before producing it: CI statuses and the gha-ci artifact server a
 - a linked ticket's repro,
 - a scenario the PR claims but CI does not cover.
 
-The runs follow the repository's execution rules: builds and CTP go to the delegated worker that this repo's CLAUDE.md names (smoke-sized checks stay with the lead), and every CTP run goes through `just ctp` containers. Recipes, artifact-server paths and cleanup are in `runtime.md`.
+Builds and CTP go to a delegated worker (Sonnet Workflow or Luna; smoke-sized checks stay with the lead), and every CTP run goes through `just ctp` containers. Recipes, the worker prompt's verbatim execution contract, artifact-server paths and cleanup are in `runtime.md`.
+
+How a run becomes evidence:
+- A pass/fail verdict on query output comes from robust aggregates (`COUNT`, `SUM(CAST … AS NUMERIC(38,0))`, `MIN`, `MAX`) plus the actual rows a top-level SELECT returns to the client, never from an md5 of raw output. (P13)
+- A parallel path counts as exercised only when `;trace on` shows `parallel workers: N>1` (`;plan detail` does not show it); forcing serial needs both `parallelism=1` and `max_parallel_workers=1`. (P14)
+- A nondeterministic failure is judged by N repetitions (the FAIL and the PASS alike), and a fix is shown fail-before-fix and pass-after by the same method; a theoretical race is a finding only once it is shown reachable. (P15)
+- Live verification runs on a CS-mode optdebug server (release compiles asserts and `er_log_debug` out; the resource tracker's leak checks are per-request in CS mode only, so an SA `csql -S` pass proves nothing about leaks), and gdb is never verification evidence — code-path proof is a `perf record -p <pid>` symbol band, a counter or an A/B output, and attaching gdb to a live `cub_server` is banned. (P16)
+- When a comparison decides a verdict, print the number of differing lines per file (`diff a b | grep -c '^[<>]'`) or the full diff, and truncate only after the remainder is confirmed to be the same class of difference. (P10)
+- Before calling a gha-ci NOK the PR's, scan `failed.list` of the recent runs on other PRs and read the case's trace in its shard's `ctp_log.tgz`; a case failing on unrelated PRs is a flake or a develop defect (`/run rerun <run id>`), a 2-of-2 on one head is a signal, and a local `just ctp shell` timeout (720 s) is no proof that CI (1200 s) fails the case. (P17)
 
 Completion: every Expected Result row and every TC scenario row has evidence (CI, the author's attached result, or a run), and the Runtime Verification section names each source with its build sha, build type and testcase ref.
 
@@ -258,6 +243,9 @@ Drop findings that are:
 - **Stylistic** (formatting, naming) unless CLAUDE.md mandates it — but **never drop Step 3b sanity findings** (comment hygiene, license headers, include order, etc.); those exist precisely because CI does not catch them
 - **On unmodified lines**
 - **Out of the PR's stated scope** — don't critique the design of code the PR didn't intend to change, even if the diff exposed it
+- On a PR that undoes what an earlier change broke, a finding is compared first against develop's answer on the equivalent plan; the same answer on develop is "pre-existing, out of scope" — unless the PR's own change adds a new way into that defect, or the fix the user asked for is not real without it, in which case it is fixed in the PR at the root. (P12)
+- Before calling a changed row order a defect, cite what the SQL standard, vendor docs and the CUBRID manual guarantee (for CONNECT BY: parent-then-children only; root and sibling order is not), confirm the guaranteed part still holds, and downgrade to a request that the JIRA spec record the order change and the TC answers follow. (P11)
+- CUBRID builds no Windows target from guava (11.5; CBRD-26051 removed the CircleCI and Jenkins Windows jobs), so a Windows link or API limit is a finding only for a backport to a pre-11.5 branch — check the target branch first. (P7)
 
 Every surviving finding needs a code snippet or diagnostic as evidence.
 
@@ -271,54 +259,7 @@ Every surviving finding needs a code snippet or diagnostic as evidence.
 
 ## Example Output
 
-A short finished report looks like this — use it as a shape anchor, not a template to fill out verbatim. The example below is about 40 lines, well under half the budget; for a typical PR this is plenty.
-
-```markdown
-# PR #6950 코드 리뷰 보고서
-
-**PR:** [CUBRID/CUBRID#6950](https://github.com/CUBRID/CUBRID/pull/6950)
-**제목:** [CBRD-26583] Re-enable OOS OID replacement in heap records
-**작성자:** xmilex-git
-**HEAD SHA:** `abc1234` (develop merge-base `def5678`)
-**JIRA:** CBRD-26583 (Improve, Confirmed) / 연관: 없음
-**TC PR:** CUBRID/cubrid-testcases#3001 (`tc/pr-6950` `aaa1111`) / cubrid-testcases-private-ex#4001 (빈 draft)
-**리뷰 일시:** 2026-05-06
-**리뷰 결정:** 엔진 PR Request changes / TC PR #3001 Approve
-
-> **TL;DR** (Blocking): `heap_record_replace_oos_oids` 에러 경로에서 `pgbuf_unfix` 누락으로 페이지 핀 누수 가능. 해당 한 곳만 고치면 머지 가능.
-
-## Summary
-
-- **변경 요약**: heap 레코드의 OOS OID 치환 로직을 `feat/oos`에 다시 활성화
-- **주요 이슈**: `heap_file.c:12345` 에러 경로 페이지 핀 누수
-- **확인 필요 사항**: 없음
-
----
-
-## Findings
-
-### Blocking (must fix)
-- `src/storage/heap_file.c:12345` — `er_set` 후 `goto exit` 전에 `pgbuf_unfix(thread_p, page_p)` 누락. 해당 함수 진입에서 `pgbuf_fix` 했으므로 모든 종료 경로에서 unfix 필요. 근거: 같은 함수 line 12302의 정상 종료 경로에는 unfix 존재.
-
-## JIRA -> Engine PR
-
-| 항목 | PR 상태 | 판정 |
-|---|---|---|
-| Expected Result (OOS 레코드 갱신 후 OID 일치) | test_result.md T1 | 충족 |
-| design 변경 1: 치환 재활성화 | 구현, 에러 경로 누수 | 부분 (Blocking 1) |
-
-## TC PRs
-
-| 시나리오 | 근거 | 판정 |
-|---|---|---|
-| T1 OOS 레코드 갱신 | test.md T1, #3001 | 통과 |
-
-## Runtime Verification
-
-- CI: build/sql/medium 통과(run 123), `cbrd_26583.sql` ok. 새로 돌린 실행 없음.
-```
-
-(Existing Comments was omitted because no unresolved top-level comments existed. `Non-blocking` and `Questions for the author` subsections are also omitted because they had no items.)
+A finished ~40-line report is in `example-report.md` — a shape anchor, not a template to fill out verbatim.
 
 ## Mandatory: Grill the Review (`grilling` + `domain-modeling`)
 
@@ -333,7 +274,7 @@ Run it by invoking two skills with the Skill tool: `grilling` (the interview loo
   - What gets posted.
 - **Rounds**: ask each round's frontier at once, numbered, in Korean. Give each question a recommended answer and the SQL or code it hinges on. A verdict question waits until the findings it depends on are settled.
 - **Facts are yours**: what the code does, what CI showed, whether a scenario reproduces. Look it up or run it (Step 3c) instead of asking.
-- **domain-modeling**: when a round settles a term (a CUBRID-internal concept the report glosses, or review vocabulary such as TC PR), write it to the repo's `GLOSSARY.md` at once. That file is a glossary only.
+- **domain-modeling**: when a round settles a term (a CUBRID-internal concept the report glosses, or review vocabulary such as TC PR), write it to the repo's `GLOSSARY.md` at once if the repo has one. That file is a glossary only.
 - **Review angle** (check every round):
   - each finding has file:line evidence with no hedging,
   - nothing pre-existing, CI-caught or out of scope leaked in,
@@ -354,9 +295,12 @@ After the grill finalizes `PR-<NUMBER>-report.md`, convert the surviving finding
 Mapping from report to comments:
 
 - Each **Blocking / Question** finding -> one comment. Lead with `file:line` (inline target), then a 1-3 line body ending in a human reviewer ending: a real bug is short and assertive (`~해야 하는 것으로 보입니다`), a doubt is a question (`~지 않나요?`), a proposal is a suggestion (`~는 어떨까요?`). Cite an existing function / macro / pattern instead of explaining abstractly; attach a short reproducible SQL or a ` ```suggestion ` block when it helps.
-- Each **Non-blocking** finding -> a `NIT:` comment (`NIT:` is the only severity label allowed in comment bodies).
+- Each **Non-blocking** finding -> a comment; `NIT:` is the only severity label allowed in comment bodies, and `NIT:` labels only a trivial item (a stray blank line, a typo, a naming nit); a Non-blocking finding with substance — a coverage gap, a description claim the code contradicts — carries no label and is written in the suggestion voice (`~는 어떨까요?`). (P18)
 - **Existing Comments** the report listed as unresolved: do **not** re-post a near-duplicate. Note in `PR-<NUMBER>-comments.md` that they should be answered as a reply on the existing thread instead.
 - Optional top-level comment: one short paragraph summarizing the PR in plain human tone (no `##` headers, no verdict label, no lane / meta terms), followed by `확인 부탁드립니다` and `추가로 논의가 필요해 보이는 항목` groupings for documentation / scope items. Requests about the JIRA ticket (linking a duplicate, recording a regression cause) go here as asks to the author; this skill never writes to JIRA.
+- On another team's PR, missing JIRA attachments (`design.md` / `test.md`), a missing regression TC and absent CI stay out of the post-ready comments by default — they are recorded in the local report's tables, and posting one is a grill question whose recommended answer is "don't post". (P19)
+- When a reviewer proposes a different architecture as a follow-up, the reply states the principle the PR protects, says the structure is open under that principle, and closes with "이슈로 올려 <reviewer>님께 assign, 검토 부탁" — no commitment to implement; the user decides whether to file it. (P20)
+- When the user says a posted comment looks cut off, first establish the client they read it on (GitHub's Android app clips paragraphs that hold inline code), report server-side integrity as its own fact ("stored in full"), and write phone-read text as plain paragraphs without inline code or bold. (P21)
 
 Before saving, run the `voice-guide.md` Section 7 self-checklist (no English headers in bodies, no `Why:` / `Fix:` labels, every comment ends in a human ending, identifiers English, only `NIT:` as a label, no emoji / `LGTM` / `Strongly recommend`, no lane / meta terms, no comment body over 6 lines).
 
@@ -367,3 +311,12 @@ gh api -X POST repos/<OWNER>/<REPO>/pulls/<N>/reviews --input <payload.json>
 # payload: {"commit_id": "<head sha>", "event": "APPROVE|COMMENT|REQUEST_CHANGES", "body": "<top-level>",
 #           "comments": [{"path": "<file>", "line": <n>, "side": "RIGHT", "body": "<comment>"}]}
 ```
+
+## Replying on your own PR
+
+The same skill serves when a CUBRID reviewer comments on the user's PR and the user asks for replies or for the review to be acted on.
+
+- Replies on the user's own PR follow `voice-guide.md` (§1b tone): Korean, identifiers in backticks, actor-subject sentences, results with build and row counts (`debug 빌드: … / release 빌드: …`), no `문제:`/`원인:` labels, no evaluative words, no emoji, ending on a fact or a question; when the user finds an explanation hard to follow, go one decision at a time with the actual SQL. (P22)
+- A review the user pastes is not turned straight into fixes: every finding is checked statically at the reviewed SHA and at runtime, and reported with verdict, measurement, the intent behind the code (which decision, which ticket) and what was missed then, before any edit. (P23)
+- A reviewer-suggested assert goes in its own commit and is gated by optdebug CTP; one that fires is removed and the reply quotes the SQL case; no assert is added to develop-origin behavior the PR only moved (reply "develop 에서도 나는 동작, 별도 이슈"); every accepted change keeps develop's error code and message. (P24)
+- Decisions on what to change are grilled with the user first; replies are posted only after explicit confirmation, one review per PR with `commit_id` at that PR's head SHA (Step 6).
