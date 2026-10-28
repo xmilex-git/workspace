@@ -27,6 +27,7 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-10-04, CBRD-27557): the swapped link form read "D causes F" and had to be deleted and recreated.
 - Case (2026-10-23, CBRD-27759): a `{1, 2}` set literal in prose opened a wiki macro that swallowed the next `{code:sql}` block, and `COUNT (*)` became a star emoticon; inside `{code}` both are fine.
 - Case (2026-10-23, CBRD-27730): an Open Correct Error offers only "To Triage" and "Bug Invalid"; "Bug Invalid" resolves it as **Fixed** and the resolution cannot be changed afterwards without the UI or an admin — say so before using it.
+- Case (2026-10-28, CBRD-27815): the user named the assignee by GitHub handle "shparkcubrid"; JIRA has no such user — `GET /rest/api/2/user/search?username=shpark` gave `shpark` (park se hun), and the report said which account was used.
 - Source: memory:jira-filing-workflow, memory:no-jira-posting
 
 ### P4 — design docs in the code's words
