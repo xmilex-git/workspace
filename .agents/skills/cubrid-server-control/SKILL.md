@@ -61,6 +61,22 @@ The wrapper prints `RESULT: OK | FAILED | TIMEOUT`, the captured cubrid output,
 and a `cubrid server status` snapshot. It exits with cubrid's own exit code
 (`0` = success), so callers can branch on `$?`.
 
+## Before starting
+
+- Before any server or broker starts, `just port-claim <db> <effort>` picks a free `cubrid_port_id` in 1700–1799 and a broker hundred-block from 36000 and records the claim in `.git_ignored_dir/port-registry/claims.md`; `just ports` shows claims and live listeners, `just port-release <db|port>` drops the claim when the effort ends; 1523 (default master), 1568 (`~/CUBRID` install) and the 30000/33000 broker ranges are never claimed, and a port found in use by someone without a claim goes into `.git_ignored_dir/port-registry/reserved.txt`. (P1) A claim protects against agents, not against humans' servers: check `ss -ltn` too.
+- Before a start, read the install's `conf/cubrid.conf`: `data_buffer_size=512M` on every server any session starts on this host (a 70 GiB host; two full gates at 16 × ~1 GB per lane ran it out), the claimed `cubrid_port_id`, and — when the run needs engine defaults — a conf holding only `cubrid_port_id`, because the campaign conf that `just conf` and `port-claim` write has `double_write_buffer_size=0` and `parallelism=24`. (P2)
+- A parameter or environment variable set only for the csql client changes nothing in the server; pass it to the server's start (the wrapper inherits the caller's `CUBRID_*` environment and `$CUBRID/conf/cubrid.conf`), and read it back with `cubrid paramdump -C <db>`. (P6)
+- An interactive CUBRID utility never runs in automation without its answers supplied (a flag or explicit stdin), because an EOF-looping prompt grows the log until the disk is full; automation logs get a size cap and a free-space check, and bounded evidence (statdump counters, file-size deltas) is preferred over full dumps. (P7)
+
+## Stopping and restarting
+
+- After `kill -9` of a hung `cub_server`, the still-running `cub_master` relaunches it within seconds (and a server that dies again within 120 s of its last relaunch stays down), so stop the server through the wrapper — or stop that install's master — before editing `cubrid.conf`, start fresh, and confirm the parameters with `cubrid paramdump -C <db>` (hidden parameters such as `test_mode` and `parallel_sort_page_threshold` never appear there); in a crash loop, poll for the relaunch and start the server yourself when none comes. (P3)
+- `cubrid server stop <db>` does not stop `cub_master`; a stray master keeps the claimed port (a listener with no `cub_server`) and a rebuilt binary then fails to bind, so stop that master by its exact pid with SIGTERM — the one whose `/proc/<pid>/exe` (or `CUBRID=` in `/proc/<pid>/environ`) is under the install — never `pkill cub` or `cubrid service stop` on this shared host, and always `server stop` (confirmed by process absence) before any master stop, so an in-flight stop is not lost and no `cub_server` is orphaned; an orphan is ended with SIGTERM, not `kill -9`. (P4)
+- A control command finds the master's unix socket under `$CUBRID_TMP` (the master puts its socket at a path derived from the environment that started **it**; on this host a shared master uses `$HOME/CUBRID/var/CUBRID_SOCK`), so "Could not connect to master server" while `ps` shows a live `cub_server` and `ss -tlnp` shows the master on the port is an environment mismatch, not a hang: read the master's value with `tr '\0' '\n' < /proc/<pid>/environ | grep CUBRID_TMP`, export the same one, and keep it short — the socket path `$CUBRID_TMP/cubrid_tcp_setup_server<pid>` must fit in 107 bytes (an 83-character scratch path failed with `-359 Datagram bind error … Invalid argument`; 69 worked). (P5)
+- When the effort ends, stop its servers through the wrapper, stop its master by pid (P4), `just port-release` the claim, and restore any install conf a smoke rewrote; servers left running are not fine, short SA jobs are. (P8)
+
+The incidents behind each `P<n>` are in `PITFALLS.md`; a new lesson goes there as a case under its rule, or as a new rule added to both files in one commit.
+
 ## Workflow checklist
 
 When you need to start/stop/restart a CUBRID server:
