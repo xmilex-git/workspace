@@ -44,6 +44,10 @@ Cases:
   DATETIME" because only the string case changed → DATE/TIME/TIMESTAMP inputs return their own type on
   11.4.6 and develop alike → `:param`/`:rtype` of MEDIAN and PERCENTILE_CONT/DISC rewritten from a
   per-type measurement (numeric incl. MONETARY, eight date/time types, strings) (GAP-AUDIT §3a).
+- PR #780 (CUBRIDMAN-357, 2026-10-29, caught by Greptile): PERCENTILE_DISC body gained "문자열이면
+  DOUBLE" but `:rtype:` kept "*expression2* 의 타입과 동일" → a reader of the field list alone reads a
+  string result → `:rtype:` carries the same exception in ko/en (f0902467); re-read every `:param`/`:rtype`
+  of a function whose body changed.
 - PR #772 (CBRD-27299, 2026-10-16, caught by reviewer): "서버에서 평가하는 내장 함수 … 사용할 수
   없다" → read as "only some built-ins"; `ParseTreeConverter` calls `setConnectionRequired()` on every
   built-in path (`visitFunction_call`, `visitIdentifier`, `visitSyntaxed_call_*`) → "내장 함수 호출은
