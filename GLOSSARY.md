@@ -1047,6 +1047,19 @@ _Avoid_: 모드, 복사 모드(처리 등급과 섞인다)
 도착 페이지 하나에 가하는 변경의 정도. 그대로(바이트 동일), patch(제자리 필드 수정·vacuum 잔여 제거), transform(레코드 재인코딩이나 구조 재작성) 셋 중 하나이고, 복사 방식과 독립이다.
 _Avoid_: 모드, 변환 모드
 
+### cubrid-fastmig 볼륨 밖 자산 (지도 #472, G6 #488 그릴링 2026-10-29)
+
+**볼륨 밖 자산 (out-of-volume asset)**:
+DB에 속하지만 볼륨 파일 바깥에 있는 파일. LOB 외부 파일(lob-base-path 아래)과 Java SP 클래스·jar(`java`, `java_static` 디렉터리)가 여기에 든다. PL/CSQL 컴파일 결과는 카탈로그 안에 있으므로 여기에 들지 않는다.
+_Avoid_: 외부 파일(LOB 파일만 가리키는 것으로 읽힌다), 부속 파일
+
+**참조 LOB 파일 (referenced LOB file)**:
+출발 DB의 레코드에 있는 LOB 로케이터가 가리키는 lob-base-path 아래의 파일. 도구가 옮기고, 나중에 지우는 단위다.
+
+**고아 LOB 파일 (orphan LOB file)**:
+lob-base-path 아래에 있지만 어느 레코드의 로케이터도 가리키지 않는 파일. 11.4는 DROP TABLE 때 LOB 파일을 지우지 않으므로 정상적으로도 쌓인다. 같은 lob-base-path를 쓰는 다른 DB의 파일도 이것과 구별할 수 없다. 옮기지도 지우지도 않고 보고만 한다.
+_Avoid_: 쓰레기 파일, 누수 파일
+
 ### nix 개발 환경 (그릴링 2026-09-30)
 
 CUBRID CI 환경을 nix로 재현하는 추가 경로의 용어(nix 개발 환경, CI 툴체인 스냅샷, 봉인 입력, 실행 디렉터리, 샤드 등)와 결정은 [xmilex-git/cubrid-nix](https://github.com/xmilex-git/cubrid-nix)의 `CONTEXT.md`와 ADR 0001에 있다. 그 레포의 **샤드**는 컨테이너가 아니라 `unshare` 네임스페이스 하나와 1:1이다.
