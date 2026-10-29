@@ -1009,6 +1009,24 @@ _Avoid_: 행마다 실행, "쓰이는 가지에서만 실행된다"는 서술(11
 비상관 스칼라 부질의를 바깥 스캔이 시작하기 전에 메인 스레드에서 한 번 실행해, 그 값을 병렬 워커에 넘기는 최적화(CBRD-26931). 부질의 실행 횟수가 0회 또는 1회로 보장되지 않기 때문에 허용된다.
 _Avoid_: 지연 실행 위반, 회귀(CBRD-27730의 첫 분류)
 
+### NUMERIC 표현 (CBRD-27819 survey 그릴링 2026-10-29)
+
+**이진 NUMERIC 표현 (binary NUMERIC representation)**:
+NUMERIC 값의 절댓값을 하나의 이진 정수로 두고, 부호·precision·scale 을 따로 두는 표현. 현행 CUBRID 의 NUMERIC 이다.
+_Avoid_: 256진 NUMERIC, 256-base numeric(바이트 단위 십진수로 읽힌다)
+
+**10000진 NUMERIC 표현 (base-10000 NUMERIC representation)**:
+NUMERIC 값을 십진 네 자리씩 묶은 자릿수(0~9999)의 배열로 두는 표현. PostgreSQL numeric(NBASE 10000)의 표현이다.
+_Avoid_: PG numeric(PG 의 교차 타입 비교 의미까지 가져오는 것으로 읽힌다)
+
+**DOUBLE→NUMERIC 변환 (DOUBLE to NUMERIC cast)**:
+DOUBLE 값을 유효숫자 16자리로 반올림해 NUMERIC 으로 만드는 변환. CAST·대입의 의미이고 값이 정확히 보존되지 않는다.
+_Avoid_: 정확 변환
+
+**DOUBLE·NUMERIC 정확 비교 (exact DOUBLE-NUMERIC comparison)**:
+DOUBLE 이 나타내는 이진 값 그대로와 NUMERIC 값의 대소를 정하는 비교. NUMERIC 범위 밖의 DOUBLE·inf·NaN 도 오류 없이 대소가 정해진다.
+_Avoid_: DOUBLE 을 NUMERIC 으로 바꿔 비교(그것은 DOUBLE→NUMERIC 변환을 거쳐 반올림된다)
+
 ### nix 개발 환경 (그릴링 2026-09-30)
 
 CUBRID CI 환경을 nix로 재현하는 추가 경로의 용어(nix 개발 환경, CI 툴체인 스냅샷, 봉인 입력, 실행 디렉터리, 샤드 등)와 결정은 [xmilex-git/cubrid-nix](https://github.com/xmilex-git/cubrid-nix)의 `CONTEXT.md`와 ADR 0001에 있다. 그 레포의 **샤드**는 컨테이너가 아니라 `unshare` 네임스페이스 하나와 1:1이다.
