@@ -48,6 +48,15 @@ Cases:
   DOUBLE" but `:rtype:` kept "*expression2* 의 타입과 동일" → a reader of the field list alone reads a
   string result → `:rtype:` carries the same exception in ko/en (f0902467); re-read every `:param`/`:rtype`
   of a function whose body changed.
+- PR #780 (CUBRIDMAN-357, 2026-10-29, caught by reviewer): plandump key "같은 질의도 바인딩한 값이나
+  상수의 타입이 다르면 다른 항목" → the key records the type after conversion to the position
+  ('2004' and 2004e0 share `?:0:3` against an INT column) → sentence says the position's type, with the
+  page's own '2004' → DOUBLE(3) as the example; measure two value types that convert to one before
+  writing "per value type".
+- PR #780 (CUBRIDMAN-357, 2026-10-29, caught by reviewer): -435 written on `cci_prepare` only →
+  `cci_prepare_and_execute` reaches the same `ux_prepare` check → every driver entry point calling the
+  checking function (code-index `callers`) gets the sentence, each run once (CCI program via
+  fast-cs-jdbc launcher).
 - PR #772 (CBRD-27299, 2026-10-16, caught by reviewer): "서버에서 평가하는 내장 함수 … 사용할 수
   없다" → read as "only some built-ins"; `ParseTreeConverter` calls `setConnectionRequired()` on every
   built-in path (`visitFunction_call`, `visitIdentifier`, `visitSyntaxed_call_*`) → "내장 함수 호출은
@@ -98,6 +107,12 @@ Cases:
 - PR #772 (CBRD-27299, 2026-09-11, caught by reviewer): parallel trace showed FUNC time 7502 above
   the serial 6140 and above its own SELECT time, unexplained → say which field to compare (SELECT
   time) and why the other grows (summed over workers).
+- PR #780 (CUBRIDMAN-357, 2026-10-29, caught by reviewer): two error statements in one block with
+  csql's "In line 9, column 32," prefixes → reader's line numbers differ → one statement per block
+  followed by its error, prefixes dropped (house precedent: 14 such lines in all of upstream ko).
+- PR #780 (CUBRIDMAN-357, 2026-10-29, caught by reviewer): note example used table t from earlier on
+  the page, after an earlier `UPDATE t SET i = ...` had made its `rows: 3` unreproducible → an example
+  whose output depends on table contents creates and fills the table itself.
 - PR #768 (CBRD-26722, round 2, caught by reviewer): MEMOIZE `enabled: false` described as visible
   → the entry is not printed at all; describe the output gate (`hit > 0`).
 
