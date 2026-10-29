@@ -37,6 +37,7 @@ Work the phases in order; each has a checklist in its reference file.
 
 | Phase | Do | Reference |
 |---|---|---|
+| 0. Ticket | The manual work is tracked by a CUBRIDMAN issue: if none exists, create one (Task, priority Minor, English summary, a one- or two-sentence Korean description, as CUBRIDMAN-312) and link it `Relates` to the CBRD issue (CBRD-27583 → CUBRIDMAN-357, user 2026-10-29). | `cubrid-jira-issue-write` step 6 (payload, link, read-back) |
 | 1. Audit | Inventory the user surface (parameters, hints, trace, activation/fallback semantics) from JIRA link web + engine PR sweep + code; grade the manual `없음`/`부실·낡음`/`충분`; decide placement by precedent; emit a section-level work list. A behavior change to sections that already exist: classify each change against the last release, not develop, and weave it into those sections (§3a). | [GAP-AUDIT.md](GAP-AUDIT.md) |
 | 2. Environment | Claim a port (`just port-claim <db> <effort>`), isolated install via `INSTALL_PREFIX`, create the db, start it through `cubrid-server-control`. | [VERIFY.md](VERIFY.md) §1 |
 | 3. Write ko | Follow the templates and vocabulary rules; grep the manual before coining any term. | [STYLE.md](STYLE.md), [PITFALLS.md](PITFALLS.md) |

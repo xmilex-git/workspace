@@ -23,7 +23,7 @@
 
 - **One PR, ko+en together**, base `develop`. Title `[<KEY>] <what> (ko/en)`, e.g.
   `[CBRD-26722] Document 11.5 parallel query execution and memoize (ko/en)`.
-- Body: JIRA URL on the first line, one or two Korean sentences of scope, a bullet per file with what
+- Body: JIRA URL on the first line (the CUBRIDMAN issue and the CBRD issue it documents), one or two Korean sentences of scope, a bullet per file with what
   changed, and `Replaces #<n>` / `Closes #<n>` when superseding an earlier draft PR.
 - The CI bot posts ko/en preview links — open them and re-check the touched pages before requesting review.
 
