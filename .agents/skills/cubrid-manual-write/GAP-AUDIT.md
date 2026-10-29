@@ -76,9 +76,17 @@ driver rules) and no new section is wanted, the audit is per changed rule, not p
   compiles, what is refused) go into that section's `.. note::`. No new section, no "변경 사항" heading, no
   version names (STYLE.md §3). Link related places with `:ref:` instead of repeating the rule.
 - **Scope of edits.** Unchanged meaning keeps its words (PITFALLS Rule 3). A pre-existing inaccuracy is
-  fixed only when the change alters that sentence's meaning (CBRD-27583: "SQL_ID is the MD5 of the
+  fixed when the change alters that sentence's meaning (CBRD-27583: "SQL_ID is the MD5 of the
   original query" became wrong to leave once SQL_ID varies by bind type; the code hashes the sql hash
-  text). Other drift (stale plandump stats format) is recorded as an observation.
+  text), and also when it sits in an entry the audit already reads for the change: measure it on the
+  release and the new build and write what both show (user 2026-10-29, CUBRIDMAN-357: MEDIAN and
+  PERCENTILE_CONT `:rtype` said DOUBLE/DATETIME while date/time inputs return their own type). Drift in
+  sections the change does not reach (stale plandump stats format) is recorded as an observation.
+- **Leave out what the manual never taught.** A change reached only through usage the manual does not
+  document is a release-note item, not a manual edit; object-oriented features (inheritance, class
+  hierarchies) are kept terse on purpose (user 2026-10-29, CUBRIDMAN-357: `SELECT … FROM ALL p` fails
+  once a subclass redefines an inherited column's domain, but redefinition itself is undocumented, and
+  `FROM (t1, t2)` is not in the SELECT grammar).
 
 Worked example: CBRD-27583 (PR 8213) — 29 develop-relative items reclassified against 11.4.6 into 12
 documented changes across 10 ko/en page pairs; audit `.git_ignored_dir/scratch/cbrd27583-manual/audit.md`.
