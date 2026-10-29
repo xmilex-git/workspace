@@ -1,5 +1,17 @@
 {
   "enabledPlugins": {
     "codex@openai-codex": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$CLAUDE_ENV_FILE\" ] && [ -x \"$CLAUDE_PROJECT_DIR/.venv/bin/python\" ] && echo \"source \\\"$CLAUDE_PROJECT_DIR/.venv/bin/activate\\\"\" >> \"$CLAUDE_ENV_FILE\"; exit 0"
+          }
+        ]
+      }
+    ]
   }
 }
