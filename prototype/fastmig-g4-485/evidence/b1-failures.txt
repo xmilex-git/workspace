@@ -1,0 +1,25 @@
+evidence/fm485_20261029_2120.err-Time: 10/29/26 21:20:05.239 - FATAL ERROR *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 5720 ERROR CODE = -97, Tran = 0, CLIENT = :(0), EID = 2
+evidence/fm485_20261029_2120.err:Internal error: unable to find log page 10044 in log archives.
+--
+evidence/fm485_20261029_2120.err-Time: 10/29/26 21:20:07.931 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/query/vacuum.c, line 7228
+evidence/fm485_20261029_2120.err:VACUUM ERROR (thr=4303, trid=536873856): cannot prefetch log page 10044
+evidence/fm485_20261029_2120.err-
+--
+evidence/fm485_20261029_2120.err-Time: 10/29/26 21:20:12.497 - FATAL ERROR *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 5720 ERROR CODE = -97, Tran = 0, CLIENT = :(0), EID = 2
+evidence/fm485_20261029_2120.err:Internal error: unable to find log page 10044 in log archives.
+--
+evidence/fm485_20261029_2120.err-Time: 10/29/26 21:20:15.281 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/query/vacuum.c, line 7228
+evidence/fm485_20261029_2120.err:VACUUM ERROR (thr=4301, trid=-2013262976): cannot prefetch log page 10044
+evidence/fm485_20261029_2120.err-
+evidence/fm485_20261029_2119.err-Time: 10/29/26 21:19:24.666 - FATAL ERROR *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 5720 ERROR CODE = -97, Tran = 0, CLIENT = :(0), EID = 6
+evidence/fm485_20261029_2119.err:Internal error: unable to find log page 10044 in log archives.
+--
+evidence/fm485_20261029_2119.err-Time: 10/29/26 21:19:26.741 - FATAL ERROR *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 5720 ERROR CODE = -97, Tran = 0, CLIENT = :(0), EID = 10
+evidence/fm485_20261029_2119.err:Internal error: unable to find log page 10044 in log archives.
+--
+evidence/fm485_20261029_2119.err-Time: 10/29/26 21:19:26.744 - FATAL ERROR *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 5720 ERROR CODE = -97, Tran = 0, CLIENT = :(0), EID = 11
+evidence/fm485_20261029_2119.err:Internal error: unable to find log page 10044 in log archives.
+--
+evidence/fm485_20261029_2119.err-Time: 10/29/26 21:19:28.286 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/query/vacuum.c, line 7228
+evidence/fm485_20261029_2119.err:VACUUM ERROR (thr=4301, trid=2944): cannot prefetch log page 10044
+evidence/fm485_20261029_2119.err-

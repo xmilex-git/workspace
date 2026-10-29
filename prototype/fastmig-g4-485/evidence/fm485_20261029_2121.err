@@ -1,0 +1,12 @@
+
+Time: 10/29/26 21:21:47.646 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/boot_sr.c, line 234  CODE = -973, Tran = 0, CLIENT = :(0), EID = 1
+Server status is UP.
+
+Time: 10/29/26 21:21:48.462 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/connection/connection_worker.cpp, line 1060
+handle_connection_close: conn 0x561056f5cbe0 { fd 227 status 3 transaction_id 1 db_error 0 stop_talk 0 stop_phase 0 }
+
+Time: 10/29/26 21:21:53.693 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/boot_sr.c, line 234  CODE = -973, Tran = 0
+Server status is DOWN.
+
+*** The previous error message is the last one. ***
+

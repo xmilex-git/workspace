@@ -1,0 +1,79 @@
+
+Time: 10/29/26 21:19:20.559 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/boot_sr.c, line 234  CODE = -973, Tran = 0, CLIENT = :(0), EID = 1
+Server status is UP.
+
+Time: 10/29/26 21:19:24.422 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6116  CODE = -974, Tran = 0, CLIENT = :(0), EID = 3
+Archive log "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_lgar000" is created to archive pages from 10062 to 11339.
+
+Time: 10/29/26 21:19:24.554 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6116  CODE = -974, Tran = 0, CLIENT = :(0), EID = 4
+Archive log "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_lgar001" is created to archive pages from 11340 to 12617.
+
+Time: 10/29/26 21:19:24.656 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6342  CODE = -614, Tran = 0, CLIENT = :(0), EID = 5
+Number of active log archives has been exceeded the max desired number of 0.
+
+Time: 10/29/26 21:19:24.666 - FATAL ERROR *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 5720 ERROR CODE = -97, Tran = 0, CLIENT = :(0), EID = 6
+Internal error: unable to find log page 10044 in log archives.
+[11] 0x00000000002f0d6b: er_dump_call_stack_internal(print_output&) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/stack_dump.c:390
+[10] 0x00000000002f19a2: er_dump_call_stack(_IO_FILE*) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/printer.hpp:43
+[09] 0x0000000000299238: er_notify_event_on_error at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/error_manager.c:1347
+[08] 0x0000000000299a45: er_set at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/error_manager.c:1278
+[07] 0x00000000007aceb7: logpb_fetch_from_archive(cubthread::entry*, long, log_page*, int*, log_arv_header*, bool) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:5720
+[06] 0x00000000007ad630: logpb_get_archive_number(cubthread::entry*, long) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:5106
+[05] 0x00000000007aeec4: logpb_remove_archive_logs_exceed_limit(cubthread::entry*, int) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:6355
+[04] 0x000000000073da35: cubthread::daemon::loop_with_context(cubthread::daemon*, cubthread::entry_manager*, cubthread::task<cubthread::entry>*, char const*) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/thread/thread_daemon.cpp:231
+[03] 0x0000000000de9383: execute_native_thread_routine at thread.o:?
+[02] 0x00000000000081ca: start_thread at ??:?
+[01] 0x00000000000398d3: __GI___clone at :?
+
+Time: 10/29/26 21:19:26.527 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6116  CODE = -974, Tran = 0, CLIENT = :(0), EID = 7
+Archive log "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_lgar002" is created to archive pages from 12618 to 13895.
+
+Time: 10/29/26 21:19:26.685 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6116  CODE = -974, Tran = 0, CLIENT = :(0), EID = 8
+Archive log "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_lgar003" is created to archive pages from 13896 to 15173.
+
+Time: 10/29/26 21:19:26.732 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6342  CODE = -614, Tran = 0, CLIENT = :(0), EID = 9
+Number of active log archives has been exceeded the max desired number of 0.
+
+Time: 10/29/26 21:19:26.741 - FATAL ERROR *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 5720 ERROR CODE = -97, Tran = 0, CLIENT = :(0), EID = 10
+Internal error: unable to find log page 10044 in log archives.
+[11] 0x00000000002f0d6b: er_dump_call_stack_internal(print_output&) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/stack_dump.c:390
+[10] 0x00000000002f19a2: er_dump_call_stack(_IO_FILE*) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/printer.hpp:43
+[09] 0x0000000000299238: er_notify_event_on_error at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/error_manager.c:1347
+[08] 0x0000000000299a45: er_set at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/error_manager.c:1278
+[07] 0x00000000007aceb7: logpb_fetch_from_archive(cubthread::entry*, long, log_page*, int*, log_arv_header*, bool) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:5720
+[06] 0x00000000007ad630: logpb_get_archive_number(cubthread::entry*, long) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:5106
+[05] 0x00000000007aeec4: logpb_remove_archive_logs_exceed_limit(cubthread::entry*, int) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:6355
+[04] 0x000000000073da35: cubthread::daemon::loop_with_context(cubthread::daemon*, cubthread::entry_manager*, cubthread::task<cubthread::entry>*, char const*) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/thread/thread_daemon.cpp:231
+[03] 0x0000000000de9383: execute_native_thread_routine at thread.o:?
+[02] 0x00000000000081ca: start_thread at ??:?
+[01] 0x00000000000398d3: __GI___clone at :?
+
+Time: 10/29/26 21:19:26.744 - FATAL ERROR *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 5720 ERROR CODE = -97, Tran = 0, CLIENT = :(0), EID = 11
+Internal error: unable to find log page 10044 in log archives.
+[15] 0x00000000002f0d6b: er_dump_call_stack_internal(print_output&) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/stack_dump.c:390
+[14] 0x00000000002f19a2: er_dump_call_stack(_IO_FILE*) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/printer.hpp:43
+[13] 0x0000000000299238: er_notify_event_on_error at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/error_manager.c:1347
+[12] 0x0000000000299a45: er_set at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/base/error_manager.c:1278
+[11] 0x00000000007aceb7: logpb_fetch_from_archive(cubthread::entry*, long, log_page*, int*, log_arv_header*, bool) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:5720
+[10] 0x00000000007ad899: logpb_read_page_from_file(cubthread::entry*, long, log_cs_access_mode, log_page*) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:2073
+[09] 0x00000000007adc74: logpb_copy_page(cubthread::entry*, long, log_cs_access_mode, log_page*) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:1974
+[08] 0x00000000007b3459: logpb_fetch_page(cubthread::entry*, log_lsa const*, log_cs_access_mode, log_page*) at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c:1814
+[07] 0x00000000005afd08: vacuum_log_prefetch_vacuum_block at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/query/vacuum.c:7225
+[06] 0x0000000000391a45: cubthread::worker_pool_impl<(cubthread::stats_t)1>::core_impl::worker_impl::execute_current_task() at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/thread/thread_worker_pool_impl.hpp:1854
+[05] 0x0000000000391c18: cubthread::worker_pool_impl<(cubthread::stats_t)1>::core_impl::worker_impl::run() at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/thread/thread_worker_pool_impl.hpp:1744
+[04] 0x000000000038bf03: cubthread::worker_pool_impl<(cubthread::stats_t)1>::core_impl::worker_impl::run_in_thread() at /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/thread/thread_worker_pool_impl.hpp:1763
+[03] 0x0000000000de9383: execute_native_thread_routine at thread.o:?
+[02] 0x00000000000081ca: start_thread at ??:?
+[01] 0x00000000000398d3: __GI___clone at :?
+
+Time: 10/29/26 21:19:28.286 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/query/vacuum.c, line 7228
+VACUUM ERROR (thr=4301, trid=2944): cannot prefetch log page 10044
+
+Time: 10/29/26 21:19:28.463 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/connection/connection_worker.cpp, line 1060
+handle_connection_close: conn 0x55e4ddf89be0 { fd 227 status 3 transaction_id 1 db_error 0 stop_talk 0 stop_phase 0 }
+
+Time: 10/29/26 21:20:04.503 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/boot_sr.c, line 234  CODE = -973, Tran = 0
+Server status is DOWN.
+
+*** The previous error message is the last one. ***
+

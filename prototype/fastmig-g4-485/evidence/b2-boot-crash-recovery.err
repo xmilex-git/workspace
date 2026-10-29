@@ -1,0 +1,90 @@
+Time: 10/29/26 21:20:27.407 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/boot_sr.c, line 234  CODE = -973, Tran = 0, CLIENT = :(0), EID = 1
+Server status is UP.
+
+Time: 10/29/26 21:20:29.845 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6116  CODE = -974, Tran = 0, CLIENT = :(0), EID = 3
+Archive log "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_lgar000" is created to archive pages from 10075 to 11352.
+
+Time: 10/29/26 21:20:29.920 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6116  CODE = -974, Tran = 0, CLIENT = :(0), EID = 4
+Archive log "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_lgar001" is created to archive pages from 11353 to 12630.
+
+Time: 10/29/26 21:20:29.988 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6342  CODE = -614, Tran = 0, CLIENT = :(0), EID = 5
+Number of active log archives has been exceeded the max desired number of 0.
+
+Time: 10/29/26 21:20:30.407 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6116  CODE = -974, Tran = 0, CLIENT = :(0), EID = 6
+Archive log "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_lgar002" is created to archive pages from 12631 to 13908.
+
+Time: 10/29/26 21:20:30.510 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6116  CODE = -974, Tran = 0, CLIENT = :(0), EID = 7
+Archive log "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_lgar003" is created to archive pages from 13909 to 15186.
+
+Time: 10/29/26 21:20:30.537 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6342  CODE = -614, Tran = 0, CLIENT = :(0), EID = 8
+Number of active log archives has been exceeded the max desired number of 0.
+
+Time: 10/29/26 21:20:31.088 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/connection/connection_worker.cpp, line 1060
+handle_connection_close: conn 0x555f9b945c00 { fd 227 status 3 transaction_id 1 db_error 0 stop_talk 0 stop_phase 0 }
+
+Time: 10/29/26 21:20:40.535 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6116  CODE = -974, Tran = 0, CLIENT = :(0), EID = 10
+Archive log "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_lgar004" is created to archive pages from 15187 to 16464.
+
+Time: 10/29/26 21:20:40.580 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 6342  CODE = -614, Tran = 0, CLIENT = :(0), EID = 11
+Number of active log archives has been exceeded the max desired number of 0.
+
+Time: 10/29/26 21:20:40.607 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/connection/connection_worker.cpp, line 1060
+handle_connection_close: conn 0x555f9b945c00 { fd 117 status 3 transaction_id 1 db_error 0 stop_talk 0 stop_phase 0 }
+
+Time: 10/29/26 21:20:57.370 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 833  CODE = -1128, Tran = 0, CLIENT = :(0), EID = 1
+Log recovery is started.
+
+Time: 10/29/26 21:20:57.370 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 837  CODE = -1296, Tran = 0, CLIENT = :(0), EID = 2
+Log recovery: ANALYSIS Phase is started.
+
+Time: 10/29/26 21:20:57.462 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 842  CODE = -1300, Tran = 0, CLIENT = :(0), EID = 3
+Log recovery: ANALYSIS Phase is finished.
+
+Time: 10/29/26 21:20:57.462 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 878  CODE = -1297, Tran = 0, CLIENT = :(0), EID = 4
+Log recovery: REDO Phase is started. Log pages to redo: 6814, Log records to redo: 1017707.
+
+Time: 10/29/26 21:20:57.691 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 4054
+log_recovery_redo_perf:  parallel_count=64  reusable_jobs_count=1048576  flush_back_count=1024
+log_recovery_redo_perf:  setting_up=    32  main=   185  async=   196 (ms)
+
+Time: 10/29/26 21:20:57.691 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 4074  CODE = -1299, Tran = 0, CLIENT = :(0), EID = 5
+Log recovery: REDO Phase is being finished up.
+
+Time: 10/29/26 21:20:58.118 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 883  CODE = -1300, Tran = 0, CLIENT = :(0), EID = 6
+Log recovery: REDO Phase is finished.
+
+Time: 10/29/26 21:20:58.118 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 4680  CODE = -1298, Tran = 0, CLIENT = :(0), EID = 7
+Log recovery: UNDO Phase is started. Log pages to undo: 6762, transactions to undo: 11.
+
+Time: 10/29/26 21:20:58.118 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 5137  CODE = -1299, Tran = 0, CLIENT = :(0), EID = 8
+Log recovery: UNDO Phase is being finished up.
+
+Time: 10/29/26 21:20:58.119 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 896  CODE = -1300, Tran = 0, CLIENT = :(0), EID = 9
+Log recovery: UNDO Phase is finished.
+
+Time: 10/29/26 21:20:58.122 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 7382  CODE = -977, Tran = 0, CLIENT = :(0), EID = 10
+Checkpoint started (previous checkpoint page id: 10075, previous redo page id: 10075).
+
+Time: 10/29/26 21:20:58.182 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_page_buffer.c, line 7825  CODE = -978, Tran = 0, CLIENT = :(0), EID = 11
+Checkpoint finished (checkpoint page id: 16888, checkpoint redo page id: 16888, flushed page count: 2).
+
+Time: 10/29/26 21:20:58.184 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/log_recovery.c, line 974  CODE = -1129, Tran = 0, CLIENT = :(0), EID = 12
+Log recovery is finished.
+
+Time: 10/29/26 21:20:58.202 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/boot_sr.c, line 1001  CODE = -858, Tran = 1, CLIENT = :.(0), EID = 13
+Volume "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_t32766" is unknown at server restart.
+
+Time: 10/29/26 21:20:58.202 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/boot_sr.c, line 1001  CODE = -858, Tran = 1, CLIENT = :.(0), EID = 14
+Volume "/home/cubrid/dev/workspace/.git_ignored_dir/scratch/485/db/live/fm485_t32765" is unknown at server restart.
+
+Time: 10/29/26 21:20:58.204 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/boot_sr.c, line 234  CODE = -973, Tran = 0, CLIENT = :(0), EID = 15
+Server status is UP.
+
+Time: 10/29/26 21:21:04.645 - DEBUG *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/connection/connection_worker.cpp, line 1060
+handle_connection_close: conn 0x5647ecf90c00 { fd 228 status 3 transaction_id 1 db_error 0 stop_talk 0 stop_phase 0 }
+
+Time: 10/29/26 21:21:40.402 - NOTIFICATION *** file /home/cubrid/dev/cubrid-worktree/CBRD-27819-survey/src/transaction/boot_sr.c, line 234  CODE = -973, Tran = 0
+Server status is DOWN.
+
+*** The previous error message is the last one. ***
+
