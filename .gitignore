@@ -24,3 +24,5 @@ csql.access
 */secrets/*
 
 hermes-github-notifications
+# Python venv on the pinned nix CPython (just python-venv)
+.venv/

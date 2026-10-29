@@ -518,6 +518,22 @@ port-release key:
     [ "$removed" -gt 0 ] || { echo "WARNING: no claim matched '{{key}}'." >&2; exit 1; }
     echo "released $removed claim(s) matching '{{key}}'"
 
+# Build the pinned CPython (tools/python/python.nix) into the GC root
+# .git_ignored_dir/python/interpreter and (re)create .venv from it; the store path stays alive while
+# the root exists, so the venv never loses its interpreter to nix-collect-garbage.
+[doc("Create .venv on the pinned nix CPython (GC root under .git_ignored_dir/)")]
+python-venv:
+    #!/usr/bin/env bash
+    set -eu
+    command -v nix-build >/dev/null || { echo "ERROR: nix-build not found; install nix first" >&2; exit 1; }
+    root="{{justfile_directory()}}"
+    out="$root/.git_ignored_dir/python/interpreter"
+    export TMPDIR="$root/.git_ignored_dir/scratch/tmp"
+    mkdir -p "$(dirname "$out")" "$TMPDIR"
+    nix-build "$root/tools/python/python.nix" -o "$out"
+    "$out/bin/python3" -m venv --clear --upgrade-deps "$root/.venv"
+    "$root/.venv/bin/python" --version
+
 # ---------------------------------------------------------------------------
 # code-index — build-free symbol lookup in an engine worktree (AGENTS.md "Code lookup")
 # ---------------------------------------------------------------------------
