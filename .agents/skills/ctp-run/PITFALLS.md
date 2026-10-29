@@ -37,6 +37,7 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Gates
 - Case (2026-10-18, CBRD-27583 b110): a JDBC smoke runner copied a session cubrid.conf and a `%smoke27583` broker conf into the install two minutes before the gate; the whole CQT workload ran through that broker. Byte-equal results, but not a like-for-like comparison — discarded and rerun after restoring the templates. Shard CAS logs named `smoke27583_*.err` instead of `broker1_*.err` were the tell.
 - Case (dpin #334): a counter bench's cleanup trap left `parallelism=0` in the install conf; the next CTP run failed every PX trace TC (18/156) — only the `(parallel workers: …)` lines were missing. One round-trip lost on a "PX regression" that was a conf line.
+- Case (2026-10-29, CBRD-27679): a JDBC smoke `up.sh` wrote a `[%query_editor]`-only broker conf into the install and backed up `cubrid.conf` on every start, so its second start overwrote the backup with the smoke conf and `down.sh` restored nothing; the next gate's 16 sql shards and medium failed `Cannot connect to a broker … :30000` and sql_by_cci's ccqt dumped a core in every shard before any case (0 cases run in all three). Back up once (`[ -f bak ] || cp`), back up the broker conf too, and restore both from the untouched release install of the same build if in doubt.
 - Source: memory:gate-install-conf-must-match-reference, memory:counter-harness-leaves-parallelism-0, SSOT §3.3
 
 ### P5 — the campaign conf has the DWB off
