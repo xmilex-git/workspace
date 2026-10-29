@@ -1027,6 +1027,16 @@ _Avoid_: 정확 변환
 DOUBLE 이 나타내는 이진 값 그대로와 NUMERIC 값의 대소를 정하는 비교. NUMERIC 범위 밖의 DOUBLE·inf·NaN 도 오류 없이 대소가 정해진다.
 _Avoid_: DOUBLE 을 NUMERIC 으로 바꿔 비교(그것은 DOUBLE→NUMERIC 변환을 거쳐 반올림된다)
 
+### cubrid-fastmig 검증 (지도 #472, G3 #483 그릴링 2026-10-29)
+
+**마이그레이션 결함 (migration defect)**:
+검증기가 도착 DB 에서 찾은 결함 가운데, 같은 식별자(검사 종류·클래스·인덱스·OID 또는 키·결함 코드)의 결함이 출발 DB 에는 없는 것. 하나라도 있으면 마이그레이션은 불합격이다.
+_Avoid_: 검증 실패(도구 오류와 섞인다), 오류
+
+**기존 결함 (pre-existing defect)**:
+도착 DB 의 결함 가운데 같은 식별자의 결함이 출발 DB 에도 있는 것. 보고만 하고 합격 판정에 넣지 않는다.
+_Avoid_: 원본 오류, 무시된 결함
+
 ### nix 개발 환경 (그릴링 2026-09-30)
 
 CUBRID CI 환경을 nix로 재현하는 추가 경로의 용어(nix 개발 환경, CI 툴체인 스냅샷, 봉인 입력, 실행 디렉터리, 샤드 등)와 결정은 [xmilex-git/cubrid-nix](https://github.com/xmilex-git/cubrid-nix)의 `CONTEXT.md`와 ADR 0001에 있다. 그 레포의 **샤드**는 컨테이너가 아니라 `unshare` 네임스페이스 하나와 1:1이다.
