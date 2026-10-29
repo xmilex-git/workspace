@@ -88,6 +88,7 @@ Every build that produces an install (`just build|rebuild|incr`, optdebug and re
 The completion marker of a build is the log's last line `installed <mode> (<ws>) -> <prefix>` (incremental: `installed (incremental) …`); a bounded poll is `timeout 540 bash -c 'until grep -q "^installed " <build.log>; do sleep 15; done'`. The worker reports the prefix, the marker line, the rebuilt targets and the fingerprint (P3); the lead checks the install's `lib/libcubrid.so.11.5` mtime against the commit time instead of trusting an idle worker.
 
 - While a worker's build runs on a worktree, nobody edits, checks out or patches its sources: check `ps` or the workflow for a running build on that worktree first, and stage a mid-build decision as a patch file to apply after the `installed` line. (P10)
+- Two builds of one worktree (optdebug and release) run one after the other, never at once: both rebuild the JDBC jar inside the `cubrid-jdbc` submodule directory, and a build that copies it mid-rewrite into `build_preset_<mode>/pl_engine/lib` fails `pl_server:compileJava` with `package cubrid.sql does not exist`. (P11)
 
 ## Gate checklist (what a change must pass)
 

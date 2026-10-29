@@ -75,3 +75,8 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Delegated builds
 - Case (2026-10-17, CBRD-27583): a peer reversed decision D-27 while build 26 was compiling; `system_parameter.c` was restored at 01:11:28 but its three objects had compiled at 01:11:08 from the reverted text. The install had `plus_as_concat` out of the plan key: 28 extra `_15_host_variable` failures and 4 `qdata_assert_arith_planned` cores the committed source would not produce, and the run was repeated. Also: keep the Bash tool's cwd out of smoke DB dirs (run scripts in a subshell), since removing the current directory is refused.
 - Source: memory:no-source-edits-during-delegated-build
+
+### P11 — one build per worktree at a time
+- Rule: Two builds of one worktree (optdebug and release) run one after the other, never at once: both rebuild the JDBC jar inside the `cubrid-jdbc` submodule directory, and a build that copies it mid-rewrite into `build_preset_<mode>/pl_engine/lib` fails `pl_server:compileJava` with `package cubrid.sql does not exist`.
+- Applies at: Delegated builds
+- Case (2026-10-29, CBRD-27679): a worker ran `just incr optdebug` and `just incr release` on one worktree in parallel after a JDBC change; the optdebug tree copied a 1203-byte jar written while the release build was rebuilding it, and `pl_server:compileJava` failed on every `cubrid.sql`/`cubrid.jdbc` import. The release build passed, and the optdebug build alone passed afterwards. The first fresh builds of the same tree had run in parallel without failing, because the jar was only built once.
