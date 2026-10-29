@@ -3,6 +3,7 @@ status: accepted
 date: 2026-10-27
 issue: CBRD-27679
 supersedes: 0031
+superseded_by: 0035 (EXECUTE 열 정보 부분)
 ---
 
 # 선언 타입이 있는 NULL 과 EXECUTE 열 정보는 PROTOCOL_V13 확인으로 하위 호환을 지킨다
