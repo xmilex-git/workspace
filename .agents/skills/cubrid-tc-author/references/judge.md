@@ -73,7 +73,7 @@ entries, error codes), or does it only change **time, I/O, memory, logging, sche
 | R1 | A user-visible value or error changes — or the values stay and a non-numeric trace line appears or disappears (CBRD-27177: GROUPBY gains `parallel workers`) — AND the new path shows a non-numeric trace token (`gather: buildvalue`, `MEMOIZE`, `semi join`, `method: hybrid`, `PARTITION`) or a plan shape, AND no server restart / second session / server-side observation is needed | **sql** | by issue type (table below) |
 | R2 | The change needs any of: a `cubrid.conf` parameter that `SET SYSTEM PARAMETERS` cannot change, a server restart, two or more concurrent sessions, backup/restore or another utility, a count of workers/pages/readkeys (CTP masks every digit in a plan/trace), server pid / core / error-log observation | **shell** | by issue type |
 | R3 | R1 holds for the result and R2 holds for a separate observation (e.g. a value fix plus a leak that only a server statistic shows) | **both** — one sql case for the value, one shell case for the observation | both trees |
-| R4 | The diff changes only time / I/O / memory / logging and the result and trace text are identical before and after — no row, error, or trace token differs | **out of scope (performance only)** → Step 7 comment "성능 TC 필요" | — |
+| R4 | The diff changes only time / I/O / memory / logging and the result and trace text are identical before and after — no row, error, or trace token differs | **shell_perf** when a hint or parameter runs the old path in the same run (a twin; shell-rules 25); no such switch → **out of scope (performance only)** → Step 7 comment "성능 TC 필요" | `shell_perf/` at the shell path of the issue type |
 | R5 | A value-producing function changed (R1 kind) but the new path has **no switch** (no hint, no parameter) to run the old path for a reference twin. Look for a dispatch guard first: an input that sends the same query to the old path is a twin (CBRD-27181: a multi-byte ESCAPE absent from the patterns forces the old LIKE loop) | **sql, correctness TC**: literal expected values, pre-fix build also OK; the results table says so | by issue type |
 | R6 | No case reproduces the defect **deterministically** on the pre-fix optdebug build: the pre run is NOK in fewer than 3 of 3 CTP runs, using only mechanisms existing shell/sql TCs already use (parameters, hints, utilities, concurrent sessions, bounded loops). A debug assert that fires deterministically on optdebug is observable, since CI runs optdebug; a race that fires only sometimes is not | **no TC possible** → Step 7 comment "TC 불가 사유" naming the triggers tried | — |
 
@@ -98,7 +98,7 @@ placement; a Sub-task takes its parent's type):
 
 | issue type | sql | shell (cubrid-testcases-private-ex) |
 |---|---|---|
-| Correct Error | `sql/_13_issues/_26_2h/cases/cbrd_<N>.sql` + `answers/cbrd_<N>.answer` (flat `cases/`, half-year of **today**) | `shell/_06_issues/_26_2h/cbrd_<N>/cases/cbrd_<N>.sh` |
+| Correct Error | `sql/_13_issues/_26_2h/cases/cbrd_<N>.sql` + `answers/cbrd_<N>.answer` (flat `cases/`, half-year in which the TC is written) | `shell/_06_issues/_26_2h/cbrd_<N>/cases/cbrd_<N>.sh` (same half-year rule; the rulebook text still says the issue's creation half-year — shell-rules "Where we differ") |
 | every other type (Improve, Development Subject, Task, Sub-task of those) | `sql/_36_guava/cbrd_<N>/cases/cbrd_<N>.sql` + `answers/` | `shell/_40_guava/cbrd_<N>/cases/cbrd_<N>.sh`; several cases: `shell/_40_guava/cbrd_<N>/cbrd_<N>_<keyword>/cases/cbrd_<N>_<keyword>.sh` (the shapes private-ex develop uses) |
 
 Several files for one issue: `cbrd_<N>_<keyword>.sql` in the same `cases/`; shell: one directory
@@ -133,7 +133,7 @@ Sources, in this order, each item one row:
 5. the repro itself (always case 1 or the first case after setup).
 
 A row whose only observable is a duration (trace time, wall time, SLEEP, a timeout) never becomes a
-case, whatever the bound: "timing — flaky under CI load (shell-rules 23)" (user, 2026-10-12, CBRD-27604).
+case, whatever the bound: "timing — flaky under CI load (shell-rules 23)", unless it is the subject of a shell_perf TC (R4) (user, 2026-10-12, CBRD-27604).
 Rows without a case need a reason a reviewer accepts: "timing only (R4)", "needs debug assert",
 "covered by case 3", "CBRD-27572 assert on develop makes it crash CI", "unobservable from SQL: <why>".
 A reason about the **post point alone** ("post asserts", "the fix build crashes here") is not one:

@@ -16,6 +16,11 @@ git -C ../cbrd_<N> push -u fork cbrd_<N>
 ```
 
 The commit message ends with the attribution trailer the harness prescribes for this session.
+In private-ex follow the shell rulebook's commit form: a new TC and a change of an existing TC or its
+answer file go in separate commits, the first titled `Add shell testcase for …`, the second
+`Revise testcase for …`, each body saying why the change is needed and what it changes; a PR that
+changes an answer file says which lines changed and why. Commit only the files the TC needs (no
+`.result`, logs, volumes, cores).
 
 **Open mode** — the TC rides the bot's branch of the engine PR. This includes every TC change made
 while the issue is being fixed (SKILL.md Step 0): new cases and changes to existing TC files alike.
@@ -36,7 +41,7 @@ while the issue is being fixed (SKILL.md Step 0): new cases and changes to exist
    in each of the two TC repos: `gh pr list -R CUBRID/<cubrid-testcases|cubrid-testcases-private-ex> --head tc/pr-<PR> --json number,url`.
    Edit the title and body (§2–§3) of each one that received commits with
    `gh pr edit <n> -R <repo> --title ... --body-file ...`; a repo with no TC change keeps the bot's empty
-   draft. The body explains every added and every changed file. Leave draft status to the engine PR owner.
+   draft (the shell rulebook closes it and reruns `Check TC PRs`; we keep it — user, 2026-10-30). The body explains every added and every changed file. Leave draft status to the engine PR owner.
 
 ## §2 Title
 
@@ -152,7 +157,7 @@ gh api repos/CUBRID/cubrid/pulls/<PR>/reviews --paginate -q '.[] | select(.state
 
 ## §5 JIRA comment — three kinds only
 
-Post a JIRA comment **only** for: (1) "성능 TC 필요" — out of scope, performance only (R4), **or** any
+Post a JIRA comment **only** for: (1) "성능 TC 필요" — out of scope, performance only (R4 with no switch for a shell_perf twin), **or** any
 TC PR (R1, R2, R3, R5) for an issue whose acceptance criteria name a time, I/O or memory target: the PR
 covers the results, the comment says which performance TC is still needed (user, 2026-10-08,
 CBRD-27181 R5 and CBRD-26931 R1); (2) no TC possible (R6); (3) latest-develop regression
@@ -173,7 +178,7 @@ Templates (fill, save as `<rundir>/jira-comment.txt`):
 *TC 작성 판단*
 이 이슈의 변경은 <함수/경로>의 <시간|I/O|메모리>만 바꾸고, 질의 결과와 실행 계획·trace 문자열은 수정 전후가 같다 (<fix sha 9>와 그 부모 <pre sha 9>의 optdebug 빌드에서 확인).
 정합성 TC로는 변경을 판별할 수 없어 CTP 테스트케이스를 추가하지 않는다.
-필요한 것은 성능 TC다: <무엇을 어떤 데이터로 재서 어떤 비율을 기대하는지 2-3줄>. 실행 시간 기반 TC는 공용 회귀 환경에서 흔들리므로 전용 성능 환경에서 측정하는 쪽이 맞다.
+필요한 것은 성능 TC(shell_perf)다: <무엇을 어떤 데이터로 재서 어떤 비율을 기대하는지 2-3줄>. 같은 실행 안에서 옛 경로를 돌릴 힌트나 파라미터가 없어 비교 대상이 없으므로 이번에는 추가하지 않는다.
 ```
 
 ```

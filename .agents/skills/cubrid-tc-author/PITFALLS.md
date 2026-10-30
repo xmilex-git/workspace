@@ -25,9 +25,10 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Source: memory:px-temp-scan-unreachable-on-june-builds
 
 ### P3 — QA's conventions are the yardstick
-- Rule: When a TC convention is in question (placement by issue type, header length, ORDER BY, cleanup, determinism), the QA team's own skills are the source: `git -C ~/dev/cubrid-agent pull` (clone of github.com/tw-kang/cubrid-agent) and read `skills/qa/create-sql/SKILL.md`, `skills/qa/author-testcase/SKILL.md`, `skills/qa/review-testcase/SKILL.md` (the lint our TC PRs face) and `skills/in-progress/create-shell/SKILL.md`; cite them and the CUBRIDQA ticket numbers.
+- Rule: When a TC convention is in question (placement by issue type, header length, ORDER BY, cleanup, determinism), the QA team's own rules are the source: for shell, the rulebook in the TC worktree (`AGENTS.md`, `shell/AGENTS.md`, `shell/rules/test-perspectives.md`, `shell/rules/writing-rules.md`; `references/shell-rules.md` lists where we differ); for sql, `git -C ~/dev/cubrid-agent pull` (clone of github.com/tw-kang/cubrid-agent) and read `skills/qa/create-sql/SKILL.md`, `skills/qa/author-testcase/SKILL.md`, `skills/qa/review-testcase/SKILL.md` (the lint our TC PRs face); cite them and the CUBRIDQA ticket numbers.
 - Applies at: Step 1
 - Case (2026-10-08, #411): the user: "이거 어딘가에 clone해놓고 편하게 봐. 자주 참조할거같으니." CTP's own docs are `~/cubrid-testtools/CTP/../doc/{sql_guide,shell_guide}.md`. A host without the clone: `git clone https://github.com/tw-kang/cubrid-agent ~/dev/cubrid-agent`.
+- Case (2026-10-30, CUBRIDQA-1686): QA merged the shell rulebook into private-ex develop (PR 4585); it replaced `skills/in-progress/create-shell` as the shell yardstick, and the user decided where we differ (optdebug only, half-year by TC date, empty draft kept, `kill -INT` on a saved pid, shell_perf for R4).
 - Source: memory:cubrid-agent-clone-reference
 
 ## Oracles (Step 3)

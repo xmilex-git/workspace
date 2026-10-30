@@ -1,7 +1,7 @@
 ---
 name: cubrid-tc-author
 description: >-
-  Author a CUBRID CTP testcase (sql or shell) for one CBRD issue or engine PR end to end — judge sql / shell / both / out of scope from the fix diff, write the case, prove it on the pre-fix, fix and latest-develop optdebug builds with containerized CTP, open the TC PR with a results table, assign one reviewer (only when the engine PR is already merged into develop), and leave the JIRA comment the outcome calls for. Also the yardstick for reviewing another author's TC PR (review mode: judge and pitfalls only, no reviewer, nothing pushed). Use when asked to "write a TC", "tc 만들어", "테스트케이스 작성", "add a testcase for CBRD-N / PR #N", to review a TC PR against these rules, or when a wayfinder ticket says to follow the TC authoring skill.
+  Author a CUBRID CTP testcase (sql, shell or shell_perf) for one CBRD issue or engine PR end to end — judge sql / shell / both / out of scope from the fix diff, write the case, prove it on the pre-fix, fix and latest-develop optdebug builds with containerized CTP, open the TC PR with a results table, assign one reviewer (only when the engine PR is already merged into develop), and leave the JIRA comment the outcome calls for. Also the yardstick for reviewing another author's TC PR (review mode: judge and pitfalls only, no reviewer, nothing pushed). Use when asked to "write a TC", "tc 만들어", "테스트케이스 작성", "add a testcase for CBRD-N / PR #N", to review a TC PR against these rules, or when a wayfinder ticket says to follow the TC authoring skill.
 ---
 
 # cubrid-tc-author
@@ -35,7 +35,8 @@ Terms: **pre / fix / dev** = the three optdebug builds a case is proven on (the 
    후속 TC PR from the fork for such an issue; the 후속 TC PR is only for an issue whose engine PR is
    already merged (merged mode).
    **A TC PR by another author given to review** → **review mode**: Steps 1–3 are the yardstick
-   (ground the issue, judge the verdict and coverage, walk the pitfall rules against the PR's files);
+   (ground the issue, judge the verdict and coverage, walk the pitfall rules against the PR's files;
+   for shell files, the shell rulebook as well);
    Step 4 only where the review needs runtime evidence. Steps 5–7 never run: no push, no PR, no
    reviewer, no JIRA comment — the output is the review report.
 3. Write `mode`, `issue`, `pr`, `merge_commit` (merged mode) or `head_sha` + `base = origin/develop merge-base` (open mode;
@@ -50,7 +51,7 @@ Follow [references/judge.md](references/judge.md) §1. Produces `<rundir>/ground
 QA fields, repro SQL, acceptance criteria, attachment list (each read or marked unread with reason),
 the fix diff file list, and the spec changes the PR describes.
 
-When a TC convention is in question (placement by issue type, header length, ORDER BY, cleanup, determinism), the QA team's own skills are the source: `git -C ~/dev/cubrid-agent pull` (clone of github.com/tw-kang/cubrid-agent) and read `skills/qa/create-sql/SKILL.md`, `skills/qa/author-testcase/SKILL.md`, `skills/qa/review-testcase/SKILL.md` (the lint our TC PRs face) and `skills/in-progress/create-shell/SKILL.md`; cite them and the CUBRIDQA ticket numbers. (P3)
+When a TC convention is in question (placement by issue type, header length, ORDER BY, cleanup, determinism), the QA team's own rules are the source: for shell, the rulebook in the TC worktree (`AGENTS.md`, `shell/AGENTS.md`, `shell/rules/test-perspectives.md`, `shell/rules/writing-rules.md`; `references/shell-rules.md` lists where we differ); for sql, `git -C ~/dev/cubrid-agent pull` (clone of github.com/tw-kang/cubrid-agent) and read `skills/qa/create-sql/SKILL.md`, `skills/qa/author-testcase/SKILL.md`, `skills/qa/review-testcase/SKILL.md` (the lint our TC PRs face); cite them and the CUBRIDQA ticket numbers. (P3)
 
 Done when `ground.md` has every section of the §1 template filled or explicitly "none".
 
@@ -71,7 +72,10 @@ every row has a case number or an exclusion reason. Verdict `out of scope` → g
 
 - sql: [references/sql-rules.md](references/sql-rules.md) (the form) and
   [references/sql-pitfalls.md](references/sql-pitfalls.md) (seven rules, each with the past cases that
-  made it — read before writing). shell: [references/shell-rules.md](references/shell-rules.md).
+  made it — read before writing). shell and shell_perf: the shell rulebook in the TC worktree
+  (`shell/AGENTS.md` and the two `shell/rules/` files it links), then
+  [references/shell-rules.md](references/shell-rules.md) for where we differ and our judging methods;
+  walk `writing-rules.md` and the shell-rules checklist against every `.sh` file before saving.
 - Placement is decided by the **issue type** (judge.md §2 table), never by version.
 - A check on a traced `fetch:` count compares it with `SHOW EXEC STATISTICS ALL` `data_page_fetches` of a second, trace-off execution of the same plan (`set @collect_exec_stats = 1`; within 0.8..1.25; one csql run cannot give both, because SHOW TRACE / SHOW EXEC STATISTICS restart the watch), and hash-join parallelism is read from the line after `PROBE (`, not from the `HASHJOIN (` line. (P4)
 - Before saving, walk the seven pitfall rules against every sql file and write `<rundir>/pitfalls.md`
@@ -130,7 +134,10 @@ A human reviewer's find goes the same way.
 (`/run rerun <id>` reruns only the cases that failed in run `<id>`, on the same engine head and the latest TC branch.) When the engine commit is unchanged and only shell TC files changed, post `/run rerun <previous run id>` on the engine PR — it reruns just that run's cases on the latest TC branch content in minutes; a full `/run shell` (~2 h) only when the engine commit changed or a case outside the previous run needs coverage. (P7) Every miss a review or a three-point run exposes adds
 one past-case line under its rule in `references/sql-pitfalls.md` (or shell-rules.md), in the
 tooling repo, in the same work that fixes the TC: `CBRD-N (date, caught by ...): wrote → ran or
-missed → fix`. A find that fits no rule gets a new rule, never a loose fact.
+missed → fix`. A find that fits no rule gets a new rule, never a loose fact. A shell lesson that is
+not CUBRID-internal (a CTP or bash trap any shell TC can hit) is also proposed to QA: draft a
+CUBRIDQA-1505 comment with the rule and one piece of evidence (review comment, CI run), show it to
+the user in Korean, and post only after the user agrees.
 
 ## Final report (same turn as the last step)
 
