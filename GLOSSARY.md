@@ -1028,7 +1028,7 @@ DOUBLE 하나에 대해, 다시 DOUBLE 로 읽으면 같은 값이 되는 십진
 _Avoid_: Ryu 값, dtoa mode 0 출력(알고리즘 이름으로 값을 부르지 않는다), 정확한 십진값(그것은 2 의 거듭제곱 분수를 전부 펼친 값이다)
 
 **비교 공통 타입 (comparison common type)**:
-타입이 다른 두 값을 `=`·`<>`·`<`·BETWEEN·IN 등 비교에서 대소·동등 판정하기 전에 맞추는 타입. 현행은 BIGINT/NUMERIC × DOUBLE 에서 DOUBLE 이다. 산술 결과 타입과는 다른 결정이다.
+타입이 다른 두 값을 `=`·`<>`·`<`·BETWEEN·IN 등 비교에서 대소·동등 판정하기 전에 맞추는 타입. BIGINT/NUMERIC × DOUBLE 에서는 DOUBLE, × FLOAT 에서는 FLOAT 이다(develop·PostgreSQL 과 같음, ADR 0039). 순차 스캔·인덱스 범위·파티션 가지치기 등 모든 경로가 이 타입으로 비교한 답과 같아야 한다. 산술 결과 타입과는 다른 결정이다.
 _Avoid_: 공통 타입(산술 결과 타입과 섞인다), 공통값 타입(집계·CASE 의 결과 타입을 가리킨다)
 
 **DOUBLE·NUMERIC 정확 비교 (exact DOUBLE-NUMERIC comparison)**:
@@ -1036,7 +1036,7 @@ DOUBLE 이 나타내는 이진 값 그대로와 NUMERIC 값의 대소를 정하�
 _Avoid_: DOUBLE 을 NUMERIC 으로 바꿔 비교(그것은 DOUBLE→NUMERIC 변환을 거쳐 잘린다), 정확 비교를 (C)안의 이름으로 쓰는 것
 
 **DOUBLE 비교값 (comparison value of a DOUBLE)**:
-BIGINT/NUMERIC 과 DOUBLE 의 동등·대소를 판정할 때 DOUBLE 쪽이 대표하는 값이다(ADR 0037, 2026-10-30). |d| < 2^53 이면 그 DOUBLE 의 가장 짧은 왕복 십진수이고, |d| ≥ 2^53 이면 정확한 정수값이다(`144115188075855872e0` → 144115188075855872). FLOAT 은 float32 의 가장 짧은 십진수다. 동등과 대소가 한 값으로 정해지므로 `0.10000000000000001 > 0.1e0` 은 참이다. NUMERIC(38) 밖·inf 도 오류 없이 대소가 정해진다(-inf < 모든 수 < +inf). NaN 과의 비교는 정의하지 않는다(사용자 2026-10-30).
+BIGINT/NUMERIC 과 DOUBLE 의 동등·대소를 판정할 때 DOUBLE 쪽이 대표하는 값이다(ADR 0037, 2026-10-30). |d| < 2^53 이면 그 DOUBLE 의 가장 짧은 왕복 십진수이고, |d| ≥ 2^53 이면 정확한 정수값이다(`144115188075855872e0` → 144115188075855872). FLOAT 은 float32 의 가장 짧은 십진수다. 동등과 대소가 한 값으로 정해지므로 `0.10000000000000001 > 0.1e0` 은 참이다. NUMERIC(38) 밖·inf 도 오류 없이 대소가 정해진다(-inf < 모든 수 < +inf). NaN 과의 비교는 정의하지 않는다(사용자 2026-10-30). **채택하지 않음(2026-10-30, ADR 0039 가 ADR 0037 을 대체)** — 비교는 DOUBLE 로 한다.
 _Avoid_: DOUBLE 의 정확값, 16자리 값, 공통 타입 NUMERIC(변환이 아니라 판정 규칙이다)
 
 ### cubrid-fastmig 검증 (지도 #472, G3 #483 그릴링 2026-10-29)

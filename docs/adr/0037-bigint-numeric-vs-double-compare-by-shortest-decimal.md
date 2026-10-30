@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by 0039
 date: 2026-10-30
 issue: CBRD-27819 (CBRD-27797, CBRD-27799, CBRD-27703)
 ---
