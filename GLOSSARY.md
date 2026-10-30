@@ -1020,12 +1020,24 @@ NUMERIC 값을 십진 네 자리씩 묶은 자릿수(0~9999)의 배열로 두는
 _Avoid_: PG numeric(PG 의 교차 타입 비교 의미까지 가져오는 것으로 읽힌다)
 
 **DOUBLE→NUMERIC 변환 (DOUBLE to NUMERIC cast)**:
-DOUBLE 값을 유효숫자 16자리로 반올림해 NUMERIC 으로 만드는 변환. CAST·대입의 의미이고 값이 정확히 보존되지 않는다.
-_Avoid_: 정확 변환
+DOUBLE 의 가장 짧은 왕복 십진수를 유효숫자 16자리에서 잘라(반올림이 아니라 절단: `cast(12345678901234568e0 as numeric(38,0))` = 12345678901234560) NUMERIC 으로 만드는 변환. CAST·대입의 의미이고 값이 정확히 보존되지 않는다(2026-10-30 develop 5b1867174 실측으로 '반올림' 을 정정).
+_Avoid_: 정확 변환, 16자리 반올림
+
+**가장 짧은 왕복 십진수 (shortest round-trip decimal)**:
+DOUBLE 하나에 대해, 다시 DOUBLE 로 읽으면 같은 값이 되는 십진수 가운데 유효숫자가 가장 적은 것(최대 17자리; `0.1e0` → 0.1, `9007199254740993e0` → 9007199254740992, `0.1e0 + 0.2e0` → 0.30000000000000004). 사용자가 적은 십진 리터럴이 DOUBLE 로 저장됐다가 되돌아오는 값이다.
+_Avoid_: Ryu 값, dtoa mode 0 출력(알고리즘 이름으로 값을 부르지 않는다), 정확한 십진값(그것은 2 의 거듭제곱 분수를 전부 펼친 값이다)
+
+**비교 공통 타입 (comparison common type)**:
+타입이 다른 두 값을 `=`·`<>`·`<`·BETWEEN·IN 등 비교에서 대소·동등 판정하기 전에 맞추는 타입. 현행은 BIGINT/NUMERIC × DOUBLE 에서 DOUBLE 이다. 산술 결과 타입과는 다른 결정이다.
+_Avoid_: 공통 타입(산술 결과 타입과 섞인다), 공통값 타입(집계·CASE 의 결과 타입을 가리킨다)
 
 **DOUBLE·NUMERIC 정확 비교 (exact DOUBLE-NUMERIC comparison)**:
-DOUBLE 이 나타내는 이진 값 그대로와 NUMERIC 값의 대소를 정하는 비교. NUMERIC 범위 밖의 DOUBLE·inf·NaN 도 오류 없이 대소가 정해진다.
-_Avoid_: DOUBLE 을 NUMERIC 으로 바꿔 비교(그것은 DOUBLE→NUMERIC 변환을 거쳐 반올림된다)
+DOUBLE 이 나타내는 이진 값 그대로와 NUMERIC 값의 대소를 정하는 비교. survey(#471 S1-2)가 측정용으로 구현했으나 `n(0.1) = 0.1e0` 을 거짓으로 만들어 채택하지 않았다 — 채택된 의미는 아래 "DOUBLE 비교값" 이다.
+_Avoid_: DOUBLE 을 NUMERIC 으로 바꿔 비교(그것은 DOUBLE→NUMERIC 변환을 거쳐 잘린다), 정확 비교를 (C)안의 이름으로 쓰는 것
+
+**DOUBLE 비교값 (comparison value of a DOUBLE)**:
+BIGINT/NUMERIC 과 DOUBLE 의 동등·대소를 판정할 때 DOUBLE 쪽이 대표하는 값 = 그 DOUBLE 의 가장 짧은 왕복 십진수(ADR 0037, 2026-10-30). 동등과 대소가 한 값으로 정해지므로 `0.10000000000000001 > 0.1e0` 은 참이다. NUMERIC(38) 밖·inf 도 오류 없이 대소가 정해지고 NaN 은 NaN 과 같다.
+_Avoid_: DOUBLE 의 정확값, 16자리 값, 공통 타입 NUMERIC(변환이 아니라 판정 규칙이다)
 
 ### cubrid-fastmig 검증 (지도 #472, G3 #483 그릴링 2026-10-29)
 
