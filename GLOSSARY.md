@@ -1028,7 +1028,7 @@ DOUBLE 하나에 대해, 다시 DOUBLE 로 읽으면 같은 값이 되는 십진
 _Avoid_: Ryu 값, dtoa mode 0 출력(알고리즘 이름으로 값을 부르지 않는다), 정확한 십진값(그것은 2 의 거듭제곱 분수를 전부 펼친 값이다)
 
 **손실 키 쌍 (lossy key pair)**:
-키 열의 타입을 비교 공통 타입으로 바꾸면 서로 다른 키가 같은 값이 될 수 있는 타입 쌍. BIGINT × DOUBLE(2^53 이상), NUMERIC(p > 15) × DOUBLE, NUMERIC × FLOAT, INTEGER/BIGINT × FLOAT(2^24 이상)이 해당하고, SHORT × DOUBLE/FLOAT, INTEGER × DOUBLE, NUMERIC(p ≤ 15) × DOUBLE 은 아니다. 이 쌍의 동등 비교값은 키 공간에서 점이 아니라 범위라서, 인덱스 키 탐색·다중 키 정리·파티션 가지치기는 그 범위 전부를 다뤄야 순차 스캔과 같은 답이 된다(ADR 0039). 판정은 두 타입만으로 컴파일 때 한다. PostgreSQL 은 이 쌍의 열을 키로 쓰지 않고 필터로만 비교한다.
+키 열의 타입을 비교 공통 타입으로 바꾸면 서로 다른 키가 같은 값이 될 수 있는 타입 쌍. BIGINT × DOUBLE(2^53 이상), NUMERIC(p > 15) × DOUBLE, NUMERIC × FLOAT, INTEGER/BIGINT × FLOAT(2^24 이상)이 해당하고, SHORT × DOUBLE, INTEGER × DOUBLE, NUMERIC(p ≤ 15) × DOUBLE 은 아니다(SHORT × FLOAT 도 수학적으로는 아니지만 엔진 `domain_key_converts_losslessly` 는 보수적으로 손실로 다룬다 — 답은 같다). 이 쌍의 동등 비교값은 키 공간에서 점이 아니라 범위라서, 인덱스 키 탐색·다중 키 정리·파티션 가지치기는 그 범위 전부를 다뤄야 순차 스캔과 같은 답이 된다(ADR 0039). 판정은 두 타입만으로 컴파일 때 한다. PostgreSQL 은 이 쌍의 열을 키로 쓰지 않고 필터로만 비교한다.
 _Avoid_: SPAN, merges 쌍(B-tree 경계 표시의 이름이지 타입 쌍의 이름이 아니다), 손실 변환(변환 일반을 가리킨다)
 
 **비교 공통 타입 (comparison common type)**:
