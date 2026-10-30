@@ -20,7 +20,7 @@ develop 은 BIGINT/NUMERIC × DOUBLE 비교의 공통 타입이 DOUBLE 이라 2^
 사용자(1번 세션 경유)가 2026-10-30 아래 여섯 가지를 정했다. 실측은 develop 7b7e84d25 release(SA)와 PostgreSQL 18.6 이고 SQL·출력은 `.git_ignored_dir/scratch/cbrd27819/566/`(`probe1..7.sql`, `dev/*.out`, `pg_probe.sql`, `pg18.out`)에 있다. "이 결정" 열은 규칙에서 낸 예측값이며 구현 뒤 TC 로 측정한다.
 
 1. **2^53 이상 정수 DOUBLE**: |d| ≥ 2^53 이면 비교값은 d 의 정확한 정수값이고, 그 아래는 가장 짧은 왕복 십진수다. 가장 짧은 십진수만 쓰면 |d| ≥ 2^54 에서 값이 정수와 달라진다(2^57 → 144115188075855870). 그러면 `cast(d as bigint) = d` 가 거짓이 되고 144115188075855870 = 2^57e0 이 참이 된다. 두 결과 모두 수학적으로 틀렸다. 대가는 `1208925819614629200000000 = 1208925819614629174706176e0`(2^80)가 거짓이 되는 것인데, 이것이 수학적으로 맞는 답이다.
-2. **NaN·inf·-0·NUMERIC(38) 밖**: 오류 없이 전순서로 판정한다. -inf < 모든 수 < +inf < NaN 이고, NaN 은 NaN 과만 같다(PostgreSQL 순서). -0 의 비교값은 0 이다. develop 에서는 `cast('nan'|'inf'|'-inf' as double)` 로 이 값들을 만들 수 있다. 오류로 처리하는 안은 develop 에서 돌던 문장을 깨뜨린다. IEEE 방식(NaN 과의 비교는 전부 거짓)은 전순서가 아니어서 인덱스 범위·정렬 병합과 어긋난다. 그래서 둘 다 기각했다. 경계: SHORT/INTEGER × DOUBLE 은 DOUBLE 비교를 유지하므로 `int열 = cast('nan' as double)` 은 develop 그대로 참이다. DOUBLE 비교의 NaN 동작은 이 결정 밖의 결함으로 따로 다룬다.
+2. **inf·-0·NUMERIC(38) 밖**: 오류 없이 판정한다. -inf < 모든 수 < +inf 이고, -0 의 비교값은 0 이다. develop 에서는 `cast('inf'|'-inf' as double)` 로 이 값들을 만들 수 있다. 오류로 처리하는 안은 develop 에서 돌던 문장을 깨뜨리므로 기각했다. NaN 과의 비교는 정의하지 않는다 — 실사용·기존 TC 에 없음(사용자 2026-10-30). 경계: SHORT/INTEGER × DOUBLE 은 DOUBLE 비교를 유지한다.
 3. **인덱스 키 범위**: 인덱스 경로의 답은 비교값을 키 도메인으로 올림·내림한 범위의 답과 같다. 정수가 아닌 값과의 `=` 는 빈 범위다. 도메인 밖의 값은 빈 범위나 전체 범위가 된다. 인덱스 경로와 `USING INDEX NONE` 의 답은 같아야 한다. 상수를 열 도메인으로 강제 변환하는 재작성(`qo_reduce_equality_terms`)도 같은 규칙을 따른다.
 4. **파티션**: 가지치기와 WHERE·UPDATE·DELETE 대상 판정은 비교값으로 한다. INSERT 값과 UPDATE SET 값은 대입 변환(반올림)을 유지하고, 변환된 값으로 파티션을 고른다. NUMERIC 파티션 키는 develop 이 지원하지 않으므로 범위 밖이다.
 5. **FLOAT**: 비교값은 float32 의 가장 짧은 십진수다. FLOAT × INTEGER/BIGINT 은 DOUBLE 로 넓혀 비교한다. 이 교정도 같은 PR 에 넣는다. |f| ≥ 2^24 이면 모든 float 가 정수이므로, 1번과 같은 꼴로 비교값은 f 의 정확한 정수값이다(2026-10-30, #567). 그래야 같은 정수값의 BIGINT 열(DOUBLE 로 넓혀 비교)과 NUMERIC 열의 답이 같다. 예를 들어 `cast(1073741824 as numeric(20)) = cast(1073741824 as float)` 는 참이다. float32 최단 십진수만 쓰면 비교값이 1073741800 이 되어 거짓이 된다. 단조성은 1번과 같은 이유로 유지된다.
@@ -40,8 +40,6 @@ develop 은 BIGINT/NUMERIC × DOUBLE 비교의 공통 타입이 DOUBLE 이라 2^
 | 같은 표 `DELETE … WHERE k = 9007199254740993e0` | 2^53+1 행 삭제 | — | 2^53 행 삭제 |
 | LIST / HASH `k = 2^53e0` 류 | 2^53 / 두 행 | 두 행 / — | 2^53 / 2^53 |
 | `INSERT … VALUES (9.5e0)` BIGINT 파티션 키 | 10 → p1 | 10 → p1 | 같음 |
-| `b(5) = cast('nan' as double)` / `b(5) < nan` (BIGINT·NUMERIC 5; INTEGER 5 는 결정 2 의 경계대로 develop 그대로) | 참 / 거짓 | 거짓 / 참 | 거짓 / 참 |
-| `n > nan`, n 인덱스 / NONE | 1행 / 0행 | 0 | 0 / 0 |
 | NUMERIC(38) 최댓값 `= 1e38` / `< 1e38` (1e38 의 정확한 정수값 99999999999999997748809823456034029568 < 10^38−1) | 참 / 거짓 | 참 / 거짓 | 거짓 / 거짓 |
 | `0 = -0e0`, `b < cast('inf' as double)` | 참, 참 | 참, 참 | 같음 |
 | FLOAT 0.3f: `n(0.3000000119) = f` / `n(0.30) = f` | 참 / 참 | 거짓 / 거짓 | 거짓 / 참 |
