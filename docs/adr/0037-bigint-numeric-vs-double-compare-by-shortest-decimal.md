@@ -21,9 +21,9 @@ develop 은 BIGINT/NUMERIC × DOUBLE 비교의 공통 타입이 DOUBLE 이라 2^
 
 1. **2^53 이상 정수 DOUBLE**: |d| ≥ 2^53 이면 비교값은 d 의 정확한 정수값이고, 그 아래는 가장 짧은 왕복 십진수다. 가장 짧은 십진수만 쓰면 |d| ≥ 2^54 에서 값이 정수와 달라진다(2^57 → 144115188075855870). 그러면 `cast(d as bigint) = d` 가 거짓이 되고 144115188075855870 = 2^57e0 이 참이 된다. 두 결과 모두 수학적으로 틀렸다. 대가는 `1208925819614629200000000 = 1208925819614629174706176e0`(2^80)가 거짓이 되는 것인데, 이것이 수학적으로 맞는 답이다.
 2. **NaN·inf·-0·NUMERIC(38) 밖**: 오류 없이 전순서로 판정한다. -inf < 모든 수 < +inf < NaN 이고, NaN 은 NaN 과만 같다(PostgreSQL 순서). -0 의 비교값은 0 이다. develop 에서는 `cast('nan'|'inf'|'-inf' as double)` 로 이 값들을 만들 수 있다. 오류로 처리하는 안은 develop 에서 돌던 문장을 깨뜨린다. IEEE 방식(NaN 과의 비교는 전부 거짓)은 전순서가 아니어서 인덱스 범위·정렬 병합과 어긋난다. 그래서 둘 다 기각했다. 경계: SHORT/INTEGER × DOUBLE 은 DOUBLE 비교를 유지하므로 `int열 = cast('nan' as double)` 은 develop 그대로 참이다. DOUBLE 비교의 NaN 동작은 이 결정 밖의 결함으로 따로 다룬다.
-3. **인덱스 키 범위**: 비교값을 키 도메인으로 올림·내림해 범위를 만든다. 정수가 아닌 값과의 `=` 는 빈 범위다. 도메인 밖의 값은 빈 범위나 전체 범위가 된다. 인덱스 경로와 `USING INDEX NONE` 의 답은 같아야 한다. 상수를 열 도메인으로 강제 변환하는 재작성(`qo_reduce_equality_terms`)도 같은 규칙을 따른다.
+3. **인덱스 키 범위**: 인덱스 경로의 답은 비교값을 키 도메인으로 올림·내림한 범위의 답과 같다. 정수가 아닌 값과의 `=` 는 빈 범위다. 도메인 밖의 값은 빈 범위나 전체 범위가 된다. 인덱스 경로와 `USING INDEX NONE` 의 답은 같아야 한다. 상수를 열 도메인으로 강제 변환하는 재작성(`qo_reduce_equality_terms`)도 같은 규칙을 따른다.
 4. **파티션**: 가지치기와 WHERE·UPDATE·DELETE 대상 판정은 비교값으로 한다. INSERT 값과 UPDATE SET 값은 대입 변환(반올림)을 유지하고, 변환된 값으로 파티션을 고른다. NUMERIC 파티션 키는 develop 이 지원하지 않으므로 범위 밖이다.
-5. **FLOAT**: 비교값은 float32 의 가장 짧은 십진수다. FLOAT × INTEGER/BIGINT 은 DOUBLE 로 넓혀 비교한다. 이 교정도 같은 PR 에 넣는다.
+5. **FLOAT**: 비교값은 float32 의 가장 짧은 십진수다. FLOAT × INTEGER/BIGINT 은 DOUBLE 로 넓혀 비교한다. 이 교정도 같은 PR 에 넣는다. |f| ≥ 2^24 이면 모든 float 가 정수이므로, 1번과 같은 꼴로 비교값은 f 의 정확한 정수값이다(2026-10-30, #567). 그래야 같은 정수값의 BIGINT 열(DOUBLE 로 넓혀 비교)과 NUMERIC 열의 답이 같다. 예를 들어 `cast(1073741824 as numeric(20)) = cast(1073741824 as float)` 는 참이다. float32 최단 십진수만 쓰면 비교값이 1073741800 이 되어 거짓이 된다. 단조성은 1번과 같은 이유로 유지된다.
 6. **TC 위치**: 사양 표는 `sql/_36_guava/cbrd_27819/cases/cbrd_27819_{spec,index,partition,special,float}.sql` 에 둔다. Correct Error 세 이슈의 재현은 `sql/_13_issues/_26_2h/cases/cbrd_277{97,99,03}.sql` 에 둔다. 모두 엔진 PR 의 봇 브랜치에 올린다.
 
 | 질의 (b BIGINT, n NUMERIC; develop 7b7e84d25 실측) | develop | PG 18.6 | 이 결정 |
@@ -48,6 +48,8 @@ develop 은 BIGINT/NUMERIC × DOUBLE 비교의 공통 타입이 DOUBLE 이라 2^
 | `16777217 = cast(16777216 as float)` (INT, BIGINT) | 참 | 거짓 | 거짓 |
 | `cast(b as json) = cast(d as json)`, b = 2^53+1, d = 2^53e0 (JSON 숫자 비교도 같은 규칙) | 참 | — | 거짓 |
 | `n = 12345678901234568e0 AND m = n` (n, m NUMERIC 열, 값 12345678901234568; 동등 상수 전파가 16자리 절단 값을 복사) | 0행 | — | 1행 |
+
+구현 방식(#567, `docs/research/cbrd27819-compare-dispatch.md` 브랜치 `research/cbrd27819-compare-dispatch`)은 다음과 같다. 3번의 답은 경계를 키 도메인으로 바꾸지 않고 낸다. 경계를 원래 타입(KEEP)으로 두고, B-tree 키 비교·다중 열 키·다중 키 정리가 모두 비교값 규칙의 전용 비교 함수를 쓴다. 이 비교가 엄격 단조이므로 범위 탐색이 순차 스캔과 같은 집합을 낸다(2026-10-30 1번 세션 확정).
 
 비교값 v(d)가 다시 DOUBLE 로 읽어 d 가 되는 값이기만 하면 v 는 엄격 단조다. 서로 다른 DOUBLE 의 반올림 구간은 겹치지 않고 순서대로 놓이며, v(d)는 d 의 구간 안에 있기 때문이다. 가장 짧은 십진수와 정확한 정수값이 둘 다 이 조건을 만족하므로, 1번처럼 둘을 섞어도 단조성은 유지된다. 두 단계 비교 조건도 같은 이유로 성립한다. n ≥ v(d) 이면 nearest(n) ≥ nearest(v(d)) = d 이므로, 대우를 취하면 nearest(n) < d ⇒ n < v(d) 다. [2^53, 2^54) 에서는 가장 짧은 십진수가 곧 정수다. 그래서 경계를 2^53 에 두든 2^54 에 두든 답은 같다.
 
