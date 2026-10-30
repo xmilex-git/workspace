@@ -304,7 +304,7 @@ Mapping from report to comments:
 
 Before saving, run the `voice-guide.md` Section 7 self-checklist (no English headers in bodies, no `Why:` / `Fix:` labels, every comment ends in a human ending, identifiers English, only `NIT:` as a label, no emoji / `LGTM` / `Strongly recommend`, no lane / meta terms, no comment body over 6 lines).
 
-Posting, once the user confirms: one review per PR, with `commit_id` set to that PR's head SHA. Each inline `line` must sit inside a diff hunk of that PR (`side: "RIGHT"` for added lines). Write the payload under `.git_ignored_dir/scratch/pr<NUMBER>/`:
+Posting, once the user confirms: one review per PR, with `commit_id` set to that PR's head SHA. Right before posting, every PR's head is fetched again: a moved engine head is compared by `git range-diff` and an identical patch is posted at the new head with `commit_id` updated, while a moved TC head is re-read and a finding it already fixed is dropped and the event recomputed (an evidence-backed Approve needs the new answer run). (P25) Each inline `line` must sit inside a diff hunk of that PR (`side: "RIGHT"` for added lines). Write the payload under `.git_ignored_dir/scratch/pr<NUMBER>/`:
 
 ```bash
 gh api -X POST repos/<OWNER>/<REPO>/pulls/<N>/reviews --input <payload.json>

@@ -149,6 +149,12 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-09-28, TC PR #3590): 39 comments verified byte-identical through REST, GraphQL and body_html, reported "not cut"; the user answered with a phone screenshot: "이게 안잘린거라고??".
 - Source: memory:check-display-where-user-reads
 
+### P25 — heads are re-fetched right before posting
+- Rule: Right before posting, every PR's head is fetched again: a moved engine head is compared by `git range-diff` and an identical patch is posted at the new head with `commit_id` updated, while a moved TC head is re-read and a finding it already fixed is dropped and the event recomputed (an evidence-backed Approve needs the new answer run).
+- Applies at: Step 6
+- Case (2026-10-30, PR #8318 CBRD-27794): between analysis and posting the author rebased the engine PR (c75b1c11a -> 72ad4e886, range-diff all `=`) and pushed TC commit a5fc0dd91 that deleted the stray file behind the planned Request changes; the TC was approved after a one-case `just ctp sql` PASS with 0-line diff on the new answer.
+- Source: session 2026-10-30 PR 8318 review
+
 ## Replying on your own PR
 
 ### P22 — replies read like a CUBRID reviewer
