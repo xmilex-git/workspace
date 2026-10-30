@@ -1060,6 +1060,10 @@ _Avoid_: 외부 파일(LOB 파일만 가리키는 것으로 읽힌다), 부속 �
 lob-base-path 아래에 있지만 어느 레코드의 로케이터도 가리키지 않는 파일. 11.4는 DROP TABLE 때 LOB 파일을 지우지 않으므로 정상적으로도 쌓인다. 같은 lob-base-path를 쓰는 다른 DB의 파일도 이것과 구별할 수 없다. 옮기지도 지우지도 않고 보고만 한다.
 _Avoid_: 쓰레기 파일, 누수 파일
 
+**빈 TDE 메타데이터 (empty TDE metadata)**:
+11.0부터 엔진이 createdb 때 모든 DB에 만드는 TDE 키 자산 세 가지다: `<db>_keys`(마스터 키 1개), keyinfo heap(레코드 1개 156 B), `BOOT_DB_PARM.tde_keyinfo_hfid`. 암호화된 페이지는 없다. 10.2 출발에는 없어서 fastmig가 새 키로 만든다. 없으면 develop CS 서버의 vacuum이 돌지 않는다. keyinfo heap은 volume 0에 있어야 한다([T5 #515](https://github.com/xmilex-git/workspace/issues/515)). TDE 지원이 아니다. 암호화 출발은 plan이 거부한다.
+_Avoid_: TDE 지원, 암호화 키 이관
+
 ### nix 개발 환경 (그릴링 2026-09-30)
 
 CUBRID CI 환경을 nix로 재현하는 추가 경로의 용어(nix 개발 환경, CI 툴체인 스냅샷, 봉인 입력, 실행 디렉터리, 샤드 등)와 결정은 [xmilex-git/cubrid-nix](https://github.com/xmilex-git/cubrid-nix)의 `CONTEXT.md`와 ADR 0001에 있다. 그 레포의 **샤드**는 컨테이너가 아니라 `unshare` 네임스페이스 하나와 1:1이다.
