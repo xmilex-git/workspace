@@ -32,3 +32,4 @@ PostgreSQL 은 손실 키 쌍(GLOSSARY)의 열을 인덱스·파티션 키로 �
 - 경계 값의 같음을 범위의 같음으로 보던 자리 셋(옵티마이저 OR 범위 병합, 실행 시점 다중 키 병합, RANGE 파티션 가지치기·DML 라우팅)은 merges 표시를 보고 판정한다. 값 계산은 없다.
 - 열 × 열 조인 항은 등호 항으로 둔다(해시·병합 조인 유지). B-tree 탐색은 CBRD-27583 사양 14 의 merges 경계가 바깥 행마다 범위로 탐색한다. 여러 열 인덱스 접두를 고르는 한 곳만 merges 항을 등호로 치지 않는다.
 - 기각: L/H 구간을 값으로 계산해 키 도메인 경계로 바꾸는 안(서버 또는 클라이언트 계산이 생기고, #8213 의 merges 가 이미 있는 일을 다시 한다); PostgreSQL 처럼 키로 쓰지 않는 안(단일 열 인덱스와 NL 인덱스 조인이 느려진다).
+- PostgreSQL 과 알려진 차이(2026-10-30, `.git_ignored_dir/scratch/cbrd27819/571/pg/cmp.txt`): PostgreSQL 은 int4/int8/numeric 대 real(float4)을 DOUBLE 로 비교하고(`16777217 = 16777216::real` 거짓), CUBRID 는 FLOAT 로 비교한다(참). 이 결정은 develop 의 FLOAT 비교를 유지한다. 바꾸면 사양 변경이다. 그 밖의 모든 모양(27797·27799·27703 TC, 열 × 열 조인, 여러 열 인덱스, OR/IN, ORDER BY, PK, LIST 파티션·DELETE)에서 두 시스템의 답은 같다.
