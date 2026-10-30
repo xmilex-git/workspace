@@ -25,7 +25,7 @@ no `-type f` (rule 12). CTP's own guide: `~/cubrid-testtools/doc/shell_guide.md`
 - **Half-year directory**: a Correct Error TC goes under the half-year in which the TC is written
   (`_06_issues/_26_2h/` from 2026-07 to 2026-12), as QA's mail announcing the rulebook says and
   cubrid-agent PR #35 sets for sql. The rulebook text still says "the half-year in which the issue was
-  created"; the question went to CUBRIDQA-1505.
+  created"; we follow the mail (not raised with QA).
 - **Empty draft TC PR**: kept open (pr-and-jira.md §1); the rulebook closes it and reruns `Check TC PRs`.
 - **`kill -INT`**: allowed only on a pid the TC saved with `$!` from its own `timeout -s INT … &`, with a
   comment saying why (rule 10); `xkill_pid` is `kill -9`, which loses the output `cubrid statdump -i`
