@@ -194,6 +194,8 @@ develop(ti=false)에서 두 값이 같다는 것은 세 가지가 모두 성립�
 | V6 | **정정**(#548). 옮겨진 어긋난 LIST 행은 develop `WHERE c = 'a '`가 찾는다(count 1). 그 행을 다시 넣는 `REORGANIZE PARTITION`이 실패한다. 어긋난 RANGE 행은 pruning이 놓친다(count 0) |
 | V7 | 일치. `no`로 만든 인덱스(`'a'`,`'a '`,`'a  '`,`'b'`)를 `CUBRID_IGNORE_TRAILING_SPACE=yes`로 열면 `c = 'a'`가 인덱스 스캔(`Index scan ... ii ... (covers)`) 1행(`'a  '`)이고 풀 스캔 3행이다. `no`에서는 둘 다 1행이다 |
 
+10.2 끝-끝 HASH 정리 확인(workspace#539, fastmig `89fe515` + `b11ab54`): #548 G10 fixture(HASH 8개, LIST·RANGE·FK, owner app)를 10.2.18에서 만들고 `migrate --verify`로 develop optdebug에 옮겼다(migration 0, pre_existing 2 = FK 끝 공백 고아). 행마다 `WHERE <키식> = <그 행의 값>` 한 문장(37개)을 돌렸다. `post-migration-fixes.sql` 전에는 22행을 pruning이 놓쳤다(count 0). 표마다 plan 경고 수와 같다: h 5, hci3 4, htr 3, hko 5, h7 4, hexpr 1(plan은 식 키를 행 단위로 세지 않는다), hx·hci 0. 정리 SQL은 오류 0으로 돌았고, 그 뒤에는 37행을 모두 찾는다(놓친 행 0). 증거: workspace `.git_ignored_dir/scratch/539/run102/out/prune_{before,after}.out`.
+
 ## 새 질문
 
 **지금 정확히 서술할 수 있는 것** (티켓 후보):
