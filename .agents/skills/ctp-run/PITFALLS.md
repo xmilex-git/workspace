@@ -135,3 +135,8 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Env knobs
 - Case (2026-09-21, wf268 #285): a campaign `ctp-conf.conf` delta of `stored_procedure=yes` passed via `CONF=` was a no-op, which made candidate-only runs comparable with the cited upstream CI baseline.
 - Source: memory:ctp-stored-procedure-default-and-ci-baseline
+
+### P19 — release lines without PX refuse the pin
+- Rule: A run on a release line without PX (release/11.4 and older) uses an install whose `conf/cubrid.conf` is the branch's own template (`just build` writes the campaign conf, which sets `parallelism`) and `CTP_PIN_PARAMS=0`, because that line's server refuses to start on the unknown `parallelism` keyword.
+- Applies at: Env knobs
+- Case (2026-10-30, TC backports cubrid-testcases#3948 / private-ex#4648 on release/11.4 `52d4301a2`): the first sql and shell runs died at server start with "The 'parallelism' parameter at line 58 in file '/home/CUBRID/conf/cubrid.conf' : Unrecognized keyword" (sql 0 of 2 cases ran, shell 3 NOK at createdb); copying the worktree's `conf/cubrid.conf` over the install's and rerunning with `CTP_PIN_PARAMS=0` passed 2/2 and 3/3.

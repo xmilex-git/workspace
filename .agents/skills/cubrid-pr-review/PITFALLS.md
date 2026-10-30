@@ -25,6 +25,11 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (#4431): the author's develop merge resolved the planned Blocking item during the hours-long CI wait; the item was dropped only because the head was re-fetched before posting.
 - Source: memory:tc-only-pr-review-ci-evidence
 
+### P26 — release-line TC PRs have no optdebug build
+- Rule: A TC PR based on release/11.4 or an older line has no optdebug preset (`CMakePresets.json` holds release, debug, coverage and profile only), so its runtime evidence is a local release build of the branch head run through `just ctp`, and the report says asserts were not exercised.
+- Applies at: Step 3c
+- Case (2026-10-30, cubrid-testcases#3948 / private-ex#4648, backports to release/11.4): a worker was launched for an optdebug build of `52d4301a2`; the user: "optdebug 빌드 안될텐데근데". The worker was stopped before building and relaunched on release; both TC PRs passed there (sql 2/2, shell 3/3).
+
 ## Reading the diff (Step 3)
 
 ### P3 — an assert is a claim about every call site

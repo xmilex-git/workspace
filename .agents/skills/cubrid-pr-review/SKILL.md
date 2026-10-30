@@ -225,6 +225,7 @@ Reuse evidence before producing it: CI statuses and the gha-ci artifact server a
 Builds and CTP go to a delegated worker (Sonnet Workflow or Luna; smoke-sized checks stay with the lead), and every CTP run goes through `just ctp` containers. Recipes, the worker prompt's verbatim execution contract, artifact-server paths and cleanup are in `runtime.md`.
 
 How a run becomes evidence:
+- A TC PR based on release/11.4 or an older line has no optdebug preset (`CMakePresets.json` holds release, debug, coverage and profile only), so its runtime evidence is a local release build of the branch head run through `just ctp`, and the report says asserts were not exercised. (P26)
 - A pass/fail verdict on query output comes from robust aggregates (`COUNT`, `SUM(CAST … AS NUMERIC(38,0))`, `MIN`, `MAX`) plus the actual rows a top-level SELECT returns to the client, never from an md5 of raw output. (P13)
 - A parallel path counts as exercised only when `;trace on` shows `parallel workers: N>1` (`;plan detail` does not show it); forcing serial needs both `parallelism=1` and `max_parallel_workers=1`. (P14)
 - A nondeterministic failure is judged by N repetitions (the FAIL and the PASS alike), and a fix is shown fail-before-fix and pass-after by the same method; a theoretical race is a finding only once it is shown reachable. (P15)

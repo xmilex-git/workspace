@@ -68,6 +68,7 @@ Where the values go:
 The pin is applied before `CONF=`, so an explicit `CONF=` value wins, e.g. `parallelism=24`
 for a PX stress run. `CTP_PIN_PARAMS=0` keeps the install's values. Provenance records
 `pinned=`.
+A run on a release line without PX (release/11.4 and older) uses an install whose `conf/cubrid.conf` is the branch's own template (`just build` writes the campaign conf, which sets `parallelism`) and `CTP_PIN_PARAMS=0`, because that line's server refuses to start on the unknown `parallelism` keyword. (P19)
 `CONF=` for medium now reaches the server too: it used to merge into a
 `[medium/cubrid.conf]` section that CTP never reads.
 
