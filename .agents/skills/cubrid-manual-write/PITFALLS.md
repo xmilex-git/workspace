@@ -57,6 +57,12 @@ Cases:
   `cci_prepare_and_execute` reaches the same `ux_prepare` check → every driver entry point calling the
   checking function (code-index `callers`) gets the sentence, each run once (CCI program via
   fast-cs-jdbc launcher).
+- PR #780 (CUBRIDMAN-357, 2026-10-30, caught by reviewer): VALUES "같은 규칙을 따르며, 첫 행에 NULL을
+  바인딩하면 … 칼럼 타입을 NULL로 정하므로 오류" → UNION accepts NULL in the first operand and
+  `VALUES (NULL), (1)` / `VALUES (?), (1)` succeed; only a NULL first row (constant or bound) followed by
+  a host-variable row errors → sentence states that condition with the constant-only contrast (35a537db);
+  before writing a cause ("because X sets Y"), run the rows that vary each part of it (constant vs bound
+  NULL, later row constant vs host variable).
 - PR #772 (CBRD-27299, 2026-10-16, caught by reviewer): "서버에서 평가하는 내장 함수 … 사용할 수
   없다" → read as "only some built-ins"; `ParseTreeConverter` calls `setConnectionRequired()` on every
   built-in path (`visitFunction_call`, `visitIdentifier`, `visitSyntaxed_call_*`) → "내장 함수 호출은
