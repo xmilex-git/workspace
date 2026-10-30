@@ -180,6 +180,20 @@ develop(ti=false)에서 두 값이 같다는 것은 세 가지가 모두 성립�
 | V6 | LIST 어긋남(L) | 10.2: `partition by list(c) (partition pa values in ('a'))`에 `'a '` INSERT 성공 → fastmig로 옮긴 뒤 develop에서 `select count(*) from t where c='a '`와 `select count(*) from t__p__pa where c='a '`를 비교 | 10.2 INSERT 성공. develop pruning 결과 0, 파티션 직접 스캔은 1 |
 | V7 | 도착 conf `yes`에서 fastmig가 쓴 VARCHAR 인덱스 순서가 어긋난다(P) | develop 도착을 `ignore_trailing_space=yes`로 띄우고 `'a'`·`'a '` 키가 있는 인덱스에서 `select … where c='a'` 인덱스 스캔과 풀 스캔을 비교 | 결과가 다르거나 검증기가 순서 위반을 보고 |
 
+### 실측 결과 (T16 workspace#539, G10 구현 workspace#548, 2026-10-30)
+
+10.2.18(`CUBRID-fastmig-10.2.18`)과 develop(`CUBRID-fastmig-dev`)에 en_US.utf8 SA 테스트 DB를 만들어 위 SQL을 그대로 돌렸다. 증거는 workspace `.git_ignored_dir/scratch/539/out_102_dba.txt`, `out_dev_dba.txt`, `out_dev_v7_{no,yes}.txt`(V3·V4 binary·V5 10.2 쪽·V6은 `scratch/548/`)에 있다.
+
+| # | 결과 |
+|---|---|
+| V1 | 일치. 10.2 두 번째 INSERT가 `unique constraint violations ... key: 'a '`로 실패한다 |
+| V2 | 일치. develop은 `'a'`(길이 1)와 `'a '`(길이 2)를 둘 다 받는다 |
+| V3 | 일치(#548). `'a b'` PARTITIONS 3은 10.2 p0, develop p2 |
+| V4 | 일치. `collate iso88591_bin`: `'a b'`·`'New York'` p2, `'ab'` p0으로 두 버전이 같다. `collate binary` diff 0(#548) |
+| V5 | 일치. 10.2는 자식 `'a '`를 받고, develop은 같은 INSERT를 `The constraint of the foreign key 'fk_fk5_k' is invalid, due to value ''a ''`로 거부한다 |
+| V6 | **정정**(#548). 옮겨진 어긋난 LIST 행은 develop `WHERE c = 'a '`가 찾는다(count 1). 그 행을 다시 넣는 `REORGANIZE PARTITION`이 실패한다. 어긋난 RANGE 행은 pruning이 놓친다(count 0) |
+| V7 | 일치. `no`로 만든 인덱스(`'a'`,`'a '`,`'a  '`,`'b'`)를 `CUBRID_IGNORE_TRAILING_SPACE=yes`로 열면 `c = 'a'`가 인덱스 스캔(`Index scan ... ii ... (covers)`) 1행(`'a  '`)이고 풀 스캔 3행이다. `no`에서는 둘 다 1행이다 |
+
 ## 새 질문
 
 **지금 정확히 서술할 수 있는 것** (티켓 후보):
