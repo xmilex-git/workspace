@@ -19,7 +19,7 @@
 
 | 10.2 이름 (종류) | develop 대응 | 칼럼·의미 | R11 판정 | G1 현재 규칙 |
 |---|---|---|---|---|
-| `db_trig` (vclass) | `db_trigger` (vclass) | 10.2 칼럼 7개가 develop 11개에 모두 있다. 행 필터 의미도 같다 | **재작성** `db_trig`→`db_trigger` | 거부 |
+| `db_trig` (vclass) | `db_trigger` (vclass) | 10.2 칼럼 7개가 develop 11개에 모두 있다. 행 필터 의미도 같다(정정 #539: 대상 클래스 권한이 없는 사용자에게 10.2 `db_trig`는 행을 숨기지만 11.4 `db_trig`·develop `db_trigger`는 보인다, §6 실측 V5) | **재작성** `db_trig`→`db_trigger` | 거부 |
 | `db_trigger` (class) | `_db_trigger` (class). 같은 이름 `db_trigger`는 다른 vclass다 | develop vclass에는 `name`·`owner`·`condition`·`action_definition`·`status`·`priority`·`event`·`target_class`가 없다. `_db_trigger`는 10.2 칼럼을 모두 가진다 | **재작성** `db_trigger`→`_db_trigger` (owner가 DBA 그룹일 때. 10.2 PUBLIC grant 없음) | 경고 |
 | `db_password` (class) | `_db_password` | `password` 유지. `created_time`·`updated_time`·`expire_time` 추가 | **재작성** `db_password`→`_db_password` (10.2에서 DBA 전용이었다) | 없음 (검사 누락) |
 | `db_user` (class) | `_db_user` (class). `db_user`는 vclass | vclass: `password`·`authorization` 항상 NULL, `direct_groups`·`groups`가 이름 문자열 집합, 행이 현재 사용자·그룹으로 걸러진다, class method는 `find_user`·`login`뿐. `_db_user`: `triggers` 삭제(5a3e7a14b #7980), 나머지 같음 | owner가 DBA 그룹이고 `triggers`를 쓰지 않으면 **재작성** →`_db_user`. 아니면 **그대로 + 경고** | 경고 |
@@ -71,7 +71,7 @@
 | 10.2 | 10.2 칼럼 | develop | develop 칼럼 | 차이와 의미 |
 |---|---|---|---|---|
 | `db_trigger` (class) | `owner` db_user, `name`, `status`, `priority`, `event`, `target_class`, `target_attribute`, `target_class_attribute`, `condition_type`, `condition`, `condition_time`, `action_type`, `action_definition`, `action_time`, `comment` (trigger_manager.c:7269-7348@10.2. `TR_ATT_PROPERTIES` :147은 상수만 있고 속성으로 넣지 않는다) | `_db_trigger` (class). 이름 `db_trigger`는 develop에서 **vclass**다 | `_db_trigger`: `unique_name` + 10.2 칼럼 전부 + `created_time`, `updated_time` (install.cpp:727-760@D). vclass `db_trigger`: `trigger_name`, `owner_name`, `target_class_name`, `target_owner_name`, `target_attr_name`, `target_attr_type`, `action_type`, `action_time`, `comment`, `created_time`, `updated_time` (install.cpp:1523-1546@D) | 같은 이름이 다른 객체를 가리킨다. 10.2 칼럼 중 develop vclass에도 있는 것은 `action_type`·`action_time`·`comment` 셋뿐이다. 나머지를 쓰는 텍스트는 처음 쓸 때 실패한다. 11.4 출발도 같다(11.4의 `db_trigger`도 클래스, constants.h@11.4) |
-| `db_trig` (vclass) | `trigger_name`, `target_class_name`, `target_attr_name`, `target_attr_type`, `action_type`, `action_time`, `comment` (boot_cl.c:4949-4957@10.2). 필터: DBA, owner·그룹, 대상 클래스 SELECT 권한 (:4985-4990@10.2) | `db_trigger` (vclass) | 위 11칼럼. 필터 `AUTH_CHECK_PRIVILEGE ([t].[owner].[name], [c].[class_of], 'SELECT')` (query_spec.cpp:551-580@D, 매크로 schema_system_metadata_query_spec.hpp:70-82@D) | 10.2 칼럼 7개가 모두 같은 이름·같은 식으로 있다(`CAST([t].[name] AS VARCHAR(255))`, `[c].[class_name]`). `_db_class.class_name`은 develop에서도 owner 없는 이름이다. 필터도 같은 조건(DBA / owner·그룹 / SELECT grant)이다. 그래서 이름만 바꾸면 같은 행·같은 값이 나온다 (추론, [VERIFY] V5) |
+| `db_trig` (vclass) | `trigger_name`, `target_class_name`, `target_attr_name`, `target_attr_type`, `action_type`, `action_time`, `comment` (boot_cl.c:4949-4957@10.2). 필터: DBA, owner·그룹, 대상 클래스 SELECT 권한 (:4985-4990@10.2) | `db_trigger` (vclass) | 위 11칼럼. 필터 `AUTH_CHECK_PRIVILEGE ([t].[owner].[name], [c].[class_of], 'SELECT')` (query_spec.cpp:551-580@D, 매크로 schema_system_metadata_query_spec.hpp:70-82@D) | 10.2 칼럼 7개가 모두 같은 이름·같은 식으로 있다(`CAST([t].[name] AS VARCHAR(255))`, `[c].[class_name]`). `_db_class.class_name`은 develop에서도 owner 없는 이름이다. 필터도 같은 조건(DBA / owner·그룹 / SELECT grant)이다. 그래서 이름만 바꾸면 같은 행·같은 값이 나온다 (추론, [VERIFY] V5. 정정 #539: DBA·trigger owner·대상 클래스 SELECT 권한자는 같다. 권한 없는 사용자는 10.2 0행, 11.4·develop 전체 행) |
 
 ### 4.3 serial, HA
 
@@ -140,6 +140,28 @@
 | V6 | develop에서 `db_password` 참조는 `owner.db_password`로 풀려 실패한다 | develop에서 DBA로 `SELECT password FROM db_password` | "Unknown class \"dba.db_password\""류 오류 |
 | V7 | 10.2 trigger 생성 때 action 텍스트를 컴파일하는가 (없는 클래스 `_db_resolution` 참조 trigger가 존재할 수 있는가) | 10.2에서 `CREATE TRIGGER t AFTER INSERT ON x EXECUTE INSERT INTO _db_resolution VALUES (1)` | 생성이 실패하면 기존 결함 경로 없음. 성공하면 그런 trigger가 있을 수 있음 |
 | V8 | develop `db_serial` vclass는 AUTO_INCREMENT serial을 뺀다 | develop에서 `CREATE TABLE t (a INT AUTO_INCREMENT)` 뒤 `SELECT COUNT(*) FROM db_serial WHERE class_name IS NOT NULL` vs `FROM _db_serial` | 0 vs 1 |
+
+### 실측 결과 (T16 workspace#539, 2026-10-30)
+
+10.2.18(`CUBRID-fastmig-10.2.18`), 11.4.6, develop(`CUBRID-fastmig-dev`)에 en_US.utf8 SA 테스트 DB(사용자 u1·u2)를 만들어 돌렸다. 증거는 workspace `.git_ignored_dir/scratch/539/`(`out_102_*.txt`, `out_dev_*.txt`, `out_114_v5.txt`, `judge102.txt`, `judge_trg.txt`, `res{102,dev}_{a,b}.txt`, `attrs{102,dev}.txt`)에 있다.
+
+| # | 결과 |
+|---|---|
+| V1 | 일치. `v1` spec은 `select [db_user].[name], ..., [db_user].[triggers], [db_user].[comment] from [db_user] [db_user]`로 `*`가 펼쳐진다. probe의 `SELECT name FROM db_trig`는 10.2에서 "Attribute name was not found"다(`db_trig` 칼럼은 `trigger_name`). `trigger_name`으로 만든 뷰는 `from [db_trig] [db_trig]`로 저장된다. trigger action·condition 텍스트는 별칭 없이 `from [db_user]`로 저장되고, 별칭을 쓰면 `from [db_serial] [s]`다 |
+| V2 | 일치. DBA 소유 `dv`는 5행(DBA, INFORMATION_SCHEMA, PUBLIC, U1, U2)이다. u1 소유 `u1v`는 만들어지지만 SELECT가 "Select is not authorized on u1.u1v"다 |
+| V3 | **정정.** 10.2 u1은 `db_trigger`·`db_password`를 참조하는 뷰를 **만들 수 있다**(생성 성공). 그 뷰를 쓰면 실패한다. u1과 DBA 모두 "Select is not authorized on x3a"를 받는다. 그래서 owner가 DBA 그룹이 아닌 이런 텍스트가 출발에 있을 수 있다. 출발에서 이미 쓸 수 없는 뷰이므로 develop에서 실패해도 새 결함이 아니다. T18의 처리(`db_password`→`_db_password` 항상, `db_trigger`는 경고)는 그대로 맞다 |
+| V4 | 일치. `select [db_user].[name] from [_db_user] [db_user]`가 5행이다 |
+| V5 | **부분 정정.** DBA와 u1(trigger owner, 다른 trigger 대상 클래스 SELECT grant)은 10.2 `db_trig`와 develop `db_trigger`의 7칼럼 집합이 같다(2행). 권한이 없는 u2는 10.2에서 0행, 11.4 `db_trig`와 develop `db_trigger`에서 2행이다. 차이는 재작성 때문이 아니라 11.x vclass 필터의 동작이다(11.4도 같다). owner가 권한 없는 사용자인 `db_trig` 참조 뷰는 옮긴 뒤 행이 늘어난다 |
+| V6 | 일치. develop DBA `select password from db_password`가 `Unknown class "dba.db_password"`이다 |
+| V7 | 일치(기존 결함 경로 없음). 10.2 `CREATE TRIGGER ... EXECUTE INSERT INTO _db_resolution VALUES (1)`은 `Error compiling action for "t7", Unknown class "_db_resolution"`으로 실패한다. 10.2도 생성 때 action을 컴파일한다 |
+| V8 | 일치. develop `db_serial where class_name is not null` 0, `_db_serial` 1이다 |
+
+T18(fastmig `cad1af3`)의 11.4 미만 전용 규칙을 10.2 fixture로 확인했다. 10.2 뷰 15개와 trigger 2개(condition 1, action 2)의 저장 텍스트를 `system_name_mapping::judge(V10_2, ..)`에 넣었다(Rust probe `scratch/539/probe`). 거부하지 않은 재작성 텍스트로 develop에 같은 뷰·trigger를 만들어 결과를 대조했다.
+
+- 거부 5건: `_db_auth`, `_db_stored_procedure`, `_db_stored_procedure_args`, `db_serial`+`att_name`, `db_user` `*`(`triggers`). 칼럼 근거는 실측과 같다: `_db_auth.class_of`→`object_of`(+`object_type`), `_db_stored_procedure.target`→`target_class`·`target_method`(`sp_name`은 남는다), `_db_stored_procedure_args.sp_name`→`sp_of`, `db_serial.att_name`→`attr_name`, develop `db_user`·`_db_user`에 `triggers`가 없다. `db_authorizations`는 10.2에서 칼럼 없는 클래스이고(`select count(*)`만 된다), develop에는 없다. `_db_stored_procedure`의 `sp_name`만 읽는 텍스트는 develop에서 컴파일된다. 그래서 이 거부는 보수적이다(통과시켜도 컴파일은 된다).
+- 경고 3건: `db_auth`(develop은 `class_name`이 없어 뷰 컴파일이 "does not have attribute class_name"으로 실패한다), u1 소유 `db_user`·`db_serial`(develop vclass 행이 다르다: u1에게 `db_user`는 U1·PUBLIC·INFORMATION_SCHEMA만, `db_serial`은 auto_increment serial을 뺀다).
+- 재작성 9건(`db_trig`→`db_trigger`, `db_password`→`_db_password`, DBA owner의 `db_trigger`·`db_user`·`db_authorization`·`db_serial`→`_db_*`, JOIN 두 항): 모두 develop에서 컴파일되고, 행이 10.2와 같다. 다른 것은 develop이 더한 INFORMATION_SCHEMA 사용자 1행뿐이다. trigger 재작성(`[db_user]`→`[_db_user]`, condition `[db_trig]`→`[db_trigger]`, `[db_serial] [s]`→`[_db_serial] [s]`)도 발화 결과가 같다(serial 1, user 수 4→5는 INFORMATION_SCHEMA). 재작성하지 않은 `db_trig` condition은 develop에서 `Unknown class "dba.db_trig"`로 trigger 생성이 실패한다.
+- 10.2 뷰 spec에는 뷰 칼럼 별칭이 남지 않는다(`select u.name, a.owner.name as oname` → `select [u].[name], [a].[owner].[name] ...`). 그래서 spec만 가지고 `CREATE VIEW`를 다시 하면 "name has already been used"가 난다. fastmig는 클래스 객체의 속성 이름과 spec을 따로 옮기므로 영향이 없다. probe는 칼럼 목록을 붙여 대조했다.
 
 ## 7. 새 질문
 
