@@ -1036,7 +1036,7 @@ DOUBLE 이 나타내는 이진 값 그대로와 NUMERIC 값의 대소를 정하�
 _Avoid_: DOUBLE 을 NUMERIC 으로 바꿔 비교(그것은 DOUBLE→NUMERIC 변환을 거쳐 잘린다), 정확 비교를 (C)안의 이름으로 쓰는 것
 
 **DOUBLE 비교값 (comparison value of a DOUBLE)**:
-BIGINT/NUMERIC 과 DOUBLE 의 동등·대소를 판정할 때 DOUBLE 쪽이 대표하는 값 = 그 DOUBLE 의 가장 짧은 왕복 십진수(ADR 0037, 2026-10-30). 동등과 대소가 한 값으로 정해지므로 `0.10000000000000001 > 0.1e0` 은 참이다. NUMERIC(38) 밖·inf 도 오류 없이 대소가 정해지고 NaN 은 NaN 과 같다.
+BIGINT/NUMERIC 과 DOUBLE 의 동등·대소를 판정할 때 DOUBLE 쪽이 대표하는 값이다(ADR 0037, 2026-10-30). |d| < 2^53 이면 그 DOUBLE 의 가장 짧은 왕복 십진수이고, |d| ≥ 2^53 이면 정확한 정수값이다(`144115188075855872e0` → 144115188075855872). FLOAT 은 float32 의 가장 짧은 십진수다. 동등과 대소가 한 값으로 정해지므로 `0.10000000000000001 > 0.1e0` 은 참이다. NUMERIC(38) 밖·inf 도 오류 없이 대소가 정해진다. 순서는 -inf < 모든 수 < +inf < NaN 이고, NaN 은 NaN 과만 같다.
 _Avoid_: DOUBLE 의 정확값, 16자리 값, 공통 타입 NUMERIC(변환이 아니라 판정 규칙이다)
 
 ### cubrid-fastmig 검증 (지도 #472, G3 #483 그릴링 2026-10-29)
