@@ -47,6 +47,12 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-09-16, PR 7866 boundary check): `INSERT … SELECT level FROM db_root CONNECT BY LEVEL <= 300000` ran 30+ minutes at 100 % CPU with 8 GB+ RSS on the base build too — the hierarchical query's own cost, not the patch.
 - Source: CUBRID_SSOT.md §3.19, memory:ctp-new-tc-needs-answer-and-as-is
 
+### P18 — a copied database names the original
+- Rule: A copied database is opened by the engine only after its `_vinf` names the copy: a reflink or `cp` copy keeps the original's absolute paths in `_vinf` and in every volume header, the engine reads `_vinf` first (a header path that differs only gives a -114 notification), so a server or SA utility on an unfixed copy opens the original's volumes and `cubrid deletedb` deletes them; rewrite every `_vinf` line to the copy's directory (cubrid-fastmig baseline DBs: `basedb/safe_copy.sh`), print it before the first start, check `ls -l /proc/<cub_server pid>/fd` holds no path outside the copy, and remove a copy by its literal path with `rm -rf`, never `deletedb`.
+- Applies at: Where to run the probe
+- Case (2026-10-30, workspace#515): the cubrid-fastmig develop baseline `pristine/clean` was reflink-copied to scratch and only `_keys` removed; the server opened the registered DB's `_x001`/`_x002` beside the copy's volume 0, the probe's DML went into them, and the closing `cubrid deletedb` removed the registered DB's volumes and logs. Restored with `rsync -a --delete pristine/clean/ clean/` and a sha256 diff of 0 against `evidence/clean/pristine.sha256`. The same thing happened once with `addvoldb -S` (workspace#494).
+- Source: workspace#515 resolution
+
 ## Designing the probe
 
 ### P6 — discriminate, and probe the no-key cases
