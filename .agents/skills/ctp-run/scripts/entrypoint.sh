@@ -2,7 +2,8 @@
 # ctp-run HA additions to CUBRID/cubridci test_rl8.10.
 # Upstream: 452b7be0cee601b9efd59a1d9c9faf89886d255f (PRs #120, #121, #123).
 # Only local changes: thin-csql broker port in the HA SSH environment and
-# slave broker startup in the shard's CTP helper. Scope, source pinning,
+# slave broker startup in the shard's CTP helper, and the shell_perf category
+# (shell_heavy's shape on private-ex shell_perf/). Scope, source pinning,
 # database permissions and provenance use upstream's implementation.
 # Mounted over /entrypoint.sh; no local image build.
 set -o pipefail
@@ -17,7 +18,7 @@ Usage: /entrypoint.sh checkout [<category>]
        /entrypoint.sh <command> [<args>...]
 
 <category> overrides $TEST_SUITE. One category per run.
-Supported categories: sql, medium, shell, shell_heavy, shell_long, cci, isolation,
+Supported categories: sql, medium, shell, shell_heavy, shell_perf, shell_long, cci, isolation,
                       sql_by_cci, jdbc, ha_repl, ha_shell, rqg
 
 'node' prepares this container as a CTP node and waits. Multi-node categories
@@ -68,6 +69,12 @@ function resolve_category ()
       CTP_CONF=conf/shell_heavy_ci.conf   REPORT_STYLE=status
       CONF_WRITER=write_shell_conf
       SHELL_ROOT=$WORKDIR/$TC_REPO/shell_heavy
+      SHELL_TIMEOUT=7200 ;;
+    shell_perf)
+      TC_REPO=cubrid-testcases-private-ex CTP_CMD=shell
+      CTP_CONF=conf/shell_perf_ci.conf    REPORT_STYLE=status
+      CONF_WRITER=write_shell_conf
+      SHELL_ROOT=$WORKDIR/$TC_REPO/shell_perf
       SHELL_TIMEOUT=7200 ;;
     shell_long)
       TC_REPO=cubrid-testcases-private    CTP_CMD=shell

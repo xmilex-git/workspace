@@ -71,7 +71,7 @@ usage() {
   cat <<'EOF'
 ctp_run.sh — run one CUBRID CTP suite in isolated podman containers.
 
-  ctp_run.sh --suite <sql|medium|sql_by_cci|shell|ha_shell|ha_repl> --build <install> \
+  ctp_run.sh --suite <sql|medium|sql_by_cci|shell|shell_perf|ha_shell|ha_repl> --build <install> \
              --testcases <repo checkout> [--ctp <CTP_HOME>] [--out <dir>] [options]
 
 WHAT / WHY
@@ -86,6 +86,7 @@ WHAT / WHY
 SUITES
   sql        shardable, default 7 shards (bulk + measured-time split)
   shell      shardable, default 7 shards (per test dir, count-balanced)
+  shell_perf always 1 shard  (its cases measure time; private-ex shell_perf/)
   medium     always 1 shard  (one mdb dataset, mutated in place)
   sql_by_cci the sql cases through CTP's CCI driver (.answer_cci, else .answer);
              shardable like sql (count-balanced), no --exclude
@@ -109,13 +110,13 @@ TESTCASE REF (never silently 'develop')
   its uncommitted edits are never touched.
 
 OPTIONS
-  --suite <s>            sql | medium | sql_by_cci | shell | ha_shell | ha_repl (default sql)
+  --suite <s>            sql | medium | sql_by_cci | shell | shell_perf | ha_shell | ha_repl (default sql)
   --build <dir>          CUBRID install to test (required for a real run)
   --testcases <dir>      testcases repo checkout for this suite (required)
   --ctp <dir>            CTP_HOME to copy per shard      (default ~/cubrid-testtools/CTP)
   --out <dir>            run/output directory
   --only <relpath>       scenario-relative subset path (repeatable)
-  --shards <N>           override the shard count (refused for medium/ha_shell/ha_repl)
+  --shards <N>           override the shard count (refused for medium/shell_perf/ha_shell/ha_repl)
   --tc-ref / --pr / --workspace   see TESTCASE REF
   --testcases-as-is      use --testcases verbatim, skipping ref resolution
   --worktree-root <dir>  where testcase worktrees live
@@ -162,7 +163,7 @@ EOF
 #####################################################################
 ARG_BUILD=""
 ARG_TC=""
-ARG_SUITE="sql"        # CTP suite: sql | medium | sql_by_cci | shell | ha_shell | ha_repl
+ARG_SUITE="sql"        # CTP suite: sql | medium | sql_by_cci | shell | shell_perf | ha_shell | ha_repl
 ARG_TCREF=""           # explicit testcases ref (branch/tag/sha); "" = derive from --pr/--workspace
 ARG_PR=""              # engine PR number -> testcases ref tc/pr-<N>
 ARG_WS=""              # CUBRID source checkout, used to infer the PR when --pr/--tc-ref are absent
@@ -366,6 +367,12 @@ resolve_suite() {
       SUITE_TCREPO="cubrid-testcases-private-ex"; SUITE_SUBPATH="shell"
       SUITE_CAT="shell";    SUITE_EXT="sh";       SUITE_UNIT_DEFAULT="dir"
       SUITE_SHARDABLE=1;    SUITE_STYLE="status";     SUITE_CONF="conf/shell_ci.conf" ;;
+    shell_perf)
+      # Timing cases: one shard, so no other shard competes for the cores they measure.
+      # The entrypoint derives its conf from conf/shell_ci.conf, so parameters merge there.
+      SUITE_TCREPO="cubrid-testcases-private-ex"; SUITE_SUBPATH="shell_perf"
+      SUITE_CAT="shell_perf"; SUITE_EXT="sh";     SUITE_UNIT_DEFAULT="dir"
+      SUITE_SHARDABLE=0;    SUITE_STYLE="status";     SUITE_CONF="conf/shell_ci.conf" ;;
     ha_shell)
       SUITE_TCREPO="cubrid-testcases-private";    SUITE_SUBPATH="HA/shell"
       SUITE_CAT="ha_shell"; SUITE_EXT="sh";       SUITE_UNIT_DEFAULT="dir"
@@ -380,7 +387,7 @@ resolve_suite() {
       SUITE_CAT="ha_repl";  SUITE_EXT="sql";      SUITE_UNIT_DEFAULT="dir"
       SUITE_SHARDABLE=0;    SUITE_STYLE="status";     SUITE_CONF="conf/ha_repl_ci.conf"; SUITE_HA=1
       C_DB="$C_CUBRID/databases" ;;
-    *) usage; die "--suite must be one of: sql medium sql_by_cci shell ha_shell ha_repl (got: '$ARG_SUITE')" ;;
+    *) usage; die "--suite must be one of: sql medium sql_by_cci shell shell_perf ha_shell ha_repl (got: '$ARG_SUITE')" ;;
   esac
   C_TCREPO="$C_WORKDIR/$SUITE_TCREPO"
   C_SCN="$C_TCREPO/$SUITE_SUBPATH"
@@ -412,7 +419,7 @@ resolve_volatile() {
   [ "$ARG_VOLATILE" -eq 1 ] || return 0
   case "$ARG_SUITE" in
     sql|medium|sql_by_cci) VOLATILE_TARGETS="$C_CUBRID/databases" ;;
-    shell)      VOLATILE_TARGETS="$C_TCREPO $C_DB $C_CUBRID/databases" ;;
+    shell|shell_perf) VOLATILE_TARGETS="$C_TCREPO $C_DB $C_CUBRID/databases" ;;
     *) return 0 ;;
   esac
   if [ "$ARG_OVERLAY" -eq 1 ]; then
@@ -630,6 +637,7 @@ shard_refusal_reason() {
   case "$ARG_SUITE" in
     medium)   printf 'one mdb dataset is loaded from a single data_file tarball and the cases mutate it in place' ;;
     ha_shell|ha_repl) printf 'a shard is a master+slave container pair and the suite is run one bucket at a time' ;;
+    shell_perf) printf 'its cases measure time, and a second shard would compete for their cores' ;;
     *)        printf 'suite policy' ;;
   esac
 }
@@ -907,7 +915,7 @@ BASE_FILE=""       # the original CTP exclusions.txt (verbatim base list)
 suite_base_exclusion_file() {
   case "$ARG_SUITE" in
     sql|medium|sql_by_cci) printf '%s' "$ARG_CTP/conf/exclusions.txt" ;;
-    shell|ha_shell) printf '%s' "$SCN/config/daily_regression_test_excluded_list_linux.conf" ;;
+    shell|shell_perf|ha_shell) printf '%s' "$SCN/config/daily_regression_test_excluded_list_linux.conf" ;;
     ha_repl) printf '%s' "$SCN/config/daily_regression_test_exclude_list_ha_repl.conf" ;;
   esac
 }

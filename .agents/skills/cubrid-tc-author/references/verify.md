@@ -4,7 +4,8 @@ Everything here is **runtime work**: builds, CTP, servers. Delegate it to one Wo
 (`agent(prompt, { model: 'sonnet', effort: 'xhigh' })`) whose prompt contains §0 verbatim plus the
 exact commands of §1–§4 with the placeholders filled. The lead reads the worker's `results.md` and
 judges §5–§6. Only optdebug is used — release hides asserts and once produced four wrong diagnoses
-(2026-09-19/20); QA generates answers on release, we do not.
+(2026-09-19/20); QA generates answers on release, we do not. The shell rulebook asks for a release
+run as well; we skip it by decision (user, 2026-10-30) and the PR table names optdebug.
 
 ## §0 Text to paste verbatim into every worker prompt
 
@@ -14,9 +15,9 @@ Delegation execution contract:
 - The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
 
 CTP execution rule (every suite):
-- Every CTP run, whole or subset, goes through `just ctp <sql|medium|shell|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe. CTP's teardown runs `pkill cub` and `kill -9` over `ps -u $USER`.
+- Every CTP run, whole or subset, goes through `just ctp <sql|medium|shell|shell_perf|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe. CTP's teardown runs `pkill cub` and `kill -9` over `ps -u $USER`.
 - The testcase ref is never implicit: pass `PR=<n>` or `TC_REF=<ref>`, or `CTP_ARGS="--testcases-as-is --testcases <dir>"` for an unpushed worktree.
-- `medium` and `ha_shell` are never sharded.
+- `medium`, `shell_perf` and `ha_shell` are never sharded.
 
 House rules: never write to /tmp; scratch goes under /home/cubrid/dev/workspace/.git_ignored_dir/scratch/tc-author/CBRD-<N>/. Run every command from /home/cubrid/dev/workspace. Report facts only; never fake a verdict. Match cores to your own server pids (core.<thread>.<pid>), not by timestamp.
 ```
@@ -101,6 +102,8 @@ Shell has no answer: run `CTP_ARGS="--testcases-as-is --testcases $TCEX" CTP_KEE
 and read `<run dir>/shard_0/testcases/shell/<dir>/cases/<name>.result`: one line per check, all `OK`.
 The case's own logs are gone after `do_cleanup`; the measured values are in the xtrace at
 `<run dir>/shard_0/CTP/result/shell/current_runtime_logs/test_local.log` (`+ workers=2` lines).
+A `shell_perf` case runs the same way with `just ctp shell_perf <dir>` (one shard, never sharded,
+so no other shard competes for the cores while it measures).
 A pre build that is expected to crash runs with `NO_ABORT_ON_CORE=1`, otherwise the runner stops the
 shard at the first core and the case writes no `.result` (CBRD-26930).
 CTP reruns a failed shell case once inside the same run: `test_local.log` holds both executions
@@ -176,6 +179,7 @@ has one expectation (CBRD-27181).
 | verdict (judge.md) | pre | fix | dev (merged mode) | dev (open mode) |
 |---|---|---|---|---|
 | R1 / R2 / R3 | **NOK** | OK | OK | NOK, same diff as pre (fix not merged yet) |
+| R4 shell_perf TC (`just ctp shell_perf <dir>`) | **NOK** by the ratio | OK | OK | NOK, same ratio as pre |
 | R5 correctness TC | OK (results identical); **NOK** when the data triggers the defect deterministically (CBRD-26799) | OK | OK | OK |
 
 Deviations and what they mean:

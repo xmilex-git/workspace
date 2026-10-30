@@ -85,9 +85,10 @@ infer the PR from `WORKSPACE`'s branch. With none of the three it refuses rather
 than run develop testcases against a PR build. Refs are materialized as git
 worktrees, so host checkouts (and their uncommitted edits) are never touched.
 
-**medium, ha_shell and ha_repl are never sharded.** medium loads one mdb from a single
-`data_file` tarball and its cases mutate it in place; an ha_shell shard is a
-master+slave container pair. `SHARDS>1` is refused with the reason.
+**medium, shell_perf, ha_shell and ha_repl are never sharded.** medium loads one mdb from a single
+`data_file` tarball and its cases mutate it in place; shell_perf cases (private-ex `shell_perf/`,
+the entrypoint's local `shell_perf` category) measure time, so no second shard may compete for the
+cores; an ha_shell shard is a master+slave container pair. `SHARDS>1` is refused with the reason.
 
 **sql and medium need the install's JDBC driver.** CTP compiles its Java SP classes
 against `<install>/jdbc/cubrid_jdbc.jar` and runs CQT on it. The runner therefore
@@ -117,7 +118,7 @@ CTP runs are delegated to a worker (Sonnet Workflow or Luna). The worker prompt 
 
 - Finite gate work (incremental build, smoke rerun, targeted CTP — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
 - The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
-- Every CTP run, whole or subset, by the lead or any delegated worker, goes through `just ctp <sql|medium|shell|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe.
+- Every CTP run, whole or subset, by the lead or any delegated worker, goes through `just ctp <sql|medium|shell|shell_perf|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe.
 - The testcase ref is never implicit: pass `PR=<n>` or `TC_REF=<ref>`, or let it infer the PR from `WORKSPACE`. A run with none of the three refuses rather than validate a PR against develop testcases.
 
 The worker reports: run dir, `provenance.txt` first line (install, TC ref, `pinned=`), build type, per-suite OK/NOK counts from CTP's own log lines (P7), `failed.list`, stopped shards, core paths with pids. The lead reads the logs; a worker summary alone is not a verdict.

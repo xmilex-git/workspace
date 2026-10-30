@@ -32,7 +32,7 @@
 #   just install-locale [dest]                             copy prebuilt locale files (lib+bin); auto-run by build/rebuild
 #   WORKSPACE=<src> just deploy [mode] [version]           stop server (if any) -> build -> conf
 #   WORKSPACE=<src> just ctest [mode]                      ctest against the build tree
-#   just ctp <suite> [DIRS...]                             run a CTP suite (sql|medium|shell|ha_shell|ha_repl) in podman
+#   just ctp <suite> [DIRS...]                             run a CTP suite (sql|medium|shell|shell_perf|ha_shell|ha_repl) in podman
 #   just ctp-rerun <CI URL>                                re-run locally exactly what failed in CI
 #
 # Campaign: debug install for D1/D2/D3, release install for D4 — switch via `just use <mode>`.
@@ -272,19 +272,19 @@ ctest mode="debug":
 # install mounted in, and the testcases materialized from the ref this run is
 # supposed to verify.
 #
-#   just ctp <suite>                     whole suite (sql 16 shards by dir, shell 7, medium/ha_shell/ha_repl single)
+#   just ctp <suite>                     whole suite (sql 16 shards by dir, shell 7, medium/shell_perf/ha_shell/ha_repl single)
 #                                        a whole sql run also runs whole medium beside it (CTP_WITH_MEDIUM=0: sql alone)
 #   just ctp sql+medium                  the same pair, explicitly
 #   just ctp <suite> <DIRS...>           subset: those scenario-relative dirs
 #   just ctp-rerun <CI URL>              re-run exactly what failed in CI
 #
-# Suites: sql | medium | sql+medium | shell | ha_shell | ha_repl (the sql cases replayed on an HA pair).
+# Suites: sql | medium | sql+medium | shell | shell_perf | ha_shell | ha_repl (the sql cases replayed on an HA pair).
 # HA derives thin csql ports from CTP broker2 config for both SSH nodes and
 # starts the folded slave broker after HA setup; no manual port export is needed.
 # Env knobs (all optional):
 #   PR=<n>        testcases ref tc/pr-<n>            (else inferred from WORKSPACE)
 #   TC_REF=<ref>  explicit testcases branch/tag/sha  (wins over PR)
-#   SHARDS=<n>    override the shard count           (refused for medium/ha_shell/ha_repl)
+#   SHARDS=<n>    override the shard count           (refused for medium/shell_perf/ha_shell/ha_repl)
 #   BUILD=<dir>   install to test                    (else $CUBRID, else ~/CUBRID)
 #   CONF=<file>   cubrid.conf whose [<suite>/cubrid.conf] section CTP applies
 #   EXCLUDE=<file> host exclusion list (unset: suite default; empty: none)
@@ -304,7 +304,7 @@ ctest mode="debug":
 # ---------------------------------------------------------------------------
 
 # Run a CTP suite (whole, or just the given scenario-relative dirs) in podman.
-[doc("Run a CTP suite in isolated podman: just ctp <sql|medium|sql+medium|sql_by_cci|shell|ha_shell|ha_repl> [DIRS...]")]
+[doc("Run a CTP suite in isolated podman: just ctp <sql|medium|sql+medium|sql_by_cci|shell|shell_perf|ha_shell|ha_repl> [DIRS...]")]
 ctp SUITE *DIRS:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -345,9 +345,10 @@ ctp SUITE *DIRS:
         medium)   repo=dev/cubrid-tc-worktree/develop ;;
         sql_by_cci) repo=dev/cubrid-tc-worktree/develop ;;
         shell)    repo=dev/cubrid-tc-ex-worktree/develop ;;
+        shell_perf) repo=dev/cubrid-tc-ex-worktree/develop ;;
         ha_shell) repo=dev/cubrid-testcases-private ;;
         ha_repl)  repo=dev/cubrid-tc-worktree/develop ;;
-        *) echo "ERROR: suite must be sql | medium | sql+medium | sql_by_cci | shell | ha_shell | ha_repl (got '{{SUITE}}')" >&2; exit 1 ;;
+        *) echo "ERROR: suite must be sql | medium | sql+medium | sql_by_cci | shell | shell_perf | ha_shell | ha_repl (got '{{SUITE}}')" >&2; exit 1 ;;
     esac
     tc="${TESTCASES_ROOT:-$HOME}/$repo"
     [ -d "$tc" ] || { echo "ERROR: testcases checkout not found: $tc" >&2; exit 1; }
