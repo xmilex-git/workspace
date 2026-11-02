@@ -12,6 +12,7 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Run
 - Case (2026-09-29, PR #7866): testcases develop was merged into `tc/pr-7866` alone to pick up `cbrd_26473.answer_cci`; the user: "develop 머지할거면 세 레포 다 머지하는 /cubrid-pr-sync 를 사용해야한다??" The three branches are validated as a set in CI; one repo ahead is engine↔testcases skew (ctp-run P3).
 - Case (2026-10-01, PR 8009 against #7991): the pushed merge `0a9e157a3` did not compile against #7991's new `new_memoize_storage (…, bool match_only)` and duplicated #7991's memo renewal; `1fbdbe1c4` fixed it. The user asked for the intent check ("7991 이 하고자 했던 일과 8009가 하고자 하는 일이 전부 해결되는지를 봐야할거같네"), which became the Overlap section.
+- Case (2026-11-02, PR 8317 review round): following the general "fetch and rebase before committing" rule, the lead rebased the pushed engine branch onto develop alone and gated that build; the CTP run on the un-synced `tc/pr-8317` gave 69 NOKs that were only develop's new trace and plan text, and pushing would have needed a force-push. The branch was rebuilt as fork head + the new commit, the three develop tips merged locally (P3) and the gate rerun with `TC_REF=<local tc merge sha>`.
 - Source: memory:develop-merge-via-pr-sync
 
 ### P2 — on OVERLAP, CI gates when the user asked for `/run all`
