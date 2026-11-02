@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted (resend condition superseded by 0041)
 date: 2026-10-29
 issue: CBRD-27679
 supersedes: 0032 (EXECUTE 열 정보 부분)
