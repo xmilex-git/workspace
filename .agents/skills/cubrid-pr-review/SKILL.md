@@ -194,7 +194,7 @@ If `reference.md` is present and flags a rule (e.g., new error code -> 6 places)
 
 ### Step 3b: Sanity Check (mandatory)
 
-After the main review pass, run a focused sanity scan over the diff yourself. Source reading stays with the lead (workers build and run; they do not read for findings), so the scan is not delegated. It is mandatory and cannot be skipped — it catches convention violations that `codestyle.sh` and CI do not enforce. Inputs: the full PR diff, the `reference.md` "Comment & Convention Hygiene" section, and any `CLAUDE.md` from directories of changed files.
+After the main review pass, run a focused sanity scan over the diff yourself. Source reading stays with the lead, so the scan is not delegated. It is mandatory and cannot be skipped — it catches convention violations that `codestyle.sh` and CI do not enforce. Inputs: the full PR diff, the `reference.md` "Comment & Convention Hygiene" section, and any `CLAUDE.md` from directories of changed files.
 
 The scan checks **only** these categories (logic/concurrency/memory belong to the main review):
 
@@ -222,7 +222,7 @@ Reuse evidence before producing it: CI statuses and the gha-ci artifact server a
 - a linked ticket's repro,
 - a scenario the PR claims but CI does not cover.
 
-Builds and smoke-sized checks stay with the lead, CTP goes to a delegated worker (Sonnet Workflow or Luna), and every CTP run goes through `just ctp` containers. Recipes, the worker prompt's verbatim execution contract, artifact-server paths and cleanup are in `runtime.md`.
+The lead runs the builds, smoke and CTP itself, and every CTP run goes through `just ctp` containers. Recipes, artifact-server paths and cleanup are in `runtime.md`.
 
 How a run becomes evidence:
 - A TC PR based on release/11.4 or an older line has no optdebug preset (`CMakePresets.json` holds release, debug, coverage and profile only), so its runtime evidence is a local release build of the branch head run through `just ctp`, and the report says asserts were not exercised. (P26)

@@ -104,7 +104,7 @@ A gate is evidence only when everything except the change matches the baseline r
 - A gate runs on the **optdebug** install and is compared only against a baseline of the same build type; every failure count is reported with its build type. (P1)
 - The whole shell suite never runs locally; a local shell subset runs once, right after a crash fix, with the exact dirs that crashed — every other shell verdict comes from upstream CI (`/run all`). (P2) The local gate is sql (whole, which brings medium) plus the targeted sql set.
 - Before a gate, fetch upstream develop for both the engine and cubrid-testcases and build from an engine tip paired with the TC ref; a NOK, hang or off-by-one catalog count shared by the branch and the develop baseline is skew, not "develop common", until `git log <engine-base>..origin/develop` shows no engine PR paired with that case's TC commit. (P3)
-- Before delegating a gate, `cmp` the install's `conf/cubrid.conf` and `conf/cubrid_broker.conf` against the reference state (`just incr` reinstalls the factory templates and does not re-apply `just conf`; a smoke that writes install confs restores them), and read `parallelism` in the install conf before suspecting a patch for a PX trace failure. (P4)
+- Before a gate run, `cmp` the install's `conf/cubrid.conf` and `conf/cubrid_broker.conf` against the reference state (`just incr` reinstalls the factory templates and does not re-apply `just conf`; a smoke that writes install confs restores them), and read `parallelism` in the install conf before suspecting a patch for a PX trace failure. (P4)
 - Treat a crash-recovery anomaly seen under a `just conf` / `port-claim` install as "double write buffer off" until it reproduces with a conf holding only `cubrid_port_id`. (P5)
 - When runs share an install another session may rebuild, run with `CTP_KEEP_COPIES=1` and report `sha256sum shard_*/CUBRID/lib/libcubrid.so shard_*/CUBRID/lib/libcubridsa.so` for every shard of every run (a swap can hit any shard); warn the sessions running CTP on an install before rebuilding it. (P6)
 - CTP sql/medium databases are utf8 (`utf8_bin` in error messages, although the conf line reads `db_charset=en_US`), so a smoke that stands in for CTP on string, collation, name or client/server value-transfer paths runs on an `en_US.utf8` database through a CS client (csql -C or JDBC), never only on an `en_US` (iso88591) SA database. (P12)
@@ -112,16 +112,14 @@ A gate is evidence only when everything except the change matches the baseline r
 - A gate runs with `NO_ABORT_ON_CORE=1` so one assert does not end the whole run (the crash-loop and disk-floor caps still stop a runaway shard); medium beside sql has its own run dir and `failed.list`, reported and cleaned up with the sql run.
 - Counter and SA probe lanes of a gate run through `tools/fast-gate/` (`fast-counters.sh`, `fast-sa.sh`, prompts `lane-b-fast-prompt.md` / `lane-c-fast-prompt.md`), not through CTP; they are overlay-namespace runners with no fsync.
 
-### Delegated runs
+### Running and reporting
 
-CTP runs are delegated to a worker (Sonnet Workflow or Luna). The worker prompt carries these lines verbatim (source: .agents/AGENTS.md):
+The lead runs CTP itself; nothing is delegated to a worker (source: .agents/AGENTS.md). A targeted subset runs in the foreground, a whole suite with `run_in_background` (the harness re-invokes the lead on exit).
 
-- Finite gate work (incremental build, smoke rerun, targeted CTP — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
-- The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
-- Every CTP run, whole or subset, by the lead or any delegated worker, goes through `just ctp <sql|medium|shell|shell_perf|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe.
+- Every CTP run, whole or subset, goes through `just ctp <sql|medium|shell|shell_perf|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe.
 - The testcase ref is never implicit: pass `PR=<n>` or `TC_REF=<ref>`, or let it infer the PR from `WORKSPACE`. A run with none of the three refuses rather than validate a PR against develop testcases.
 
-The worker reports: run dir, `provenance.txt` first line (install, TC ref, `pinned=`), build type, per-suite OK/NOK counts from CTP's own log lines (P7), `failed.list`, stopped shards, core paths with pids. The lead reads the logs; a worker summary alone is not a verdict.
+A run's report carries: run dir, `provenance.txt` first line (install, TC ref, `pinned=`), build type, per-suite OK/NOK counts from CTP's own log lines (P7), `failed.list`, stopped shards, core paths with pids. The lead reads these from the logs; a summary alone is not a verdict.
 
 ## Layout
 
@@ -167,7 +165,7 @@ A **subset defaults to 1 shard** whatever the suite: each shard costs a full cop
 of the install and a container, which pays for itself over 17k cases and not over
 a handful of dirs. `SHARDS=N` splits a big subset anyway.
 
-A small CTP check runs candidate and control at the same time, puts `CTP_KEEP_COPIES=1` in the first command whenever the `.result` is needed, passes `EXCLUDE=''` when the case is in `dirsplit_exclusions.txt`, and the worker prompt carries only the commands and the facts to report. (P17) A single-case run costs ≈45 s of container setup around a 1 s case; sequencing A then B, or repeating A for a missing `.result`, is what makes "one case" take ten minutes.
+A small CTP check runs candidate and control at the same time, puts `CTP_KEEP_COPIES=1` in the first command whenever the `.result` is needed, and passes `EXCLUDE=''` when the case is in `dirsplit_exclusions.txt`. (P17) A single-case run costs ≈45 s of container setup around a 1 s case; sequencing A then B, or repeating A for a missing `.result`, is what makes "one case" take ten minutes.
 
 **sql splits by cases dir** (user decision at the runner migration, 2026-09). The user confirmed that no case fails from
 order effects at dir granularity. `CTP_ARGS='--by-category'` restores the old bulk split.

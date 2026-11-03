@@ -33,7 +33,7 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Source: memory:ctp-engine-tc-develop-skew, memory:ctp-shell-false-nok-sources (develop-install skew)
 
 ### P4 — install confs are gate inputs
-- Rule: Before delegating a gate, `cmp` the install's `conf/cubrid.conf` and `conf/cubrid_broker.conf` against the reference state (`just incr` reinstalls the factory templates and does not re-apply `just conf`; a smoke that writes install confs restores them), and read `parallelism` in the install conf before suspecting a patch for a PX trace failure.
+- Rule: Before a gate run, `cmp` the install's `conf/cubrid.conf` and `conf/cubrid_broker.conf` against the reference state (`just incr` reinstalls the factory templates and does not re-apply `just conf`; a smoke that writes install confs restores them), and read `parallelism` in the install conf before suspecting a patch for a PX trace failure.
 - Applies at: Gates
 - Case (2026-10-18, CBRD-27583 b110): a JDBC smoke runner copied a session cubrid.conf and a `%smoke27583` broker conf into the install two minutes before the gate; the whole CQT workload ran through that broker. Byte-equal results, but not a like-for-like comparison — discarded and rerun after restoring the templates. Shard CAS logs named `smoke27583_*.err` instead of `broker1_*.err` were the tell.
 - Case (dpin #334): a counter bench's cleanup trap left `parallelism=0` in the install conf; the next CTP run failed every PX trace TC (18/156) — only the `(parallel workers: …)` lines were missing. One round-trip lost on a "PX regression" that was a conf line.
@@ -124,7 +124,7 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 ## Small runs
 
 ### P17 — the single-case fast path
-- Rule: A small CTP check runs candidate and control at the same time, puts `CTP_KEEP_COPIES=1` in the first command whenever the `.result` is needed, passes `EXCLUDE=''` when the case is in `dirsplit_exclusions.txt`, and the worker prompt carries only the commands and the facts to report.
+- Rule: A small CTP check runs candidate and control at the same time, puts `CTP_KEEP_COPIES=1` in the first command whenever the `.result` is needed, and passes `EXCLUDE=''` when the case is in `dirsplit_exclusions.txt`.
 - Applies at: Suites (subsets)
 - Case (2026-09-29, PR 7866 cbrd_26473): each single-case run took ≈45 s (the case: 1.3 s), yet the check took 13 minutes — the first attempt died on a jar-less install, the prompt omitted `CTP_KEEP_COPIES=1` so run A was repeated, and the runs went one after another. The user: "그 1건 돌려보는데 시간이 이렇게 많이걸려?".
 - Case (2026-10-07, CBRD-27365): `_36_guava/cbrd_27485` is in `dirsplit_exclusions.txt`; the A/B on gha-ci develop archives needed `EXCLUDE=''` to run it alone.

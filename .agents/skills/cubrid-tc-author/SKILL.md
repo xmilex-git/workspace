@@ -92,7 +92,7 @@ Follow [references/verify.md](references/verify.md): obtain the pre-fix, fix and
 optdebug installs, generate the answer on the fix build, run the case directory on all three in
 parallel containers, run the fix build 3 times for determinism, then (sql) once more as `sql_by_cci`
 and once over the TC's parent directory, and read verdicts from the runner.
-The lead runs the builds (verify.md §1); CTP is delegated to a Workflow worker with the contract text from verify.md §0 pasted verbatim.
+The lead runs the builds and CTP itself (verify.md); nothing there is delegated to a worker.
 To prove a shell case records failures, build a negative control without a worktree — `read-tree` into a temporary `GIT_INDEX_FILE`, `hash-object -w` the changed file, `update-index --cacheinfo`, `write-tree`, `commit-tree` — force one check to fail (its expected value +1), never push the commit, run it with `TC_REF=<that sha>`, then `git worktree remove` the runner's tc-worktree for that sha; and count the `.result` lines against the number of `write_ok`/`write_nok` calls (one line per check). (P5)
 
 Done when `<rundir>/results.md` holds the table (build, sha, OK/NOK per case, cores) and the

@@ -59,15 +59,12 @@ $S/rst-lint.sh     -d upstream/develop ko/sql/foo.rst en/sql/foo.rst   # house-s
 
 Both scripts also run without `-d` (whole-file mode) — the right gate for a page you wrote end to end.
 
-## Delegation
+## Who runs what
 
-The ko↔en semantic comparison is delegated using the harness-specific worker policy
-in `.agents/AGENTS.md` (Codex: Luna/max, fast when supported; Claude Code: Sonnet/xhigh via the
-`Workflow` tool). Include the delegation execution contract from
-`.agents/AGENTS.md` verbatim, the scratch rule (`.git_ignored_dir/scratch/`, never `/tmp`), and the
-`cubrid-server-control` requirement in every delegation prompt. The lead keeps: the builds, the audit verdicts,
-the prose, the mechanical sweeps, the PR, and the example runs on the built install (server
-start/stop, data generation, query/trace capture), which are smoke per that file's division of labor.
+The lead does all of it (`.agents/AGENTS.md`, division of labor): the builds, the ko↔en semantic
+comparison, the audit verdicts, the prose, the mechanical sweeps, the PR, and the example runs on
+the built install (server start/stop, data generation, query/trace capture). Nothing is delegated
+to a worker.
 
 ## Worked example (provenance)
 

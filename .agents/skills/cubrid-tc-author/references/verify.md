@@ -1,19 +1,13 @@
 # Verify on three optdebug builds
 
-Everything here is **runtime work**: builds, CTP, servers. The lead runs the §1 builds itself; the
-rest goes to one Workflow worker (`agent(prompt, { model: 'sonnet', effort: 'xhigh' })`) whose prompt
-contains §0 verbatim plus the exact commands of §2–§4 with the placeholders filled. The lead reads the worker's `results.md` and
-judges §5–§6. Only optdebug is used — release hides asserts and once produced four wrong diagnoses
+Everything here is **runtime work**: builds, CTP, servers. The lead runs §1–§4 itself under the §0
+rules, records them in `results.md`, and judges §5–§6. Only optdebug is used — release hides asserts and once produced four wrong diagnoses
 (2026-09-19/20); QA generates answers on release, we do not. The shell rulebook asks for a release
 run as well; we skip it by decision (user, 2026-10-30) and the PR table names optdebug.
 
-## §0 Text to paste verbatim into every worker prompt
+## §0 Rules for every run
 
 ```
-Delegation execution contract:
-- Finite gate work (incremental build, smoke rerun, targeted CTP — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
-- The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
-
 CTP execution rule (every suite):
 - Every CTP run, whole or subset, goes through `just ctp <sql|medium|shell|shell_perf|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe. CTP's teardown runs `pkill cub` and `kill -9` over `ps -u $USER`.
 - The testcase ref is never implicit: pass `PR=<n>` or `TC_REF=<ref>`, or `CTP_ARGS="--testcases-as-is --testcases <dir>"` for an unpushed worktree.

@@ -37,8 +37,8 @@ tested and fixed later. This is a report the user asked for, so give it in full.
    per item, O(n^2) on big input, per-process state that must be shared.
 4. **Missing execution evidence:** risky logic (a branch, a parser, money,
    security, data writes) without a check that exposes the failure. Get the
-   relevant reproduction or runtime check (builds and smoke by the lead, CTP
-   by the worker); do not create, enable or run unit tests.
+   relevant reproduction or runtime check (builds, smoke and CTP, all run by
+   the lead); do not create, enable or run unit tests.
 5. **Speed:** big slowdowns are problems. Small wins (work repeated in a hot
    loop) are suggestions; some software counts every millisecond.
 6. **Lean:** code that should not exist or should be smaller.
@@ -67,10 +67,9 @@ tested and fixed later. This is a report the user asked for, so give it in full.
 - No style taste, no "consider", no vague worries.
 
 - Read-only inspection does not replace execution validation. The lead
-  defines bounded checks, runs the builds and smoke-sized reproductions itself,
-  and delegates the CTP runs the findings and the verdict need to the
-  designated worker.
-- Do not declare a pass from a worker summary alone: inspect the returned
+  defines bounded checks, runs the smoke-sized reproductions, builds and CTP
+  runs the findings and the verdict need itself.
+- Do not declare a pass from a summary alone: inspect the
   logs, exit codes and task-specific evidence. State what was actually run.
 
 ### 4. Output

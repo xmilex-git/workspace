@@ -499,9 +499,6 @@ _Avoid_: TC 브랜치
 QA 가 cubrid-agent 에 정본을 두고 TC 저장소에 배포한 TC 작성 규칙. cubrid-testcases 에는 sql·medium 룰북(`AGENTS.md`, `sql/AGENTS.md`, `medium/AGENTS.md`, `<category>/rules/{test-perspectives,writing-rules}.md`), private-ex 에는 shell 룰북(`AGENTS.md`, `shell/AGENTS.md`, `shell/rules/…`)이 있다. TC 를 쓰거나 고치거나 리뷰할 때의 기준이며, cubrid-tc-author 의 규칙 파일은 룰북에 없는 CUBRID 내부 판정법과 룰북과 다르게 하기로 정한 점만 담는다.
 _Avoid_: sql-rules·shell-rules(우리 스킬의 차이 파일), QA 스킬(cubrid-agent 의 `skills/` 는 별개)
 
-**위임 빌드 (delegated build)**:
-설치본을 만드는 모든 빌드(`just build|rebuild|incr`)로, 워커(Sonnet Workflow 또는 Luna)가 위임 실행 계약 아래 수행한다. 리드는 변경 TU 의 `-fsyntax-only` 까지만 직접 한다.
-
 ### CTP 실행 도구 (컨테이너 격리 러너)
 
 **설치본 (install)**:

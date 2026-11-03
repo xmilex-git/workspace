@@ -5,9 +5,7 @@ was not rendered is a review round waiting to happen.
 
 ## 1. Test server (isolated install, claimed port)
 
-Never reuse another session's server or `~/CUBRID`. Use the harness-specific worker policy
-(Codex: Luna/max, fast when supported; Claude Code: Sonnet/xhigh via the `Workflow` tool) and delegation contract from
-`.agents/AGENTS.md` for delegated work below.
+Never reuse another session's server or `~/CUBRID`. The lead runs everything below itself.
 
 ```bash
 # in the tooling repo

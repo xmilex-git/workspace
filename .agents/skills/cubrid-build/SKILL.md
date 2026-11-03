@@ -16,7 +16,7 @@ tracked `CMakePresets.json` and installs to a versioned, per-mode directory.
 - **incremental build** (`just incr`): ninja over an already-configured tree, installing to the prefix the tree was configured with; no locale copy, no conf re-apply, no `~/CUBRID` change.
 - **fingerprint**: `sha256sum <install>/lib/libcubrid.so.11.5` (and `libcubridsa.so` for SA work) — the only thing that tells two builds apart.
 - **gate**: the verification a change must pass before push or merge; its builds are optdebug and release, both green.
-- **lead build**: every build that produces an install runs in the lead's own session through the justfile; it is not delegated to a Workflow or Luna worker (user, 2026-11-03).
+- **lead build**: every build that produces an install runs in the lead's own session through the justfile; nothing is delegated to a worker (user, 2026-11-03).
 
 The lessons behind every `(P<n>)` are in `PITFALLS.md`; a new lesson goes there as a case under its rule, or as a new rule added to both files in one commit.
 

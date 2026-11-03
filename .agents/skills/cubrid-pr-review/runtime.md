@@ -24,11 +24,9 @@ Reached from Step 3c of `SKILL.md`. Building CUBRID and running TCs for a review
 
 ## 3. Runs
 
-Delegate the runs to the designated worker (Claude Code: Sonnet at effort `xhigh` through the `Workflow` tool, `agent(prompt, { model: 'sonnet', effort: 'xhigh' })`; Codex: Luna). The prompt carries these lines verbatim (source: .agents/AGENTS.md):
+The lead runs these itself (source: .agents/AGENTS.md): a targeted subset in the foreground, a whole suite with `run_in_background`.
 
-- Finite gate work (incremental build, smoke rerun, targeted CTP — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
-- The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
-- Every CTP run, whole or subset, by the lead or any delegated worker, goes through `just ctp <sql|medium|shell|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe.
+- Every CTP run, whole or subset, goes through `just ctp <sql|medium|shell|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe.
 - The testcase ref is never implicit: pass `PR=<n>` or `TC_REF=<ref>`, or let it infer the PR from `WORKSPACE`. A run with none of the three refuses rather than validate a PR against develop testcases.
 
 Keep the prompt to the commands and the facts to report. Add the host gotchas: `/usr/bin/grep` for `-E`, inline `VAR=x cmd` rather than bare `env`, and multi-command logic in a script run as `bash <script>`. Every CTP run is `just ctp` from the tooling repo root. Runs isolate containers and serialize testcase checkout with a lock, so an A/B pair runs at once.
