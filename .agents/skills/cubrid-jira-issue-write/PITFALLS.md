@@ -28,6 +28,7 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-10-23, CBRD-27759): a `{1, 2}` set literal in prose opened a wiki macro that swallowed the next `{code:sql}` block, and `COUNT (*)` became a star emoticon; inside `{code}` both are fine.
 - Case (2026-11-03, CBRD-27893): prose "CHAR(n)" rendered as a thumbs-down emoticon — (n), (y), (i), (x), (!), (?), (on), (off) are emoticons too; escape as \(n) outside {code}.
 - Case (2026-10-23, CBRD-27730): an Open Correct Error offers only "To Triage" and "Bug Invalid"; "Bug Invalid" resolves it as **Fixed** and the resolution cannot be changed afterwards without the UI or an admin — say so before using it.
+- Case (2026-11-03, CBRD-27797/27799/27703): "Resolve without fix" (transition 561, sent without a `resolution` field) also left Resolution **Fixed**; `editmeta` has no `resolution`, so it cannot be fixed by REST afterwards. Read `GET /transitions?expand=transitions.fields` first and send `"fields":{"resolution":{"name":…}}` with the transition when the screen offers it; otherwise tell the user the resolution will read Fixed before closing.
 - Case (2026-10-28, CBRD-27815): the user named the assignee by GitHub handle "shparkcubrid"; JIRA has no such user — `GET /rest/api/2/user/search?username=shpark` gave `shpark` (park se hun), and the report said which account was used.
 - Source: memory:jira-filing-workflow, memory:no-jira-posting
 
