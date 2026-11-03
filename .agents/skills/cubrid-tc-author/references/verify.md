@@ -1,8 +1,8 @@
 # Verify on three optdebug builds
 
-Everything here is **runtime work**: builds, CTP, servers. Delegate it to one Workflow worker
-(`agent(prompt, { model: 'sonnet', effort: 'xhigh' })`) whose prompt contains §0 verbatim plus the
-exact commands of §1–§4 with the placeholders filled. The lead reads the worker's `results.md` and
+Everything here is **runtime work**: builds, CTP, servers. The lead runs the §1 builds itself; the
+rest goes to one Workflow worker (`agent(prompt, { model: 'sonnet', effort: 'xhigh' })`) whose prompt
+contains §0 verbatim plus the exact commands of §2–§4 with the placeholders filled. The lead reads the worker's `results.md` and
 judges §5–§6. Only optdebug is used — release hides asserts and once produced four wrong diagnoses
 (2026-09-19/20); QA generates answers on release, we do not. The shell rulebook asks for a release
 run as well; we skip it by decision (user, 2026-10-30) and the PR table names optdebug.
@@ -55,8 +55,8 @@ INSTALL_PREFIX=~/optdebug/CUBRID-cbrd<N>-<pre|fix> WORKSPACE="$WT" just build op
 tail -3 .git_ignored_dir/scratch/tc-author/CBRD-<N>/build-<pre|fix>.log   # ends with "installed optdebug (...) -> <dir>"
 ```
 
-`INSTALL_PREFIX` keeps `~/CUBRID` untouched. A full build may run in the background only with a
-bounded poll in the same turn (§0). `just build` applies the campaign conf; the CTP runner pins its
+`INSTALL_PREFIX` keeps `~/CUBRID` untouched. A full build runs with `run_in_background`; the lead
+continues independent work until the harness reports its exit. `just build` applies the campaign conf; the CTP runner pins its
 own server parameters, so the install's conf does not matter for CTP.
 
 **A sha older than 2026-07-15 has no `optdebug` preset** (`CMake Error: No such preset ... "optdebug"`).

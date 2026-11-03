@@ -52,38 +52,38 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 
 ### P7 — a comment-only change gets no build
 - Rule: A comment-only change gets no build: verify that only PR-added lines changed, that the code is identical with comments stripped, and that the CI formatters (`indent -l120 -lc120 -st`, astyle with the codestyle.sh options) leave it unchanged.
-- Applies at: Smoke before a delegated build
+- Applies at: Smoke before the build
 - Case (2026-09-29, PR 8022): after scrubbing workspace references from about 850 comments, a compile check was about to go to a worker; the user: "주석만 바뀌었는데 컴파일을 왜해. 그거 하지말고 마저 진행해." If a tiny non-comment change slips in (an unused table's id strings did), say so and let the PR's CI compile it; commit messages of a squash-merged PR need no cleanup.
 - Source: memory:comment-only-change-no-build
 
 ### P8 — syntax-only with both compile commands
 - Rule: For every changed TU, run the optdebug compile command from `build_preset_optdebug/compile_commands.json` with ` -fsyntax-only -fmax-errors=0` and the release command from `build_preset_release/compile_commands.json` with `-o /dev/null` (a real `-c` compile, not syntax-only), because `-Werror=maybe-uninitialized` needs the optimizer and only the release flags carry it; and when inserting a check into a long function, read the lines above it to confirm every variable it reads is assigned there.
-- Applies at: Smoke before a delegated build
+- Applies at: Smoke before the build
 - Case (2026-10-23, PR 8213 gate v16): a check read `statement->xasl_id` about 30 lines before `statement = session->statements[stmt_ndx]`; the optdebug syntax-only pass was clean, the release build stopped with `-Werror=maybe-uninitialized`, and the optdebug install crashed every CAS at the first statement of every CTP case (16 shards stalled, one gate lost).
 - Case (2026-10-28, dry run): GCC's `-fsyntax-only` does not run the optimizer, so the release command as syntax-only cannot raise `-Wmaybe-uninitialized`; the rule now compiles the release command for real into `/dev/null`.
 - Source: memory:syntax-compile-with-release-command
 
 ### P9 — the compiler is the census
-- Rule: To find every reader of a field, rename it in the header (`<field>_CENSUS_<tag>`), syntax-compile every TU of the tree (`xargs -P`, ~1200 TUs in about a minute, delegated), parse the `has no member named` errors with their struct name and `in expansion of macro` notes into a sites table, then undo the rename and check the tree hash — a grep census misses sites.
-- Applies at: Smoke before a delegated build
+- Rule: To find every reader of a field, rename it in the header (`<field>_CENSUS_<tag>`), syntax-compile every TU of the tree (`xargs -P`, ~1200 TUs in about a minute), parse the `has no member named` errors with their struct name and `in expansion of macro` notes into a sites table, then undo the rename and check the tree hash — a grep census misses sites.
+- Applies at: Smoke before the build
 - Case (dpin #355): a grep census missed `qdata_get_dbval_from_constant_regu_variable` and the diagnostic CTP died on it; the compiler census found 493 sites in 24 files (1214 TUs in 63 s with `xargs -P 48`). GCC's "did you mean" hint is not a matching signal (it suggested `domain_plan` for `arith_list_node::domain`); match on the struct name. Inline accessors that return the field (`REGU_VARIABLE_GET_TYPE`) need their callers checked too.
 - Case (2026-09-30, PR 8022 C4, unused-member census): `private: … public:` wrapping reports nested accesses a rename stops at; GCC's message is `‘T X::m’ is private within this context`; skip C TUs, anonymous-union members and uses inside the class's own methods; GCC 8 reports unused-but-set for variables used only in a discarded `if constexpr` branch (false positives); removals cascade (wrapper → macro → next wrapper), so rerun until the reference count is empty.
 - Source: memory:compiler-census-field-rename
 
-### P10 — no source edits during a delegated build
-- Rule: While a worker's build runs on a worktree, nobody edits, checks out or patches its sources: check `ps` or the workflow for a running build on that worktree first, and stage a mid-build decision as a patch file to apply after the `installed` line.
-- Applies at: Delegated builds
+### P10 — no source edits during a build
+- Rule: While a build runs on a worktree, nobody edits, checks out or patches its sources: check `ps` for a running build on that worktree first, and stage a mid-build decision as a patch file to apply after the `installed` line.
+- Applies at: Builds
 - Case (2026-10-17, CBRD-27583): a peer reversed decision D-27 while build 26 was compiling; `system_parameter.c` was restored at 01:11:28 but its three objects had compiled at 01:11:08 from the reverted text. The install had `plus_as_concat` out of the plan key: 28 extra `_15_host_variable` failures and 4 `qdata_assert_arith_planned` cores the committed source would not produce, and the run was repeated. Also: keep the Bash tool's cwd out of smoke DB dirs (run scripts in a subshell), since removing the current directory is refused.
 - Source: memory:no-source-edits-during-delegated-build
 
 ### P11 — one build per worktree at a time
 - Rule: Two builds of one worktree (optdebug and release) run one after the other, never at once: both rebuild the JDBC jar inside the `cubrid-jdbc` submodule directory, and a build that copies it mid-rewrite into `build_preset_<mode>/pl_engine/lib` fails `pl_server:compileJava` with `package cubrid.sql does not exist`.
-- Applies at: Delegated builds
+- Applies at: Builds
 - Case (2026-10-29, CBRD-27679): a worker ran `just incr optdebug` and `just incr release` on one worktree in parallel after a JDBC change; the optdebug tree copied a 1203-byte jar written while the release build was rebuilding it, and `pl_server:compileJava` failed on every `cubrid.sql`/`cubrid.jdbc` import. The release build passed, and the optdebug build alone passed afterwards. The first fresh builds of the same tree had run in parallel without failing, because the jar was only built once.
 - Case (2026-10-30, CBRD-27819 #568): the lead's gate workflow started the optdebug and release builds of one worktree as parallel agents; the rule was read before either build reached the JDBC step and the workflow was relaunched with release chained after optdebug.
 - Case (2026-11-02, CBRD-27679 review round): the lead's gate workflow again started the two builds as parallel lanes; release failed at `pl_server:compileJava` (`package cubrid.sql does not exist`) while optdebug ran, and passed when rerun after it. The next workflow put both builds in one lane, release after optdebug.
 
 ### P12 — a CMakeLists change gets a real target build
-- Rule: When a commit changes a `CMakeLists.txt`, build one real target of the changed list in the optdebug tree (`ninja -C <ws>/build_preset_optdebug -j 32 cubridsa`) before delegating, because `-fsyntax-only` on the changed TUs never sees the source lists; a `.i` file that another TU includes goes into `*_HEADERS` (beside `like_match_lockstep.i`), never `*_SOURCES`, which compiles it as its own TU.
-- Applies at: Smoke before a delegated build
+- Rule: When a commit changes a `CMakeLists.txt`, build one real target of the changed list in the optdebug tree (`ninja -C <ws>/build_preset_optdebug -j 32 cubridsa`) before the full build, because `-fsyntax-only` on the changed TUs never sees the source lists; a `.i` file that another TU includes goes into `*_HEADERS` (beside `like_match_lockstep.i`), never `*_SOURCES`, which compiles it as its own TU.
+- Applies at: Smoke before the build
 - Case (2026-10-30, CBRD-27819 #568): `numeric_shortest_decimal.i` (included by `numeric_opfunc.c`) was added to `QUERY_SOURCES` of cubrid/sa/cs; the syntax-only compiles of `numeric_opfunc.c` were clean, and the delegated release build failed with `'uint64_t' does not name a type` at the `.i` compiled alone. Moved to `QUERY_HEADERS`; `ninja … cubridsa` then built 377/377.

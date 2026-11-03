@@ -1,4 +1,4 @@
-Post-code validation policy (supersedes the previous explicit-request-only policy): After code changes, perform change-focused review and delegate execution validation without waiting for a separate user request. For CUBRID source changes, require release and optdebug builds, the relevant containerized CTP suites, and task-specific runtime checks, following the justfile and the skills (`cubrid-build`, `ctp-run`, `cubrid-server-control`, `cubrid-diagnose`, `cubrid-pr-review`). Do not create, enable or run unit tests. The lead performs source inspection, implementation, smoke, review and verification planning; builds, CTP and the gate go to the designated Sonnet Workflow or Luna worker under the existing model, host and execution contracts (Division of labor below). If delegation or a verification gate is blocked, report the blocker and incomplete state; do not silently skip validation or claim completion. Documentation-only changes do not trigger unrelated engine builds or CTP runs.
+Post-code validation policy (supersedes the previous explicit-request-only policy): After code changes, perform change-focused review and start execution validation without waiting for a separate user request. For CUBRID source changes, require release and optdebug builds, the relevant containerized CTP suites, and task-specific runtime checks, following the justfile and the skills (`cubrid-build`, `ctp-run`, `cubrid-server-control`, `cubrid-diagnose`, `cubrid-pr-review`). Do not create, enable or run unit tests. The lead performs source inspection, implementation, builds, smoke, review and verification planning; CTP and the other long runs go to the designated Sonnet Workflow or Luna worker under the existing model, host and execution contracts (Division of labor below). If delegation or a verification gate is blocked, report the blocker and incomplete state; do not silently skip validation or claim completion. Documentation-only changes do not trigger unrelated engine builds or CTP runs.
 
 When developing, executing or reviewing CUBRID, use the justfile and the skills; each skill's `PITFALLS.md` holds the incidents behind its rules (ADR 0033).
 
@@ -9,9 +9,10 @@ Whenever modifying CUBRID source code, ALWAYS consult the `cpp-perf-rules` skill
 Engine code lookup (definition, body, outline, callers, references of a symbol in an engine worktree) goes through `tools/code-index/code-index <WORKSPACE> <command> <name>` first — ahead of rg, LSP, or an Explore agent. Use rg for comments, strings, configuration, dynamic references, regexes, and names code-index reports as not found; an empty index result alone does not prove code is unused. Commands and output: root `AGENTS.md`, "Code lookup in an engine worktree".
 
 Division of labor (shared instructions; `.claude/CLAUDE.md` is a relative symlink to this file; boundary set by the user 2026-10-16):
-- **Lead directly:** source reading/comparison, static code and call-path analysis, documentation/research, design, implementation, smoke, verification planning, and the final diagnosis. Read-only inspection of files, git history/diffs, and tracker records belongs to the lead; it is not execution validation.
-- **Smoke** is the lead's own runtime check inside the implementation loop, on an install that already exists: `-fsyntax-only` compiles of the changed translation units, server start through `cubrid-server-control` on a claimed port, small csql/SA queries and fixtures, error reproduction, and gdb on cores or live processes. Each step runs in the foreground and finishes within ~10 min; output goes to a scratch file and the lead reads only the lines it needs; the lead stops its servers and releases its ports when done. Smoke is loop feedback, not gate evidence: keep the smoke script so the gate worker reruns it on the gated build.
-- **Delegate to the worker:** every build that produces an install (`just build|rebuild|incr`, release and optdebug), every CTP run, the gate as a whole, whole-tree compile censuses, benchmarks and A/B measurements, large data loads, repeated-N race runs, and any step longer than ~10 min. A worker that hits a core reports its path and matching pid; the lead takes the backtrace.
+- **Lead directly:** source reading/comparison, static code and call-path analysis, documentation/research, design, implementation, builds, smoke, verification planning, and the final diagnosis. Read-only inspection of files, git history/diffs, and tracker records belongs to the lead; it is not execution validation.
+- **Smoke** is the lead's own runtime check inside the implementation loop, on an install that already exists: `-fsyntax-only` compiles of the changed translation units, server start through `cubrid-server-control` on a claimed port, small csql/SA queries and fixtures, error reproduction, and gdb on cores or live processes. Each step runs in the foreground and finishes within ~10 min; output goes to a scratch file and the lead reads only the lines it needs; the lead stops its servers and releases its ports when done. Smoke is loop feedback, not gate evidence: keep the smoke script and rerun it on the gated build.
+- **Builds** (`just build|rebuild|incr`, release and optdebug) and whole-tree compile censuses are the lead's, through the justfile (user, 2026-11-03: a Workflow worker adds only tokens to a harnessed build): an incremental build runs in the foreground, a fresh build with `run_in_background` (the harness notifies on exit); the lead reads only the `installed` line and the fingerprint (`cubrid-build`).
+- **Delegate to the worker:** every CTP run, benchmarks and A/B measurements, large data loads, repeated-N race runs, and any other step longer than ~10 min. A worker that hits a core reports its path and matching pid; the lead takes the backtrace.
 - A skill or map asking for a research/exploration subagent does not expand this boundary: the lead performs source investigation directly. Delegate such investigation only when the user explicitly requests it.
 
 Delegation model: **use the harness's own subagent facility**:
@@ -76,7 +77,7 @@ CTP execution rule (every suite; 2026-08-28 incident: CTP's teardown runs `pkill
 - A claim about develop is stated only after a probe on a develop build with a discriminating row.
 - An external review the user hands over is verified finding by finding (static at the reviewed SHA, runtime repro, original intent, what was missed) and reported before anything is fixed.
 - `cubrid checkdb` is not a test: it runs only for index-structure work on a small DB and is named in the report; "정합성 체크" means comparing query results.
-- Gate lanes (CTP, counters on an install copy, release build + SA probes, targeted TC) run as parallel workers after the optdebug build; whole-suite CTP keeps 16 shards; two counter harnesses never run at once; shell is one run over the union of affected directories and otherwise upstream CI's.
+- Gate lanes (CTP, counters on an install copy, targeted TC) run as parallel workers after the optdebug build while the lead builds release and runs the SA probes; whole-suite CTP keeps 16 shards; two counter harnesses never run at once; shell is one run over the union of affected directories and otherwise upstream CI's.
 - Minimum verification of a new or changed path: optdebug and release builds green; fail-before-fix then PASS by the same method; a live run on a CS-mode optdebug server with no assert, crash or tracker leak; orphan-zero temp files after normal, abnormal and `kill -9` exits; tree restored, daemons stopped, the libcubrid fingerprint in the proof.
 - An index path is verified with a sargable predicate on the index column and plan evidence (`;plan simple`, `INDEX SCAN`), never by the answer alone.
 - Large evidence, backups and databases get a size estimate and a cap before they are created; large loads split schema (no indexes) → data → index file with `cubrid loaddb -i <index.sql> --no-logging-index` in CS mode, and a full backup follows (the log chain carries a barrier).
@@ -124,7 +125,7 @@ These are shared project instructions, not an installed plugin. No hooks, slash 
 - Implementation principles apply to coding tasks. Review every code change. Audit the repository only when the user explicitly requests an audit; implementation or ordinary review does not trigger a repository-wide audit.
 - Do not create, enable or run unit tests. References to existing tests below permit source inspection, not execution, and do not make unit-test absence a finding by itself. Use build, containerized CTP and task-specific runtime evidence instead.
 - Execution validation is part of completing code work, not opt-in. For CUBRID source changes, the baseline is release and optdebug builds plus the relevant CTP and runtime checks, not every unrelated CTP suite.
-- Lead directly: source inspection, static review, implementation, smoke, verification planning and final judgment. Delegate builds, CTP and the gate through the existing Sonnet Workflow or Luna model/host contracts (Division of labor above). Do not substitute an unauthorized worker or run delegated work directly because the designated facility is unavailable; report the blocker.
+- Lead directly: source inspection, static review, implementation, smoke, verification planning and final judgment. Run builds yourself; delegate CTP and the other long runs through the existing Sonnet Workflow or Luna model/host contracts (Division of labor above). Do not substitute an unauthorized worker or run delegated work directly because the designated facility is unavailable; report the blocker.
 - Preserve the justfile, code-index, CTP container, port ownership, safety and worker execution contracts. Do not start engine builds or CTP for documentation-only changes.
 - For engine symbols, use code-index first for definitions, bodies, callers and references. Use rg for comments, strings, configuration, dynamic references, regex searches and symbols the index cannot find. An empty index result alone does not prove code is unused.
 - Push back on unnecessary complexity, but respect clear requirements. Do not repeatedly question a requirement the user has already decided.
@@ -158,7 +159,7 @@ Take the first option that fully works:
 - Bug fix: before you edit, find every caller of the function you touch with code-index first for engine symbols and rg as needed, then fix the root cause once in the shared code.
 - Code you move or merge keeps its error handling and validation.
 - Between options of equal size, take the one that is correct on edge cases.
-- Lazy code without its check is unfinished: after code changes, review the change and delegate execution validation to the designated runtime worker. For CUBRID source changes, require release and optdebug builds plus the relevant containerized CTP and task-specific runtime checks. Do not create, enable or run unit tests.
+- Lazy code without its check is unfinished: after code changes, review the change, run the builds and smoke yourself, and delegate CTP to the designated runtime worker. For CUBRID source changes, require release and optdebug builds plus the relevant containerized CTP and task-specific runtime checks. Do not create, enable or run unit tests.
 - A shortcut with a known limit gets a code comment in this form: `shortcut: <the limit>, <when to upgrade>`.
 
 Never cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.
@@ -198,8 +199,8 @@ This is a report the user asked for, so give it in full.
    per item, O(n^2) on big input, per-process state that must be shared.
 4. **Missing execution evidence:** risky new logic (a branch, a parser, money,
    security, data writes, a bug fix) without a check that exposes the failure.
-   Get the relevant reproduction or runtime check (smoke by the lead, builds
-   and CTP by the worker); do not create, enable or run unit tests.
+   Get the relevant reproduction or runtime check (builds and smoke by the
+   lead, CTP by the worker); do not create, enable or run unit tests.
 5. **Speed:** big slowdowns are problems. Small wins (work repeated in a hot
    loop) are suggestions; some software counts every millisecond.
 6. **Lean:** code that should not exist or should be smaller.
@@ -226,8 +227,8 @@ This is a report the user asked for, so give it in full.
 - No style taste, no "consider", no vague worries.
 
 - Read-only inspection does not replace execution validation. The lead
-  defines bounded checks, runs smoke-sized reproductions itself, and delegates
-  the builds, CTP and gate runs the findings and the verdict need to the
+  defines bounded checks, runs the builds and smoke-sized reproductions itself,
+  and delegates the CTP runs the findings and the verdict need to the
   designated worker.
 - Do not declare a pass from a worker summary alone: inspect the returned
   logs, exit codes and task-specific evidence. State what was actually run.

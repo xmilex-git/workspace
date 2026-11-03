@@ -222,7 +222,7 @@ Reuse evidence before producing it: CI statuses and the gha-ci artifact server a
 - a linked ticket's repro,
 - a scenario the PR claims but CI does not cover.
 
-Builds and CTP go to a delegated worker (Sonnet Workflow or Luna; smoke-sized checks stay with the lead), and every CTP run goes through `just ctp` containers. Recipes, the worker prompt's verbatim execution contract, artifact-server paths and cleanup are in `runtime.md`.
+Builds and smoke-sized checks stay with the lead, CTP goes to a delegated worker (Sonnet Workflow or Luna), and every CTP run goes through `just ctp` containers. Recipes, the worker prompt's verbatim execution contract, artifact-server paths and cleanup are in `runtime.md`.
 
 How a run becomes evidence:
 - A TC PR based on release/11.4 or an older line has no optdebug preset (`CMakePresets.json` holds release, debug, coverage and profile only), so its runtime evidence is a local release build of the branch head run through `just ctp`, and the report says asserts were not exercised. (P26)

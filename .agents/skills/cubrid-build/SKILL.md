@@ -1,6 +1,6 @@
 ---
 name: cubrid-build
-description: CUBRID build and install workflow using the portable justfile (optdebug and release presets, incremental builds, dedicated install prefixes, build fingerprints, gate checklist). The CUBRID source directory is passed explicitly via WORKSPACE (the justfile lives in this standalone tooling repo, not inside the checkout). Use when building, compiling, installing, or syntax-checking CUBRID source code in any CUBRID worktree or source directory, or when a build must be delegated to a worker.
+description: CUBRID build and install workflow using the portable justfile (optdebug and release presets, incremental builds, dedicated install prefixes, build fingerprints, gate checklist). The CUBRID source directory is passed explicitly via WORKSPACE (the justfile lives in this standalone tooling repo, not inside the checkout). Use when building, compiling, installing, or syntax-checking CUBRID source code in any CUBRID worktree or source directory.
 ---
 
 # CUBRID Build & Install
@@ -16,7 +16,7 @@ tracked `CMakePresets.json` and installs to a versioned, per-mode directory.
 - **incremental build** (`just incr`): ninja over an already-configured tree, installing to the prefix the tree was configured with; no locale copy, no conf re-apply, no `~/CUBRID` change.
 - **fingerprint**: `sha256sum <install>/lib/libcubrid.so.11.5` (and `libcubridsa.so` for SA work) — the only thing that tells two builds apart.
 - **gate**: the verification a change must pass before push or merge; its builds are optdebug and release, both green.
-- **delegated build**: a build run by a worker (Sonnet Workflow or Luna) under the execution contract below; the lead does not run builds that produce an install.
+- **lead build**: every build that produces an install runs in the lead's own session through the justfile; it is not delegated to a Workflow or Luna worker (user, 2026-11-03).
 
 The lessons behind every `(P<n>)` are in `PITFALLS.md`; a new lesson goes there as a case under its rule, or as a new rule added to both files in one commit.
 
@@ -72,23 +72,20 @@ just install-locale <install>                  # copy the prebuilt locale files 
 
 A `cp -a` copy of an install runs the original prefix's libraries on the host, because CUBRID binaries carry `DT_RPATH=<original>/lib`, which wins over `LD_LIBRARY_PATH`; so a host-side baseline copy is probed before the original is rebuilt, or its `lib` is bind-mounted over the RPATH dir inside the job namespace, or it is made a real install with `patchelf --remove-rpath && patchelf --force-rpath --set-rpath <copy>/lib` on every ELF under `bin/` and `lib/` — and `readelf -d <copy>/bin/csql | grep RPATH` is read before any "base = …" comparison. (P4) Inside CTP containers a copy is fine (the original path does not exist there). CI tarballs carry `RPATH=/home/CUBRID/lib`: run them with `LD_LIBRARY_PATH=<inst>/lib` and confirm with `ldd`. With several sessions sharing one install, each new candidate is built into its own directory and the old one is left until their runs end.
 
-## Smoke before a delegated build (lead)
+## Smoke before the build
 
 - A comment-only change gets no build: verify that only PR-added lines changed, that the code is identical with comments stripped, and that the CI formatters (`indent -l120 -lc120 -st`, astyle with the codestyle.sh options) leave it unchanged. (P7)
 - For every changed TU, run the optdebug compile command from `build_preset_optdebug/compile_commands.json` with ` -fsyntax-only -fmax-errors=0` and the release command from `build_preset_release/compile_commands.json` with `-o /dev/null` (a real `-c` compile, not syntax-only), because `-Werror=maybe-uninitialized` needs the optimizer and only the release flags carry it; and when inserting a check into a long function, read the lines above it to confirm every variable it reads is assigned there. (P8)
-- When a commit changes a `CMakeLists.txt`, build one real target of the changed list in the optdebug tree (`ninja -C <ws>/build_preset_optdebug -j 32 cubridsa`) before delegating, because `-fsyntax-only` on the changed TUs never sees the source lists; a `.i` file that another TU includes goes into `*_HEADERS` (beside `like_match_lockstep.i`), never `*_SOURCES`, which compiles it as its own TU. (P12)
-- To find every reader of a field, rename it in the header (`<field>_CENSUS_<tag>`), syntax-compile every TU of the tree (`xargs -P`, ~1200 TUs in about a minute, delegated), parse the `has no member named` errors with their struct name and `in expansion of macro` notes into a sites table, then undo the rename and check the tree hash — a grep census misses sites. (P9) For an unused-member census wrap declarations as `private: … public:` instead (the access error keeps the expression's type, so nested accesses still report); `-fsyntax-only` reports no unused static functions in C++ — compile with `-O0 -c -o /dev/null` and diff the `-Wunused` warnings against develop's same TUs.
+- When a commit changes a `CMakeLists.txt`, build one real target of the changed list in the optdebug tree (`ninja -C <ws>/build_preset_optdebug -j 32 cubridsa`) before the full build, because `-fsyntax-only` on the changed TUs never sees the source lists; a `.i` file that another TU includes goes into `*_HEADERS` (beside `like_match_lockstep.i`), never `*_SOURCES`, which compiles it as its own TU. (P12)
+- To find every reader of a field, rename it in the header (`<field>_CENSUS_<tag>`), syntax-compile every TU of the tree (`xargs -P`, ~1200 TUs in about a minute), parse the `has no member named` errors with their struct name and `in expansion of macro` notes into a sites table, then undo the rename and check the tree hash — a grep census misses sites. (P9) For an unused-member census wrap declarations as `private: … public:` instead (the access error keeps the expression's type, so nested accesses still report); `-fsyntax-only` reports no unused static functions in C++ — compile with `-O0 -c -o /dev/null` and diff the `-Wunused` warnings against develop's same TUs.
 
-## Delegated builds
+## Builds
 
-Every build that produces an install (`just build|rebuild|incr`, optdebug and release) goes to the designated worker (Claude Code: Sonnet at effort `xhigh` through the `Workflow` tool, `agent(prompt, { model: 'sonnet', effort: 'xhigh' })`; Codex: Luna). The prompt carries these lines verbatim (source: .agents/AGENTS.md):
+The lead runs every build that produces an install (`just build|rebuild|incr`, optdebug and release) itself, output redirected to a log under `.git_ignored_dir/scratch/`: `just incr` in the foreground, a fresh `just build|rebuild` with `run_in_background` (the harness re-invokes the lead on exit; independent work continues meanwhile).
 
-- Finite gate work (incremental build, smoke rerun, targeted CTP — steps that each finish within ~10 min) runs as FOREGROUND blocking commands, chained in one continuous turn. run_in_background/nohup/monitors are FORBIDDEN for such steps. Only a full fresh build may go background, and then the SAME turn must bounded-poll its completion marker (`timeout ... until grep ...`) — never end a turn "waiting for a notification".
-- The worker must deliver its final report in the same turn the work finishes, BEFORE going idle.
+The completion marker of a build is the log's last line `installed <mode> (<ws>) -> <prefix>` (incremental: `installed (incremental) …`); read `tail -3` of the log, never the whole log. The build record is the prefix, the marker line and the fingerprint (P3).
 
-The completion marker of a build is the log's last line `installed <mode> (<ws>) -> <prefix>` (incremental: `installed (incremental) …`); a bounded poll is `timeout 540 bash -c 'until grep -q "^installed " <build.log>; do sleep 15; done'`. The worker reports the prefix, the marker line, the rebuilt targets and the fingerprint (P3); the lead checks the install's `lib/libcubrid.so.11.5` mtime against the commit time instead of trusting an idle worker.
-
-- While a worker's build runs on a worktree, nobody edits, checks out or patches its sources: check `ps` or the workflow for a running build on that worktree first, and stage a mid-build decision as a patch file to apply after the `installed` line. (P10)
+- While a build runs on a worktree, nobody edits, checks out or patches its sources: check `ps` for a running build on that worktree first, and stage a mid-build decision as a patch file to apply after the `installed` line. (P10)
 - Two builds of one worktree (optdebug and release) run one after the other, never at once: both rebuild the JDBC jar inside the `cubrid-jdbc` submodule directory, and a build that copies it mid-rewrite into `build_preset_<mode>/pl_engine/lib` fails `pl_server:compileJava` with `package cubrid.sql does not exist`. (P11)
 
 ## Gate checklist (what a change must pass)

@@ -7,8 +7,8 @@ description: CUBRID companion to diagnosing-bugs — where to run a probe (SA vs
 
 The generic loop (build a red loop, reproduce, minimise, hypothesise, instrument, fix) is the
 `diagnosing-bugs` skill. This skill is what that loop needs to know about CUBRID and this host.
-Read-only inspection and probes are the lead's; builds, CTP and anything over ~10 min go to the
-designated worker (`cubrid-build`, `ctp-run`).
+Read-only inspection, probes and builds are the lead's (`cubrid-build`); CTP and other runs over
+~10 min go to the designated worker (`ctp-run`).
 
 ## Terms
 
