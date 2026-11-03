@@ -784,8 +784,12 @@ _Avoid_: 값별 플랜·custom plan(PG 의 값 peek 플랜 — 여기서는 타�
 _Avoid_: 가변 POS·가변 자리(옛 말, 실행 전 확정의 대상), 늦은 바인딩 자리, 값이 플랜을 정한다는 서술(타입만 정한다), 산술·함수 인자의 값 타입 자리를 클라이언트가 캐스트한다는 서술(`return_null_on_function_errors` 의 NULL 답이 바뀐다).
 
 **문맥 타입 자리 (context-typed position)** — 코드 `host_var_expected_domains`:
-타입 검사가 문맥(INSERT 대상 컬럼, 문자열·날짜 컬럼과의 비교, 함수 서명)으로 기대 도메인을 정한 호스트 변수 자리. 어떤 타입을 바인드하든 클라이언트가 그 도메인으로 바꿔 보내고, 바꿀 수 없으면 바인드 시점 오류다. develop 과 같다.
+타입 검사가 문맥(INSERT 대상 컬럼, 문자열·날짜 컬럼과의 비교, 함수 서명)으로 기대 도메인을 정한 호스트 변수 자리. 어떤 타입을 바인드하든 클라이언트가 그 도메인으로 바꿔 보내고, 바꿀 수 없으면 바인드 시점 오류다. develop 과 같다. 예외: 기대 도메인이 CHAR(n)·BIT(n) 이면 VARCHAR·VARBIT 값은 패딩하지 않고 그대로 보낸다 — 패딩한 `'a%   '` 는 LIKE 의 답을 바꾼다 — 그래서 그 자리의 플랜은 보낸 타입에 따라 둘 중 하나다. 대입 자리는 이 예외가 없다.
 _Avoid_: 고정 자리(fixed position, 옛 말), 컴파일 타입 자리.
+
+**대입 자리 (assignment position)**:
+바인드 번호의 모든 쓰임이 컬럼에 저장되는 값인 문맥 타입 자리다(INSERT·REPLACE 의 VALUES, UPDATE·MERGE 의 SET, MERGE 의 INSERT 값, ON DUPLICATE KEY UPDATE). 저장이 어차피 컬럼 타입으로 바꾸므로 클라이언트가 바인드 때 컬럼 타입으로 바꿔 보내고(CHAR 는 패딩), 바꿀 수 없으면 바인드 시점 오류다. 그래서 플랜은 하나이고 값 없는 PREPARE 가 만든다. ENUM 컬럼은 대입 자리가 아니다(develop 이 바꾸지 않는다, CUBRIDSUS-9007). 같은 번호가 비교 등 다른 쓰임에도 있으면 대입 자리가 아니다.
+_Avoid_: INSERT 자리(UPDATE SET 도 같다), 저장 자리.
 
 **타입 무관 자리 (type-irrelevant position)**:
 값이 NULL 인지만 쓰이는 호스트 변수 자리(IS NULL·IS NOT NULL 의 피연산자, ISNULL 의 인자). 값의 타입이 답을 바꾸지 못하므로 서명에 들지 않고, 어떤 타입의 값이든 한 플랜을 쓴다. 그 자리의 모든 출현이 이런 소비자일 때만이다(다시 쓰기가 같은 `?` 를 값이 쓰이는 곳에 복사했으면 값 타입 자리다).
