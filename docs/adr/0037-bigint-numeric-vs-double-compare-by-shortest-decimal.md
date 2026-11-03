@@ -6,7 +6,7 @@ issue: CBRD-27819 (CBRD-27797, CBRD-27799, CBRD-27703)
 
 # BIGINT/NUMERIC 과 DOUBLE 의 비교는 DOUBLE 의 가장 짧은 왕복 십진수로 정확히 판정한다
 
-develop 은 BIGINT/NUMERIC × DOUBLE 비교의 공통 타입이 DOUBLE 이라 2^53 이상 정수·17자리 초과 NUMERIC 에서 서로 다른 값이 같다고 답하고, 인덱스·파티션 경로는 키 값으로 판정해 순차 스캔과 어긋난다(CBRD-27797/27799/27703). PostgreSQL 18.6 실측(2026-10-30, `.git_ignored_dir/scratch/cbrd27819/grill/pg18-probe2.out`)은 develop 과 같은 DOUBLE 비교이고, 불일치는 혼합 비교에 인덱스 키·파티션 가지치기를 아예 쓰지 않는 것으로 피한다; Oracle 도 NUMBER × BINARY_DOUBLE 은 BINARY_DOUBLE 로 비교한다. 사용자는 2026-10-30 사양 유지(P)와 바로잡기(C) 가운데 (C)를 택했다: DOUBLE 쪽의 비교값을 **가장 짧은 왕복 십진수**(최대 17자리; |d| ≥ 2^53 은 정확한 정수값 — 아래 경계 사양 절)로 두고 NUMERIC 으로 정확히 비교한다. 바뀌는 답은 서로 다른 두 값이 DOUBLE 로 같아지던 경우뿐이며(아래 표) 전부 현행이 틀린 답이다. 대소도 같은 비교값으로 정해 동등과 대소가 한 값에서 일관된다. CAST·대입(16자리 절단), 산술·집계·함수의 결과 타입, SHORT/INTEGER × DOUBLE 의 답은 바뀌지 않는다.
+develop 은 BIGINT/NUMERIC × DOUBLE 비교의 공통 타입이 DOUBLE 이라 2^53 이상 정수·17자리 초과 NUMERIC 에서 서로 다른 값이 같다고 답하고, 인덱스·파티션 경로는 키 값으로 판정해 순차 스캔과 어긋난다(CBRD-27797/27799/27703). PostgreSQL 18.6 실측(2026-10-30, `.git_ignored_dir/scratch/cbrd27819/grill/pg18-probe2.out`)은 develop 과 같은 DOUBLE 비교이고, 불일치는 혼합 비교에 인덱스 키·파티션 프루닝를 아예 쓰지 않는 것으로 피한다; Oracle 도 NUMBER × BINARY_DOUBLE 은 BINARY_DOUBLE 로 비교한다. 사용자는 2026-10-30 사양 유지(P)와 바로잡기(C) 가운데 (C)를 택했다: DOUBLE 쪽의 비교값을 **가장 짧은 왕복 십진수**(최대 17자리; |d| ≥ 2^53 은 정확한 정수값 — 아래 경계 사양 절)로 두고 NUMERIC 으로 정확히 비교한다. 바뀌는 답은 서로 다른 두 값이 DOUBLE 로 같아지던 경우뿐이며(아래 표) 전부 현행이 틀린 답이다. 대소도 같은 비교값으로 정해 동등과 대소가 한 값에서 일관된다. CAST·대입(16자리 절단), 산술·집계·함수의 결과 타입, SHORT/INTEGER × DOUBLE 의 답은 바뀌지 않는다.
 
 | 질의 (develop 5b1867174 실측) | develop | 이 결정 |
 |---|---|---|
@@ -22,7 +22,7 @@ develop 은 BIGINT/NUMERIC × DOUBLE 비교의 공통 타입이 DOUBLE 이라 2^
 1. **2^53 이상 정수 DOUBLE**: |d| ≥ 2^53 이면 비교값은 d 의 정확한 정수값이고, 그 아래는 가장 짧은 왕복 십진수다. 가장 짧은 십진수만 쓰면 |d| ≥ 2^54 에서 값이 정수와 달라진다(2^57 → 144115188075855870). 그러면 `cast(d as bigint) = d` 가 거짓이 되고 144115188075855870 = 2^57e0 이 참이 된다. 두 결과 모두 수학적으로 틀렸다. 대가는 `1208925819614629200000000 = 1208925819614629174706176e0`(2^80)가 거짓이 되는 것인데, 이것이 수학적으로 맞는 답이다.
 2. **inf·-0·NUMERIC(38) 밖**: 오류 없이 판정한다. -inf < 모든 수 < +inf 이고, -0 의 비교값은 0 이다. develop 에서는 `cast('inf'|'-inf' as double)` 로 이 값들을 만들 수 있다. 오류로 처리하는 안은 develop 에서 돌던 문장을 깨뜨리므로 기각했다. NaN 과의 비교는 정의하지 않는다 — 실사용·기존 TC 에 없음(사용자 2026-10-30). 경계: SHORT/INTEGER × DOUBLE 은 DOUBLE 비교를 유지한다.
 3. **인덱스 키 범위**: 인덱스 경로의 답은 비교값을 키 도메인으로 올림·내림한 범위의 답과 같다. 정수가 아닌 값과의 `=` 는 빈 범위다. 도메인 밖의 값은 빈 범위나 전체 범위가 된다. 인덱스 경로와 `USING INDEX NONE` 의 답은 같아야 한다. 상수를 열 도메인으로 강제 변환하는 재작성(`qo_reduce_equality_terms`)도 같은 규칙을 따른다.
-4. **파티션**: 가지치기와 WHERE·UPDATE·DELETE 대상 판정은 비교값으로 한다. INSERT 값과 UPDATE SET 값은 대입 변환(반올림)을 유지하고, 변환된 값으로 파티션을 고른다. NUMERIC 파티션 키는 develop 이 지원하지 않으므로 범위 밖이다.
+4. **파티션**: 프루닝와 WHERE·UPDATE·DELETE 대상 판정은 비교값으로 한다. INSERT 값과 UPDATE SET 값은 대입 변환(반올림)을 유지하고, 변환된 값으로 파티션을 고른다. NUMERIC 파티션 키는 develop 이 지원하지 않으므로 범위 밖이다.
 5. **FLOAT**: 비교값은 float32 의 가장 짧은 십진수다. FLOAT × INTEGER/BIGINT 은 DOUBLE 로 넓혀 비교한다. 이 교정도 같은 PR 에 넣는다. |f| ≥ 2^24 이면 모든 float 가 정수이므로, 1번과 같은 꼴로 비교값은 f 의 정확한 정수값이다(2026-10-30, #567). 그래야 같은 정수값의 BIGINT 열(DOUBLE 로 넓혀 비교)과 NUMERIC 열의 답이 같다. 예를 들어 `cast(1073741824 as numeric(20)) = cast(1073741824 as float)` 는 참이다. float32 최단 십진수만 쓰면 비교값이 1073741800 이 되어 거짓이 된다. 단조성은 1번과 같은 이유로 유지된다.
 6. **TC 위치**: 사양 표는 `sql/_36_guava/cbrd_27819/cases/cbrd_27819_{spec,index,partition,special,float}.sql` 에 둔다. Correct Error 세 이슈의 재현은 `sql/_13_issues/_26_2h/cases/cbrd_277{97,99,03}.sql` 에 둔다. 모두 엔진 PR 의 봇 브랜치에 올린다.
 
@@ -36,7 +36,7 @@ develop 은 BIGINT/NUMERIC × DOUBLE 비교의 공통 타입이 DOUBLE 이라 2^
 | `b > 9007199254740992e0 AND b < 9007199254741000` | 없음 | 없음 | 2^53+1 |
 | `n = 1e20`, n NUMERIC(10,2) (인덱스·NONE) | 오류 `Cannot coerce 1e20 to type numeric.` | 0행 | 0행 |
 | `b = 0.5e0` / `b > 0.5e0` / `b <= 1e20` / `n < 0.30000000000000004e0` | 빈 / b≥1 / 전체 / n≤0.30 | 같음 | 같음 |
-| RANGE(p0 < 2^53+1) `k = 9007199254740993e0` | 2^53+1 (p1 만 가지치기) | 2^53, 2^53+1 | 2^53 |
+| RANGE(p0 < 2^53+1) `k = 9007199254740993e0` | 2^53+1 (p1 만 프루닝) | 2^53, 2^53+1 | 2^53 |
 | 같은 표 `DELETE … WHERE k = 9007199254740993e0` | 2^53+1 행 삭제 | — | 2^53 행 삭제 |
 | LIST / HASH `k = 2^53e0` 류 | 2^53 / 두 행 | 두 행 / — | 2^53 / 2^53 |
 | `INSERT … VALUES (9.5e0)` BIGINT 파티션 키 | 10 → p1 | 10 → p1 | 같음 |
@@ -60,5 +60,5 @@ develop 은 BIGINT/NUMERIC × DOUBLE 비교의 공통 타입이 DOUBLE 이라 2^
 ## Consequences
 
 - 비교 결과가 바뀌는 사양 변경이므로 JIRA CBRD-27819 의 "Specification Changes: 없음" 은 수정 대상(사용자 승인 뒤). 바뀐 답을 가진 CTP 답 파일은 고치고, 위 표는 TC 로 고정한다.
-- 인덱스 키 범위·다중 키 정리·파티션 가지치기·DML 라우팅·해시 조인 키·IN 리스트·CASE/DECODE/NULLIF 동등 등 두 값을 판정하는 모든 자리가 같은 비교값을 써야 한다(CBRD-27583 사양 14 의 범위 확장은 이 규칙으로 대체).
+- 인덱스 키 범위·다중 키 정리·파티션 프루닝·DML 라우팅·해시 조인 키·IN 리스트·CASE/DECODE/NULLIF 동등 등 두 값을 판정하는 모든 자리가 같은 비교값을 써야 한다(CBRD-27583 사양 14 의 범위 확장은 이 규칙으로 대체).
 - 비교값을 행마다 구하는 비용이 비교 경로의 성능 과제다(CBRD-27819): DOUBLE 끼리 먼저 견주고 같을 때만 비교값을 구하는 두 단계가 가능하다(nearest(n) < d ⇒ n < v(d), 증명은 경계 사양 절).

@@ -138,8 +138,12 @@ _Avoid_: 파티션 스캔, 파티션당 메모이즈
 스캔 체인에서 언네스트된 semi/anti 노드보다 아래에 놓인 일반 조인이다. 블록 반복이 첫 semi/anti 노드 위에서 멈추므로 semi/anti 노드를 통과한 outer 행마다 구동된다.
 _Avoid_: SA inner(semi/anti 노드 자신), 후속 노드(semi/anti 노드까지 포함하는 것처럼 읽힘), 하위 조인
 
+**파티션 프루닝 (partition pruning)**:
+술어의 값으로 읽을 필요가 없는 파티션을 실행 전에 빼는 것. LIST·HASH·RANGE 파티션 모두에 쓰고, DML 이 행을 넣을 파티션을 고르는 일(DML 라우팅)과는 구분한다.
+_Avoid_: 가지치기, 파티션 제거
+
 **다중 파티션 스캔 (multi-partition scan)**:
-파티션 테이블의 스캔으로, 가지치기로 남은 파티션 하나하나가 스캔 블록 하나다. 블록 반복과 행 단위 파티션 탐색이 도는 단위가 이 파티션이다.
+파티션 테이블의 스캔으로, 프루닝로 남은 파티션 하나하나가 스캔 블록 하나다. 블록 반복과 행 단위 파티션 탐색이 도는 단위가 이 파티션이다.
 _Avoid_: 다중 블록 스캔(클래스 계층 ALL의 클래스별 스펙까지 끌어들임), 파티션 스캔
 
 **매치 전용 메모이즈 (match-only memoize)**:
@@ -1036,7 +1040,7 @@ _Avoid_: Ryu 값, dtoa mode 0 출력(알고리즘 이름으로 값을 부르지 
 _Avoid_: SPAN, merges 쌍(B-tree 경계 표시의 이름이지 타입 쌍의 이름이 아니다), 손실 변환(변환 일반을 가리킨다)
 
 **비교 공통 타입 (comparison common type)**:
-타입이 다른 두 값을 `=`·`<>`·`<`·BETWEEN·IN 등 비교에서 대소·동등 판정하기 전에 맞추는 타입. BIGINT/NUMERIC × DOUBLE 에서는 DOUBLE, × FLOAT 에서는 FLOAT 이다(develop·PostgreSQL 과 같음, ADR 0039). 순차 스캔·인덱스 범위·파티션 가지치기 등 모든 경로가 이 타입으로 비교한 답과 같아야 한다. 산술 결과 타입과는 다른 결정이다.
+타입이 다른 두 값을 `=`·`<>`·`<`·BETWEEN·IN 등 비교에서 대소·동등 판정하기 전에 맞추는 타입. BIGINT/NUMERIC × DOUBLE 에서는 DOUBLE, × FLOAT 에서는 FLOAT 이다(develop·PostgreSQL 과 같음, ADR 0039). 순차 스캔·인덱스 범위·파티션 프루닝 등 모든 경로가 이 타입으로 비교한 답과 같아야 한다. 산술 결과 타입과는 다른 결정이다.
 _Avoid_: 공통 타입(산술 결과 타입과 섞인다), 공통값 타입(집계·CASE 의 결과 타입을 가리킨다)
 
 **DOUBLE·NUMERIC 정확 비교 (exact DOUBLE-NUMERIC comparison)**:

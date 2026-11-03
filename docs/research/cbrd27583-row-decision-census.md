@@ -48,7 +48,7 @@
 | query_aggregate.cpp `qdata_aggregate_value_to_accumulator` MIN/MAX, `qdata_calculate_aggregate_cume_dist_percent_rank`, `qdata_evaluate_aggregate_hierarchy` | 누산기와 값 비교 | C | 집계 노드 |
 | query_analytic.cpp `qdata_evaluate_analytic_func` MIN/MAX | 같음 | C | 분석 노드 |
 | arithmetic.c `db_least_or_greatest`, `db_width_bucket_calculate_numeric` | LEAST/GREATEST·WIDTH_BUCKET 비교 | C | 연산자 몸체 |
-| partition.c `partition_do_regu_variables_match` · `partition_prune_range` | 가지치기 값과 파티션 경계 비교 | C | 가지치기 정보(파티션 키 도메인 고정) |
+| partition.c `partition_do_regu_variables_match` · `partition_prune_range` | 프루닝 값과 파티션 경계 비교 | C | 프루닝 정보(파티션 키 도메인 고정) |
 | query_executor.c `qexec_check_limit_clause`, `qexec_get_orderbynum_upper_bound` | LIMIT·ORDERBY_NUM 상한 비교 | 실행당 1회 — 그대로 |
 | px_scan_instnum.cpp L271·L280 | instnum 상한을 BIGINT 로 coerce·비교 | 실행당 1회 — 그대로 |
 | set_object.c `col_value_compare`·`col_bsearch`·`col_find`·`setobj_*`(compare·union·difference·intersection·issome·ismember) | 컬렉션 원소 비교 | 상수 컬렉션(IN 목록): C, 원소 도메인이 정해진 컬렉션 열: C, 타입 없는 컬렉션 값: E | 비교 항의 원소 비교 |

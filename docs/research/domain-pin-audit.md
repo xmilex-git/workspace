@@ -150,7 +150,7 @@ S 번호가 없는 develop 비교, 곧 `tp_value_compare_with_error` 가 타입�
 | 해시 조인 키(query_hash_join.c) | 기존 판정 S-22(#341) | 셋업이 두 리스트의 계획 도메인으로 공통 도메인을 정한다 |
 | `btree_coerce_key` | 기존 판정 S-30(#342) | 호출자는 다중 컬럼 키 조립뿐 |
 | 키 리밋·LIMIT·ORDERBY_NUM 상한·PX instnum 한계 → INT/BIGINT, NTILE·NTH_VALUE·LEAD/LAG 오프셋 | 유지(연산 구현) | 연산이 정한 고정 목표 |
-| 파티션 가지치기 값 → 파티션 키 도메인(partition.c 4곳) | 유지 | 목표는 카탈로그 도메인이다. 스캔 open 마다 한 번이고 행마다가 아니다(§3 파티션 행과 같은 근거) |
+| 파티션 프루닝 값 → 파티션 키 도메인(partition.c 4곳) | 유지 | 목표는 카탈로그 도메인이다. 스캔 open 마다 한 번이고 행마다가 아니다(§3 파티션 행과 같은 근거) |
 | 문자열·날짜 함수 인자 캐스트(fetch.c 길이·TO_* 류, string_opfunc.c, arithmetic.c, query_opfunc.c) | 유지(연산 구현, S-08 부류) | 연산이 요구하는 고정 타입 |
 | INSERT 기본값·JSON_TABLE 열·타입 있는 컬렉션 원소·DBLink 원격 값 | 유지(대입) | 선언된 도메인으로 넣는다 |
 | heap ALTER·btree 적재·overflow 키, 클라이언트 쪽 | 범위 밖 | 질의 실행 하위가 아니다 |
