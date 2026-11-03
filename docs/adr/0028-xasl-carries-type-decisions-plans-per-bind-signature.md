@@ -183,6 +183,8 @@ grill 결과: 2-7(컬렉션 6·JSON 4·원격 1) 11곳은 예외 유지(원격�
 
 검토하고 택하지 않은 안: (가) PREPARE에서 문맥으로 서명을 추정해 계획(MySQL 방식; `int_col = ?`는 열 타입, CHAR 열은 VARCHAR, 문자열 함수 인자는 세션 collation의 VARCHAR) — 추정이 빗나간 첫 EXECUTE가 어차피 다시 컴파일하고 사양 9·11의 "값 없는 PREPARE는 플랜 없음"이 조건부가 된다. (나) 값을 PREPARE 타입으로 캐스트(PostgreSQL 방식) — 값 타입 자리의 답이 develop과 달라져 원칙 4에 어긋난다. (다) PREPARE가 파싱 트리를 보관해 첫 EXECUTE의 재파싱만 줄임 — 타입 검사·XASL 생성이 남아 이득이 작고 보관 수명 관리가 는다. 참고: 변경 전 develop(a9940d67a)은 이런 자리를 타입 없이 계획했다(`int_col = ?`는 VARIABLE 도메인, CHAR 열에 VARCHAR 값이 그대로, 문자열 함수 인자는 LEAVE collation).
 
+결과(2026-11-02 확인, cubrid-testcases#3987 리뷰): CCI `cci_get_query_plan` 은 SQL 텍스트를 보내고 CAS `fn_get_query_info` 가 그 텍스트를 바인드 값 없이 다시 컴파일해 플랜 파일을 읽으므로, 값 없는 컴파일이 플랜을 만들지 않는 문장(문자열 바인드 자리)은 빈 플랜을 받는다. SA csql `;plan simple` 값 없이: 변경 전 develop(2d925cb86)은 `c4 = ?`, `vc = ?`, `id = ?` 모두 플랜을 내고, 이 PR 이후 develop(309265e6d)은 `id = ?` 만 낸다. JDBC 의 `--@queryplan` 은 실행한 핸들의 플랜을 읽어 영향이 없다.
+
 ### D-98 (2026-10-20) UPDATE/DELETE/MERGE prepare 실패의 중복 보고(#463)는 중복만 없앤다 — 오류 번호는 develop 유지
 
 사용자 결정. do_prepare_update/delete/merge는 XASL 생성 실패 뒤 er 메시지를 문장 위치의 파서 오류(-494)로 다시 기록한다. 생성이 파서 오류를 이미 남긴 실패(VARCHAR 기본값을 ENUM 열에 대입)는 그래서 두 번 보였다. 세 재기록을 아예 지운 첫 구현은 중복은 없앴지만, 생성이 er에만 넣는 실패(NOT NULL 열에 NULL 대입, ER_OBJ_ATTRIBUTE_CANT_BE_NULL -205)의 번호를 -494에서 -205로, csql 위치 줄을 "In line N, column M"에서 "In the command from line N"으로 바꿔 TC 답 72건이 달라졌다. 메시지 본문은 같다. INSERT의 NULL은 실행 시 -631이라 "INSERT와 같아진다"는 설명도 맞지 않았다. 택한 안: 재기록을 `!pt_has_error (parser)` 조건으로 복원한다 — 파서 오류가 이미 있을 때만 생략하고, er에만 생긴 실패는 develop 그대로 -494로 한 번 기록한다(원칙 4). 택하지 않은 안: -205를 사양으로 받아들이고 답 72건을 고치는 것(응용이 보는 오류 번호가 바뀐다), #463을 PR에서 빼는 것.
