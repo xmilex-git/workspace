@@ -27,6 +27,8 @@ the "caught by" part is never dropped.
 
 ## Rule 1 — The server runs the shape the case claims (positive control)
 
+Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Evidence in the answer file" (a hint or parameter took effect); this rule is the CUBRID-internal form of it.
+
 A case that claims a shape — stays serial, stays parallel, reads the index, reads overlapping
 ranges, reads keys spread over the index — names the answer line that proves the server saw that
 shape: the number of ranges in `key range:`, the `rewritten query` line, `INDEX SCAN` against
@@ -85,6 +87,8 @@ using 10, 100, 50, 200;`).
 
 ## Rule 2 — The data must change the output when the path is wrong
 
+Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Evidence in the answer file" (data that takes the *bug path*, columns that tell rows apart).
+
 Choose data so a lost row, a doubled row, a wrong key or a wrong order changes a result row. A
 total that averages out, a single key, a 0-row DML, or a float printed by the driver passes a broken
 path.
@@ -103,7 +107,9 @@ path.
   skip sort, KEYLIMIT, ROWNUM) is built this way.
 - Float-producing aggregates (`AVG`, `STDDEV*`, `VAR*`) are wrapped (`round(avg(v), 2)`) or
   compared as integers: the CCI driver prints floats with another precision (cbrd_26711 needed a
-  second `.answer_cci`; user decision 2026-10-08: no CCI runs here).
+  second `.answer_cci`). The 2026-10-08 "no CCI runs" decision is superseded (2026-11-03): the
+  rulebook's `run_cci` step runs as verify.md §4's `sql_by_cci` run, and a differing output adds
+  `.answer_cci`; the rounding keeps that file rare.
 - A token that appears only when something happened at runtime (`MEMOIZE` prints only with hits)
   needs data that makes it happen (repeated keys).
 - CBRD-26931 Case 8 (greptile): a DML statement under test is followed by a select of its target
@@ -145,6 +151,8 @@ path.
   answers changed).
 
 ## Rule 3 — Stay far from every threshold, estimate and placement
+
+Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Plans, hints, and data size" (cross a *threshold* with a margin); the margins below are ours.
 
 Under CTP `test_mode=yes` lowers thresholds: `parallel_scan_page_threshold` 32 pages (≈100,000 rows
 of `(int, int)`), parallel sort / hash-join thresholds 0 → raised to 2 pages by
@@ -191,6 +199,8 @@ comment of the file.
 
 ## Rule 4 — The three points give the same answer, or the file says which point cannot
 
+Rulebook: `sql/AGENTS.md` "Before the PR" (run on a build without and with the change, answer from the target branch); the third point and its drift are ours.
+
 **The answer comes from the post point, but CI runs develop.** Before writing traced queries, run
 the planned shapes with a placeholder answer on pre, post and dev, and trace only shapes whose post
 and dev output match. A shape that a known develop assert kills on optdebug is left out with the
@@ -235,6 +245,8 @@ verify.md §6b.
 
 ## Rule 5 — Coverage comes from the code, and new code always has a case
 
+Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Scenarios to cover" (every scenario of the issue, boundaries, siblings); reading the coverage from the diff is ours.
+
 The coverage list (judge.md §3–§4) is read from the diff: every branch, every boundary, both sides
 of every guard. A file or function the PR **adds** must have a case or a develop-only file; the
 reviewer opens the new file first. The only exclusion reasons a row may carry: unobservable from
@@ -268,35 +280,37 @@ post point asserts" is not one — that is Rule 4's develop-only file.
 
 ## Rule 6 — The session leaves as it came
 
-CTP runs **one connection per shard, cases back to back**: whatever a case leaves in the session
-(trace on, a traced plan with no `show trace`, session variables, changed parameters, prepared
-statements) hits the next case, and a plan left by an earlier case can be printed by this one's
-`show trace`. The cleanup block of sql-rules.md is the mechanical list.
+Rulebook: `sql/rules/writing-rules.md` "Cleanup" (drop every object, `=default` every parameter,
+`set trace off`, isolation level, `set names`, optimization level, `deallocate prepare`). What it lacks:
 
+- **`set trace off` right after the last `show trace`**, before any later query, or the last plan stays
+  in the session and the next case's first `show trace` over a cached plan prints it.
+- **`deallocate variable` every `@name`**: the session holds at most 20; leaked ones push a later case
+  over the limit (-1071).
+
+Cases:
 - 2026-10-06: trace left on in `cbrd_24876` made `cbrd_27485` print a foreign plan.
 - 2026-09-26: 7 leaked session variables pushed a later case over the 20-variable limit (-1071).
 - cbrd_27509 (2026-09-30): a traced query without `recompile` printed a plan left by an earlier case.
-- The last traced query of a file: `set trace off` goes right after the last `show trace`, before
-  any later query, or the last plan stays in the session and the next case's first `show trace` over
-  a cached plan prints it.
 
 ## Rule 7 — CTP reads the file its own way
 
-- **A statement ends at a line that ends with `;`** — comments are not parsed. A `/** */` header
-  line ending in `;` becomes a statement and prints `Error:-493` (cbrd_27465, 2026-09-22). A `;` in
-  the middle of a line is harmless. A whole line starting with `--` is dropped before parsing, so
-  `--` inside `/** */` breaks the block.
-- **CQT runs a statement as a control command** when its text contains `server-message`,
-  `autocommit` or `holdcas` followed by `on` or `off` anywhere (`ConsoleBO.isPropOn/isPropOff`). The
-  `/** */` header travels with the first statement, so a header saying "server-message on" silently
-  skips the first `drop table`: the result has one block fewer than the statements (CBRD-27299).
-- **CTP masks every digit** in the plan, the trace statistics, the first `rewritten query` line and
-  in error messages: `parallel workers: 4` → `?`, `idx_col2` → `idx_col?`, `rows: 100` → `?`.
-  Result rows are **not** masked. A trace can only assert **tokens** (`MEMOIZE`, `gather:
-  buildvalue`, `NESTED LOOPS (semi join)`, `method: hybrid`, `PARTITION`), never a count; counts need
-  a shell TC. Identifiers carry no digits (`t2` → `t?` makes two tables indistinguishable).
+Rulebook: `sql/rules/writing-rules.md` "Statements and comments" (a statement ends only at a line ending
+in `;`; no `;`, `'` or `?` in a block comment; no `--` in the header; the control words `autocommit`,
+`holdcas`, `server-message` with `on`/`off` anywhere in a statement; `$` bind lines) and "Plans and
+traces" plus `test-perspectives.md` "What sql TCs cannot check" (every digit of a plan or trace masked
+to `?`, so names differ in letters). What it lacks:
+
 - **No `.answer` → the case is skipped and the run still says PASSED.** Seed a wrong placeholder
   answer so the case runs NOK and writes its `.result` (verify.md §2).
 - A table alias equal to a column name fails with -494.
-- #3642: an engine function named in a comment must exist
+- An engine function named in a comment must exist
   (`tools/code-index/code-index ~/dev/cubrid-worktree/develop definition <name>`).
+- The digit masking covers the first `rewritten query` line and error messages too; result rows are
+  not masked, so a count of workers, pages or readkeys needs a shell TC.
+
+Cases:
+- cbrd_27465 (2026-09-22): a `/** */` header line ending in `;` became a statement and printed `Error:-493`.
+- CBRD-27299: a header saying "server-message on" silently skipped the first `drop table`; the result
+  had one block fewer than the statements (`ConsoleBO.isPropOn/isPropOff`).
+- #3642: a comment named an engine function that does not exist.

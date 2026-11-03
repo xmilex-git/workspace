@@ -98,11 +98,15 @@ placement; a Sub-task takes its parent's type):
 
 | issue type | sql | shell (cubrid-testcases-private-ex) |
 |---|---|---|
-| Correct Error | `sql/_13_issues/_26_2h/cases/cbrd_<N>.sql` + `answers/cbrd_<N>.answer` (flat `cases/`, half-year in which the TC is written) | `shell/_06_issues/_26_2h/cbrd_<N>/cases/cbrd_<N>.sh` (same half-year rule; the rulebook text still says the issue's creation half-year — shell-rules "Where we differ") |
+| Correct Error | `sql/_13_issues/_26_2h/cases/cbrd_<N>.sql` + `answers/cbrd_<N>.answer` (flat `cases/`, half-year in which the TC is written) | `shell/_06_issues/_26_2h/cbrd_<N>/cases/cbrd_<N>.sh` (same half-year rule) |
 | every other type (Improve, Development Subject, Task, Sub-task of those) | `sql/_36_guava/cbrd_<N>/cases/cbrd_<N>.sql` + `answers/` | `shell/_40_guava/cbrd_<N>/cases/cbrd_<N>.sh`; several cases: `shell/_40_guava/cbrd_<N>/cbrd_<N>_<keyword>/cases/cbrd_<N>_<keyword>.sh` (the shapes private-ex develop uses) |
 
 Several files for one issue: `cbrd_<N>_<keyword>.sql` in the same `cases/`; shell: one directory
 per script, directory name = script name.
+
+medium: a TC of a new issue goes under `sql/`, never `medium/`, unless its scenario needs the
+inheritance, collection or vclass data of `mdb`; then it follows `medium/AGENTS.md` and its two
+`medium/rules/` files (rulebook, CUBRIDQA-1692; user, 2026-11-03).
 
 `judge.md` template:
 

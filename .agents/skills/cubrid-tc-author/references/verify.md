@@ -146,6 +146,21 @@ undeclared stored function tens of thousands of times ("pending transmission rea
 output is null. Cap undeclared calls near 1,000 per statement with a cheap leading filter (simple
 comparisons are evaluated first); read a null trace by grepping the server log for `IOV_MAX` (CBRD-27299).
 
+**Two more runs on the fix build (sql only, the rulebook's "Before the PR" and `run_cci` steps;
+user, 2026-11-03):**
+
+1. **CCI**: `CTP_ARGS="--testcases-as-is --testcases $TC" CTP_KEEP_COPIES=1 BUILD=~/optdebug/CUBRID-cbrd<N>-fix just ctp sql_by_cci $RUN`.
+   OK → no `.answer_cci`. NOK → diff its `.result` against the `.answer`: a driver difference
+   (float precision, plan on every result set) becomes `answers/cbrd_<N>.answer_cci`, a copy of that
+   `.result`, committed beside the `.answer`; any other difference is a defect of the case → Step 3.
+   A later change of the `.answer` regenerates the `.answer_cci` in the same commit.
+2. **Parent directory**: `just ctp sql $DIR` with the same arguments, the TC's whole directory in one
+   run (`_13_issues/_26_2h`, or the code-name directory such as `_36_guava`), so an object or setting
+   one TC leaves behind shows on the next. A NOK of this TC here and not alone → its cleanup or its
+   names collide → Step 3. A NOK of another TC: run that TC alone on the dev build; NOK there too →
+   not ours, name it in the PR's 검증 section; OK there → this TC disturbed it → Step 3. The whole of
+   `sql/` is not run here: the engine PR's CI runs it.
+
 ## §5 Expected verdicts — fill the table and compare
 
 `results.md`:
@@ -155,6 +170,8 @@ comparisons are evaluated first); read a null trace by grepping the server log f
 | pre | <sha> | cbrd_<N> | NOK | 0 | NOK | yes |
 | fix | <sha> | cbrd_<N> | OK ×3 | 0 | OK | yes |
 | dev | <sha> | cbrd_<N> | OK | 0 | OK | yes |
+| fix cci | <sha> | cbrd_<N> | OK (answer_cci: none / added) | 0 | OK | yes |
+| fix dir | <sha> | <parent dir> | OK (other NOKs: none / <case>: NOK on dev too) | 0 | OK | yes |
 ```
 
 A behavior the **post point cannot run** gets a develop-only file `cbrd_<N>_<topic>.sql`: its

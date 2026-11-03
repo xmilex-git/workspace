@@ -1,10 +1,26 @@
 # SQL testcase rules (CTP `sql` suite)
 
 Work in the TC worktree that [pr-and-jira.md](pr-and-jira.md) §1 creates (`~/dev/cubrid-tc-worktree/cbrd_<N>`
-in merged mode, the `tc/pr-<PR>` worktree in open mode). Model files to imitate, on cubrid-testcases
-develop: `sql/_36_guava/cbrd_27465/cases/cbrd_27465.sql` (reference twins, trace tokens),
-`sql/_36_guava/cbrd_26711/cases/cbrd_26711.sql` (serial twins, error cases),
-`sql/_36_guava/cbrd_27568/cases/cbrd_27568.sql` (parallel scan under test_mode).
+in merged mode, the `tc/pr-<PR>` worktree in open mode).
+
+**The sql rulebook is the source.** Before you write, change or review a sql TC, read from that
+worktree `AGENTS.md`, `sql/AGENTS.md`, `sql/rules/test-perspectives.md` and `sql/rules/writing-rules.md`
+(QA's deployed copy, merged by CUBRIDQA-1692; for a medium TC also `medium/AGENTS.md` and
+`medium/rules/*`). This file holds only our form on top of it: the skeleton, the reference twin and
+trace-token judging, and the points where we decided to differ. Anything else here that disagrees with
+the rulebook is a defect of this file: follow the rulebook and tell the user.
+
+Model files: the rulebook's three ("Model TCs" in `sql/rules/test-perspectives.md`) with their
+"Differs" lines.
+
+## Where we differ from the rulebook (user, 2026-11-03)
+
+- **Builds**: pre, fix and dev on optdebug only (verify.md); the rulebook asks for a build without and
+  with the change, which pre and fix are.
+- **`recompile`**: on every query a `show trace` reads (rule 10), which is the rulebook's "needs a
+  stable plan"; the PR body's 설계 section says so in one line. Twins and result-only queries carry none.
+- **Empty draft TC PR**: kept open (pr-and-jira.md §1); the rulebook closes it and reruns `Check TC PRs`.
+- **Identifiers**: no digits at all (rule 8), stricter than the rulebook's "differ in letters".
 
 This file is the **form** of a case file. Everything learned the hard way — what the server really
 runs, data that exposes a wrong path, thresholds, three-point drift, coverage, session and CTP
@@ -43,7 +59,7 @@ set trace on;
 evaluate 'Case 1: <what>; result = parallel(0)';
 select /*+ recompile */ k, count(*) from t_outer o, t_inner i where i.k = o.k group by k order by k;
 show trace;
-select /*+ recompile parallel(0) */ k, count(*) from t_outer o, t_inner i where i.k = o.k group by k order by k;
+select /*+ parallel(0) */ k, count(*) from t_outer o, t_inner i where i.k = o.k group by k order by k;
 
 
 evaluate 'Case 2: ...';
@@ -60,7 +76,7 @@ drop table t_outer, t_inner;
 
 ## Header (the `/** */` block)
 
-1. 20–30 lines: sentence of what is verified → before/after in 2–4 lines → how judged in 2–4 lines
+1. At most 30 lines: sentence of what is verified → before/after in 2–4 lines → how judged in 2–4 lines
    → `Coverage:` with one `Case N:` line each. The engine-internal narrative and develop's numbers
    go to the PR body, not here (user, 2026-09-30 #3611; QA lint caps headers, CUBRIDQA-1481).
 2. **No line ends with `;`** inside the header or any comment (pitfalls Rule 7). Check:
@@ -85,8 +101,10 @@ drop table t_outer, t_inner;
 
 9. Two blank lines, then `evaluate 'Case N: <what>; result = <twin>';` — single quotes, no double
    quotes or apostrophes inside, numbered from 1 without gaps. A `;` inside the quotes is fine.
-10. Every tested query: one line, `/*+ recompile <hints> */`. `recompile` makes each `show trace`
-    print its own plan; without it a plan left by an earlier case can be printed (pitfalls Rule 6).
+10. Every query a `show trace` reads: one line, `/*+ recompile <hints> */`. `recompile` makes each
+    `show trace` print its own plan; without it a plan left by an earlier case can be printed (pitfalls
+    Rule 6). A twin or a query whose result alone is checked gets no `recompile` (rulebook: only a
+    query that needs a stable plan, with the reason in the PR).
     Exception: a case that tests plan invalidation or clone reuse runs the same text without `recompile`,
     when the text exists only in this file and its first run compiles over this file's own tables and
     functions. `show trace` after a cached run prints the session's last compiled plan text, so judge by
@@ -130,13 +148,20 @@ drop table t_outer, t_inner;
 - `/usr/bin/grep -o "evaluate 'Case [0-9]*" <file>` → consecutive numbers from 1
 - `/usr/bin/grep -c 'set trace on' <file>` = `/usr/bin/grep -c 'set trace off' <file>` and the last
   `set trace` in the file is `off`
-- every traced `select` has `recompile` (or a `--` comment for the rule 10 plan-cache exception); every
-  multi-row select has `order by`
+- every `select` that a `show trace` reads has `recompile` (or a `--` comment for the rule 10
+  plan-cache exception), no other query has it; every multi-row select has `order by`
 - every `@var` deallocated; every `set system parameters` has a `=default` later; every `prepare`
   deallocated; every table dropped
 - no digits in identifiers; no float printed unrounded
 - the twin exists for every tested query, or the header says "pre-fix build also passes (correctness TC)"
-- header 20–30 lines, `Coverage:` rows = `evaluate` count
+- header at most 30 lines, `Coverage:` rows = `evaluate` count
+- `sed -n '/\/\*/,/\*\//p' <file> | /usr/bin/grep -c "['?]"` → `0` (no `'` or `?` in a block comment)
+- `/usr/bin/grep -n '^--[[:space:]]*@' <file> | /usr/bin/grep -vxE '[0-9]+:--@(queryplan|fullplan|joingraph)'` → nothing
+- `/usr/bin/grep -n '^\$' <file> | /usr/bin/grep -vE '^[0-9]+:\$[A-Za-z_:]+, ?[^,]*(, ?\$[A-Za-z_:]+, ?[^,]*)*$'` → nothing (bind lines are `$<type>, $<value>` pairs)
+- `/usr/bin/grep -nP "^evaluate '.*[^\x00-\x7F]" <file>` → nothing (ASCII labels)
+- `file <file> <answer>` says neither `CRLF` nor `BOM`
+- every `create table|view|serial` has a `drop … if exists` of the same name before it
+- the last statement of the file ends with `;` (`tail -c 200 <file>`)
 - every `evaluate` line's claim has its proof: the answer token named in `<rundir>/pitfalls.md`
   (Rule 1 row) or a control probe in the PR body
 - every plan, parallel or hash decision that rests on an estimate or a page count states its margin in

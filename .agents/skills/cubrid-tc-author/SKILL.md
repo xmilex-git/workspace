@@ -35,8 +35,7 @@ Terms: **pre / fix / dev** = the three optdebug builds a case is proven on (the 
    후속 TC PR from the fork for such an issue; the 후속 TC PR is only for an issue whose engine PR is
    already merged (merged mode).
    **A TC PR by another author given to review** → **review mode**: Steps 1–3 are the yardstick
-   (ground the issue, judge the verdict and coverage, walk the pitfall rules against the PR's files;
-   for shell files, the shell rulebook as well);
+   (ground the issue, judge the verdict and coverage, walk the TC rulebook and the pitfall rules against the PR's files);
    Step 4 only where the review needs runtime evidence. Steps 5–7 never run: no push, no PR, no
    reviewer, no JIRA comment — the output is the review report.
 3. Write `mode`, `issue`, `pr`, `merge_commit` (merged mode) or `head_sha` + `base = origin/develop merge-base` (open mode;
@@ -51,7 +50,7 @@ Follow [references/judge.md](references/judge.md) §1. Produces `<rundir>/ground
 QA fields, repro SQL, acceptance criteria, attachment list (each read or marked unread with reason),
 the fix diff file list, and the spec changes the PR describes.
 
-When a TC convention is in question (placement by issue type, header length, ORDER BY, cleanup, determinism), the QA team's own rules are the source: for shell, the rulebook in the TC worktree (`AGENTS.md`, `shell/AGENTS.md`, `shell/rules/test-perspectives.md`, `shell/rules/writing-rules.md`; `references/shell-rules.md` lists where we differ); for sql, `git -C ~/dev/cubrid-agent pull` (clone of github.com/tw-kang/cubrid-agent) and read `skills/qa/create-sql/SKILL.md`, `skills/qa/author-testcase/SKILL.md`, `skills/qa/review-testcase/SKILL.md` (the lint our TC PRs face); cite them and the CUBRIDQA ticket numbers. (P3)
+The QA team's TC rulebook is the source for every TC convention (placement, header, ORDER BY, cleanup, determinism, PR and commit form); read it by absolute path from the TC worktree, since this skill does not run in that clone: sql → `AGENTS.md`, `sql/AGENTS.md`, `sql/rules/test-perspectives.md`, `sql/rules/writing-rules.md` of cubrid-testcases (medium → the same files under `medium/`); shell → `AGENTS.md`, `shell/AGENTS.md`, `shell/rules/test-perspectives.md`, `shell/rules/writing-rules.md` of private-ex. `references/sql-rules.md`, `references/sql-pitfalls.md` and `references/shell-rules.md` hold only where we differ and the CUBRID-internal judging methods; anything else in them that disagrees with the rulebook is their defect: follow the rulebook and tell the user. Cite the rulebook section and its CUBRIDQA ticket. (P3)
 
 Done when `ground.md` has every section of the §1 template filled or explicitly "none".
 
@@ -70,7 +69,9 @@ every row has a case number or an exclusion reason. Verdict `out of scope` → g
 
 ## Step 3 — write the case(s)
 
-- sql: [references/sql-rules.md](references/sql-rules.md) (the form) and
+- sql (and medium): the sql rulebook in the TC worktree (`sql/AGENTS.md` and the two `sql/rules/`
+  files it links; medium adds `medium/AGENTS.md` and its two files), then
+  [references/sql-rules.md](references/sql-rules.md) (our form on top of it) and
   [references/sql-pitfalls.md](references/sql-pitfalls.md) (seven rules, each with the past cases that
   made it — read before writing). shell and shell_perf: the shell rulebook in the TC worktree
   (`shell/AGENTS.md` and the two `shell/rules/` files it links), then
@@ -89,7 +90,8 @@ with no open `hit`, the checklist has no miss, and `git status` in that worktree
 
 Follow [references/verify.md](references/verify.md): obtain the pre-fix, fix and latest-develop
 optdebug installs, generate the answer on the fix build, run the case directory on all three in
-parallel containers, run the fix build 3 times for determinism, and read verdicts from the runner.
+parallel containers, run the fix build 3 times for determinism, then (sql) once more as `sql_by_cci`
+and once over the TC's parent directory, and read verdicts from the runner.
 Builds and CTP are delegated to a Workflow worker with the contract text from verify.md §0 pasted verbatim.
 To prove a shell case records failures, build a negative control without a worktree — `read-tree` into a temporary `GIT_INDEX_FILE`, `hash-object -w` the changed file, `update-index --cacheinfo`, `write-tree`, `commit-tree` — force one check to fail (its expected value +1), never push the commit, run it with `TC_REF=<that sha>`, then `git worktree remove` the runner's tc-worktree for that sha; and count the `.result` lines against the number of `write_ok`/`write_nok` calls (one line per check). (P5)
 

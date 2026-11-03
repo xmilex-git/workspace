@@ -11,16 +11,17 @@ git fetch -q origin develop
 git worktree add -b cbrd_<N> ../cbrd_<N> origin/develop
 # ... write the case there (Step 3), verify (Step 4), then:
 git -C ../cbrd_<N> add sql/<dir>/cases sql/<dir>/answers        # shell: shell/<dir>
-git -C ../cbrd_<N> commit -q -m "[CBRD-<N>] Add sql testcase for <English summary>" -m "<2-4 lines: what the case pins and how it is judged>"
+git -C ../cbrd_<N> commit -q -m "Add sql testcase for <English summary> (CBRD-<N>)" -m "<2-4 lines: what the case pins and how it is judged>"
 git -C ../cbrd_<N> push -u fork cbrd_<N>
 ```
 
 The commit message ends with the attribution trailer the harness prescribes for this session.
-In private-ex follow the shell rulebook's commit form: a new TC and a change of an existing TC or its
-answer file go in separate commits, the first titled `Add shell testcase for …`, the second
-`Revise testcase for …`, each body saying why the change is needed and what it changes; a PR that
-changes an answer file says which lines changed and why. Commit only the files the TC needs (no
-`.result`, logs, volumes, cores).
+In both repos follow the rulebook's commit form (`sql/AGENTS.md` / `shell/AGENTS.md` "The PR"): a new
+TC and a change of an existing TC or its answer file go in separate commits, the first starting
+`Add sql testcase for …` (`Add shell testcase for …` in private-ex), the second `Revise testcase for …`,
+each body saying why the change is needed and what it changes; a PR that changes an answer file says
+which lines changed and why. Commit only the files the TC needs (no `.result`, `csql.err`, logs,
+volumes, cores).
 
 **Open mode** — the TC rides the bot's branch of the engine PR. This includes every TC change made
 while the issue is being fixed (SKILL.md Step 0): new cases and changes to existing TC files alike.
@@ -41,7 +42,7 @@ while the issue is being fixed (SKILL.md Step 0): new cases and changes to exist
    in each of the two TC repos: `gh pr list -R CUBRID/<cubrid-testcases|cubrid-testcases-private-ex> --head tc/pr-<PR> --json number,url`.
    Edit the title and body (§2–§3) of each one that received commits with
    `gh pr edit <n> -R <repo> --title ... --body-file ...`; a repo with no TC change keeps the bot's empty
-   draft (the shell rulebook closes it and reruns `Check TC PRs`; we keep it — user, 2026-10-30). The body explains every added and every changed file. Leave draft status to the engine PR owner.
+   draft (both rulebooks close it and rerun `Check TC PRs`; we keep it — user, 2026-10-30). The body explains every added and every changed file. Leave draft status to the engine PR owner.
 
 ## §2 Title
 
@@ -74,6 +75,7 @@ the engine PR's body (judge.md §1) and must not be overwritten. Template (every
 - **<굵은 머리말>** <판정 방법: 참조 쌍둥이와 trace 토큰, 마스킹 때문에 숫자를 쓰지 않는 이유>
 - **<데이터>** <크기와 임계값, 그룹별 건수가 다르게 한 이유>
 - **<정리>** <trace off, 파라미터 복원>
+- **<recompile>** <trace를 읽는 질의에만 recompile을 붙인 이유 한 줄: 앞 케이스가 남긴 plan을 show trace가 출력하지 않도록>
 
 ## 커버리지 (<K> 케이스)
 
@@ -85,13 +87,15 @@ the engine PR's body (judge.md §1) and must not be overwritten. Template (every
 
 - <코드 조사 목록에서 케이스가 되지 못한 행과 이유: 지점 사이 drift, 알려진 develop assert, 결정성 부족. 작업 중 찾은 결함은 JIRA 키로 적고, 해결 뒤 더할 검사를 한 줄로.>
 
-## 검증 (optdebug, CTP `sql` 단일 디렉터리)
+## 검증 (optdebug, CTP `sql` 케이스 디렉터리)
 
 | 지점 | 커밋 | 결과 |
 |---|---|---|
 | 직전 | `<sha 9>` (<merge_commit>^) | NOK — <어느 케이스가 어떻게 달랐는지 한 줄> |
 | 직후 | `<sha 9>` | OK ×3 |
 | 최신 develop | `<sha 9>` (<날짜>) | OK |
+| 직후, CCI | `<sha 9>` | OK (`.answer_cci` <없음 / 추가: 이유>) |
+| 직후, `<상위 디렉터리>` 전체 | `<sha 9>` | OK (<다른 TC NOK: 없음 / 키와 develop에서도 NOK>) |
 ```
 
 Write what the table shows; a "직전 OK" row in an R5 PR gets the sentence from `판별`.

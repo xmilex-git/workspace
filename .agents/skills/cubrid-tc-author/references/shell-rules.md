@@ -22,10 +22,6 @@ no `-type f` (rule 12). CTP's own guide: `~/cubrid-testtools/doc/shell_guide.md`
 
 - **Builds**: pre, fix and dev on optdebug only; no release run, and the PR table names optdebug
   (rulebook: release and debug). Release hides asserts (verify.md).
-- **Half-year directory**: a Correct Error TC goes under the half-year in which the TC is written
-  (`_06_issues/_26_2h/` from 2026-07 to 2026-12), as QA's mail announcing the rulebook says and
-  cubrid-agent PR #35 sets for sql. The rulebook text still says "the half-year in which the issue was
-  created"; we follow the mail (not raised with QA).
 - **Empty draft TC PR**: kept open (pr-and-jira.md §1); the rulebook closes it and reruns `Check TC PRs`.
 - **`kill -INT`**: allowed only on a pid the TC saved with `$!` from its own `timeout -s INT … &`, with a
   comment saying why (rule 10); `xkill_pid` is `kill -9`, which loses the output `cubrid statdump -i`
@@ -53,6 +49,11 @@ no `-type f` (rule 12). CTP's own guide: `~/cubrid-testtools/doc/shell_guide.md`
   statistics are asserted (judge.md R2).
 
 ## File skeleton (copy, then fill)
+
+This is a *flow TC* (SQL in heredocs between shell steps). A *list TC* puts each check in
+`cases/sql/_NN_<name>.sql` with `_NN_<name>.answer` beside it and its shared setup in non-`_NN_` files,
+as the rulebook's "Place and files" says (private-ex 4681); its cleanup then removes only the files the
+run made and never `*.sql`, which would delete the committed checks.
 
 ```bash
 #!/bin/bash
@@ -84,7 +85,7 @@ do_cleanup()
     cubrid server stop ${dbname} > /dev/null 2>&1
     cubrid deletedb ${dbname} > /dev/null 2>&1
     rm -rf ${dbname}
-    rm -f *.sql *.log *.out *_session_*.err csql.err
+    rm -f *.log *.out *_session_*.err csql.err   # flow TC: also the input files its heredocs wrote, by name
 }
 
 abort_test()
