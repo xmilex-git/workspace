@@ -1044,7 +1044,7 @@ _Avoid_: Ryu 값, dtoa mode 0 출력(알고리즘 이름으로 값을 부르지 
 _Avoid_: 경로 정렬, path alignment
 
 **손실 키 쌍 (lossy key pair)**:
-키 열의 타입을 비교 공통 타입으로 바꾸면 서로 다른 키가 같은 값이 될 수 있는 타입 쌍. BIGINT × DOUBLE(2^53 이상), NUMERIC(p > 15) × DOUBLE, NUMERIC × FLOAT, INTEGER/BIGINT × FLOAT(2^24 이상)이 해당하고, SHORT × DOUBLE, INTEGER × DOUBLE, NUMERIC(p ≤ 15) × DOUBLE 은 아니다(SHORT × FLOAT 도 수학적으로는 아니지만 엔진 `domain_key_converts_losslessly` 는 보수적으로 손실로 다룬다 — 답은 같다). 이 쌍의 동등 비교값은 키 공간에서 점이 아니라 범위다. CUBRID 는 이 상황을 고치지 않고 매뉴얼에 제한으로 명시한다(ADR 0040): 서로 다른 값이 같다고 판정될 수 있고 인덱스·파티션 경로와 순차 스캔의 결과 행이 다를 수 있다. 우회는 값을 열 타입으로 CAST 하거나 키 구간을 직접 범위로 쓰는 것이다. PostgreSQL 은 이 쌍의 열을 키로 쓰지 않고 필터로만 비교한다.
+키 열의 타입을 비교 공통 타입으로 바꾸면 서로 다른 키가 같은 값이 될 수 있는 타입 쌍. BIGINT × DOUBLE(2^53 이상), NUMERIC(p > 15) × DOUBLE, NUMERIC × FLOAT, INTEGER/BIGINT × FLOAT(2^24 이상)이 해당하고, SHORT × DOUBLE, INTEGER × DOUBLE, NUMERIC(p ≤ 15) × DOUBLE 은 아니다(SHORT × FLOAT 도 수학적으로는 아니지만 엔진 `domain_key_converts_losslessly` 는 보수적으로 손실로 다룬다 — 답은 같다). 이 쌍의 동등 비교값은 키 공간에서 점이 아니라 범위다. CUBRID 는 이 상황을 고치지 않고 매뉴얼에도 적지 않는다(ADR 0040, 2026-11-03 개정): 서로 다른 값이 같다고 판정될 수 있고 인덱스·파티션 경로와 순차 스캔의 결과 행이 다를 수 있다. 우회는 값을 열 타입으로 CAST 하거나 키 구간을 직접 범위로 쓰는 것이다. PostgreSQL 은 이 쌍의 열을 키로 쓰지 않고 필터로만 비교한다.
 _Avoid_: SPAN, merges 쌍(B-tree 경계 표시의 이름이지 타입 쌍의 이름이 아니다), 손실 변환(변환 일반을 가리킨다)
 
 **비교 공통 타입 (comparison common type)**:
