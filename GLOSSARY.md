@@ -416,6 +416,10 @@ _Avoid_: 스캔 블록(물리 분할과 혼동), 쿼리 실행 1회(패스는 �
 `AGGREGATE_TYPE::accumulator.value`/`value2`의 버퍼를 한 힙에서 다른 힙으로 옮기는 동작 — 대상 힙에서 `pr_clone_value`로 복제하고 원래 힙에서 `pr_clear_value`로 해제한 뒤 대입한다. 병렬 BUILDVALUE 경로에서 워커 병합용 heap 0(malloc)과 코디네이터 private heap(lea) 사이를 오간다. 값 복사이지 소유권 표시 변경이 아니므로, 어느 쪽으로 옮겼는지를 코드가 따로 알아야 한다.
 _Avoid_: 힙 전환(`db_change_private_heap` 자체와 혼동), 얕은 대입
 
+**GROUP_CONCAT 누적 버퍼 (GROUP_CONCAT accumulation buffer)**:
+한 그룹의 GROUP_CONCAT 결과를 쌓는 누산기 값의 버퍼로, 필요할 때만 2^n으로 커지고 `group_concat_max_len`을 넘지 않는다. 그룹의 첫 값에서 새로 잡히고 누산기 재이주로 교체되면 용량을 모르는 상태가 된다(RND-2891).
+_Avoid_: 누적 문자열(매 행 새로 만드는 값과 혼동), group_concat 캐시
+
 **빌림·반납 브래킷 (borrow/return bracket)**:
 CBRD-27327의 채택 수정 형태 — 패스 **시작**(`manager::open()`의 handler 생성)에서 누산기를 코디네이터 heap → heap 0으로 빌리고, 패스 **안**(`read_node`)에서 heap 0 → 코디네이터 heap으로 반납하는 대칭 규약이다. 반납을 패스 끝(`read_finalize`)에 두면 안 되는 이유는 `read_finalize`가 `manager::end()`를 통해 쿼리 최종 종료 시에도 불리기 때문이다. ADR 0015 참조.
 _Avoid_: 파티션 게이트(증상 회피안 — 기각), `read_finalize` 반납(최종 teardown에서 재발)
