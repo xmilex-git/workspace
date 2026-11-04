@@ -140,3 +140,9 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Rule: A run on a release line without PX (release/11.4 and older) uses an install whose `conf/cubrid.conf` is the branch's own template (`just build` writes the campaign conf, which sets `parallelism`) and `CTP_PIN_PARAMS=0`, because that line's server refuses to start on the unknown `parallelism` keyword.
 - Applies at: Env knobs
 - Case (2026-10-30, TC backports cubrid-testcases#3948 / private-ex#4648 on release/11.4 `52d4301a2`): the first sql and shell runs died at server start with "The 'parallelism' parameter at line 58 in file '/home/CUBRID/conf/cubrid.conf' : Unrecognized keyword" (sql 0 of 2 cases ran, shell 3 NOK at createdb); copying the worktree's `conf/cubrid.conf` over the install's and rerunning with `CTP_PIN_PARAMS=0` passed 2/2 and 3/3.
+
+### P20 — wait on the runner, not on a pattern
+- Rule: A background CTP wait is judged by the runner's own `[ctp-run] RESULT:` line or by the runner pid having exited, never by a loose pattern such as `rc=` (it matches the provenance line's `ref-src=`) or by a zsh `( … ) &` pair's early completion notice: launch two concurrent runs from one `bash <script>` that waits on each pid.
+- Applies at: Small runs
+- Case (2026-11-04, PR #8056 review): a `( just ctp sql … ; echo "sql rc=$?" ) & ( just ctp shell … ) & wait` pair under zsh reported completion within seconds while both runners kept going; an `until grep -q 'rc='` wait then matched `ref-src=--pr 8056` in the provenance line, and a duplicate shell run was started and had to be stopped and its container removed. The runners' `RESULT: PASSED` lines (sql 12/12, shell 1/1) were the real end.
+- Source: session 2026-11-04

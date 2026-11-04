@@ -115,6 +115,7 @@ A gate is evidence only when everything except the change matches the baseline r
 ### Running and reporting
 
 The lead runs CTP itself; nothing is delegated to a worker (source: .agents/AGENTS.md). A targeted subset runs in the foreground, a whole suite with `run_in_background` (the harness re-invokes the lead on exit).
+A background CTP wait is judged by the runner's own `[ctp-run] RESULT:` line or by the runner pid having exited, never by a loose pattern such as `rc=` (it matches the provenance line's `ref-src=`) or by a zsh `( … ) &` pair's early completion notice: launch two concurrent runs from one `bash <script>` that waits on each pid. (P20)
 
 - Every CTP run, whole or subset, goes through `just ctp <sql|medium|shell|shell_perf|ha_shell> [DIRS...]` (containers) or `just ctp-rerun <CI URL>`. Never `ctp.sh` on the host, never resurrect a host-side recipe.
 - The testcase ref is never implicit: pass `PR=<n>` or `TC_REF=<ref>`, or let it infer the PR from `WORKSPACE`. A run with none of the three refuses rather than validate a PR against develop testcases.
