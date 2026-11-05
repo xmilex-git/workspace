@@ -230,3 +230,13 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: Run the Apalache inductive cfg before the TLC inductive cfg and before TLAPS whenever IndInv's types fit Apalache: it checks every value of the integer constants in seconds, where `INIT IndInv` enumeration takes minutes and a failed TLAPS step tells only that the provers gave up. (P42)
 - Applies at: SKILL.md step 6
 - Case (2026-11-06, parallel hash join): the 2-worker TLC inductive cfg enumerated 31 072 256 initial states in 15 min (26 min under load), and each IndInv strengthening (W_fl with p = NP, mutant-only labels) was found that way before a TLAPS round of up to 40 min per module; Apalache 0.62.4 checks CondVarHandoff's IndInv for every `MaxSpurious \in Nat` in 5 s and rejects a weakened IndInv in the same time.
+
+### P43 — a wait's return branches each name their lock
+- Rule: Map each return branch of a wait separately and name the lock it holds: a primitive that returns unlocked (`thread_suspend_timeout_wakeup_and_unlock_entry`) gets one row per branch of its caller, and a branch that does not re-lock is split at each shared read and write, never copied from the branch that does.
+- Applies at: SKILL.md step 2
+- Case (2026-11-06, CBRD-26425 atomic latch): the first model gave `pgbuf_timed_sleep`'s timeout one step under the entry lock, like its interrupt branch (page_buffer.c:7397 re-locks). The TIMEDOUT branch does not: it reads `resume_status` at 7420, may `goto try_again` (7428), writes `NO_LATCH` at 7436 and calls `thread_unlock_entry` on a lock it does not hold at 7437. Splitting it found hole A (CBRD-27739 cause A): a grant between the read and the write leaks fcnt (runtime: page 1|769 READ-blocked, S2's entry mutex `__nusers = 4294967293`, assert at thread_entry.cpp:270 on stop).
+
+### P44 — the scope is the change's diff
+- Rule: Before the report, give every function a hunk of the verified change touches, and every path between its acquire and release points (error returns, interrupts, hand-offs, invalidation, lock-free lookups), a map row or a fault-table row carrying the code fact that excludes it; "not covered" is never a report line.
+- Applies at: SKILL.md step 2
+- Case (2026-11-06, CBRD-26425 atomic latch): the first report listed the flush errors, the FLUSH waiter interrupt, the post-flush hand-off, invalidation and `pgbuf_search_hash_chain_no_bcb_lock` as not covered; the user asked why. Modeling them found hole E: `pgbuf_bcb_flush_with_wal` returns on a TDE or DWB error after `pgbuf_bcb_mark_is_flushing` (page_buffer.c:10986, 10998) with FLUSHING set and DIRTY cleared and wakes no FLUSH waiter (TLC deadlock at depth 17; optdebug assert `LSA_ISNULL(oldest_unflush_lsa) || dirty` on the next unfix).

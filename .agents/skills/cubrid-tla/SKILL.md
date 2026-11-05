@@ -94,6 +94,9 @@ latch, lock, mutex, atomic, single owner). Then cut steps:
 
 Before the model is final, list the callers of every protocol entry point in the mapped code (code-index `callers`) and give each exit path (LIMIT, error, interrupt, reset, the end of a range) an action or a fault-table row saying why it is not modeled. (P11)
 
+- Map each return branch of a wait separately and name the lock it holds: a primitive that returns unlocked (`thread_suspend_timeout_wakeup_and_unlock_entry`) gets one row per branch of its caller, and a branch that does not re-lock is split at each shared read and write, never copied from the branch that does. (P43)
+- Before the report, give every function a hunk of the verified change touches, and every path between its acquire and release points (error returns, interrupts, hand-offs, invalidation, lock-free lookups), a map row or a fault-table row carrying the code fact that excludes it; "not covered" is never a report line. (P44)
+
 Done when every action and every variable of the spec has a row (`MODELING.md` has the CUBRID
 primitive patterns: page latch, lock manager, MVCC snapshot and vacuum, WAL, PX workers, condvar).
 
