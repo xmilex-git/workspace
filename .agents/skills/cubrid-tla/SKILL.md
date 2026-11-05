@@ -111,6 +111,7 @@ provides it. Done when every checklist row is answered.
   check the claims depend on. In a review, the pre-change behavior is a mutant: the defect the
   ticket describes must fail on it (fail-before) and pass on the change (pass-after).
 - An environment process that loops (an OS, vacuum, a DML stream) must be able to end when the system ends, or TLC reports a false deadlock. (P8)
+- A TLC cfg cannot write a negative integer: put a natural constant in the cfg and build the value set from it in the spec. (P9)
 
 ### 5. Check, then hunt
 

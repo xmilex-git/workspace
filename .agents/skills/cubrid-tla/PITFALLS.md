@@ -104,3 +104,14 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Applies at: TRACE.md (Reproducing a hole); SKILL.md step 7
 - Case (2026-11-05, parallel scan index H2): of three runs with the same delay, one returned 474416 / 1125355077360 instead of 474552 / 1126000376280; its TLATRACE lines showed `btree_merge left=13744 right=13742`, `btree_alloc page=13742`, `link_trusted last=changed`, while the other two runs' bulk loads had laid out the leaves so that no merge hit the last leaf. statdump counters stayed 0 throughout and could not tell the runs apart.
 - Case (2026-11-05, parallel scan probes): a race did not hold vacuum back because csql auto-committed the scanning session; `--no-auto-commit` fixed it. A rebuild of the probe install under a running server left a master the wrapper could not stop.
+
+### P9 — no negative integers in a cfg
+- Rule: A TLC cfg cannot write a negative integer: put a natural constant in the cfg and build the value set from it in the spec.
+- Applies at: SKILL.md step 4
+- Case (2026-11-05, CBRD-27819 cmp-dispatch): `CONSTANTS Vals = {-10, -5, 0, 5, 10}` stopped every cfg with `ConfigFileException ... expecting }`; `MaxV = 10` with `Vals == {v \in -MaxV..MaxV : v % 5 = 0}` in the spec ran.
+
+### P10 — decision tables: literal chains, no poisoned facts
+- Rule: A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, boolean assignments written `IF … THEN TRUE ELSE FALSE`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover.
+- Applies at: PROOFS.md
+- Case (2026-11-05, CBRD-27819 cmp-dispatch): one obligation per (client, site, type pair) with the whole decision unfolded timed out (34/843 in 1800 s); `conv = <<a # tgt, b # tgt>>` and `[d EXCEPT !.cmp = ...]` failed even for one concrete pair, and `BY <2>1` failed while `<2>1` held `inst' = CASE ...` although the same equality proved from `DEF Install`. With 0/1 flags, fresh records, a generated literal chain per pair and facts taken one by one from the action, 7652/7652 proved in 866 s.
+
