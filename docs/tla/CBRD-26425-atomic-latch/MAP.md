@@ -475,8 +475,11 @@ Last line: `RESULT: FAILED (16)`. Seven are the code cfgs (`AtomicLatch`, `code-
 cfgs, every one `got=[pass]`, refused only because this file still carried the dead-expression
 section of the pre-extension model; the section above was regenerated from this run, and every
 dead line of the nine is now named here (the same `AtomicLatch.tla:<n>` grep tla-check applies).
-The expected verdict with this file is `RESULT: FAILED (7)`, on the code cfgs only; a rerun on the
-unchanged specs was started 07:54 (`.git_ignored_dir/scratch/tla/CBRD-26425-atomic-latch-20261106-075416-2506890`).
+Rerun with this file on the unchanged specs, 07:54 (`.git_ignored_dir/scratch/tla/CBRD-26425-atomic-latch-20261106-075416-2506890`):
+the seven code cfgs fail as above, all eight non-scale pass cfgs print `PASS` (dead expressions
+explained), and the nine mutants `PASS`. It was stopped at 08:15 inside `scale-3t-2f` when the session
+ended, so it printed no `RESULT` line; `scale-3t-2f`'s pass is the 05:03 run's (9532 s), and every
+dead line of that run is named in the section above. The ten witnesses and `PageLatch` are the 05:03 run's.
 
 | cfg | expect | got | states (generated/distinct) | depth | time |
 |---|---|---|---|---|---|
