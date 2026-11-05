@@ -225,3 +225,8 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: Read the `toolchain:` line and every proof log's `TLAPM version` line: a toolchain install during a run swaps the tools under it, and a run whose modules carry different versions is rerun, never judged.
 - Applies at: SKILL.md (Toolchain)
 - Case (2026-11-06, parallel sort merge queue): the tools link moved from tlapm 1.4.5 to 1.6.0-pre at 01:31 during a 01:12 run; three proof modules logged `TLAPM version 1.4.5` and two `efe4f2d`, `Safe` failed with `ls4 not found`, and the 1.4.5 modules failed steps that had proved before. The rerun on one toolchain proved `Safe`.
+
+### P42 — the symbolic inductive check comes first
+- Rule: Run the Apalache inductive cfg before the TLC inductive cfg and before TLAPS whenever IndInv's types fit Apalache: it checks every value of the integer constants in seconds, where `INIT IndInv` enumeration takes minutes and a failed TLAPS step tells only that the provers gave up. (P42)
+- Applies at: SKILL.md step 6
+- Case (2026-11-06, parallel hash join): the 2-worker TLC inductive cfg enumerated 31 072 256 initial states in 15 min (26 min under load), and each IndInv strengthening (W_fl with p = NP, mutant-only labels) was found that way before a TLAPS round of up to 40 min per module; Apalache 0.62.4 checks CondVarHandoff's IndInv for every `MaxSpurious \in Nat` in 5 s and rejects a weakened IndInv in the same time.

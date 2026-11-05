@@ -21,7 +21,8 @@ rule, or as a new rule added to both files in one commit.
 
 - `just tla-install` once per host: TLC and the PlusCal translator (tla2tools 1.8.0), TLAPS
   (tlapm 1.6.0-pre with Isabelle2025, LS4, Zenon and Z3, the release build re-linked against nixpkgs' glibc in
-  `tools/tla/tlapm-next.nix`), pinned in `tools/tla/tools.nix`, GC root `.git_ignored_dir/tla/tools`.
+  `tools/tla/tlapm-next.nix`) and Apalache 0.62.4 (`tools/tla/apalache.nix`), pinned in
+  `tools/tla/tools.nix`, GC root `.git_ignored_dir/tla/tools`.
 - `tools/tla/tla-check [--workers N] [--heap SIZE] [--stretch F] DIR...` (or `just tla-check DIR...`)
   translates PlusCal, runs every cfg, proves every theorem and checks completeness. Evidence goes to
   `.git_ignored_dir/scratch/tla/<dir>-<stamp>/`; read only the `PASS`/`FAIL` lines and the last line.
@@ -54,6 +55,7 @@ rule, or as a new rule added to both files in one commit.
 | `<Module>.mutant-<n>.cfg` | one per claim at least: a known-wrong variant (`Mutant` constant) the properties must reject |
 | `<Module>.witness-<n>.cfg` | an outcome that must be reachable, as an invariant `Not<Outcome>` expected violated |
 | `<Module>.inductive-<n>.cfg` | `INIT IndInv`, `NEXT Next`, `INVARIANT IndInv`: TLC's check that IndInv is inductive |
+| `<Module>.apalache-<n>.cfg` | the same check by Apalache over every value of the integer constants (`PROOFS.md`, "Apalache"); counts as an inductive cfg |
 | `<Module>_proofs.tla` | TLAPS proof of the three INV1 premises for the correct variant (`PROOFS.md`) |
 | `MAP.md` | claims, refinement map, properties, fault model, mutants, witnesses, dead expressions, bounds |
 | trace files (protocol changes) | `<Module>Trace.tla`, its data module, `*.witness-trace-*.cfg`, `*.reject-*.cfg` (`TRACE.md`) |
@@ -139,9 +141,10 @@ either adds a cfg that passes or produces a finding:
 
 ### 6. Prove
 
-Write `IndInv`, check it with the inductive cfg, then prove the INV1 premises and their temporal
+Write `IndInv`, check it with the Apalache and TLC inductive cfgs, then prove the INV1 premises and their temporal
 conclusion `Spec => []IndInv` with TLAPS (`PROOFS.md`).
 
+- Run the Apalache inductive cfg before the TLC inductive cfg and before TLAPS whenever IndInv's types fit Apalache: it checks every value of the integer constants in seconds, where `INIT IndInv` enumeration takes minutes and a failed TLAPS step tells only that the provers gave up. (P42)
 - An inductive-cfg counterexample from a state the system cannot reach means IndInv is too weak: strengthen IndInv, never the spec, and keep IndInv in the main cfg's INVARIANTS so TLC confirms the strengthened conjunct on every reachable state. (P6)
 - TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish. (P23)
 - An obligation fails until the proof is right: split it, never `OMITTED`, never a weaker theorem.

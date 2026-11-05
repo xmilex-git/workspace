@@ -60,14 +60,15 @@ model names `file:function` and the symbol at each row.
 
 | Line | Why never evaluated |
 |---|---|
-| CondVarHandoff.tla:138 | `W_wake` branch of `mutant-if-not-while` only |
-| CondVarHandoff.tla:144 | `badConsume' = TRUE`: the ghost that flags C1's violation; dead because C1 holds |
-| CondVarHandoff.tla:158 | `S_lock` branch of `mutant-lost-wakeup` only |
-| CondVarHandoff.tla:176 | `S_unlock` branch of `mutant-lost-wakeup` only |
+| CondVarHandoff.tla:150 | `W_wake` branch of `mutant-if-not-while` only |
+| CondVarHandoff.tla:156 | `badConsume' = TRUE`: the ghost that flags C1's violation; dead because C1 holds |
+| CondVarHandoff.tla:170 | `S_lock` branch of `mutant-lost-wakeup` only |
+| CondVarHandoff.tla:188 | `S_unlock` branch of `mutant-lost-wakeup` only |
 
 ## Bounds and limits
 
 - TLC: one waiter, one signaler, `MaxSpurious = 2`; TLAPS covers any `MaxSpurious` for C1.
+- Apalache (`CondVarHandoff.apalache-indinv.cfg`): IndInv is inductive for every `MaxSpurious \in Nat`, one waiter and one signaler.
 - C2 is checked by TLC only, under the bounded-spurious-wakeup assumption above.
 - `pthread_cond_broadcast` and several waiters are out of scope for this example.
 

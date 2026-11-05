@@ -17,6 +17,11 @@
 #      *.inductive-* cfgs each must be explained in MAP.md as <Module>.tla:<line>.
 #      Trace validation: *.witness-trace-*.cfg accepts a recorded run (expects its TraceNotDone
 #      violated); *.reject-*.cfg feeds a corrupted run and expects pass, skipping the coverage checks.
+#      Apalache: a *.apalache-*.cfg (INIT IndInv, NEXT Next, INVARIANT IndInv, expecting pass) runs
+#      `apalache-mc check` instead of TLC, with the arguments of its `\* apalache: <args>` line
+#      (--cinit=<op> --length=1 for the inductive check), on a run-dir copy whose CONSTANTS and
+#      VARIABLES declarations tools/tla/apalache-types annotated from the spec's
+#      `\* apalache-type: <name> <type>` lines. It counts as an inductive cfg.
 #   3. TLAPS: every .tla holding a THEOREM is proved by tlapm (Z3, Zenon, Isabelle, LS4) on a copy in the run dir;
 #      every obligation must come back proved — none failed, none OMITTED. A proof module's
 #      `\* timeout: <seconds>` line (default 1800) bounds its tlapm run, as a cfg's does TLC's.
@@ -90,7 +95,7 @@ for arg in "${dirs[@]}"; do
            && [ "$(/usr/bin/grep -E '^ *CONSTANTS? ' "$c")" != "$(/usr/bin/grep -E '^ *CONSTANTS? ' "$main")" ]; then
           nscale=$((nscale + 1))
         fi ;;
-      *.inductive-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ pass ]] && nind=$((nind + 1)) ;;
+      *.inductive-*.cfg|*.apalache-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ pass ]] && nind=$((nind + 1)) ;;
       *) [[ "$e" =~ ^\\\*\ expect:\ pass ]] && npass=$((npass + 1)) ;;
     esac
     # Only mutants and witnesses may expect an error: a hole found in the code stays a failing
@@ -135,13 +140,36 @@ for arg in "${dirs[@]}"; do
     expect="$(head -1 "$c" | sed -n 's/^\\\* expect: *//p')"
     [ -n "$expect" ] || { fail "$name: first line must be '\\* expect: pass|violation <Name>|deadlock|liveness|refinement'"; continue; }
     [ -f "$dir/$module.tla" ] || { fail "$name: module $module.tla not found"; continue; }
+    tmo="$(sed -n 's/^\\\* timeout: *\([0-9]*\).*/\1/p' "$c" | head -1)"
+    if [[ "$name" == *.apalache-* ]]; then
+      # Apalache: symbolic check over every value of the constants the --cinit operator leaves open.
+      [ -x "$tools/bin/apalache-mc" ] || { fail "$name: apalache-mc missing from the pinned toolchain; run 'just tla-install'"; continue; }
+      adir="$run/apalache-$name"
+      mkdir -p "$adir/tmp"
+      cp "$dir"/*.tla "$adir/"
+      for f in "$adir"/*.tla; do "$root/tools/tla/apalache-types" "$f"; done
+      read -r -a aargs <<< "$(sed -n 's/^\\\* apalache: *//p' "$c" | head -1)"
+      start=$(date +%s)
+      (cd "$adir" && timeout "${tmo:-1800}" "${clean_env[@]}" TMPDIR="$adir/tmp" JVM_ARGS="-Xmx$heap" \
+        "$tools/bin/apalache-mc" check --out-dir="$adir/out" --config="$c" "${aargs[@]}" "$module.tla") > "$log" 2>&1
+      rc=$?
+      secs=$(( $(date +%s) - start ))
+      case $rc in
+        0) got="pass" ;;
+        12) got="violation $(sed -n 's/^ *INVARIANTS\{0,1\} *//p' "$c" | xargs)" ;;
+        124) got="timeout after ${tmo:-1800}s" ;;
+        *) got="error rc=$rc ($(/usr/bin/grep -m1 'E@' "$log" | sed 's/ *E@.*//'))" ;;
+      esac
+      line="$name expect=[$expect] got=[$got] apalache ${secs}s log=$log"
+      if [ "$got" = "$expect" ]; then echo "PASS $line"; else fail "$line"; fi
+      continue
+    fi
     if /usr/bin/grep -q '^ *SYMMETRY' "$c" && /usr/bin/grep -q '^ *PROPERTY' "$c"; then
       fail "$name: SYMMETRY together with PROPERTY (TLC liveness is unsound under symmetry)"; continue
     fi
     if /usr/bin/grep -q '^ *CHECK_DEADLOCK *FALSE' "$c" && ! /usr/bin/grep -q '^\\\* deadlock-off: *[^ ]' "$c"; then
       fail "$name: CHECK_DEADLOCK FALSE without a '\\* deadlock-off: <reason>' line"; continue
     fi
-    tmo="$(sed -n 's/^\\\* timeout: *\([0-9]*\).*/\1/p' "$c" | head -1)"
     start=$(date +%s)
     (cd "$dir" && timeout "${tmo:-1800}" "${jrun[@]}" tlc2.TLC -config "$c" -metadir "$run/meta-$name" -cleanup \
       -noGenerateSpecTE -coverage 60 -workers "$workers" "$module.tla") > "$log" 2>&1

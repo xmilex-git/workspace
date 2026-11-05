@@ -76,6 +76,32 @@ Every workaround keeps the theorem statement; only the proof is decomposed, and 
 the parts is itself an obligation. A theorem weakened to make it prove, an `OMITTED` step, or a
 property moved from TLAPS to "TLC only" without saying so in MAP.md is not a workaround.
 
+## Apalache: the symbolic inductive check
+
+`<Module>.apalache-<n>.cfg` asks Apalache whether `IndInv /\ Next => IndInv'` holds, by SMT over
+every value of the constants the `--cinit` operator leaves open:
+
+```
+\* expect: pass
+\* apalache: --cinit=CInit --length=1
+INIT IndInv
+NEXT Next
+INVARIANT IndInv
+```
+
+- `CInit` (in the spec, after the translation) fixes the role sets to string literals
+  (`Workers = {"w1", "w2"}`, TLC's model values become strings) and leaves the integer bounds open
+  (`MaxSpurious \in Nat`, `NU \in Nat /\ NU >= 1`). Set sizes stay fixed; integer sizes are
+  unbounded. That is what TLC's inductive cfg cannot give and TLAPS gives only after the proof is written.
+- Apalache's type checker needs every CONSTANT and VARIABLE typed. The PlusCal translator drops
+  comments, so the spec states each type once as `\* apalache-type: <name> <type>` (`pc Str -> Str`,
+  `temp Str -> (Int -> Set(<<Int, Str>>))`) and `tools/tla/apalache-types` writes them into the
+  declarations of tla-check's run-dir copy. An untyped name fails the cfg with `error rc=255` and
+  the name in the log.
+- A counterexample (`got=[violation IndInv]`) is the pair of states in the run dir's
+  `apalache-<cfg>/out/**/violation1.tla`; read it as an inductive-cfg counterexample (below).
+- Example: `examples/condvar-handoff/CondVarHandoff.apalache-indinv.cfg`.
+
 ## Strengthening IndInv
 
 The inductive cfg finds a state satisfying IndInv whose successor violates it. Read the state: if

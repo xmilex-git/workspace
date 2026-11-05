@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# usage: tools/tla/apalache-types FILE.tla   (rewrites FILE in place; tla-check runs it on its run-dir copy)
+#
+# Apalache needs a `\* @type: T;` annotation in front of every constant and variable declaration,
+# and the PlusCal translator drops the comments of a `variables` block. A spec therefore states each
+# name's type once on a line of its own, anywhere in the module:
+#     \* apalache-type: <name> <Apalache type>      e.g.  \* apalache-type: pc Str -> Str
+# and this script rewrites every CONSTANTS and VARIABLES declaration (one line or a list continued
+# after commas) into one annotated declaration per name. A name with no line stays bare, so
+# Apalache's type checker names it.
+set -eu
+f="${1:?usage: apalache-types FILE.tla}"
+awk '
+  FNR == NR { if (match($0, /^\\\* apalache-type: *[A-Za-z_][A-Za-z0-9_]* +/)) {
+                rest = substr($0, RLENGTH + 1); split(substr($0, 1, RLENGTH), h, /: */)
+                n = h[2]; sub(/ +$/, "", n); ty[n] = rest }
+              next }
+  !invars && /^(VARIABLE|CONSTANT)S? / { invars = 1; kw = ($0 ~ /^V/) ? "VARIABLE" : "CONSTANT"; sub(/^[A-Z]+ +/, "") }
+  invars {
+    line = $0; sub(/\\\*.*/, "", line); cont = (line ~ /, *$/)
+    gsub(/ +/, "", line); k = split(line, vs, ",")
+    for (i = 1; i <= k; i++) if (vs[i] != "") {
+      print kw
+      if (vs[i] in ty) print "  \\* @type: " ty[vs[i]] ";"
+      print "  " vs[i]
+    }
+    if (!cont) invars = 0
+    next
+  }
+  { print }
+' "$f" "$f" > "$f.apalache-types" && mv "$f.apalache-types" "$f"

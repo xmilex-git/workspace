@@ -11,6 +11,18 @@ CONSTANTS Waiter, Signaler, Mutant, MaxSpurious
 ASSUME Assm == /\ Waiter # Signaler /\ MaxSpurious \in Nat
                /\ "spurious" \notin {Waiter, Signaler}
                /\ Mutant \in {"none", "signal_without_mutex", "if_not_while"}
+\* Types for Apalache (tools/tla/apalache-types writes them into the declarations).
+\* apalache-type: Waiter Str
+\* apalache-type: Signaler Str
+\* apalache-type: Mutant Str
+\* apalache-type: MaxSpurious Int
+\* apalache-type: locked Bool
+\* apalache-type: ready Bool
+\* apalache-type: sleeping Bool
+\* apalache-type: badConsume Bool
+\* apalache-type: sleptOnce Bool
+\* apalache-type: spuriousLeft Int
+\* apalache-type: pc Str -> Str
 
 (* --algorithm CondVarHandoff
 variables
@@ -226,4 +238,8 @@ IndInv == /\ TypeOK /\ PcOK
           /\ ~badConsume
           /\ pc[Waiter] = "W_consume" => ready
           /\ sleeping => pc[Waiter] = "W_wake"
+
+(* Apalache's constant initialization for CondVarHandoff.apalache-indinv.cfg: the inductive
+   check covers every MaxSpurious at once, where the TLC inductive cfg fixes it to 2. *)
+CInit == Waiter = "w" /\ Signaler = "s" /\ Mutant = "none" /\ MaxSpurious \in Nat
 =============================================================================

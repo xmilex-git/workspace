@@ -1,6 +1,7 @@
 # Pinned TLA+ toolchain for tools/tla/tla-check: tla2tools 1.8.0 (SANY, the PlusCal translator, TLC) with the
 # JDK its wrappers exec, and the TLA+ Proof System tlapm 1.6.0-pre with its bundled back ends (Isabelle2025,
-# LS4 for PTL, Z3, Zenon), the release build re-linked for this host in tlapm-next.nix (ADR 0045).
+# LS4 for PTL, Z3, Zenon), the release build re-linked for this host in tlapm-next.nix (ADR 0045), and
+# Apalache 0.62.4 for the symbolic inductive check (apalache.nix).
 # `just tla-install` builds this into the GC root .git_ignored_dir/tla/tools.
 let
   nixpkgs = builtins.fetchTarball {
@@ -12,11 +13,13 @@ let
     overlays = [ ];
   };
   tlapm = import ./tlapm-next.nix;
+  apalache = import ./apalache.nix;
 in
 pkgs.buildEnv {
   name = "tla-tools";
   paths = [
     pkgs.tlaplus18
     tlapm
+    apalache
   ];
 }
