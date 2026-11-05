@@ -14,6 +14,7 @@ refinement map to the code: a map row that is wrong shows up as a run the spec r
   same latch, lock or mutex, or right after the atomic operation), so log order cannot disagree
   with execution order. Events from several threads carry `seq=` from one global
   `std::atomic<uint64_t>` fetch-add done inside the step.
+- An event for a step that starts another thread (`push_task`, `pthread_create`, a signal) is emitted before that start, or the started thread's first event can land ahead of it and the run diverges from the spec. (P32)
 - Line format, anywhere in a log line: `TLATRACE seq=<n> a=<Action> p=<process> <field>=<value>...`;
   `a` is the TLA+ action name, `p` the process id the spec uses, fields are the outcomes the spec
   must match (`err=1`, `page=3`). Write to a dedicated file opened by the instrumented build in the

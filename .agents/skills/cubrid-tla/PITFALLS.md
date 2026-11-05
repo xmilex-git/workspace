@@ -117,6 +117,7 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, boolean assignments written `IF … THEN TRUE ELSE FALSE`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover.
 - Applies at: PROOFS.md
 - Case (2026-11-05, CBRD-27819 cmp-dispatch): one obligation per (client, site, type pair) with the whole decision unfolded timed out (34/843 in 1800 s); `conv = <<a # tgt, b # tgt>>` and `[d EXCEPT !.cmp = ...]` failed even for one concrete pair, and `BY <2>1` failed while `<2>1` held `inst' = CASE ...` although the same equality proved from `DEF Install`. With 0/1 flags, fresh records, a generated literal chain per pair and facts taken one by one from the action, 7652/7652 proved in 866 s.
+- Case (2026-11-06, parallel sort merge queue): ghost updates written `poolOver' = (poolOver \/ inf >= PoolSize)` and `err' = (err \/ ~tok[t])` left `poolOver' = FALSE` / `err' = TRUE` unprovable in SMT and Zenon (timeouts on one-line goals); the same updates as `IF inf >= PoolSize THEN TRUE ELSE poolOver` proved at once.
 
 ### P21 — higher-order library theorems need Isa
 - Rule: A library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) applies only through the Isabelle back end: `DEFINE` the predicate, `HIDE DEF` it, and cite the theorem with `Isa`; where a least element is all the action needs, `\E x \in S : Least(x, S)` in the action instead of `Min(S)` / `CHOOSE` avoids the lemma, and TLC's deadlock check shows one exists.
@@ -164,6 +165,21 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: Stop only the processes your own runner started, by the pid it recorded; other sessions run tlapm and TLC on this host at the same time, so never kill by pattern or by a pid read from `ps`.
 - Applies at: SKILL.md Toolchain
 - Case (2026-11-06, CBRD-24094): a `pkill -f` pattern for this session's tlapm killed its own shell, and a follow-up `kill` of a tlapm pid read from `pgrep -fl` stopped another session's `PxHashJoin_proofs` run (5번 세션), which had to be redone.
+
+### P30 — `-` binds tighter than `+`
+- Rule: Parenthesize every `a + b - c` a proof step states: TLA+ binds `-` (precedence 11) tighter than `+` (10), so `qn + 1 - k` is `qn + (1 - k)` and does not match a fact written `(qn + 1) - k` without integer typing in the context.
+- Applies at: PROOFS.md
+- Case (2026-11-06, parallel sort merge queue): `Cardinality(Q') = qn + 1 - k` failed in every prover while `<2>x` proved `Cardinality(Q') = (qn + 1) - k`; tlapm printed the two differently, `qn + 1 - KOf(...)` against `(qn + 1) - KOf(...)`. Writing `(qn + 1) - k` in the step proved it.
+
+### P31 — split a large proof into modules
+- Rule: `tla-check` gives each proof module one 1800 s tlapm run: split a proof past about a thousand obligations into modules that `EXTEND` a shared base module (tlapm proves only the theorems of the module it is given), each under the limit, and keep the INV1 theorems in the top module.
+- Applies at: PROOFS.md
+- Case (2026-11-06, parallel sort merge queue): one module with 2850 obligations stopped at 1931 proved after 1800 s (rc=124) although every lemma had proved in partial runs; a test module `B EXTENDS A` reported only B's obligation. Split into `_base` (helpers, InitInv), `_main`, `_task`, `_disp`, `_tc` and the top module with StepInv, InvSafe and Safe.
+
+### P32 — emit before you start a thread
+- Rule: An event for a step that starts another thread (`push_task`, `pthread_create`, a signal) is emitted before that start, or the started thread's first event can land ahead of it and the run diverges from the spec.
+- Applies at: TRACE.md
+- Case (2026-11-06, parallel sort merge queue): `MDispatch` was logged after `sort_merge_queue_try_dispatch` returned, so in one run (merge 2 failing at once) the task's `TMerge` came before its own `MDispatch` and the trace could not be accepted; logging inside `try_dispatch` before `push_task` (and the callback's `TComplete` there too) made all six runs accepted.
 
 ### P33 — prove a large action through its branch effects
 - Rule: A PlusCal action with branches is proved through an effect step: state each branch as its guard, every assignment and `UNCHANGED` of the rest, prove their disjunction by one `CASE` per branch condition (a primed predicate such as `failed'[self] = "err"` tells `either` branches apart), then prove each IndInv part from one branch's conjunction with the action's definition left unexpanded.
