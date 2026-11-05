@@ -147,3 +147,19 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: A hole whose window is a few instructions wide is reproduced by an injection at the window that waits, polling the shared state, until the counterexample's precondition holds (bounded, traced), and then runs the real step; the load that creates the precondition runs for the whole bound.
 - Applies at: SKILL.md step 7
 - Case (2026-11-05, CBRD-26425 atomic latch H1): `pgbuf_lockfree_fix_ro` held its window between the vpid check and the CAS open until the BCB held another page whose latch word equalled the loaded one; the first run closed it unmatched after 30 s (`matched=0`) because the buffer churn (8 scans, 0.3 s) ended long before the page could age out; with two sessions churning for the whole bound it matched in 2 s, the real CAS succeeded on page 1|3992 for a fix of 1|641, and the caller asserted in `pgbuf_check_page_ptype`.
+
+### P27 — a crash state is the code's write
+- Rule: A crash fault's intermediate state is the exact page write of the function that performs the first half, read in that function (a replace that re-inserts in order, a move that shifts), never the caller's comment.
+- Applies at: SKILL.md step 3
+- Case (2026-11-06, CBRD-24094 leaf swap): the first crash model put the removed leaf object in the first overflow page's last slot, from `btree_replace_first_oid_with_ovfl_oid`'s comment ("swap ... with last object"); two injected crashes recovered cleanly. `btree_record_replace_object` removes the old object and re-inserts the new one in OID order (`btree.c:38577`); with that write the model found H2 (an object above page 2's separator left in page 1), reproduced on the third run.
+
+### P28 — a stop the capacity checks forbid is a model error
+- Rule: A counterexample that needs the scan or buffer to stop where the code's capacity checks forbid it is a model error: derive a stop or overflow condition from the code's arithmetic (what the check counts, what it reserves) before a hole is reported.
+- Applies at: SKILL.md step 7
+- Case (2026-11-06, CBRD-27401 scan resume): the model let a key-start iteration stop with no chain object accepted (anchor NULL) and TLC found a lost row without COMPACT; the runtime attempt stopped before the key instead (`n_before=0`), because the key-start check reserves the leaf objects plus one full overflow page (`btree.c:30774`, `btree.c:29694`). The stop now needs an accepted object, the vacuum-only path passes, and H1 needs COMPACT.
+
+### P29 — stop only your own processes
+- Rule: Stop only the processes your own runner started, by the pid it recorded; other sessions run tlapm and TLC on this host at the same time, so never kill by pattern or by a pid read from `ps`.
+- Applies at: SKILL.md Toolchain
+- Case (2026-11-06, CBRD-24094): a `pkill -f` pattern for this session's tlapm killed its own shell, and a follow-up `kill` of a tlapm pid read from `pgrep -fl` stopped another session's `PxHashJoin_proofs` run (5번 세션), which had to be redone.
+

@@ -30,6 +30,7 @@ rule, or as a new rule added to both files in one commit.
 - `just tla-selftest` runs `examples/`; run it after touching `tools/tla/` or this skill's rules.
 - TLC and tlapm run only through `tools/tla/tla-check`, whose verdict is read per cfg and per obligation, never from a tool's exit status. (P1)
 - Change `tools/tla/tla-check` by writing a new file and renaming it over the old one: bash reads a running script from its open file, so an in-place rewrite corrupts the runs other sessions have in flight. (P18)
+- Stop only the processes your own runner started, by the pid it recorded; other sessions run tlapm and TLC on this host at the same time, so never kill by pattern or by a pid read from `ps`. (P29)
 
 ## Where the model lives
 
@@ -101,6 +102,8 @@ enabled wherever the code can raise them. Environment assumptions (fairness, bou
 wakeups) go in the same table; a liveness claim names the fairness it needs and the code that
 provides it. Done when every checklist row is answered.
 
+- A crash fault's intermediate state is the exact page write of the function that performs the first half, read in that function (a replace that re-inserts in order, a move that shifts), never the caller's comment. (P27)
+
 ### 4. Spec and cfgs
 
 - Constants: the smallest values that still exhibit each interleaving class: at least 2 of every
@@ -152,6 +155,7 @@ Every TLC counterexample from a correct-variant cfg is classified in MAP.md befo
   finding only after a runtime reproduction (`cubrid-diagnose`: a fail-before run on a build, with
   a delay injected on a scratch worktree when the window is narrow); until then it is a question
   carrying the step-by-step trace mapped to `file:line`. A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole. (P17) A hole whose window is a few instructions wide is reproduced by an injection at the window that waits, polling the shared state, until the counterexample's precondition holds (bounded, traced), and then runs the real step; the load that creates the precondition runs for the whole bound. (P26)
+- A counterexample that needs the scan or buffer to stop where the code's capacity checks forbid it is a model error: derive a stop or overflow condition from the code's arithmetic (what the check counts, what it reserves) before a hole is reported. (P28)
 - A hole confirmed in the code stays a failing `\* expect: pass` cfg of the code as it stands, so the directory reports `RESULT: FAILED` until the code is fixed; the candidate fix gets its own pass cfg, and the code cfg's expectation is never flipped to make the directory pass. (P9)
 
 ### 8. Trace validation (protocol changes)
