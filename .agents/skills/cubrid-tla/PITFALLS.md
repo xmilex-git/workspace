@@ -240,3 +240,18 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: Before the report, give every function a hunk of the verified change touches, and every path between its acquire and release points (error returns, interrupts, hand-offs, invalidation, lock-free lookups), a map row or a fault-table row carrying the code fact that excludes it; "not covered" is never a report line.
 - Applies at: SKILL.md step 2
 - Case (2026-11-06, CBRD-26425 atomic latch): the first report listed the flush errors, the FLUSH waiter interrupt, the post-flush hand-off, invalidation and `pgbuf_search_hash_chain_no_bcb_lock` as not covered; the user asked why. Modeling them found hole E: `pgbuf_bcb_flush_with_wal` returns on a TDE or DWB error after `pgbuf_bcb_mark_is_flushing` (page_buffer.c:10986, 10998) with FLUSHING set and DIRTY cleared and wakes no FLUSH waiter (TLC deadlock at depth 17; optdebug assert `LSA_ISNULL(oldest_unflush_lsa) || dirty` on the next unfix).
+
+### P45 — verified means run, not written
+- Rule: A model is a result only once `tools/tla/tla-check` has run it to `RESULT: OK`: TLC on the main and scale cfgs, every mutant rejected, every witness reached, IndInv inductive (Apalache, then TLC), TLAPS proving the INV1 theorems, and trace validation where step 8 requires it; a spec written but not run, or run without its proof, is reported as 미완, never as verified.
+- Applies at: SKILL.md step 10
+- Case (2026-11-06, PR #8356 review, per-row partition walk): the model and its cfgs were written and the first TLC passes were in when the user asked mid-turn: "tla+ 모델링만 하는게 아니라 그걸로 검증까지해야하는건 알고있지?" The review's TLA+ step stays open until the inductive checks and the TLAPS proof run to `RESULT: OK`.
+
+### P46 — tlapm 1.6.0-pre is the prover
+- Rule: Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: the PROOFS.md table headed 1.4.5 predates it, and 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run.
+- Applies at: SKILL.md (Toolchain), PROOFS.md
+- Case (2026-11-06, PR #8356 review): the user asked "1.6버전으로 하고잇는건알고잇지?" before the proof was written; `.git_ignored_dir/tla/tools/bin/tlapm --version` printed `efe4f2d`, and ADR 0045 records 1.4.5-proved obligations that time out on 1.6 (`ExprProgExec_proofs` 23:87, `PxHeapSnapshot_proofs` 118:5 and 196:3).
+
+### P47 — a declaration keyword carries its first name
+- Rule: Write every CONSTANTS and VARIABLES declaration with its first name on the keyword's line (`VARIABLES kind, prune,`): `tools/tla/apalache-types` rewrites only a block whose keyword line already holds a name, so a bare `VARIABLES` line leaves every variable untyped and the Apalache cfg fails with `Expected a type annotation for VARIABLE <name>` (rc=255).
+- Applies at: PROOFS.md (Apalache)
+- Case (2026-11-06, PR #8356 review): `PartWalk.tla` declared `VARIABLES` on a line of its own with one commented name per line below; `PartWalk.apalache-indinv` failed at `PartWalk.tla:78` with `Expected a type annotation for VARIABLE memoOn` although all 31 `apalache-type` lines were present. With `VARIABLES kind, prune, home, data, outer,` on one line the script wrote all 31 `@type` annotations.

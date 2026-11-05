@@ -32,6 +32,7 @@ rule, or as a new rule added to both files in one commit.
 - TLC and tlapm run only through `tools/tla/tla-check`, whose verdict is read per cfg and per obligation, never from a tool's exit status. (P1)
 - Change `tools/tla/tla-check` by writing a new file and renaming it over the old one: bash reads a running script from its open file, so an in-place rewrite corrupts the runs other sessions have in flight. (P18)
 - Read the `toolchain:` line and every proof log's `TLAPM version` line: a toolchain install during a run swaps the tools under it, and a run whose modules carry different versions is rerun, never judged. (P41)
+- Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: the PROOFS.md table headed 1.4.5 predates it, and 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run. (P46)
 - Stop only the processes your own runner started, by the pid it recorded; other sessions run tlapm and TLC on this host at the same time, so never kill by pattern or by a pid read from `ps`. (P29)
 - Size `tools/tla/tla-check --workers` to the free cores for a proof module of more than a few hundred obligations: `--workers` is also tlapm's `--threads` (default 4) and the proof runs under a fixed 1800 s timeout, so at the default a large module ends as a timeout, not a verdict; check `nproc` and the load average first, and give a module that needs longer a `\* timeout: <seconds>` line in its proof file. (P39)
 
@@ -182,6 +183,8 @@ refinement mapping (`MODELING.md`, "Refinement"). A design spec without an imple
 recorded as such in the report.
 
 ### 10. Record and report
+
+- A model is a result only once `tools/tla/tla-check` has run it to `RESULT: OK`: TLC on the main and scale cfgs, every mutant rejected, every witness reached, IndInv inductive (Apalache, then TLC), TLAPS proving the INV1 theorems, and trace validation where step 8 requires it; a spec written but not run, or run without its proof, is reported as 미완, never as verified. (P45)
 
 MAP.md's last section, `## Result`, holds the facts: date, `RESULT: OK` line, run dir, per-cfg
 states and depth, obligations proved, the spec sha256 lines from `summary.txt`, the engine sha and

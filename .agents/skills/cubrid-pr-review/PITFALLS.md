@@ -128,6 +128,13 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-10-29, PR 8311 8f644ec56): all 11 `sql/_36_guava/cbrd_27381/*` cases NOK in run 40824940519. The TC had merged into testcases develop (876b70cb1, 05:18Z) while its engine PR #8209 was still open, so every PR whose `tc/pr-N` synced develop after that fails the whole dir; #8318 (run 40827759161) failed the same 11. A whole-dir NOK of one CBRD: look up that CBRD's engine PR state before reading traces.
 - Source: memory:gha-ci-shell-flaky-cases, memory:gha-ci-cancel-leaves-build-pending
 
+## TLA+ verification (Step 3d)
+
+### P27 — the TLA+ step ends at RESULT: OK
+- Rule: Step 3d is done when `tools/tla/tla-check` prints `RESULT: OK` on the PR's model, not when the model is written: the review runs TLC with its mutants and witnesses, the Apalache and TLC inductive checks and the TLAPS proof on tlapm 1.6.0-pre (`cubrid-tla` P45, P46), and a TLA+ section filled before that run says 미완.
+- Applies at: Step 3d
+- Case (2026-11-06, PR #8356 CBRD-27866): while the per-row partition walk model had its first TLC passes and no inductive check or proof yet, the user asked "tla+ 모델링만 하는게 아니라 그걸로 검증까지해야하는건 알고있지?" and "1.6버전으로 하고잇는건알고잇지?".
+
 ## Rendering and posting (Step 6)
 
 ### P18 — `NIT:` marks trivia only

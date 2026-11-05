@@ -101,6 +101,7 @@ INVARIANT IndInv
 - A counterexample (`got=[violation IndInv]`) is the pair of states in the run dir's
   `apalache-<cfg>/out/**/violation1.tla`; read it as an inductive-cfg counterexample (below).
 - Example: `examples/condvar-handoff/CondVarHandoff.apalache-indinv.cfg`.
+- Write every CONSTANTS and VARIABLES declaration with its first name on the keyword's line (`VARIABLES kind, prune,`): `tools/tla/apalache-types` rewrites only a block whose keyword line already holds a name, so a bare `VARIABLES` line leaves every variable untyped and the Apalache cfg fails with `Expected a type annotation for VARIABLE <name>` (rc=255). (P47)
 
 ## Strengthening IndInv
 
