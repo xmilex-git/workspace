@@ -20,7 +20,8 @@ rule, or as a new rule added to both files in one commit.
 ## Toolchain
 
 - `just tla-install` once per host: TLC and the PlusCal translator (tla2tools 1.8.0), TLAPS
-  (tlapm 1.4.5 with Zenon and Z3), pinned in `tools/tla/tools.nix`, GC root `.git_ignored_dir/tla/tools`.
+  (tlapm 1.6.0-pre with Isabelle2025, LS4, Zenon and Z3, the release build re-linked against nixpkgs' glibc in
+  `tools/tla/tlapm-next.nix`), pinned in `tools/tla/tools.nix`, GC root `.git_ignored_dir/tla/tools`.
 - `tools/tla/tla-check [--workers N] [--heap SIZE] [--stretch F] DIR...` (or `just tla-check DIR...`)
   translates PlusCal, runs every cfg, proves every theorem and checks completeness. Evidence goes to
   `.git_ignored_dir/scratch/tla/<dir>-<stamp>/`; read only the `PASS`/`FAIL` lines and the last line.
@@ -133,13 +134,13 @@ either adds a cfg that passes or produces a finding:
 
 ### 6. Prove
 
-Write `IndInv`, check it with the inductive cfg, then prove the INV1 premises with TLAPS
-(`PROOFS.md`).
+Write `IndInv`, check it with the inductive cfg, then prove the INV1 premises and their temporal
+conclusion `Spec => []IndInv` with TLAPS (`PROOFS.md`).
 
 - An inductive-cfg counterexample from a state the system cannot reach means IndInv is too weak: strengthen IndInv, never the spec, and keep IndInv in the main cfg's INVARIANTS so TLC confirms the strengthened conjunct on every reachable state. (P6)
 - TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish. (P23)
 - An obligation fails until the proof is right: split it, never `OMITTED`, never a weaker theorem.
-  `PROOFS.md` lists what tlapm 1.4.5 on this host cannot do and the sound workaround for each.
+  `PROOFS.md` lists what tlapm on this host cannot do and the sound workaround for each.
 
 ### 7. Counterexamples
 
@@ -179,7 +180,7 @@ TLA+ 검증: <통과 | 실패 | 미완> — <spec dir>
 - 속성: C1 <safety|liveness> <TLC 통과|실패> <TLAPS: 이 spec | 추상 spec + TLC refinement | 없음> ... (claim별 한 줄, 출처)
 - 결함: <없음 | H<n> 코드 cfg 실패, 런타임 재현(빌드 fingerprint, 결과), 후보 수정 cfg 통과>
 - mutant: <n>개 모두 위반 검출 / 살아남은 mutant: <없음 | 목록>
-- 경계: <상수>, scale <상수>; TLAPS는 safety만 (liveness는 TLC 경계 안에서만)
+- 경계: <상수>, scale <상수>; TLAPS는 safety (`Spec => []IndInv`), liveness는 공정성 증명을 쓴 claim만 (나머지는 TLC 경계 안에서만)
 - trace validation: <수용 n건, 거부 n건 | 해당 없음(이유)>
 - 반례: <없음 | 분류와 재현 여부>
 ```

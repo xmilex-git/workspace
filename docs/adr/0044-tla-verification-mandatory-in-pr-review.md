@@ -20,5 +20,5 @@ date: 2026-11-05
 
 ## Consequences
 
-- TLAPS는 이 호스트의 tlapm 1.4.5(nixpkgs; LS4·Isabelle 없음)로 안전성만 증명한다. liveness는 TLC 경계 안의 결과로만 보고한다.
+- ~~TLAPS는 이 호스트의 tlapm 1.4.5(nixpkgs; LS4·Isabelle 없음)로 안전성만 증명한다. liveness는 TLC 경계 안의 결과로만 보고한다.~~ ADR 0045가 대체한다: tlapm 1.6.0-pre(Isabelle2025, LS4)로 `Spec => []IndInv`까지 증명하고, liveness는 공정성 증명을 쓴 claim만 TLAPS로, 나머지는 TLC 경계 안의 결과로 보고한다.
 - 리뷰 비용이 늘어난다. 모델은 `.claude/review/PR-<N>/tla/`에 남아 같은 모듈의 다음 PR이 재사용한다.

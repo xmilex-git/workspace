@@ -1,7 +1,6 @@
-# Pinned TLA+ toolchain for tools/tla/tla-check: tla2tools 1.8.0 (SANY, the PlusCal translator, TLC)
-# with the JDK its wrappers exec, and the TLA+ Proof System (tlapm 1.4.5 with Zenon, plus Z3 as its
-# SMT back end; nixpkgs ships no Isabelle/TLA+ heap or LS4 for it, so Isabelle and temporal (PTL)
-# proofs are unavailable), from the nixpkgs revision this host's channel already carries.
+# Pinned TLA+ toolchain for tools/tla/tla-check: tla2tools 1.8.0 (SANY, the PlusCal translator, TLC) with the
+# JDK its wrappers exec, and the TLA+ Proof System tlapm 1.6.0-pre with its bundled back ends (Isabelle2025,
+# LS4 for PTL, Z3, Zenon), the release build re-linked for this host in tlapm-next.nix (ADR 0045).
 # `just tla-install` builds this into the GC root .git_ignored_dir/tla/tools.
 let
   nixpkgs = builtins.fetchTarball {
@@ -12,12 +11,12 @@ let
     config = { };
     overlays = [ ];
   };
+  tlapm = import ./tlapm-next.nix;
 in
 pkgs.buildEnv {
   name = "tla-tools";
   paths = [
     pkgs.tlaplus18
-    pkgs.tlaps
-    pkgs.z3
+    tlapm
   ];
 }

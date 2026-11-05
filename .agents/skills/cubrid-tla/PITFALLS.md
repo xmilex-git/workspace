@@ -15,10 +15,11 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Case (2026-11-05, skill build): the nix JDK 21 behind `tlc` died with `UnsatisfiedLinkError ... /usr/lib/jvm/java-1.8.0-openjdk/jre/lib/amd64/libnet.so` because CUBRID shells export `LD_LIBRARY_PATH` with Java 8's libs; `env -u LD_LIBRARY_PATH` through the `~/.local/bin/env` shim then printed nothing and exited 0. `tla-check` runs Java and tlapm through `/usr/bin/env -u LD_LIBRARY_PATH -u JAVA_HOME -u CLASSPATH -u JAVA_TOOL_OPTIONS`.
 - Case (2026-11-05, px-error-handoff): `tlapm --toolbox 0 0` exited 0 while two obligations had `@!!status:failed` from every prover. `tla-check` now takes each obligation's last settled status and requires proved = `@!!count`.
 
-### P2 — no PTL back end
-- Rule: tlapm here has no LS4 back end, so a `PTL` step never proves: state the INV1 premises as separate theorems and leave the temporal conclusion to the rule.
+### P2 — the temporal conclusion goes through LS4
+- Rule: `PTL` steps prove through LS4 (tlapm 1.6.0-pre): keep the INV1 premises as their own theorems and conclude `Spec => []IndInv` from them `BY InitInv, StepInv, PTL DEF Spec`, so a temporal failure is told apart from a step failure.
 - Applies at: PROOFS.md
-- Case (2026-11-05, skill build): the textbook `<1>. QED BY <1>1, <1>2, <1>3, PTL DEF Spec` failed with `Executable "ls4" not found`; nixpkgs ships tlaps 1.4.5 without LS4 or an Isabelle/TLA+ heap, and source builds are off limits on this host. `RuleINV1` from `TLAPS.tla` could not be used either (`Operator "RuleINV1" not found`, a crash in `e_anon.ml`).
+- Case (2026-11-05, tlapm 1.6.0-pre smoke): with the release build re-linked by nix (`tools/tla/tlapm-next.nix`; the binaries need glibc 2.38, the host has 2.28), `THEOREM Spec => []Inv` `BY <1>1, <1>2, PTL DEF Spec` proved through LS4.
+- Case (2026-11-05, skill build, tlapm 1.4.5 — superseded): the textbook `<1>. QED BY <1>1, <1>2, <1>3, PTL DEF Spec` failed with `Executable "ls4" not found`; nixpkgs ships tlaps 1.4.5 without LS4 or an Isabelle/TLA+ heap, and source builds are off limits on this host. `RuleINV1` from `TLAPS.tla` could not be used either (`Operator "RuleINV1" not found`, a crash in `e_anon.ml`).
 
 ### P3 — untyped logic: a negation is not a type
 - Rule: state the value the action assigns (`x' = FALSE`)
@@ -116,10 +117,11 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Applies at: PROOFS.md
 - Case (2026-11-05, CBRD-27819 cmp-dispatch): one obligation per (client, site, type pair) with the whole decision unfolded timed out (34/843 in 1800 s); `conv = <<a # tgt, b # tgt>>` and `[d EXCEPT !.cmp = ...]` failed even for one concrete pair, and `BY <2>1` failed while `<2>1` held `inst' = CASE ...` although the same equality proved from `DEF Install`. With 0/1 flags, fresh records, a generated literal chain per pair and facts taken one by one from the action, 7652/7652 proved in 866 s.
 
-### P21 — no Isabelle: pick the least element in the action
-- Rule: tlapm here has no Isabelle back end, so a library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) never applies: write `\E x \in S : Least(x, S)` in the action instead of `Min(S)` / `CHOOSE`, so the proof only uses the picked element and TLC's deadlock check shows one exists.
+### P21 — higher-order library theorems need Isa
+- Rule: A library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) applies only through the Isabelle back end: `DEFINE` the predicate, `HIDE DEF` it, and cite the theorem with `Isa`; where a least element is all the action needs, `\E x \in S : Least(x, S)` in the action instead of `Min(S)` / `CHOOSE` avoids the lemma, and TLC's deadlock check shows one exists.
 - Applies at: PROOFS.md (limits)
-- Case (2026-11-05, CBRD-27361 page-batch-walk): `MinExists` by `NatInduction` and then by `SmallestNatural` failed in every prover (`BY ..., NatInduction, Isa` cannot run here); rewriting `Hop`, `Collect`'s first off-page record and the three row emissions as `\E s \in S : Least(s, S) /\ ...` removed the lemma, and the deadlock check of the pass cfgs still shows a least element exists.
+- Case (2026-11-05, tlapm 1.6.0-pre smoke): `\E m \in Nat : Q(m) /\ \A j \in 0 .. m-1 : ~Q(j)` with `Q(x) == x \in S` hidden proved `BY <2>1, SmallestNatural, Isa` (Isabelle2025); cited without the hidden predicate it failed.
+- Case (2026-11-05, CBRD-27361 page-batch-walk, tlapm 1.4.5 without Isabelle): `MinExists` by `NatInduction` and then by `SmallestNatural` failed in every prover (`BY ..., NatInduction, Isa` cannot run here); rewriting `Hop`, `Collect`'s first off-page record and the three row emissions as `\E s \in S : Least(s, S) /\ ...` removed the lemma, and the deadlock check of the pass cfgs still shows a least element exists.
 
 ### P22 — a hidden definition under a prime needs its own equality
 - Rule: Under `HIDE DEF`, state the equality for the primed term exactly as the goal writes it (`HasAns(cur)' = HasAns(cur)`); a `\A p : Ans(p, s)' = Ans(p, s)` the prover must instantiate under the prime does not prove the goal.
