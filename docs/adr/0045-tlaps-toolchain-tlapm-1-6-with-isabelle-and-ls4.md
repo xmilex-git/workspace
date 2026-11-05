@@ -24,3 +24,4 @@ supersedes: 0044 (Consequences, the tlapm 1.4.5 line)
 - 1.6.0-pre는 롤링 pre-release다. 해시는 2026-11-05 자산을 고정하고, 상류가 자산을 바꾸면 GC root가 받아 둔 사본으로 계속 쓴다. 갱신은 `tlapm-next.nix`의 해시와 버전을 바꾸고 `just tla-selftest`와 `docs/tla` 전체를 다시 증명한 뒤에 한다.
 - liveness는 공정성(`WF`/`SF`) 증명을 쓴 claim만 TLAPS로 보고하고, 나머지는 TLC 경계 안의 결과로 보고한다.
 - `tla-check`는 tlapm을 실행 디렉터리의 HOME·TMPDIR로 돌린다(Isabelle이 `/tmp`와 `~/.isabelle`에 쓰지 않게).
+- 1.6의 SMT 번역은 1.4.5와 다르다. 2026-11-06 회귀 비교(부하가 없는 64 CPU, 번들 Z3 4.8.9와 nixpkgs Z3 4.16 둘 다, `--stretch 6`)에서 1.4.5가 증명한 obligation 일부가 1.6에서 timeout으로 남았다: `ExprProgExec_proofs` 23:87, `PxHeapSnapshot_proofs` 118:5와 196:3. `PxHashJoin_proofs`(39개)와 `PxSortMergeQueue_proofs`는 부하가 있을 때 측정해 확정되지 않았다. 이 모듈들의 `## Result`는 1.4.5 기록으로 남고, 모듈을 다시 손대는 작업이 실패 단계를 쪼개(cubrid-tla P24) 1.6에서 다시 증명한다. 새 증명은 1.6으로 쓴다(사용자 결정 2026-11-06).
