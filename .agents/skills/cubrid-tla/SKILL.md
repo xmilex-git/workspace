@@ -151,7 +151,7 @@ Every TLC counterexample from a correct-variant cfg is classified in MAP.md befo
 - **Hole**: every step maps to code, and no protection forbids the interleaving. It becomes a
   finding only after a runtime reproduction (`cubrid-diagnose`: a fail-before run on a build, with
   a delay injected on a scratch worktree when the window is narrow); until then it is a question
-  carrying the step-by-step trace mapped to `file:line`. A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole. (P17)
+  carrying the step-by-step trace mapped to `file:line`. A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole. (P17) A hole whose window is a few instructions wide is reproduced by an injection at the window that waits, polling the shared state, until the counterexample's precondition holds (bounded, traced), and then runs the real step; the load that creates the precondition runs for the whole bound. (P26)
 - A hole confirmed in the code stays a failing `\* expect: pass` cfg of the code as it stands, so the directory reports `RESULT: FAILED` until the code is fixed; the candidate fix gets its own pass cfg, and the code cfg's expectation is never flipped to make the directory pass. (P9)
 
 ### 8. Trace validation (protocol changes)

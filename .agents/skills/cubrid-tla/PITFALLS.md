@@ -142,3 +142,8 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: A worker loop is bounded by a counter every iteration advances (its share of the input), never by one only some iterations advance, or TLC reports a false liveness counterexample.
 - Applies at: SKILL.md step 4
 - Case (2026-11-05, CBRD-27361 runtime-filter): `LeaderFinishes` failed on the correct model: a worker whose filter the sample took off counted no rows, so `rows[w] < MaxRows` never stopped its row loop and `WEnd` was never continuously enabled; a per-worker `left` budget fixed it.
+
+### P26 — a narrow window waits for its precondition
+- Rule: A hole whose window is a few instructions wide is reproduced by an injection at the window that waits, polling the shared state, until the counterexample's precondition holds (bounded, traced), and then runs the real step; the load that creates the precondition runs for the whole bound.
+- Applies at: SKILL.md step 7
+- Case (2026-11-05, CBRD-26425 atomic latch H1): `pgbuf_lockfree_fix_ro` held its window between the vpid check and the CAS open until the BCB held another page whose latch word equalled the loaded one; the first run closed it unmatched after 30 s (`matched=0`) because the buffer churn (8 scans, 0.3 s) ended long before the page could age out; with two sessions churning for the whole bound it matched in 2 s, the real CAS succeeded on page 1|3992 for a fix of 1|641, and the caller asserted in `pgbuf_check_page_ptype`.
