@@ -123,6 +123,12 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-10-19, CBRD-27583 S3-37): `FAST_CS_CHECKDB=1` had been set on every smoke job when only the overflow-key B-tree smoke needed it; the user: "checkdb는 개 느려서 테스트로 쓰면 안되긴할텐데." 2026-10-22 (CBRD-27727), after "좀 크게해서 정합성좀 맞는지 체크해봐": "checkdb 는 ㅈㄴ 느리니까 쓰지말라고" — name the method in the first status line ("결과 비교, checkdb 아님").
 - Source: memory:checkdb-not-a-default-smoke, memory:checkdb-not-a-test-method
 
+### P19 — heap corruption: make it deterministic
+- Rule: An intermittent crash or hang inside glibc `malloc`/`free` (or a crash handler stuck in `__lll_lock_wait_private` under `er_print_crash_callstack`) is heap corruption from an earlier request: rerun the probe with `MALLOC_CHECK_=3 MALLOC_PERTURB_=165` in the server's environment (fast-cs/fast-sa jobs inherit it; CTP takes `CTP_ARGS="--env MALLOC_CHECK_=3 --env MALLOC_PERTURB_=165"`), which turns a use-after-free into a deterministic SIGSEGV at the corrupting statement; then bisect on archive builds with the same environment and read the stack from `out/cubrid-log/coredump/*.coredump` of the run, because the abort-on-core watchdog stops the container while a large core is still being written and gdb cannot read the truncated core.
+- Applies at: Instrumenting
+- Case (2026-11-05, CBRD-27596 TC hang in develop Jenkins #449 → CBRD-27947): QA saw release `cbrd_27596.sql` hang once in three runs with a SIGSEGV in `_int_malloc` under `DMRBMemoryPool::restore` and the crash handler deadlocked in `fopen`→`malloc`. Plain `_26_2h` CTP loops passed 7 of 7 and 60 isolated TC runs passed; with the malloc environment the first run crashed at the real culprit (`json_table::scanner::clear` → `delete_mutable`, a second clear pass added by CBRD-27215 b8199438e), 3 of 3, and a SA/CS minimal repro bisected to b8199438e in one step. The suspected commit in the #448..#449 range (CBRD-27802) was innocent. The first core was truncated (515 MB of 2 GB) and unreadable; the run's coredump callstack file had the full stack.
+- Source: session 2026-11-05 (CBRD-27947)
+
 ## Reporting a triage
 
 ### P16 — the triage report
