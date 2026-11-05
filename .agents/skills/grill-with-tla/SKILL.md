@@ -1,6 +1,6 @@
 ---
 name: grill-with-tla
-description: A relentless interview to sharpen a CUBRID design, in which every decision is written into a TLA+ model that TLC checks and TLAPS proves before the next round, and the glossary and ADRs are written as we go.
+description: A relentless interview to sharpen a CUBRID design, in which every decision is written into a TLA+ model that TLC checks and TLAPS proves before the next round, the glossary and ADRs are written as we go, and the CBRD issue is re-drafted from the verified spec.
 disable-model-invocation: true
 ---
 
@@ -28,3 +28,10 @@ The session is done when the grilling frontier is empty, `tools/tla/tla-check do
 prints `RESULT: OK` (every claim with its mutant, TLAPS obligations all proved), MAP.md has no
 blank row, and the user confirms the shared understanding. The verified spec is the abstract spec
 the implementation must later refine (cubrid-tla step 9).
+
+When the spec directory is a CBRD key, the session closes by re-drafting that issue from the verified
+spec: call the Skill tool for "cubrid-jira-issue-write" and write the body from MAP.md, not from the
+old body. The claims (C<n>) become the expected behavior, the settled decisions the fix direction,
+and each code mutant's counterexample the defect, retold as SQL or numbered steps mapped to code.
+`design.md` cites the spec directory and its `RESULT: OK` run. The draft is done when every claim
+and every settled decision appears in it; it stays a draft under that skill's output rule.
