@@ -559,3 +559,30 @@ code-index-install:
     "$out/bin/ctags" --version | head -1
     "$out/bin/global" --version | head -1
     "$out/bin/python3" --version
+
+# ---------------------------------------------------------------------------
+# TLA+ — model-check designs and changes (cubrid-tla skill)
+# ---------------------------------------------------------------------------
+
+# Build the pinned TLA+ toolchain (tools/tla/tools.nix) into the GC root .git_ignored_dir/tla/tools,
+# the only binaries tools/tla/tla-check runs.
+[doc("Install the pinned TLA+ toolchain with nix-build (GC root under .git_ignored_dir/)")]
+tla-install:
+    #!/usr/bin/env bash
+    set -eu
+    command -v nix-build >/dev/null || { echo "ERROR: nix-build not found; install nix first" >&2; exit 1; }
+    out="{{justfile_directory()}}/.git_ignored_dir/tla/tools"
+    export TMPDIR="{{justfile_directory()}}/.git_ignored_dir/scratch/tmp"
+    mkdir -p "$(dirname "$out")" "$TMPDIR"
+    nix-build "{{justfile_directory()}}/tools/tla/tools.nix" -o "$out"
+    ls "$out/share/java/tla2tools.jar"
+
+# Check every spec directory given (parse, PlusCal translation, each .cfg against its `\* expect:` line).
+[doc("Model-check TLA+ spec directories with tools/tla/tla-check")]
+tla-check +DIRS:
+    "{{justfile_directory()}}/tools/tla/tla-check" {{DIRS}}
+
+# Run the cubrid-tla skill's examples: the toolchain and the wrapper's verdict logic must both hold.
+[doc("Self-test the TLA+ toolchain on the cubrid-tla examples")]
+tla-selftest:
+    "{{justfile_directory()}}/tools/tla/tla-check" "{{justfile_directory()}}"/.agents/skills/cubrid-tla/examples/*/

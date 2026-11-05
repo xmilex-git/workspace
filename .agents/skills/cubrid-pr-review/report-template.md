@@ -43,6 +43,9 @@ Reached from SKILL.md Output Format. The rules for each section are in SKILL.md 
 ## TC PRs
 <Approval Criteria의 TC 기준 문장, 시나리오별 표, TC 파일 검토 한두 줄, 판정 한 줄.>
 
+## TLA+ Verification
+<Step 3d. cubrid-tla 보고 블록: 판정(통과 | 실패 | 미완 | 면제(근거)), spec 디렉터리, claim별 결과와 출처, mutant, 경계, trace validation, 반례 분류, 최종 `RESULT:` 줄.>
+
 ## Runtime Verification
 <재사용한 CI 증거와 새로 돌린 실행(빌드 sha와 종류, 테스트케이스 ref, 결과). 새로 돌린 것이 없으면 CI 증거만.>
 

@@ -2,7 +2,7 @@
 name: cubrid-pr-review
 description: "Review a CUBRID pull request together with its JIRA ticket and its two TC PRs, and write a code review report. Use this when the user shares a CUBRID GitHub PR link or asks to review CUBRID code changes."
 argument-hint: "<pr-url>"
-allowed-tools: Bash(gh *), Bash(git *), Bash(jq *), Bash(scripts/*), Bash(cubrid-jira *), Bash(curl *), Bash(tools/code-index/*), Read, Write, Edit, Glob, Grep, Skill, Workflow, mcp__plugin_oh-my-claudecode_t__lsp_diagnostics, mcp__plugin_oh-my-claudecode_t__lsp_diagnostics_directory, mcp__plugin_oh-my-claudecode_t__lsp_hover, mcp__plugin_oh-my-claudecode_t__lsp_document_symbols
+allowed-tools: Bash(gh *), Bash(git *), Bash(jq *), Bash(scripts/*), Bash(cubrid-jira *), Bash(curl *), Bash(tools/code-index/*), Bash(tools/tla/*), Bash(just tla-*), Read, Write, Edit, Glob, Grep, Skill, Workflow, mcp__plugin_oh-my-claudecode_t__lsp_diagnostics, mcp__plugin_oh-my-claudecode_t__lsp_diagnostics_directory, mcp__plugin_oh-my-claudecode_t__lsp_hover, mcp__plugin_oh-my-claudecode_t__lsp_document_symbols
 ---
 
 # CUBRID PR Reviewer
@@ -13,7 +13,7 @@ Review a CUBRID engine pull request as one unit with what it answers to, and pro
 - its JIRA ticket (the body, the attachments `design.md` / `test.md` / `test_result.md`, and linked issues),
 - its two **TC PRs**: the bot-created `tc/pr-<N>` branches in `CUBRID/cubrid-testcases` and `CUBRID/cubrid-testcases-private-ex`.
 
-The report gives three verdicts: findings on the engine PR, the JIRA -> engine PR approval, and the TC approval. CUBRID is a multi-threaded, open-source RDBMS with a large C/C++ codebase, so reviews focus on correctness, memory safety, and concurrency.
+The report gives four verdicts: findings on the engine PR, the JIRA -> engine PR approval, the TC approval, and the TLA+ verification of the change. CUBRID is a multi-threaded, open-source RDBMS with a large C/C++ codebase, so reviews focus on correctness, memory safety, and concurrency.
 
 ## Terms
 
@@ -61,12 +61,12 @@ Write the report to `.claude/review/PR-<NUMBER>/PR-<NUMBER>-report.md` in the re
 
 ### Length Budget
 
-- **Hard cap: 80 lines** from the title through `## Findings` for typical PRs, **200 lines** for large multi-module PRs. The JIRA -> Engine PR, TC PRs and Runtime Verification sections add their tables on top; the whole report stays under 200 lines.
+- **Hard cap: 80 lines** from the title through `## Findings` for typical PRs, **200 lines** for large multi-module PRs. The JIRA -> Engine PR, TC PRs, TLA+ Verification and Runtime Verification sections add their tables on top; the whole report stays under 200 lines.
 - If the report would exceed 80 lines, first try to compress: drop low-signal findings, shorten code excerpts to the smallest illustrative span, collapse adjacent items. Going over 96 lines is permitted only when the PR has 5+ Blocking findings.
 
 ### Report Template
 
-The section skeleton is `report-template.md` (title block, TL;DR, Summary, Findings, JIRA -> Engine PR, TC PRs, Runtime Verification, Existing Comments). Rules for filling it follow.
+The section skeleton is `report-template.md` (title block, TL;DR, Summary, Findings, JIRA -> Engine PR, TC PRs, TLA+ Verification, Runtime Verification, Existing Comments). Rules for filling it follow.
 
 ### Top-of-Report Summary Rules
 
@@ -235,6 +235,20 @@ How a run becomes evidence:
 
 Completion: every Expected Result row and every TC scenario row has evidence (CI, the author's attached result, or a run), and the Runtime Verification section names each source with its build sha, build type and testcase ref.
 
+### Step 3d: TLA+ Verification (mandatory)
+
+Every engine PR is verified in TLA+ with the `cubrid-tla` skill (invoke it with the Skill tool) before the report is written. The model lives in `.claude/review/PR-<NUMBER>/tla/<slug>/` and is built from the PR head the review reads, not from the PR description.
+
+- **Claims** come from the JIRA body and attachments, every linked issue that specifies the same behavior, and every coverage claim of the PR description; the change's own correctness conditions (no leak, no lost error, latch and lock order, deadlock freedom) are claims too.
+- **Fail-before / pass-after in the model.** For a fix, the merge-base behavior is a mutant: the JIRA defect must appear as a violation on it and not on the head variant. For a feature, each guard, ordering and check the PR adds gets a mutant.
+- **Gate.** The step passes when `tools/tla/tla-check <dir>` prints `RESULT: OK` and, for a change to a latch, lock, mutex, condvar or atomic protocol, WAL or recovery, vacuum, or PX worker coordination, a trace from an instrumented build of the PR head is accepted and a corrupted one refused (`cubrid-tla` TRACE.md).
+- **Findings.** A head-variant counterexample whose every step maps to the PR head's code is a Blocking finding once a runtime run reproduces it (Step 3c), and a Question finding carrying the mapped trace until then. A mutant the head's properties do not reject — a guard the PR adds whose removal breaks nothing — is a Question finding ("이 조건이 없으면 어떤 경우가 깨지나요?") unless a claim the model lacks explains it, in which case the claim is added. A JIRA claim the head variant violates is `미충족` in the JIRA -> Engine PR table.
+- **Exempt** only when the engine diff changes no executable statement: comments, documentation, TC files, CI or build scripts, message text. The report states the exemption and the diff fact that grants it; size, urgency, or "obviously correct" never exempts.
+
+The report's TL;DR label is `Blocking` or `작성자 확인 필요` while TLA+ verification is 실패 or 미완, and the engine PR's review event is never Approve then.
+
+Completion: the `## TLA+ Verification` section is filled from the skill's report block, with the spec directory, every claim's result, mutants, bounds, trace validation, and the `RESULT:` line of the final run.
+
 ### Step 4: Filter
 
 Drop findings that are:
@@ -254,9 +268,9 @@ Every surviving finding needs a code snippet or diagnostic as evidence.
 
 1. **Draft the TL;DR + Summary first.** Write the verdict label and conclusion before the body — this forces a clear stance and reveals whether the rest of the report supports it.
 2. **Write Findings tightly.** One sentence per item. Group as Blocking / Non-blocking / Questions, omitting any subsection that has no items. If no category has any items, replace the section body with a single `없음` line and omit all three subsections.
-3. **Fill JIRA -> Engine PR, TC PRs and Runtime Verification** per Approval Criteria and Step 3c. Omit JIRA -> Engine PR only when there is no JIRA ticket; add Existing Comments only if useful.
+3. **Fill JIRA -> Engine PR, TC PRs, TLA+ Verification and Runtime Verification** per Approval Criteria, Step 3d and Step 3c. Omit JIRA -> Engine PR only when there is no JIRA ticket; add Existing Comments only if useful.
 4. **Save** to `PR-<NUMBER>-report.md` in the repo root (or cwd).
-5. **Print** four things so the user can sanity-check the call at a glance: (1) the saved file path, (2) the verdict label extracted from the TL;DR (`Blocking` / `Non-blocking` / `작성자 확인 필요`), (3) the TL;DR sentence(s) without the label prefix, (4) the JIRA and TC verdicts.
+5. **Print** five things so the user can sanity-check the call at a glance: (1) the saved file path, (2) the verdict label extracted from the TL;DR (`Blocking` / `Non-blocking` / `작성자 확인 필요`), (3) the TL;DR sentence(s) without the label prefix, (4) the JIRA and TC verdicts, (5) the TLA+ verdict with its `RESULT:` line.
 
 ## Example Output
 
@@ -270,7 +284,8 @@ Run it by invoking two skills with the Skill tool: `grilling` (the interview loo
 
 - **Design tree**: the reviewer's decisions.
   - For each finding: keep, drop, severity, wording.
-  - The JIRA -> Engine PR verdict and the TC verdict.
+  - The JIRA -> Engine PR verdict, the TC verdict and the TLA+ verdict.
+  - Each claim of the TLA+ model (the user owns the claims; a claim is never dropped or weakened to get a pass) and each fairness or environment assumption it needs.
   - The review event for the engine PR and for each TC PR (Approve / Comment / Request changes).
   - What gets posted.
 - **Rounds**: ask each round's frontier at once, numbered, in Korean. Give each question a recommended answer and the SQL or code it hinges on. A verdict question waits until the findings it depends on are settled.
@@ -281,6 +296,7 @@ Run it by invoking two skills with the Skill tool: `grilling` (the interview loo
   - nothing pre-existing, CI-caught or out of scope leaked in,
   - the TL;DR label matches the findings,
   - both approval tables have evidence in every row,
+  - the TLA+ section names its spec directory, bounds and final `RESULT:` line, every claim has a killing mutant, and no counterexample is unclassified,
   - the length budget holds,
   - no emoji or non-BMP characters,
   - every CUBRID-internal term is glossed on first use,

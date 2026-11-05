@@ -1,0 +1,9 @@
+TLATRACE seq=1 a=L_spawn p=L
+TLATRACE seq=2 a=W_run p=w1 err=1
+TLATRACE seq=3 a=L_work p=L err=0
+TLATRACE seq=4 a=W_done p=w1
+TLATRACE seq=5 a=L_join p=L
+TLATRACE seq=6 a=L_adopt p=L err=1
+TLATRACE seq=7 a=L_free p=L
+TLATRACE seq=8 a=W_run p=w2 err=0
+TLATRACE seq=9 a=W_done p=w2

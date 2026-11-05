@@ -1,0 +1,3 @@
+interface:
+  display_name: "CUBRID TLA+"
+  short_description: "Model-check and prove a CUBRID design or change"

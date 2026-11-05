@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# usage: tools/tla/tla-check [--workers N] [--heap SIZE] [--stretch F] DIR...
+#
+# Checks every spec directory given against the cubrid-tla skill's definition of a verified model:
+#   1. PlusCal: every .tla holding an algorithm is translated in place (its .old backup moves into the run dir).
+#   2. TLC: every <Module>.cfg / <Module>.<variant>.cfg runs exhaustive BFS with the deadlock check on.
+#      Its first line states what it expects:
+#        \* expect: pass                  no error, and every action of Next fires at least once
+#        \* expect: violation <Name>      invariant or action property <Name> fails
+#        \* expect: deadlock              TLC reaches a deadlock
+#        \* expect: liveness              a temporal property fails
+#      Optional lines:  \* timeout: <seconds> (default 1800)
+#                       \* uncovered-ok: <Action> <reason>   (an action a pass cfg may leave unfired)
+#                       \* deadlock-off: <reason>            (required next to CHECK_DEADLOCK FALSE)
+#      A pass cfg also lists sub-expressions TLC never evaluated (dead-expr-lines); outside
+#      *.inductive-* cfgs each must be explained in MAP.md as <Module>.tla:<line>.
+#      Trace validation: *.witness-trace-*.cfg accepts a recorded run (expects its TraceNotDone
+#      violated); *.reject-*.cfg feeds a corrupted run and expects pass, skipping the coverage checks.
+#   3. TLAPS: every .tla holding a THEOREM is proved by tlapm (Z3 and Zenon) on a copy in the run dir;
+#      every obligation must come back proved — none failed, none OMITTED.
+#   4. Completeness: the directory holds MAP.md, a pass cfg, a mutant cfg (*.mutant-*.cfg expecting an
+#      error), a witness cfg (*.witness-*.cfg expecting a violation), an inductive cfg (*.inductive-*.cfg
+#      expecting pass), a scale cfg (*.scale-*.cfg expecting pass, whose CONSTANT lines differ from the
+#      main <Module>.cfg: the same check one size up) and a proof module; a directory with a trace
+#      witness also holds a reject cfg. Every claim id (| C<n> |) in MAP.md's "## Claim" section must
+#      appear in its "## Mutants" section: a claim no mutant kills has not been shown checkable.
+# A cfg with both SYMMETRY and PROPERTY is refused: TLC's liveness check is unsound under symmetry.
+# Evidence (logs, summary.txt with the spec sha256) goes to .git_ignored_dir/scratch/tla/<dir>-<stamp>/;
+# the last line printed is RESULT: OK or RESULT: FAILED (<n>).
+set -u
+
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+tools="$root/.git_ignored_dir/tla/tools"
+jar="$tools/share/java/tla2tools.jar"
+[ -f "$jar" ] && [ -x "$tools/bin/tlapm" ] || { echo "ERROR: pinned TLA+ toolchain missing; run 'just tla-install'" >&2; exit 2; }
+java="$(/usr/bin/grep -o '/nix/store/[^" ]*/bin/java' "$tools/bin/tlc" | head -1)"
+[ -x "$java" ] || { echo "ERROR: cannot find the JDK the pinned tlc wrapper execs" >&2; exit 2; }
+
+workers="${TLA_WORKERS:-4}"
+heap="${TLA_HEAP:-8g}"
+stretch="${TLA_STRETCH:-1}"
+dirs=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --workers) workers="$2"; shift 2 ;;
+    --heap) heap="$2"; shift 2 ;;
+    --stretch) stretch="$2"; shift 2 ;;
+    -*) echo "ERROR: unknown option $1" >&2; exit 2 ;;
+    *) dirs+=("$1"); shift ;;
+  esac
+done
+[ ${#dirs[@]} -gt 0 ] || { echo "usage: $0 [--workers N] [--heap SIZE] [--stretch F] DIR..." >&2; exit 2; }
+
+failures=0
+fail() { echo "FAIL $*"; failures=$((failures + 1)); }
+# CUBRID shells export LD_LIBRARY_PATH with the system Java 8 libs, which break the nix JDK 21.
+clean_env=(/usr/bin/env -u LD_LIBRARY_PATH -u JAVA_HOME -u CLASSPATH -u JAVA_TOOL_OPTIONS)
+
+echo "toolchain: $(readlink -f "$tools")"
+
+for arg in "${dirs[@]}"; do
+  dir="$(cd "$arg" 2>/dev/null && pwd)" || { fail "$arg: not a directory"; continue; }
+  run="$root/.git_ignored_dir/scratch/tla/$(basename "$dir")-$(date +%Y%m%d-%H%M%S)-$$"
+  mkdir -p "$run/jtmp" "$run/proof"
+  jrun=("${clean_env[@]}" "$java" -XX:+UseParallelGC "-Xmx$heap" "-Djava.io.tmpdir=$run/jtmp" -cp "$jar")
+  echo "== $dir (run dir $run)"
+
+  shopt -s nullglob
+  cfgs=("$dir"/*.cfg)
+  tlas=("$dir"/*.tla)
+  shopt -u nullglob
+  [ ${#tlas[@]} -gt 0 ] || { fail "$dir: no .tla file"; continue; }
+
+  # 4. Completeness of the verification set.
+  [ -f "$dir/MAP.md" ] || fail "$dir: MAP.md missing (refinement map, property sources, result record)"
+  npass=0; nmut=0; nwit=0; nind=0; nproof=0; ntrace=0; nrej=0; nscale=0
+  for c in "${cfgs[@]}"; do
+    e="$(head -1 "$c")"
+    case "$(basename "$c")" in
+      *.mutant-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ (violation|deadlock|liveness) ]] && nmut=$((nmut + 1)) ;;
+      *.witness-trace-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ violation ]] && ntrace=$((ntrace + 1)) ;;
+      *.witness-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ violation ]] && nwit=$((nwit + 1)) ;;
+      *.reject-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ pass ]] && nrej=$((nrej + 1)) ;;
+      *.scale-*.cfg)
+        b="$(basename "$c")"; main="$dir/${b%%.*}.cfg"
+        if [[ "$e" =~ ^\\\*\ expect:\ pass ]] && [ -f "$main" ] \
+           && [ "$(/usr/bin/grep -E '^ *CONSTANTS? ' "$c")" != "$(/usr/bin/grep -E '^ *CONSTANTS? ' "$main")" ]; then
+          nscale=$((nscale + 1))
+        fi ;;
+      *.inductive-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ pass ]] && nind=$((nind + 1)) ;;
+      *) [[ "$e" =~ ^\\\*\ expect:\ pass ]] && npass=$((npass + 1)) ;;
+    esac
+  done
+  for t in "${tlas[@]}"; do /usr/bin/grep -qE '^ *(THEOREM|LEMMA|PROPOSITION)' "$t" && nproof=$((nproof + 1)); done
+  [ $npass -gt 0 ] || fail "$dir: no pass cfg (<Module>.cfg with '\\* expect: pass')"
+  [ $nmut -gt 0 ] || fail "$dir: no mutant cfg (<Module>.mutant-<name>.cfg expecting an error)"
+  [ $nwit -gt 0 ] || fail "$dir: no witness cfg (<Module>.witness-<name>.cfg expecting a violation)"
+  [ $nind -gt 0 ] || fail "$dir: no inductive cfg (<Module>.inductive-<name>.cfg: INIT TypeOK /\\ IndInv, expecting pass)"
+  if [ -f "$dir/MAP.md" ]; then
+    claims="$(awk '/^## /{sec=$0} sec ~ /^## Claim/ && /^\| *C[0-9]+ *\|/{gsub(/[| ]/,"",$2); print $2}' FS='|' "$dir/MAP.md" | sort -u)"
+    [ -n "$claims" ] || fail "$dir: MAP.md has no '## Claim' table rows (| C1 | ... |)"
+    mutrows="$(awk '/^## /{sec=$0} sec ~ /^## Mutants/' "$dir/MAP.md")"
+    for cl in $claims; do
+      /usr/bin/grep -qE "(^|[^0-9A-Za-z])$cl([^0-9]|\$)" <<< "$mutrows" || fail "$dir: claim $cl has no mutant in MAP.md's Mutants table"
+    done
+  fi
+  [ $nscale -gt 0 ] || fail "$dir: no scale cfg (<Module>.scale-<name>.cfg expecting pass, constants one size above <Module>.cfg)"
+  [ $ntrace -eq 0 ] || [ $nrej -gt 0 ] || fail "$dir: trace witness without a reject cfg (a corrupted trace the spec must refuse)"
+  [ $nproof -gt 0 ] || fail "$dir: no proof module (a .tla with the TLAPS THEOREMs for IndInv)"
+
+  # 1. PlusCal translation, in place.
+  for t in "${tlas[@]}"; do
+    /usr/bin/grep -qE -- '--(fair )?algorithm' "$t" || continue
+    before="$(sha256sum < "$t")"
+    (cd "$dir" && "${jrun[@]}" pcal.trans -nocfg "$(basename "$t")") > "$run/$(basename "$t" .tla).pcal.log" 2>&1 \
+      || { fail "$t: PlusCal translation failed (see $run/$(basename "$t" .tla).pcal.log)"; continue; }
+    [ -f "${t%.tla}.old" ] && mv "${t%.tla}.old" "$run/"
+    [ "$before" = "$(sha256sum < "$t")" ] || echo "note: $t PlusCal translation updated in place"
+  done
+
+  # 2. TLC: every cfg against its expectation.
+  for c in "${cfgs[@]}"; do
+    name="$(basename "$c" .cfg)"
+    module="${name%%.*}"
+    log="$run/$name.log"
+    expect="$(head -1 "$c" | sed -n 's/^\\\* expect: *//p')"
+    [ -n "$expect" ] || { fail "$name: first line must be '\\* expect: pass|violation <Name>|deadlock|liveness'"; continue; }
+    [ -f "$dir/$module.tla" ] || { fail "$name: module $module.tla not found"; continue; }
+    if /usr/bin/grep -q '^ *SYMMETRY' "$c" && /usr/bin/grep -q '^ *PROPERTY' "$c"; then
+      fail "$name: SYMMETRY together with PROPERTY (TLC liveness is unsound under symmetry)"; continue
+    fi
+    if /usr/bin/grep -q '^ *CHECK_DEADLOCK *FALSE' "$c" && ! /usr/bin/grep -q '^\\\* deadlock-off: *[^ ]' "$c"; then
+      fail "$name: CHECK_DEADLOCK FALSE without a '\\* deadlock-off: <reason>' line"; continue
+    fi
+    tmo="$(sed -n 's/^\\\* timeout: *\([0-9]*\).*/\1/p' "$c" | head -1)"
+    start=$(date +%s)
+    (cd "$dir" && timeout "${tmo:-1800}" "${jrun[@]}" tlc2.TLC -config "$c" -metadir "$run/meta-$name" -cleanup \
+      -noGenerateSpecTE -coverage 60 -workers "$workers" "$module.tla") > "$log" 2>&1
+    rc=$?
+    secs=$(( $(date +%s) - start ))
+    states="$(sed -n 's/^\([0-9,]*\) states generated, \([0-9,]*\) distinct states found.*/\1\/\2/p' "$log" | tail -1)"
+    depth="$(sed -n 's/^The depth of the complete state graph search is \([0-9]*\).*/\1/p' "$log" | tail -1)"
+    case $rc in
+      0) got="pass" ;;
+      11) got="deadlock" ;;
+      12) got="violation $(sed -n 's/^Error: Invariant \(.*\) is violated.*/\1/p' "$log" | head -1)" ;;
+      13) if /usr/bin/grep -q '^Error: Temporal properties were violated' "$log"; then got="liveness"
+          else got="violation $(sed -n 's/^Error: Action property \(.*\) is violated.*/\1/p' "$log" | head -1)"; fi ;;
+      124) got="timeout after ${tmo:-1800}s" ;;
+      *) got="error rc=$rc ($(/usr/bin/grep -m1 -E '^Error|Exception' "$log"))" ;;
+    esac
+    uncovered=""; dead=""; unexplained=""
+    if [ "$expect" = "pass" ] && [ "$got" = "pass" ] && [[ "$name" != *.reject-* ]]; then
+      # Last coverage block only: "<Action line .. of module M>: distinct:total"; total 0 = never fired.
+      cov="$(awk '/^The coverage statistics/{blk=""} {blk=blk"\n"$0} END{print blk}' "$log")"
+      for a in $(sed -n 's/^<\([A-Za-z0-9_]*\) line .*>: [0-9]*:0$/\1/p' <<< "$cov" | sort -u); do
+        /usr/bin/grep -qE "^\\\\\\* uncovered-ok: $a [^ ]" "$c" || uncovered="$uncovered $a"
+      done
+      # Sub-expressions of this module never evaluated: each must be explained in MAP.md as
+      # <Module>.tla:<line> (a mutant-only branch, a ghost that flags a violation, or a hole).
+      for n in $(sed -n "s/^ *|*line \([0-9]*\), col [0-9]* to line [0-9]*, col [0-9]* of module $module: 0\$/\1/p" <<< "$cov" | sort -un); do
+        dead="$dead,$n"
+        case "$name" in *.inductive-*) ;; *) /usr/bin/grep -qF "$module.tla:$n" "$dir/MAP.md" 2>/dev/null || unexplained="$unexplained $module.tla:$n" ;; esac
+      done
+    fi
+    line="$name expect=[$expect] got=[$got] states=${states:-?} depth=${depth:-?} ${secs}s${dead:+ dead-expr-lines=${dead#,}} log=$log"
+    if [ -n "$uncovered" ]; then fail "$line vacuous: never fired:$uncovered"
+    elif [ -n "$unexplained" ]; then fail "$line dead expressions not explained in MAP.md:$unexplained"
+    elif [ "$got" = "$expect" ]; then echo "PASS $line"
+    else fail "$line"; fi
+  done
+
+  # 3. TLAPS: prove every module holding a theorem, on a copy (tlapm writes <Module>.tlaps/ beside it).
+  cp "${tlas[@]}" "$run/proof/"
+  for t in "${tlas[@]}"; do
+    /usr/bin/grep -qE '^ *(THEOREM|LEMMA|PROPOSITION)' "$t" || continue
+    name="$(basename "$t" .tla)"
+    log="$run/$name.tlapm.log"
+    start=$(date +%s)
+    (cd "$run/proof" && timeout 1800 "${clean_env[@]}" PATH="$tools/bin:/usr/bin:/bin" \
+      tlapm --cleanfp --toolbox 0 0 --threads "$workers" --stretch "$stretch" "$name.tla") > "$log" 2>&1
+    rc=$?
+    secs=$(( $(date +%s) - start ))
+    # tlapm exits 0 even when obligations fail in --toolbox mode: judge each obligation's last
+    # settled status (one prover failing before the next proves it is normal).
+    final="$(awk '/^@!!id:/{id=substr($0,7)} /^@!!loc:/{loc[id]=substr($0,8)}
+      /^@!!status:/{s=substr($0,11); if (s!="to be proved" && s!="being proved" || !(id in st)) st[id]=s}
+      /^@!!count:/{n=substr($0,10)}
+      END{for (i in st) { if (st[i]=="proved" || st[i]=="trivial") ok++; else bad=bad" "loc[i]"("st[i]")" }
+          printf "%d %d %s\n", n+0, ok+0, bad}' "$log")"
+    read -r count proved bad <<< "$final"
+    omitted=$(/usr/bin/grep -cE '\bOMITTED\b' "$t")
+    line="$name.tla tlapm rc=$rc obligations=$count proved=$proved OMITTED-in-source=$omitted ${secs}s log=$log"
+    if [ $rc -eq 0 ] && [ -z "$bad" ] && [ "$omitted" -eq 0 ] && [ "$count" -gt 0 ] && [ "$proved" -eq "$count" ]; then
+      echo "PASS $line"
+    else fail "$line not proved (line:col):${bad:- see log}"; fi
+  done
+
+  { echo "spec sha256:"; (cd "$dir" && sha256sum *.tla *.cfg MAP.md 2>/dev/null); } > "$run/summary.txt"
+  sed 's/^/  /' "$run/summary.txt"
+done
+
+if [ $failures -eq 0 ]; then echo "RESULT: OK"; exit 0; fi
+echo "RESULT: FAILED ($failures)"; exit 1

@@ -1,0 +1,5 @@
+interface:
+  display_name: "Grill with TLA+"
+  short_description: "Grill a design while TLA+ checks and proves each decision"
+policy:
+  allow_implicit_invocation: false

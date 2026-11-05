@@ -1,0 +1,183 @@
+---
+name: cubrid-tla
+description: "Verify a CUBRID design or code change in TLA+ — model it from the code, model-check it with TLC, prove its safety invariant with TLAPS, validate recorded runs against it, and hunt the holes (races, lost wakeups, deadlocks, use-after-free, lost errors, crash and vacuum interleavings, unhandled input classes). Use when designing or changing concurrent or stateful engine logic (latches, locks, MVCC/vacuum, parallel query workers, WAL/recovery, state machines, decision tables), when asked to \"TLA+로 검증\", \"모델 체킹\", \"증명해줘\", \"설계 구멍 찾아\", and as the TLA+ step of cubrid-pr-review and grill-with-tla."
+argument-hint: "<spec dir> | <claim or ticket to model>"
+allowed-tools: Bash(tools/tla/*), Bash(just tla-*), Bash(tools/code-index/*), Bash(git *), Read, Write, Edit, Glob, Grep, Skill
+---
+
+# CUBRID TLA+ verification
+
+A **verified model** is a spec directory for which `tools/tla/tla-check <dir>` prints `RESULT: OK`.
+The check is mechanical; this skill is how to build a model that deserves it. A TLC pass proves the
+model, not the code: what ties the two is the **refinement map** (every model step named at a code
+site, with the protection that makes it one step) and, for protocol changes, **trace validation**
+(a run of the real build accepted by the spec). A model that never fails is suspect until its
+**mutants** fail.
+
+The lessons behind every `(P<n>)` are in `PITFALLS.md`; a new lesson goes there as a case under its
+rule, or as a new rule added to both files in one commit.
+
+## Toolchain
+
+- `just tla-install` once per host: TLC and the PlusCal translator (tla2tools 1.8.0), TLAPS
+  (tlapm 1.4.5 with Zenon and Z3), pinned in `tools/tla/tools.nix`, GC root `.git_ignored_dir/tla/tools`.
+- `tools/tla/tla-check [--workers N] [--heap SIZE] [--stretch F] DIR...` (or `just tla-check DIR...`)
+  translates PlusCal, runs every cfg, proves every theorem and checks completeness. Evidence goes to
+  `.git_ignored_dir/scratch/tla/<dir>-<stamp>/`; read only the `PASS`/`FAIL` lines and the last line.
+- `tools/tla/trace2tla <Module> <Op>=<log>...` turns `TLATRACE` lines of an instrumented run into a
+  TLA+ data module (`TRACE.md`).
+- `just tla-selftest` runs `examples/`; run it after touching `tools/tla/` or this skill's rules.
+- TLC and tlapm run only through `tools/tla/tla-check`, whose verdict is read per cfg and per obligation, never from a tool's exit status. (P1)
+
+## Where the model lives
+
+| Work | Spec directory |
+|---|---|
+| design or implementation (yours, a ticket) | `docs/tla/<CBRD-key or slug>/` in this repo, committed with the design |
+| PR review | `.claude/review/PR-<N>/tla/<slug>/` beside the report (local) |
+| skill examples | `.agents/skills/cubrid-tla/examples/<slug>/` |
+
+## The directory a verified model needs
+
+`tla-check` refuses a directory that lacks any of these:
+
+| File | Role |
+|---|---|
+| `<Module>.tla` | the spec: PlusCal for code-shaped logic (labels = atomic steps), plain TLA+ for state-shaped logic |
+| `<Module>.cfg` | main check, `\* expect: pass`; INVARIANTS name every safety property and `IndInv`, PROPERTY every liveness property |
+| `<Module>.scale-<n>.cfg` | the same check with constants one size up |
+| `<Module>.mutant-<n>.cfg` | one per claim at least: a known-wrong variant (`Mutant` constant) the properties must reject |
+| `<Module>.witness-<n>.cfg` | an outcome that must be reachable, as an invariant `Not<Outcome>` expected violated |
+| `<Module>.inductive-<n>.cfg` | `INIT IndInv`, `NEXT Next`, `INVARIANT IndInv`: TLC's check that IndInv is inductive |
+| `<Module>_proofs.tla` | TLAPS proof of the three INV1 premises for the correct variant (`PROOFS.md`) |
+| `MAP.md` | claims, refinement map, properties, fault model, mutants, witnesses, dead expressions, bounds |
+| trace files (protocol changes) | `<Module>Trace.tla`, its data module, `*.witness-trace-*.cfg`, `*.reject-*.cfg` (`TRACE.md`) |
+
+Each cfg's first line is its expectation (`\* expect: pass | violation <Name> | deadlock | liveness`);
+`tools/tla/tla-check`'s header lists the optional lines. Shape anchors: `examples/px-error-handoff/`
+(PlusCal, faults, trace validation) and `examples/condvar-handoff/` (fairness, environment process).
+
+## Steps
+
+### 1. Claims
+
+Write MAP.md's `## Claim and sources` table first: one row per claim `C<n>`, each a sentence a
+reader can falsify, each with its source — the JIRA body or `design.md` clause, the PR description,
+a code comment, the manual, POSIX. Collect them from every place the behavior is specified: for a
+feature spread over several tickets, every linked ticket and its comments (`/jira`), the latest
+statement winning and the superseded one named. Every claim is a safety (never X), a liveness
+(eventually Y) or an equivalence (same answer as Z) property.
+
+A claim you cannot source is a question for the user, not an assumption. Done when every behavior
+the change or design promises is a row.
+
+### 2. Refinement map
+
+Read the code at the exact sha (`tools/code-index/code-index <worktree> body|callers|references`).
+For every shared variable the claims touch, name who writes it and under which protection (page
+latch, lock, mutex, atomic, single owner). Then cut steps:
+
+- One model step = the code between two acquire/release points of the protection guarding the
+  shared state it touches. An access to shared state outside any protection is its own step.
+- A coarser step hides races; that is the model's most common hole. Justify every step boundary in
+  the map's "One step because" column.
+- Name every row at `file:function` and the symbol. A row you cannot place in code is a model
+  invention: delete it or make it a claim.
+
+Done when every action and every variable of the spec has a row (`MODELING.md` has the CUBRID
+primitive patterns: page latch, lock manager, MVCC snapshot and vacuum, WAL, PX workers, condvar).
+
+### 3. Fault model
+
+Walk `MODELING.md`'s fault checklist (error return at each call, interrupt, lock timeout, deadlock
+victim, OOM, crash / `kill -9`, spurious wakeup, concurrent DML, vacuum, checkpoint, HA apply) and
+record each as modeled or not applicable with the reason. Faults are nondeterministic actions,
+enabled wherever the code can raise them. Environment assumptions (fairness, bounded spurious
+wakeups) go in the same table; a liveness claim names the fairness it needs and the code that
+provides it. Done when every checklist row is answered.
+
+### 4. Spec and cfgs
+
+- Constants: the smallest values that still exhibit each interleaving class: at least 2 of every
+  concurrent role (3 when a claim is about "all" or "any other"), every input class of a decision
+  (NULL, each type class, boundary values). The scale cfg goes one size up.
+- `TypeOK` split into boolean and integer parts when TLAPS will prove it (P4).
+- Ghost variables flag violations (`uaf`, `badConsume`) and record outcomes for witnesses.
+- `Mutant` is a constant; each mutant re-enables one wrong ordering, missing guard or missing
+  check the claims depend on. In a review, the pre-change behavior is a mutant: the defect the
+  ticket describes must fail on it (fail-before) and pass on the change (pass-after).
+- An environment process that loops (an OS, vacuum, a DML stream) must be able to end when the system ends, or TLC reports a false deadlock. (P8)
+
+### 5. Check, then hunt
+
+Run `tools/tla/tla-check <dir>`; iterate until `RESULT: OK`. Then attack the model — each attack
+either adds a cfg that passes or produces a finding:
+
+1. **Mutation.** For every guard, ordering, latch hold and check in the mapped code, ask whether
+   some mutant removes it. Add one per guard the claims rely on. A guard whose removal violates
+   nothing is a **surviving mutant**: either a property is missing (add it) or the guard is not
+   needed (a finding or a question).
+2. **Dead expressions.** `dead-expr-lines` lists sub-expressions TLC never evaluated; MAP.md
+   explains each as a mutant-only branch, a violation ghost, or a hole in the model.
+3. **Atomicity.** Split every step adjacent to shared state once more; a pass that only holds
+   with the coarser step means the code relies on a protection the map must name.
+4. **Faults.** Enable each fault at every point the code can raise it, not only at the first.
+5. **Scale.** The scale cfg must pass; a property that fails only at N+1 is a finding.
+6. **Liveness.** A liveness counterexample in the correct model that loops through an unfair lock retake is a fairness assumption to state in MAP.md (and to put to the user when it is a design question), never a reason to weaken the property. (P7)
+
+### 6. Prove
+
+Write `IndInv`, check it with the inductive cfg, then prove the INV1 premises with TLAPS
+(`PROOFS.md`).
+
+- An inductive-cfg counterexample from a state the system cannot reach means IndInv is too weak: strengthen IndInv, never the spec, and keep IndInv in the main cfg's INVARIANTS so TLC confirms the strengthened conjunct on every reachable state. (P6)
+- An obligation fails until the proof is right: split it, never `OMITTED`, never a weaker theorem.
+  `PROOFS.md` lists what tlapm 1.4.5 on this host cannot do and the sound workaround for each.
+
+### 7. Counterexamples
+
+Every TLC counterexample from a correct-variant cfg is classified in MAP.md before anything else:
+
+- **Model error**: the trace takes a step the mapped code cannot take. Fix the map or the spec, and
+  name the code line that forbids the step.
+- **Hole**: every step maps to code, and no protection forbids the interleaving. It becomes a
+  finding only after a runtime reproduction (`cubrid-diagnose`: a fail-before run on a build, with
+  a delay injected on a scratch worktree when the window is narrow); until then it is a question
+  carrying the step-by-step trace mapped to `file:line`.
+
+### 8. Trace validation (protocol changes)
+
+Required when the change touches a latch, lock, mutex, condvar or atomic protocol, WAL or
+recovery, vacuum, or PX worker coordination. Instrument a scratch worktree of the exact sha,
+record runs that cover every action of the refinement map, and check them (`TRACE.md`). An
+accepted run and a rejected corrupted run are both required; a run the spec refuses is a
+divergence between code and model, resolved like a counterexample (step 7).
+
+### 9. Refinement (when an abstract spec exists)
+
+When the design was verified as an abstract spec (`docs/tla/<key>/`), the code-level spec of the
+implementation must refine it: its main cfg names the abstract spec as a PROPERTY through a
+refinement mapping (`MODELING.md`, "Refinement"). A design spec without an implementation spec is
+recorded as such in the report.
+
+### 10. Record and report
+
+MAP.md's last section, `## Result`, holds the facts: date, `RESULT: OK` line, run dir, per-cfg
+states and depth, obligations proved, the spec sha256 lines from `summary.txt`, the engine sha and
+build the trace ran on. The report (review or design) carries a TLA+ block in Korean:
+
+```
+TLA+ 검증: <통과 | 실패 | 미완> — <spec dir>
+- 속성: C1 <safety|liveness> <TLC 통과, TLAPS 증명> ... (claim별 한 줄, 출처)
+- mutant: <n>개 모두 위반 검출 / 살아남은 mutant: <없음 | 목록>
+- 경계: <상수>, scale <상수>; TLAPS는 safety만 (liveness는 TLC 경계 안에서만)
+- trace validation: <수용 n건, 거부 n건 | 해당 없음(이유)>
+- 반례: <없음 | 분류와 재현 여부>
+```
+
+A completion report names the bounds and what the model does not cover; "검증됨" without the bounds
+and the fault table is not a result.
+
+Completion: `tools/tla/tla-check <dir>` prints `RESULT: OK`, MAP.md has every section filled with
+no row left blank, every counterexample is classified, trace validation is done or recorded as not
+required with the reason, and the report block above is written.
