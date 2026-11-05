@@ -46,5 +46,19 @@ tools/tla/trace2tla <Module>TraceData OkTrace=<run1.log> [Run2=<run2.log> ...] >
 | `<Module>Trace.witness-trace-<run>.cfg` | `violation TraceNotDone` | the whole run is a behavior of the spec |
 | `<Module>Trace.reject-<case>.cfg` | `pass` (`CHECK_DEADLOCK FALSE` with a `deadlock-off` reason) | a corrupted run (two events swapped, an event dropped, an outcome flipped) is refused, so the trace spec is not vacuous |
 
+## 4. Reproducing a hole
+
+A TLC counterexample in the correct model is a hole only after a run of the build takes the same
+steps (SKILL.md step 7). A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole. (P17)
+
+- Widen a narrow window with an env-gated delay on the scratch worktree (`CUBRID_TLA_<WHAT>_DELAY_MS`,
+  read once, default off), at the step the counterexample waits in.
+- Stop the server before rebuilding its install; a server running on a rebuilt install leaves a
+  stale master that the wrapper cannot stop.
+- A session that must hold a snapshot (to keep vacuum from removing rows) runs `csql --no-auto-commit`;
+  auto-commit ends the transaction, and its snapshot, after each statement.
+- A layout the counterexample needs (a merge of the last leaf handed out, a reused page) depends on
+  the load: log the page ids, and count only the runs whose events show the layout.
+
 A recorded run the spec refuses is a divergence: find the first event `i` could not consume (the
 `reject` cfg's TLC log shows the deepest state) and classify it as a counterexample (SKILL.md step 7).

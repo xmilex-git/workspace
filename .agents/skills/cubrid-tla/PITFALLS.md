@@ -30,6 +30,11 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Applies at: PROOFS.md (table); SKILL.md step 4
 - Case (2026-11-05, condvar-handoff): `ASSUME spuriousLeft = MaxSpurious, MaxSpurious \in Nat, locked = FALSE PROVE spuriousLeft \in 0..MaxSpurious /\ locked \in BOOLEAN` timed out in Z3 (30 s with `--stretch 6`) and Zenon exhausted its search; the captured SMT input encoded `locked = FALSE` as `(not (boolify locked))` with no axiom back to `tla__BOOLEAN`. Each half proved alone.
 
+### P18 — tla-check is replaced, never rewritten in place
+- Rule: Change `tools/tla/tla-check` by writing a new file and renaming it over the old one: bash reads a running script from its open file, so an in-place rewrite corrupts the runs other sessions have in flight.
+- Applies at: SKILL.md Toolchain
+- Case (2026-11-05, parallel scan): `tools/tla/tla-check` was edited in place (the `expect: refinement` and P9 checks) while this session's heap run and other sessions' TLAPS runs were executing it; a running bash re-reads its script at the byte offset it left, so a size change can run a partial line. Later edits write a new file and `mv` it over.
+
 ## Modeling
 
 ### P5 — PlusCal `define` sees globals only
@@ -51,3 +56,51 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: An environment process that loops (an OS, vacuum, a DML stream) must be able to end when the system ends, or TLC reports a false deadlock.
 - Applies at: SKILL.md step 4
 - Case (2026-11-05, condvar-handoff): the spurious-wakeup process `while TRUE do await sleeping` blocked forever after the waiter finished, so `Terminating` was never enabled and the correct model reported "Deadlock reached". It now loops while the waiter is not Done.
+
+## Checking, proving and reproducing
+
+### P9 — a hole found in the code stays a failing pass cfg
+- Rule: A hole confirmed in the code stays a failing `\* expect: pass` cfg of the code as it stands, so the directory reports `RESULT: FAILED` until the code is fixed; the candidate fix gets its own pass cfg, and the code cfg's expectation is never flipped to make the directory pass.
+- Applies at: SKILL.md step 7; enforced by `tools/tla/tla-check` (only mutant and witness cfgs may expect an error)
+- Case (2026-11-05, parallel scan): `docs/tla/parallel-scan/heap/PxHeapScan.cfg` (READ COMMITTED, the code) fails `SameAsSnapshot` (H1) and `index/PxIndexLeafDispatch.desc.cfg` fails `StableOnce` (H2); both stay `expect: pass`, the candidate fixes are `fix-snapshot-before-open.cfg` and `desc-fix.cfg`, and both directories report `RESULT: FAILED` until the engine is fixed.
+
+### P10 — TLC names a broken refinement by its location
+- Rule: A mutant that only the refinement mapping catches is expected as `\* expect: refinement`: TLC reports a broken refinement as "Action property line N ... of module <Abstract> is violated", by location, not by the PROPERTY's name.
+- Applies at: SKILL.md "The directory a verified model needs"; MODELING.md (Refinement)
+- Case (2026-11-05, parallel scan heap): the `reread_page` mutant only breaks `AbsSpec`; TLC exited 13 with "Action property line 130, col 17 to line 130, col 29 of module PxHeapSnapshot is violated", which `tla-check` read as `violation line` until it learned `expect: refinement`.
+
+### P11 — every exit path of the protocol is an action
+- Rule: Before the model is final, list the callers of every protocol entry point in the mapped code (code-index `callers`) and give each exit path (LIMIT, error, interrupt, reset, the end of a range) an action or a fault-table row saying why it is not modeled.
+- Applies at: SKILL.md step 2
+- Case (2026-11-05, parallel scan index): the dispatcher model passed every cfg before a re-read of `px_scan_index_leaf_page_dispatcher.cpp` found `release_leaf` (5 callers: LIMIT, reset, overflow drain) and `signal_chain_ended` (6 call sites), which end the chain while a worker holds the frontier. `W_stop` and the mutant `stop_keeps_chain` (`NoFreedFix` violated) were added; the abstract spec gained `EndChain` and its TLAPS proof a lemma.
+
+### P12 — a dead expression needs a code reason or a larger bound
+- Rule: A dead expression that maps to code is explained by the code fact that makes it unreachable (`file:line`), or the model grows until it fires; "not reached at these bounds" counts only after a larger bound leaves it dead too, and MAP.md names that bound.
+- Applies at: SKILL.md step 5
+- Case (2026-11-05, parallel scan index): `D_saved` (resume from the saved leaf whose LSA is unchanged) never fired. The reason is in the code: every split or merge that breaks the left leaf's link to the last leaf rewrites that leaf's prev link (`btree.c:24083 btree_set_vpid_previous_vpid`, logged), so its LSA always changes. The reroot-ends-the-chain branch stayed dead with `WriterOps` 3, 4 and 5; MAP.md names the layout it needs and the bound checked.
+
+### P13 — when the snapshot is built
+- Rule: Model when the MVCC snapshot is built relative to every set the scan collects at open (the page bitmap, the leaf chain, the partition list), per isolation level: under READ COMMITTED the statement's first `logtb_get_mvcc_snapshot` builds it, which may run after open.
+- Applies at: MODELING.md (Patterns)
+- Case (2026-11-05, parallel scan heap H1): under READ COMMITTED the leader collects the page bitmap at `manager::open` and the first worker's `scan_start_scan` builds the snapshot afterwards (`qexec_execute_query` builds it early only for REPEATABLE READ and up). A transaction committing in between has rows on a page outside the bitmap that its snapshot can see: TLC found it in 17 steps; the probe build returned 5004 rows, 4 of them from a committed 2000-row transaction, in 5 of 5 runs.
+
+### P14 — a VPID is not an identity
+- Rule: A check that a page is the same page by VPID alone is a reuse hole whenever the page can be freed and reallocated during the protocol: model the free pool with reuse (`file_alloc` takes the lowest free page) and check what the code compares besides the VPID (LSA, key range).
+- Applies at: MODELING.md (Patterns)
+- Case (2026-11-05, parallel scan index H2): descending `fix_prev_leaf` trusts `next_vpid == m_last_leaf_vpid`. The last leaf handed out was merged into its left neighbour, freed, and reused by that neighbour's split (`btree_alloc page=13742` right after `btree_merge right=13742`); the scan skipped the 136 keys moved there. The model found it only after the free pool allowed reuse.
+
+### P15 — prove a large IndInv conjunct by conjunct
+- Rule: Name each conjunct of IndInv beyond `TypeOK` (`R_x == ...`), prove each in its own step with `TypeOK`, its parts and every `R_` in the DEF list, and join them in the QED; one step over the whole conjunction times out.
+- Applies at: PROOFS.md
+- Case (2026-11-05, parallel scan heap): `PxHeapSnapshot_proofs.tla` timed out on `RestInv'` as one goal for `ReadPage` and `VacuumPage`; with the fourteen named conjuncts `R_early` .. `R_done` proved one by one and `TypeOK`'s parts in every DEF list, all 278 obligations proved.
+
+### P16 — what a TLAPS proof covers
+- Rule: A TLAPS proof of an abstract spec counts for the code-level model only through a refinement PROPERTY that TLC checks on that model's cfgs, inside their bounds; the report says per claim which it has: TLAPS on the abstract spec plus TLC refinement, TLC only, or neither.
+- Applies at: SKILL.md step 10
+- Case (2026-11-05, parallel scan): heap C1 is TLAPS-proved on `PxHeapSnapshot` (early snapshot) and tied to the latch-level `PxHeapScan` by TLC refinement in 2- and 3-worker cfgs; index C3 is TLAPS-proved on `PxIndexFrontier` and tied by TLC refinement to the ascending dispatcher; index C1 and every liveness claim are TLC only.
+
+### P17 — a runtime reproduction logs the interleaving
+- Rule: A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole.
+- Applies at: TRACE.md (Reproducing a hole); SKILL.md step 7
+- Case (2026-11-05, parallel scan index H2): of three runs with the same delay, one returned 474416 / 1125355077360 instead of 474552 / 1126000376280; its TLATRACE lines showed `btree_merge left=13744 right=13742`, `btree_alloc page=13742`, `link_trusted last=changed`, while the other two runs' bulk loads had laid out the leaves so that no merge hit the last leaf. statdump counters stayed 0 throughout and could not tell the runs apart.
+- Case (2026-11-05, parallel scan probes): a race did not hold vacuum back because csql auto-committed the scanning session; `--no-auto-commit` fixed it. A rebuild of the probe install under a running server left a master the wrapper could not stop.

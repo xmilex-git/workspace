@@ -28,6 +28,7 @@ rule, or as a new rule added to both files in one commit.
   TLA+ data module (`TRACE.md`).
 - `just tla-selftest` runs `examples/`; run it after touching `tools/tla/` or this skill's rules.
 - TLC and tlapm run only through `tools/tla/tla-check`, whose verdict is read per cfg and per obligation, never from a tool's exit status. (P1)
+- Change `tools/tla/tla-check` by writing a new file and renaming it over the old one: bash reads a running script from its open file, so an in-place rewrite corrupts the runs other sessions have in flight. (P18)
 
 ## Where the model lives
 
@@ -53,8 +54,9 @@ rule, or as a new rule added to both files in one commit.
 | `MAP.md` | claims, refinement map, properties, fault model, mutants, witnesses, dead expressions, bounds |
 | trace files (protocol changes) | `<Module>Trace.tla`, its data module, `*.witness-trace-*.cfg`, `*.reject-*.cfg` (`TRACE.md`) |
 
-Each cfg's first line is its expectation (`\* expect: pass | violation <Name> | deadlock | liveness`);
-`tools/tla/tla-check`'s header lists the optional lines. Shape anchors: `examples/px-error-handoff/`
+Each cfg's first line is its expectation (`\* expect: pass | violation <Name> | deadlock | liveness |
+refinement`); only mutant and witness cfgs may expect an error, and `tools/tla/tla-check`'s header
+lists the optional lines. A mutant that only the refinement mapping catches is expected as `\* expect: refinement`: TLC reports a broken refinement as "Action property line N ... of module <Abstract> is violated", by location, not by the PROPERTY's name. (P10) Shape anchors: `examples/px-error-handoff/`
 (PlusCal, faults, trace validation) and `examples/condvar-handoff/` (fairness, environment process).
 
 ## Steps
@@ -83,6 +85,8 @@ latch, lock, mutex, atomic, single owner). Then cut steps:
   the map's "One step because" column.
 - Name every row at `file:function` and the symbol. A row you cannot place in code is a model
   invention: delete it or make it a claim.
+
+Before the model is final, list the callers of every protocol entry point in the mapped code (code-index `callers`) and give each exit path (LIMIT, error, interrupt, reset, the end of a range) an action or a fault-table row saying why it is not modeled. (P11)
 
 Done when every action and every variable of the spec has a row (`MODELING.md` has the CUBRID
 primitive patterns: page latch, lock manager, MVCC snapshot and vacuum, WAL, PX workers, condvar).
@@ -118,7 +122,7 @@ either adds a cfg that passes or produces a finding:
    nothing is a **surviving mutant**: either a property is missing (add it) or the guard is not
    needed (a finding or a question).
 2. **Dead expressions.** `dead-expr-lines` lists sub-expressions TLC never evaluated; MAP.md
-   explains each as a mutant-only branch, a violation ghost, or a hole in the model.
+   explains each as a mutant-only branch, a violation ghost, or a hole in the model. A dead expression that maps to code is explained by the code fact that makes it unreachable (`file:line`), or the model grows until it fires; "not reached at these bounds" counts only after a larger bound leaves it dead too, and MAP.md names that bound. (P12)
 3. **Atomicity.** Split every step adjacent to shared state once more; a pass that only holds
    with the coarser step means the code relies on a protection the map must name.
 4. **Faults.** Enable each fault at every point the code can raise it, not only at the first.
@@ -143,7 +147,8 @@ Every TLC counterexample from a correct-variant cfg is classified in MAP.md befo
 - **Hole**: every step maps to code, and no protection forbids the interleaving. It becomes a
   finding only after a runtime reproduction (`cubrid-diagnose`: a fail-before run on a build, with
   a delay injected on a scratch worktree when the window is narrow); until then it is a question
-  carrying the step-by-step trace mapped to `file:line`.
+  carrying the step-by-step trace mapped to `file:line`. A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole. (P17)
+- A hole confirmed in the code stays a failing `\* expect: pass` cfg of the code as it stands, so the directory reports `RESULT: FAILED` until the code is fixed; the candidate fix gets its own pass cfg, and the code cfg's expectation is never flipped to make the directory pass. (P9)
 
 ### 8. Trace validation (protocol changes)
 
@@ -168,16 +173,20 @@ build the trace ran on. The report (review or design) carries a TLA+ block in Ko
 
 ```
 TLA+ 검증: <통과 | 실패 | 미완> — <spec dir>
-- 속성: C1 <safety|liveness> <TLC 통과, TLAPS 증명> ... (claim별 한 줄, 출처)
+- 속성: C1 <safety|liveness> <TLC 통과|실패> <TLAPS: 이 spec | 추상 spec + TLC refinement | 없음> ... (claim별 한 줄, 출처)
+- 결함: <없음 | H<n> 코드 cfg 실패, 런타임 재현(빌드 fingerprint, 결과), 후보 수정 cfg 통과>
 - mutant: <n>개 모두 위반 검출 / 살아남은 mutant: <없음 | 목록>
 - 경계: <상수>, scale <상수>; TLAPS는 safety만 (liveness는 TLC 경계 안에서만)
 - trace validation: <수용 n건, 거부 n건 | 해당 없음(이유)>
 - 반례: <없음 | 분류와 재현 여부>
 ```
 
+A TLAPS proof of an abstract spec counts for the code-level model only through a refinement PROPERTY that TLC checks on that model's cfgs, inside their bounds; the report says per claim which it has: TLAPS on the abstract spec plus TLC refinement, TLC only, or neither. (P16)
+
 A completion report names the bounds and what the model does not cover; "검증됨" without the bounds
 and the fault table is not a result.
 
-Completion: `tools/tla/tla-check <dir>` prints `RESULT: OK`, MAP.md has every section filled with
+Completion: `tools/tla/tla-check <dir>` prints `RESULT: OK` (or `RESULT: FAILED` only on the code cfgs
+of confirmed holes, each a MAP.md finding with its runtime reproduction), MAP.md has every section filled with
 no row left blank, every counterexample is classified, trace validation is done or recorded as not
 required with the reason, and the report block above is written.

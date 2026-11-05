@@ -42,6 +42,8 @@ THEOREM StepInv == IndInv /\ [Next]_vars => IndInv'
 One case per action; a case that fails is split further, first by the action's `either` / `IF`
 branches, then by stating the facts it needs as numbered steps.
 
+- Name each conjunct of IndInv beyond `TypeOK` (`R_x == ...`), prove each in its own step with `TypeOK`, its parts and every `R_` in the DEF list, and join them in the QED; one step over the whole conjunction times out. (P15)
+
 ## tlapm 1.4.5 on this host: limits and the sound workaround
 
 | Symptom | Cause | Workaround |

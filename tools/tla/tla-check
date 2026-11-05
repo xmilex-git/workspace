@@ -9,6 +9,7 @@
 #        \* expect: violation <Name>      invariant or action property <Name> fails
 #        \* expect: deadlock              TLC reaches a deadlock
 #        \* expect: liveness              a temporal property fails
+#        \* expect: refinement            the PROPERTY naming an abstract spec (Abs!Spec) fails a step
 #      Optional lines:  \* timeout: <seconds> (default 1800)
 #                       \* uncovered-ok: <Action> <reason>   (an action a pass cfg may leave unfired)
 #                       \* deadlock-off: <reason>            (required next to CHECK_DEADLOCK FALSE)
@@ -18,9 +19,10 @@
 #      violated); *.reject-*.cfg feeds a corrupted run and expects pass, skipping the coverage checks.
 #   3. TLAPS: every .tla holding a THEOREM is proved by tlapm (Z3 and Zenon) on a copy in the run dir;
 #      every obligation must come back proved — none failed, none OMITTED.
-#   4. Completeness: the directory holds MAP.md, a pass cfg, a mutant cfg (*.mutant-*.cfg expecting an
-#      error), a witness cfg (*.witness-*.cfg expecting a violation), an inductive cfg (*.inductive-*.cfg
-#      expecting pass), a scale cfg (*.scale-*.cfg expecting pass, whose CONSTANT lines differ from the
+#   4. Completeness: only *.mutant-* and *.witness-* cfgs may expect an error. The directory holds
+#      MAP.md, a pass cfg, a mutant cfg (*.mutant-*.cfg expecting an error), a witness cfg
+#      (*.witness-*.cfg expecting a violation), an inductive cfg (*.inductive-*.cfg expecting pass),
+#      a scale cfg (*.scale-*.cfg expecting pass, whose CONSTANT lines differ from the
 #      main <Module>.cfg: the same check one size up) and a proof module; a directory with a trace
 #      witness also holds a reject cfg. Every claim id (| C<n> |) in MAP.md's "## Claim" section must
 #      appear in its "## Mutants" section: a claim no mutant kills has not been shown checkable.
@@ -77,7 +79,7 @@ for arg in "${dirs[@]}"; do
   for c in "${cfgs[@]}"; do
     e="$(head -1 "$c")"
     case "$(basename "$c")" in
-      *.mutant-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ (violation|deadlock|liveness) ]] && nmut=$((nmut + 1)) ;;
+      *.mutant-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ (violation|deadlock|liveness|refinement) ]] && nmut=$((nmut + 1)) ;;
       *.witness-trace-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ violation ]] && ntrace=$((ntrace + 1)) ;;
       *.witness-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ violation ]] && nwit=$((nwit + 1)) ;;
       *.reject-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ pass ]] && nrej=$((nrej + 1)) ;;
@@ -89,6 +91,12 @@ for arg in "${dirs[@]}"; do
         fi ;;
       *.inductive-*.cfg) [[ "$e" =~ ^\\\*\ expect:\ pass ]] && nind=$((nind + 1)) ;;
       *) [[ "$e" =~ ^\\\*\ expect:\ pass ]] && npass=$((npass + 1)) ;;
+    esac
+    # Only mutants and witnesses may expect an error: a hole found in the code stays a failing
+    # pass cfg until the code is fixed, never a cfg flipped to expect the violation (cubrid-tla P9).
+    case "$(basename "$c")" in
+      *.mutant-*.cfg|*.witness-*.cfg) ;;
+      *) [[ "$e" =~ ^\\\*\ expect:\ pass ]] || fail "$(basename "$c"): only mutant and witness cfgs may expect an error (cubrid-tla P9)" ;;
     esac
   done
   for t in "${tlas[@]}"; do /usr/bin/grep -qE '^ *(THEOREM|LEMMA|PROPOSITION)' "$t" && nproof=$((nproof + 1)); done
@@ -124,7 +132,7 @@ for arg in "${dirs[@]}"; do
     module="${name%%.*}"
     log="$run/$name.log"
     expect="$(head -1 "$c" | sed -n 's/^\\\* expect: *//p')"
-    [ -n "$expect" ] || { fail "$name: first line must be '\\* expect: pass|violation <Name>|deadlock|liveness'"; continue; }
+    [ -n "$expect" ] || { fail "$name: first line must be '\\* expect: pass|violation <Name>|deadlock|liveness|refinement'"; continue; }
     [ -f "$dir/$module.tla" ] || { fail "$name: module $module.tla not found"; continue; }
     if /usr/bin/grep -q '^ *SYMMETRY' "$c" && /usr/bin/grep -q '^ *PROPERTY' "$c"; then
       fail "$name: SYMMETRY together with PROPERTY (TLC liveness is unsound under symmetry)"; continue
@@ -145,6 +153,8 @@ for arg in "${dirs[@]}"; do
       11) got="deadlock" ;;
       12) got="violation $(sed -n 's/^Error: Invariant \(.*\) is violated.*/\1/p' "$log" | head -1)" ;;
       13) if /usr/bin/grep -q '^Error: Temporal properties were violated' "$log"; then got="liveness"
+          elif /usr/bin/grep -qE '^Error: Action property line [0-9]+, col [0-9]+ to line [0-9]+, col [0-9]+ of module [A-Za-z0-9_]+ is violated' "$log"; then
+            got="refinement"   # an INSTANCE'd spec's [][Next]_vars reported by location
           else got="violation $(sed -n 's/^Error: Action property \(.*\) is violated.*/\1/p' "$log" | head -1)"; fi ;;
       124) got="timeout after ${tmo:-1800}s" ;;
       *) got="error rc=$rc ($(/usr/bin/grep -m1 -E '^Error|Exception' "$log"))" ;;

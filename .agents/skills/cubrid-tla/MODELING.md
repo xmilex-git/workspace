@@ -32,6 +32,9 @@ row of a real refinement map is grounded on the worktree at the reviewed or desi
 | condvar | `examples/condvar-handoff`: release-and-sleep step, spurious wakeup process, `while` re-check | |
 | decision table | Init picks every input class; one step computes the result; invariants state the expected output per class | the function and every caller (`callers`) |
 
+- Model when the MVCC snapshot is built relative to every set the scan collects at open (the page bitmap, the leaf chain, the partition list), per isolation level: under READ COMMITTED the statement's first `logtb_get_mvcc_snapshot` builds it, which may run after open. (P13)
+- A check that a page is the same page by VPID alone is a reuse hole whenever the page can be freed and reallocated during the protocol: model the free pool with reuse (`file_alloc` takes the lowest free page) and check what the code compares besides the VPID (LSA, key range). (P14)
+
 ## Fault checklist (SKILL.md step 3)
 
 Answer each row in MAP.md's fault table as modeled, or not applicable with the reason.
@@ -72,4 +75,4 @@ AbsSpec == AbsVars!Spec
 The main cfg lists `PROPERTY AbsSpec`. Every implementation step must be an `Abs` step or leave
 `Abs`'s variables unchanged (a stuttering step); a step that changes them in a way `Abs` forbids is
 reported as an action-property violation. A mutant whose implementation step breaks the mapping
-shows the check is live.
+shows the check is live; expect it as `\* expect: refinement` (P10).
