@@ -18,7 +18,8 @@
 #      Trace validation: *.witness-trace-*.cfg accepts a recorded run (expects its TraceNotDone
 #      violated); *.reject-*.cfg feeds a corrupted run and expects pass, skipping the coverage checks.
 #   3. TLAPS: every .tla holding a THEOREM is proved by tlapm (Z3, Zenon, Isabelle, LS4) on a copy in the run dir;
-#      every obligation must come back proved — none failed, none OMITTED.
+#      every obligation must come back proved — none failed, none OMITTED. A proof module's
+#      `\* timeout: <seconds>` line (default 1800) bounds its tlapm run, as a cfg's does TLC's.
 #   4. Completeness: only *.mutant-* and *.witness-* cfgs may expect an error. The directory holds
 #      MAP.md, a pass cfg, a mutant cfg (*.mutant-*.cfg expecting an error), a witness cfg
 #      (*.witness-*.cfg expecting a violation), an inductive cfg (*.inductive-*.cfg expecting pass),
@@ -189,7 +190,8 @@ for arg in "${dirs[@]}"; do
     start=$(date +%s)
     mkdir -p "$run/proof/home"
     # Isabelle writes under HOME and the temp dir: keep both in the run dir, never /tmp (ADR 0045)
-    (cd "$run/proof" && timeout 1800 "${clean_env[@]}" HOME="$run/proof/home" TMPDIR="$run/jtmp" PATH="$tools/bin:/usr/bin:/bin" \
+    ptmo="$(sed -n 's/^\\\* timeout: *\([0-9]*\).*/\1/p' "$t" | head -1)"
+    (cd "$run/proof" && timeout "${ptmo:-1800}" "${clean_env[@]}" HOME="$run/proof/home" TMPDIR="$run/jtmp" PATH="$tools/bin:/usr/bin:/bin" \
       tlapm --cleanfp --toolbox 0 0 --threads "$workers" --stretch "$stretch" "$name.tla") > "$log" 2>&1
     rc=$?
     secs=$(( $(date +%s) - start ))
