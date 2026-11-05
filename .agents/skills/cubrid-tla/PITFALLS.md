@@ -48,6 +48,7 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: An inductive-cfg counterexample from a state the system cannot reach means IndInv is too weak: strengthen IndInv, never the spec, and keep IndInv in the main cfg's INVARIANTS so TLC confirms the strengthened conjunct on every reachable state.
 - Applies at: SKILL.md step 6; PROOFS.md
 - Case (2026-11-05, condvar-handoff): the inductive cfg started from `pc[w] = "Done" /\ sleeping` and took `spuriousLeft` to -1. No run reaches a finished waiter that sleeps; the conjunct `sleeping => pc[Waiter] = "W_wake"` excluded it and the main cfg now checks IndInv on all 92 reachable states.
+- Case (2026-11-06, parallel-hash-join): the inductive cfg started from a worker at the mutant-only label `W_cas_write` and from `pc[w] = "W_fl" /\ p[w] = NP`; no run of the correct variant reaches either, so IndInv's worker labels drop the three mutant-only labels and gain `pc[w] = "W_fl" => p[w] < NP`.
 
 ### P7 — a liveness counterexample through an unfair lock is an assumption question
 - Rule: A liveness counterexample in the correct model that loops through an unfair lock retake is a fairness assumption to state in MAP.md (and to put to the user when it is a design question), never a reason to weaken the property.
@@ -127,6 +128,7 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: Under `HIDE DEF`, state the equality for the primed term exactly as the goal writes it (`HasAns(cur)' = HasAns(cur)`); a `\A p : Ans(p, s)' = Ans(p, s)` the prover must instantiate under the prime does not prove the goal.
 - Applies at: PROOFS.md (limits)
 - Case (2026-11-05, CBRD-27361 page-batch-walk): with `HIDE DEF Ans, HasAns, AnsIn` the `Env` and `UNCHANGED vars` cases failed for `IFront'` from `\A p \in Pages, s \in Slots : Ans(p, s)' = Ans(p, s)`; stating `\A s \in Slots : Ans(cur, s)' = Ans(cur, s)` and `HasAns(cur)' = HasAns(cur)` proved them.
+- Case (2026-11-06, parallel-hash-join): with 2 workers and 1 unit the probe-phase `INIT IndInv` passed 33 million initial states before its 20-min timeout; the join phase (no membuf, keys fixed) finished 31 million in 15 min and the split phase with 1 worker 2.1 million in 48 s, so the check runs as two cfgs.
 
 ### P23 — INIT IndInv must enumerate
 - Rule: TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish.
@@ -163,3 +165,27 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Applies at: SKILL.md Toolchain
 - Case (2026-11-06, CBRD-24094): a `pkill -f` pattern for this session's tlapm killed its own shell, and a follow-up `kill` of a tlapm pid read from `pgrep -fl` stopped another session's `PxHashJoin_proofs` run (5번 세션), which had to be redone.
 
+### P33 — prove a large action through its branch effects
+- Rule: A PlusCal action with branches is proved through an effect step: state each branch as its guard, every assignment and `UNCHANGED` of the rest, prove their disjunction by one `CASE` per branch condition (a primed predicate such as `failed'[self] = "err"` tells `either` branches apart), then prove each IndInv part from one branch's conjunction with the action's definition left unexpanded.
+- Applies at: PROOFS.md
+- Case (2026-11-06, parallel-hash-join): with `DEF W_claim` (six branches) unfolded in every part's step, `IDisp'`, `ICnt'` and `ILocal'` timed out even at `--stretch 6`, and the six-way effect disjunction stated in one step still failed; with one `CASE` per branch condition it proved in a single test-module run, and the parts then proved branch by branch.
+
+### P34 — a boolean conjunct is an iff
+- Rule: Write an IndInv conjunct that ties a boolean variable to a predicate as `x \in BOOLEAN /\ (x <=> P)`; written `x = (P)` it stays unprovable in SMT and Zenon, even in InitInv.
+- Applies at: PROOFS.md
+- Case (2026-11-06, parallel-hash-join): `freed = (pc[Leader] \in {"L_fallback", "Done"})` failed in InitInv at every stretch although `pc[Leader] = "L_push"` and `freed = FALSE` were facts of the step; with `freed \in BOOLEAN /\ (freed <=> ...)` (and the same for `tableFreed`, `membufClaimed`, `final`, the `L_push` test) the step proved.
+
+### P35 — parenthesize a primed right side
+- Rule: Parenthesize the right side of every `x' = ...` a proof step states: `uaf' = uaf \/ freed` parses as `(uaf' = uaf) \/ freed`, and an `IF c THEN a ELSE b` right side swallows the conjuncts written after it.
+- Applies at: PROOFS.md
+- Case (2026-11-06, parallel-hash-join): the hand-written effect steps of `W_check`, `W_err`, `W_swap` and `W_pclean` failed in every prover; the generator wrote `uaf' = uaf \/ freed` and `mainErr' = IF won[self] THEN failed[self] ELSE mainErr` followed by `/\ UNCHANGED <<...>>`. With every right side in parentheses they proved.
+
+### P36 — Assm states what model values give TLC
+- Rule: State in `Assm` what a TLC model value gives for free: a constant set is nonempty, and a sentinel the spec compares with its members is not one (`Workers # {}`, `"none" \notin Workers`); TLAPS reads every constant as an arbitrary set.
+- Applies at: PROOFS.md
+- Case (2026-11-06, parallel-hash-join): InitInv's `(pc[Leader] = "L_push" <=> pushed # Workers)` is false for `Workers = {}`, and the dispenser conjunct `\A w \in Workers : w # owner => mb[w] \in {-1, 0}` with `owner = "none"` needs `"none" \notin Workers`; both held in every TLC run because the cfg's workers are model values.
+
+### P37 — iterate a failing step in a test module
+- Rule: Fix a failing obligation in a test module that `EXTEND`s the spec and states only that step, then rerun the whole proof once: obligations that fail run to their timeout and set the whole run's wall time, and `--threads` above the free cores only takes CPU from other sessions' provers.
+- Applies at: PROOFS.md
+- Case (2026-11-06, parallel-hash-join): three whole-module reruns of about 1850 obligations at 32 threads ran 3000 s, 3000 s (both stopped by the timeout) and 2028 s (stopped by another session) while other sessions ran tlapm and TLC on the host; the `W_claim` effect that failed in all three proved in one run of a test module `T EXTENDS PxHashJoin` holding that step alone.
