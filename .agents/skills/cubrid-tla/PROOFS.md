@@ -69,6 +69,7 @@ branches, then by stating the facts it needs as numbered steps.
 - Parenthesize the right side of every `x' = ...` a proof step states: `uaf' = uaf \/ freed` parses as `(uaf' = uaf) \/ freed`, and an `IF c THEN a ELSE b` right side swallows the conjuncts written after it. (P35)
 - State in `Assm` what a TLC model value gives for free: a constant set is nonempty, and a sentinel the spec compares with its members is not one (`Workers # {}`, `"none" \notin Workers`); TLAPS reads every constant as an arbitrary set. (P36)
 - Fix a failing obligation in a test module that `EXTEND`s the spec and states only that step, then rerun the whole proof once: obligations that fail run to their timeout and set the whole run's wall time, and `--threads` above the free cores only takes CPU from other sessions' provers. (P37)
+- A step that compares a variable with `<` or `<=` needs that variable's type in its context: when `IndInv` stays folded, `USE` a fact such as `np \in 0..MaxP` in each action lemma; keep a structural assumption (`o = <<o[1], o[2]>>`) out of the module's global `USE` and cite it only in the lemma that needs it. (P38)
 
 Every workaround keeps the theorem statement; only the proof is decomposed, and the QED that joins
 the parts is itself an obligation. A theorem weakened to make it prove, an `OMITTED` step, or a

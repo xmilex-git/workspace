@@ -205,3 +205,8 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: Fix a failing obligation in a test module that `EXTEND`s the spec and states only that step, then rerun the whole proof once: obligations that fail run to their timeout and set the whole run's wall time, and `--threads` above the free cores only takes CPU from other sessions' provers.
 - Applies at: PROOFS.md
 - Case (2026-11-06, parallel-hash-join): three whole-module reruns of about 1850 obligations at 32 threads ran 3000 s, 3000 s (both stopped by the timeout) and 2028 s (stopped by another session) while other sessions ran tlapm and TLC on the host; the `W_claim` effect that failed in all three proved in one run of a test module `T EXTENDS PxHashJoin` holding that step alone.
+
+### P38 — an integer comparison needs its type in scope
+- Rule: A step that compares a variable with `<` or `<=` needs that variable's type in its context: when `IndInv` stays folded, `USE` a fact such as `np \in 0..MaxP` in each action lemma; keep a structural assumption (`o = <<o[1], o[2]>>`) out of the module's global `USE` and cite it only in the lemma that needs it.
+- Applies at: PROOFS.md
+- Case (2026-11-06, CBRD-24094 ovf-dir): `OvfOrder_proofs` stuck at 858/930 even at `--stretch 12` (tlapm 1.4.5 and 1.6.0-pre alike); `r < np BY r1 = r, r2 <= np` timed out because `np`'s type lived only in the folded `IndInv`, and `USE AssmO` (the tuple shape of every object) stalled Z3 on unrelated steps. With `<1>n. np \in 0..MaxP` used per lemma, `AssmO` cited only in `OidNat`/`OidIn`, and small `SepNat`/`ContNat` lemmas, 1257/1257 proved in 54 s.
