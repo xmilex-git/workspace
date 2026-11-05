@@ -420,8 +420,14 @@ ctp-prune KEEP="3":
     # `&&` list, which set -e does not stop, and every run would be deleted (2026-09-27).
     case "{{KEEP}}" in ''|*[!0-9]*) echo "ERROR: KEEP must be a number: just ctp-prune 3 (got '{{KEEP}}')" >&2; exit 2 ;; esac
     root="$(bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/artifact_root.sh")"
+    # INSTALL=<text>: only the runs whose provenance install path contains <text> (one session's own runs, e.g.
+    # INSTALL=CUBRID-dots-); KEEP counts within them. A run without provenance.txt never matches.
     i=0
     for d in $(ls -dt "$root"/*-*Z-* 2>/dev/null); do
+        if [ -n "${INSTALL:-}" ]; then
+            inst="$(sed -n 's/^install=\([^ ]*\).*/\1/p' "$d/provenance.txt" 2>/dev/null || :)"
+            case "$inst" in *"$INSTALL"*) ;; *) continue ;; esac
+        fi
         i=$((i+1)); [ "$i" -le "{{KEEP}}" ] && continue
         n="$(basename "$d")"
         if podman ps --format '{{{{.Names}}}}' 2>/dev/null | grep -q "ctprun_${n#*-}"; then
