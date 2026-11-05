@@ -146,8 +146,8 @@ Surviving mutants (the guard is not needed for the properties; reported as quest
 
 | Id | Cfg | Classification | Runtime |
 |---|---|---|---|
-| H1 | `OvfScanResume.cfg` (code, `ExactlyOnce`) | **hole, confirmed** — introduced by CBRD-27401 | reproduced twice (below) |
-| H2 | `OvfDirChain.crash-swap.cfg` (code, `Sorted`) | **hole, confirmed** — the directory routing (CBRD-24094) cannot find what the crash leaves | reproduced (below) |
+| H1 | `OvfScanResume.cfg` (code, `ExactlyOnce`) | **hole, confirmed** — introduced by CBRD-27401; filed as CBRD-27972 | reproduced three times (below) |
+| H2 | `OvfDirChain.crash-swap.cfg` (code, `Sorted`) | **hole, confirmed** — the directory routing (CBRD-24094) cannot find what the crash leaves; filed as CBRD-27973 | reproduced twice (below) |
 | — | first `crash-swap` model put the removed object at the page's end | model error: `btree_record_replace_object` re-inserts it in OID order (`btree.c:38577`); two crash runs with that layout recovered cleanly | 2 runs, `CrashAfterSwap` logged, chain sorted after recovery |
 | — | first `OvfScanResume` let a key-start iteration stop with no chain object accepted (anchor NULL) | model error: the key-start check reserves a full overflow page (`btree.c:30774`, `btree.c:29694`), so the first page and any stop need an accepted object; the H1 run with anchor NULL was never reachable | the first H1 attempt stopped before the key instead (trace `n_before=0`) |
 
