@@ -210,3 +210,13 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: A step that compares a variable with `<` or `<=` needs that variable's type in its context: when `IndInv` stays folded, `USE` a fact such as `np \in 0..MaxP` in each action lemma; keep a structural assumption (`o = <<o[1], o[2]>>`) out of the module's global `USE` and cite it only in the lemma that needs it.
 - Applies at: PROOFS.md
 - Case (2026-11-06, CBRD-24094 ovf-dir): `OvfOrder_proofs` stuck at 858/930 even at `--stretch 12` (tlapm 1.4.5 and 1.6.0-pre alike); `r < np BY r1 = r, r2 <= np` timed out because `np`'s type lived only in the folded `IndInv`, and `USE AssmO` (the tuple shape of every object) stalled Z3 on unrelated steps. With `<1>n. np \in 0..MaxP` used per lemma, `AssmO` cited only in `OidNat`/`OidIn`, and small `SepNat`/`ContNat` lemmas, 1257/1257 proved in 54 s.
+
+### P40 — a quantifier swallows the conjuncts after it
+- Rule: In a conjunct list, a quantifier written `/\ \A x \in S : P(x) /\ Q` takes every later conjunct on the line into its body: parenthesize it, `/\ (\A x \in S : P(x)) /\ Q`, or put it last.
+- Applies at: PROOFS.md
+- Case (2026-11-06, parallel sort merge queue): a step `/\ \A t \in Tasks : tpc[t] \in {"idle", "done"} /\ Q = {} /\ sleeping = FALSE` put `Q = {}` inside the `\A`; a later `AfterStage' => Q' = {} BY <1>3, <1>4` failed in SMT, Zenon and Isabelle until the quantifier was parenthesized.
+
+### P41 — one toolchain per run
+- Rule: Read the `toolchain:` line and every proof log's `TLAPM version` line: a toolchain install during a run swaps the tools under it, and a run whose modules carry different versions is rerun, never judged.
+- Applies at: SKILL.md (Toolchain)
+- Case (2026-11-06, parallel sort merge queue): the tools link moved from tlapm 1.4.5 to 1.6.0-pre at 01:31 during a 01:12 run; three proof modules logged `TLAPM version 1.4.5` and two `efe4f2d`, `Safe` failed with `ls4 not found`, and the 1.4.5 modules failed steps that had proved before. The rerun on one toolchain proved `Safe`.
