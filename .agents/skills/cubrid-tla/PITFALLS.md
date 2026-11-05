@@ -28,6 +28,7 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 ### P4 — SMT cannot mix boolean typing and integers
 - Rule: split `TypeOK` into a boolean part and an integer part and prove them in separate steps
 - Applies at: PROOFS.md (table); SKILL.md step 4
+- Case (2026-11-05, CBRD-27215/27361 expr-prog-exec, page-batch-walk): `TBool'` failed in ExprProgExec until it stood apart from `TRest`, and in PageBatchWalk the steps for `IFix'`/`IChunk'`/`IPhase'` kept failing (13 of 2749 obligations, `--stretch 5`) while `fixed`/`more`/`learned \in BOOLEAN` sat in those conjuncts; split out as `IFixB`/`IChunkB`/`IPhaseB`.
 - Case (2026-11-05, condvar-handoff): `ASSUME spuriousLeft = MaxSpurious, MaxSpurious \in Nat, locked = FALSE PROVE spuriousLeft \in 0..MaxSpurious /\ locked \in BOOLEAN` timed out in Z3 (30 s with `--stretch 6`) and Zenon exhausted its search; the captured SMT input encoded `locked = FALSE` as `(not (boolify locked))` with no axiom back to `tla__BOOLEAN`. Each half proved alone.
 
 ### P18 — tla-check is replaced, never rewritten in place
@@ -105,13 +106,37 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Case (2026-11-05, parallel scan index H2): of three runs with the same delay, one returned 474416 / 1125355077360 instead of 474552 / 1126000376280; its TLATRACE lines showed `btree_merge left=13744 right=13742`, `btree_alloc page=13742`, `link_trusted last=changed`, while the other two runs' bulk loads had laid out the leaves so that no merge hit the last leaf. statdump counters stayed 0 throughout and could not tell the runs apart.
 - Case (2026-11-05, parallel scan probes): a race did not hold vacuum back because csql auto-committed the scanning session; `--no-auto-commit` fixed it. A rebuild of the probe install under a running server left a master the wrapper could not stop.
 
-### P9 — no negative integers in a cfg
+### P19 — no negative integers in a cfg
 - Rule: A TLC cfg cannot write a negative integer: put a natural constant in the cfg and build the value set from it in the spec.
 - Applies at: SKILL.md step 4
 - Case (2026-11-05, CBRD-27819 cmp-dispatch): `CONSTANTS Vals = {-10, -5, 0, 5, 10}` stopped every cfg with `ConfigFileException ... expecting }`; `MaxV = 10` with `Vals == {v \in -MaxV..MaxV : v % 5 = 0}` in the spec ran.
 
-### P10 — decision tables: literal chains, no poisoned facts
+### P20 — decision tables: literal chains, no poisoned facts
 - Rule: A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, boolean assignments written `IF … THEN TRUE ELSE FALSE`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover.
 - Applies at: PROOFS.md
 - Case (2026-11-05, CBRD-27819 cmp-dispatch): one obligation per (client, site, type pair) with the whole decision unfolded timed out (34/843 in 1800 s); `conv = <<a # tgt, b # tgt>>` and `[d EXCEPT !.cmp = ...]` failed even for one concrete pair, and `BY <2>1` failed while `<2>1` held `inst' = CASE ...` although the same equality proved from `DEF Install`. With 0/1 flags, fresh records, a generated literal chain per pair and facts taken one by one from the action, 7652/7652 proved in 866 s.
 
+### P21 — no Isabelle: pick the least element in the action
+- Rule: tlapm here has no Isabelle back end, so a library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) never applies: write `\E x \in S : Least(x, S)` in the action instead of `Min(S)` / `CHOOSE`, so the proof only uses the picked element and TLC's deadlock check shows one exists.
+- Applies at: PROOFS.md (limits)
+- Case (2026-11-05, CBRD-27361 page-batch-walk): `MinExists` by `NatInduction` and then by `SmallestNatural` failed in every prover (`BY ..., NatInduction, Isa` cannot run here); rewriting `Hop`, `Collect`'s first off-page record and the three row emissions as `\E s \in S : Least(s, S) /\ ...` removed the lemma, and the deadlock check of the pass cfgs still shows a least element exists.
+
+### P22 — a hidden definition under a prime needs its own equality
+- Rule: Under `HIDE DEF`, state the equality for the primed term exactly as the goal writes it (`HasAns(cur)' = HasAns(cur)`); a `\A p : Ans(p, s)' = Ans(p, s)` the prover must instantiate under the prime does not prove the goal.
+- Applies at: PROOFS.md (limits)
+- Case (2026-11-05, CBRD-27361 page-batch-walk): with `HIDE DEF Ans, HasAns, AnsIn` the `Env` and `UNCHANGED vars` cases failed for `IFront'` from `\A p \in Pages, s \in Slots : Ans(p, s)' = Ans(p, s)`; stating `\A s \in Slots : Ans(cur, s)' = Ans(cur, s)` and `HasAns(cur)' = HasAns(cur)` proved them.
+
+### P23 — INIT IndInv must enumerate
+- Rule: TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish.
+- Applies at: SKILL.md step 6
+- Case (2026-11-05, CBRD-27361 page-batch-walk): `INIT IndInv` with `TypeOK` first spent 7 min on 656 448 initial states at NP = 1, NS = 3 and ran past 10 min for the iter mode; IndInv rewritten in binding order, the chunk slots zeroed outside a chunk (`ClearChunk`) and NS = 2 / NP = 2, NS = 1 brought each inductive cfg to 4-6 s. RtfLifecycle's `TypeOK`-first IndInv also ran past 10 min, and `bkeys \subseteq Keys` could not be enumerated at all (`\in SUBSET`).
+
+### P24 — a guard and its access are two steps
+- Rule: A guard and the shared-state access it protects are two steps when the code reads them apart (an interrupt check, then a lookup of shared memory): a mutant that survives the coarser step is the signal to split it.
+- Applies at: SKILL.md step 5
+- Case (2026-11-05, CBRD-27361 runtime-filter): `release_before_drain` (the filter freed before `wait_for_workers`) survived while `WRow` checked the interrupt and probed the filter in one step, since a stopped worker then never probed; split into `WRow` (the check) and `WProbe` (`hjoin_rtf_pass`), the mutant reads the freed filter.
+
+### P25 — a loop bound every iteration advances
+- Rule: A worker loop is bounded by a counter every iteration advances (its share of the input), never by one only some iterations advance, or TLC reports a false liveness counterexample.
+- Applies at: SKILL.md step 4
+- Case (2026-11-05, CBRD-27361 runtime-filter): `LeaderFinishes` failed on the correct model: a worker whose filter the sample took off counted no rows, so `rows[w] < MaxRows` never stopped its row loop and `WEnd` was never continuously enabled; a per-worker `left` budget fixed it.

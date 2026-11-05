@@ -55,7 +55,9 @@ branches, then by stating the facts it needs as numbered steps.
 | `"<op>" not found` in the proof module | the PlusCal translation is stale | run `tools/tla/tla-check`, which translates before proving |
 | tlapm exits 0 with obligations failed | `--toolbox` mode reports failures as messages | `tla-check` counts each obligation's final status (P1) |
 
-- A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, boolean assignments written `IF … THEN TRUE ELSE FALSE`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover. (P10)
+- tlapm here has no Isabelle back end, so a library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) never applies: write `\E x \in S : Least(x, S)` in the action instead of `Min(S)` / `CHOOSE`, so the proof only uses the picked element and TLC's deadlock check shows one exists. (P21)
+- Under `HIDE DEF`, state the equality for the primed term exactly as the goal writes it (`HasAns(cur)' = HasAns(cur)`); a `\A p : Ans(p, s)' = Ans(p, s)` the prover must instantiate under the prime does not prove the goal. (P22)
+- A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, boolean assignments written `IF … THEN TRUE ELSE FALSE`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover. (P20)
 
 Every workaround keeps the theorem statement; only the proof is decomposed, and the QED that joins
 the parts is itself an obligation. A theorem weakened to make it prove, an `OMITTED` step, or a

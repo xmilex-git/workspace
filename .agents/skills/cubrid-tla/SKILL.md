@@ -111,7 +111,8 @@ provides it. Done when every checklist row is answered.
   check the claims depend on. In a review, the pre-change behavior is a mutant: the defect the
   ticket describes must fail on it (fail-before) and pass on the change (pass-after).
 - An environment process that loops (an OS, vacuum, a DML stream) must be able to end when the system ends, or TLC reports a false deadlock. (P8)
-- A TLC cfg cannot write a negative integer: put a natural constant in the cfg and build the value set from it in the spec. (P9)
+- A worker loop is bounded by a counter every iteration advances (its share of the input), never by one only some iterations advance, or TLC reports a false liveness counterexample. (P25)
+- A TLC cfg cannot write a negative integer: put a natural constant in the cfg and build the value set from it in the spec. (P19)
 
 ### 5. Check, then hunt
 
@@ -125,7 +126,7 @@ either adds a cfg that passes or produces a finding:
 2. **Dead expressions.** `dead-expr-lines` lists sub-expressions TLC never evaluated; MAP.md
    explains each as a mutant-only branch, a violation ghost, or a hole in the model. A dead expression that maps to code is explained by the code fact that makes it unreachable (`file:line`), or the model grows until it fires; "not reached at these bounds" counts only after a larger bound leaves it dead too, and MAP.md names that bound. (P12)
 3. **Atomicity.** Split every step adjacent to shared state once more; a pass that only holds
-   with the coarser step means the code relies on a protection the map must name.
+   with the coarser step means the code relies on a protection the map must name. A guard and the shared-state access it protects are two steps when the code reads them apart (an interrupt check, then a lookup of shared memory): a mutant that survives the coarser step is the signal to split it. (P24)
 4. **Faults.** Enable each fault at every point the code can raise it, not only at the first.
 5. **Scale.** The scale cfg must pass; a property that fails only at N+1 is a finding.
 6. **Liveness.** A liveness counterexample in the correct model that loops through an unfair lock retake is a fairness assumption to state in MAP.md (and to put to the user when it is a design question), never a reason to weaken the property. (P7)
@@ -136,6 +137,7 @@ Write `IndInv`, check it with the inductive cfg, then prove the INV1 premises wi
 (`PROOFS.md`).
 
 - An inductive-cfg counterexample from a state the system cannot reach means IndInv is too weak: strengthen IndInv, never the spec, and keep IndInv in the main cfg's INVARIANTS so TLC confirms the strengthened conjunct on every reachable state. (P6)
+- TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish. (P23)
 - An obligation fails until the proof is right: split it, never `OMITTED`, never a weaker theorem.
   `PROOFS.md` lists what tlapm 1.4.5 on this host cannot do and the sound workaround for each.
 
