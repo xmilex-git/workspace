@@ -130,6 +130,12 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-11-05, CBRD-27596 TC hang in develop Jenkins #449 → CBRD-27947): QA saw release `cbrd_27596.sql` hang once in three runs with a SIGSEGV in `_int_malloc` under `DMRBMemoryPool::restore` and the crash handler deadlocked in `fopen`→`malloc`. Plain `_26_2h` CTP loops passed 7 of 7 and 60 isolated TC runs passed; with the malloc environment the first run crashed at the real culprit (`json_table::scanner::clear` → `delete_mutable`, a second clear pass added by CBRD-27215 b8199438e), 3 of 3, and a SA/CS minimal repro bisected to b8199438e in one step. The suspected commit in the #448..#449 range (CBRD-27802) was innocent. The first core was truncated (515 MB of 2 GB) and unreadable; the run's coredump callstack file had the full stack.
 - Source: session 2026-11-05 (CBRD-27947)
 
+### P20 — vacuum during a long query needs its log block filled first
+- Rule: A probe that needs vacuum to remove deleted keys while a long query runs (a merge or page reuse inside an injected delay) fills the deletes' log block before that query takes its snapshot (a bulk statement right after the deletes, while a held snapshot still blocks vacuum), and logs the vacuum lag (`show log header` Current_append page minus `cubrid vacuumdb -C --dump` "First log page ID referenced") through the window, because vacuum cleans a block only when every transaction in it is older than every snapshot: a block the query's later statements complete waits until the query ends.
+- Applies at: Instrumenting
+- Case (2026-11-06, CBRD-27968 pass-after): the dispatcher waited 300-900 s at its first `fix_prev_leaf` while the scenario waited for vacuum to empty and merge the last leaf handed out. Seven runs saw the merge only after Q ended (or after the split it had to precede); the lag log showed vacuum fixed at one page while Q ran (1312 -> 8326 pages behind) although it had caught up (10 pages) before the deletes. Moving the 200000-row pump between the deletes and Q, with the RR session still holding vacuum, gave the merge two rounds after H's commit, inside the delay, on the first try (runs fix9 and base1).
+- Source: session 2026-11-06 (CBRD-27968)
+
 ## Reporting a triage
 
 ### P16 — the triage report
