@@ -128,6 +128,12 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-10-29, PR 8311 8f644ec56): all 11 `sql/_36_guava/cbrd_27381/*` cases NOK in run 40824940519. The TC had merged into testcases develop (876b70cb1, 05:18Z) while its engine PR #8209 was still open, so every PR whose `tc/pr-N` synced develop after that fails the whole dir; #8318 (run 40827759161) failed the same 11. A whole-dir NOK of one CBRD: look up that CBRD's engine PR state before reading traces.
 - Source: memory:gha-ci-shell-flaky-cases, memory:gha-ci-cancel-leaves-build-pending
 
+### P30 — a head past its last CI runs the TC dirs locally
+- Rule: When the engine head has commits past its last gha-ci run, the TC PR's changed dirs run on a local optdebug build of that head (`just ctp sql <dirs>` with `PR=<N>`): a later commit that changes plan shapes leaves existing answers stale, and neither the author's last CI nor an approving TC review shows it.
+- Applies at: Step 3c
+- Case (2026-11-06, PR 6466 r3 at f1f4f21ea): the last `/run all` was 10-29; commit 0cb8b988a (11-05) let a non-covering function index scan keep key filters, so 8 existing answers (`bug_bts_7088`, `cbrd_25164`, `cbrd_24795`, `cbrd_26266`, four `function_based_index_select_basic_*`) turned `sargs` into `filtr`, one also changing the chosen index. TC #3865 was already approved by another reviewer; only the local 8-dir run (675 cases, 9 NOK) showed it.
+- Source: session 2026-11-06 PR 6466 review
+
 ## TLA+ verification (Step 3d)
 
 ### P27 — the TLA+ step ends at RESULT: OK

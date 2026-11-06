@@ -232,6 +232,7 @@ How a run becomes evidence:
 - Live verification runs on a CS-mode optdebug server (release compiles asserts and `er_log_debug` out; the resource tracker's leak checks are per-request in CS mode only, so an SA `csql -S` pass proves nothing about leaks), and gdb is never verification evidence — code-path proof is a `perf record -p <pid>` symbol band, a counter or an A/B output, and attaching gdb to a live `cub_server` is banned. (P16)
 - When a comparison decides a verdict, print the number of differing lines per file (`diff a b | grep -c '^[<>]'`) or the full diff, and truncate only after the remainder is confirmed to be the same class of difference. (P10)
 - Before calling a gha-ci NOK the PR's, scan `failed.list` of the recent runs on other PRs and read the case's trace in its shard's `ctp_log.tgz`; a case failing on unrelated PRs is a flake or a develop defect (`/run rerun <run id>`), a 2-of-2 on one head is a signal, and a local `just ctp shell` timeout (720 s) is no proof that CI (1200 s) fails the case. (P17)
+- When the engine head has commits past its last gha-ci run, the TC PR's changed dirs run on a local optdebug build of that head (`just ctp sql <dirs>` with `PR=<N>`): a later commit that changes plan shapes leaves existing answers stale, and neither the author's last CI nor an approving TC review shows it. (P30)
 
 Completion: every Expected Result row and every TC scenario row has evidence (CI, the author's attached result, or a run), and the Runtime Verification section names each source with its build sha, build type and testcase ref.
 
