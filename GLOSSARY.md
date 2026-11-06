@@ -1166,3 +1166,27 @@ _Avoid_: 로그 검증, 런타임 검증(일반 smoke와 혼동)
 **첫 키 전 재시작 (restart before the first key)**:
 내림차순 인덱스 스캔이 아직 키를 하나도 읽지 않은 상태에서 왼쪽 리프의 조건부 래치에 실패하면, 그 자리에서 하한을 다시 찾지 않고 왼쪽 리프를 기다렸다 놓은 뒤 루트부터 시작을 다시 하는 것. 다시 찾을 키가 없고 아직 낸 행도 없으므로, 다른 타입 하한(같게 비교되는 키가 여럿)의 시작 위치를 정하는 규칙이 시작 한 곳에만 남는다(CBRD-27848, `docs/tla/CBRD-27848/`).
 _Avoid_: 특수 경우(peculiar case — 옛 코드 주석의 이름), 하한 복제 탐색
+
+### 병렬 heap scan의 snapshot (CBRD-27967 그릴링 2026-11-06)
+
+**문장 snapshot (statement snapshot)**:
+READ COMMITTED에서 한 문장이 처음 필요할 때 만들고 그 문장이 끝날 때까지 그 문장의 모든 스캔(리더, worker, 다른 병렬 연산자의 worker)이 함께 쓰는 MVCC snapshot이다. 다른 트랜잭션의 커밋 중 어느 것이 보이는지를 정한다. 자기 트랜잭션의 변경은 이것이 아니라 읽는 시점 의미를 따른다. REPEATABLE READ 이상에서는 트랜잭션의 snapshot이 이 역할을 한다(`docs/tla/CBRD-27967/`).
+_Avoid_: 문장 시작 스냅샷(만드는 시점은 문장 시작이 아니다), statement-level snapshot(PostgreSQL의 command id 의미)
+
+**페이지 비트맵 (page bitmap)**:
+병렬 heap scan이 open에서 heap 파일의 섹터 표로부터 한 번 모아 worker들에게 나눠 주는 데이터 페이지 목록이다. 그 뒤에 할당된 페이지는 들어 있지 않으므로, 비트맵을 모으기 전에 문장 snapshot이 있어야 빠진 페이지의 행이 모두 snapshot에 보이지 않는 행이 된다(CBRD-27967).
+_Avoid_: 섹터 목록(섹터 안의 페이지 비트까지 가리키지 못함), page list
+
+### 페이지 latch 대기자 (CBRD-27970·27971 그릴링 2026-11-06)
+
+**R/W 대기자 (reader/writer waiter)**:
+BCB 대기열에서 READ 또는 WRITE latch를 기다리는 스레드다. latch를 쥔 스레드가 마지막 unfix에서 깨워 latch를 넘겨준다.
+_Avoid_: 대기자(FLUSH 대기자와 섞임)
+
+**FLUSH 대기자 (flush waiter)**:
+페이지가 디스크에 써질 때까지 BCB 대기열에서 기다리는 동기 flush 스레드다(checkpoint, backupdb, `pgbuf_flush_all`). latch를 받지 않으며, 진행 중인 쓰기를 마친 스레드가 깨운다. READ latch는 flush를 막지 않으므로 reader가 들어와도 FLUSH 대기자는 밀리지 않는다.
+_Avoid_: flush latch 보유자(FLUSH는 대기 모드일 뿐 latch로 쥐지 않는다)
+
+**대기자 표시 (waiter_exists)**:
+latch 상태 word에 든 비트로, R/W 대기자가 있어 lock-free READ fix와 대기 없는 READ 합류를 막아야 함을 뜻한다. FLUSH 대기자는 켜지 않는다(CBRD-27971 결정 D1).
+_Avoid_: 대기열 비어 있지 않음(FLUSH 대기자만 있어도 대기열은 비어 있지 않다)
