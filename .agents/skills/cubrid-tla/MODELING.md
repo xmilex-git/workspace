@@ -52,6 +52,9 @@ Answer each row in MAP.md's fault table as modeled, or not applicable with the r
 | vacuum | every version a snapshot of the change can read |
 | checkpoint, page flush, page replacement | every page fixed without being pinned across the step |
 | HA log apply | replicated state the change reads on a slave |
+| nested statement (SP SQL from the client) | the READ COMMITTED statement snapshot the change reads |
+
+- A model that reads the READ COMMITTED statement snapshot gives the fault table a row for a nested statement (an SP's SQL sent by the client) that invalidates and rebuilds it mid-statement (`network_sr.c` `logtb_invalidate_snapshot_data`), and a claim that the snapshot stays put names that row's scope. (P55)
 
 ## Fairness
 

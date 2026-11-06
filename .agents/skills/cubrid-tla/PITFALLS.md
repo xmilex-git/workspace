@@ -291,3 +291,14 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: A trace spec whose inputs the build does not log (a decision's input classes chosen in `Init`) starts from initial states the run contradicts, which stop at the first event: its `witness-trace-*` cfgs carry `CHECK_DEADLOCK FALSE` with a `deadlock-off` reason, or TLC reports that dead end as a deadlock before the run is consumed.
 - Applies at: TRACE.md (3. Check)
 - Case (2026-11-06, PR #8364 review, `bv-last-row`): `BvLastRow` chooses six booleans (reads-scan, optimizable, count-star, batchable, parallelable, always-false) in `Init`; the instrumented build logs only their effects (`Gen f=1 ao=0`, `Path serial`). All five `witness-trace-*` cfgs failed `got=[deadlock] depth=1` on initial states such as `readsScan = FALSE`, which the first `Gen f=1` event cannot follow. With `CHECK_DEADLOCK FALSE` and a `deadlock-off` reason each run was accepted (`violation TraceNotDone`, depth 8-10), and the three corrupted runs were still refused.
+
+### P54 — an env-gated delay holds the racing session too
+- Rule: An env-gated delay at a shared step holds every statement that reaches it, the racing session's included: the racing session's statements carry a hint that keeps them off the delayed path (`/*+ no_parallel_scan */`), and the report reads both sessions' elapsed times before counting a run.
+- Applies at: TRACE.md (4. Reproducing a hole)
+- Case (2026-11-06, CBRD-27967 fail-before): `CUBRID_TLA_PX_OPEN_DELAY_MS=5000` after `scan_open_parallel_heap_scan`; session B's `insert into t select * from src` was itself a parallel heap scan, waited the same 5 s (2000 rows affected, 5.136 s) and committed after A ended, so develop showed `5000 0 1` three times. With `select /*+ no_parallel_scan */` in B, develop gave `5003 4 0` 3/3 and B took 0.08 s.
+
+### P55 — the READ COMMITTED snapshot has a nested-statement fault
+- Rule: A model that reads the READ COMMITTED statement snapshot gives the fault table a row for a nested statement (an SP's SQL sent by the client) that invalidates and rebuilds it mid-statement (`network_sr.c` `logtb_invalidate_snapshot_data`), and a claim that the snapshot stays put names that row's scope.
+- Applies at: MODELING.md (fault checklist)
+- Case (2026-11-06, CBRD-27967 design): the fault table had no such row, so C2 ("one snapshot per statement") and a worker-side assert built on it were settled in grilling. A probe run of `select /*+ parallel(4) */ f27967 (b.id), b.id from t b where b.id < 4` (the function runs a SELECT) logged one `snapshot_built` per SP call after `L_open snapshot_valid=1`; the assert was dropped and C2/C4 were scoped to statements without a nested statement (`Nested`, two witness cfgs).
+
