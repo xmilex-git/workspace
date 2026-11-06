@@ -41,6 +41,7 @@ tools/tla/trace2tla <Module>TraceData OkTrace=<run1.log> [Run2=<run2.log> ...] >
 - `Hidden`: actions the build does not log fire with `UNCHANGED i`; keep this set as small as the
   instrumentation allows, since each hidden action widens what the trace can match.
 - `TraceNotDone == i < Len(TraceLog)`.
+- A trace spec builds the values an event leaves open from the event's own fields (its types, codesets and flags fixed, only the unlogged numbers chosen), never by filtering the spec's whole input set per event: `tools/tla/tla-check` runs TLC with `-coverage 60`, under which a filter over every input value advances about one event a minute. (P51)
 
 | cfg | Expectation | Meaning |
 |---|---|---|
