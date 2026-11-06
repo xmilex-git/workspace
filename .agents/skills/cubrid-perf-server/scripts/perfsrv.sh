@@ -110,21 +110,24 @@ r_reserve() {
   echo "RESERVED $line"
 }
 
-r_write_scripts() {  # cleanup.sh carries the run dir as a literal path; watchdog.sh enforces the end time
+r_write_scripts() { r_write_cleanup "$1"; r_write_watchdog "$1"; }
+
+r_write_cleanup() {  # cleanup.sh carries the run dir as a literal path
   local R=$1
   cat > "$R/cleanup.sh" <<EOF
 #!/bin/bash
 # stops every process of run $R and deletes the run dir; prints a CLEANUP verdict
 base=\$(cat $R/home-baseline.txt)
-for g in \$(cat $R/pgids); do kill -TERM -- -\$g 2>/dev/null; done
-sleep 5
-for g in \$(cat $R/pgids); do kill -KILL -- -\$g 2>/dev/null; done
+# servers first, while their cub_master (a member of an exec's process group) still runs
 for p in /proc/[0-9]*; do
   exe=\$(readlink \$p/exe 2>/dev/null) || continue
   case \$exe in $R/install-*/bin/cub_server) ;; *) continue ;; esac
   i=\${exe%/bin/cub_server}; db=\$(tr '\0' ' ' < \$p/cmdline | awk '{print \$2}')
-  CUBRID=\$i CUBRID_DATABASES=$R/databases LD_LIBRARY_PATH=\$i/lib timeout 120 \$i/bin/cubrid server stop \$db > /dev/null 2>&1
+  CUBRID=\$i CUBRID_DATABASES=$R/databases CUBRID_TMP=$R/tmp LD_LIBRARY_PATH=\$i/lib timeout 120 \$i/bin/cubrid server stop \$db > /dev/null 2>&1 || kill -TERM \${p#/proc/}
 done
+for g in \$(cat $R/pgids); do kill -TERM -- -\$g 2>/dev/null; done
+sleep 5
+for g in \$(cat $R/pgids); do kill -KILL -- -\$g 2>/dev/null; done
 for p in /proc/[0-9]*; do case \$(readlink \$p/exe 2>/dev/null) in $R/*) kill -KILL \${p#/proc/} 2>/dev/null ;; esac; done
 sleep 1
 rm -rf $R
@@ -132,6 +135,10 @@ rmdir $RROOT 2>/dev/null
 left=\$(for p in /proc/[0-9]*; do readlink \$p/exe 2>/dev/null; done | grep -c '^$R/')
 if [ "\$(ls -1A ~)" = "\$base" ] && [ "\$left" = 0 ]; then echo "CLEANUP OK"; else echo "CLEANUP DIFF leftovers=\$left"; diff <(echo "\$base") <(ls -1A ~); fi
 EOF
+}
+
+r_write_watchdog() {  # watchdog.sh enforces the end time
+  local R=$1
   {
     echo '#!/bin/bash'
     echo "# enforces the reservation end of $R: extends by 1h while busy and free, else cleans up at the end"
@@ -206,7 +213,7 @@ r_status() {
 remote() {  # node function args... — runs a node function over ssh; stdin passes through
   local h=$1; shift
   local script
-  script="$(declare -p SCHED OWNER RROOT); $(declare -f r_others r_foreign r_busy r_replace_line r_active r_conf r_reserve r_write_scripts r_push r_exec r_conf_cmd r_release r_status); $(printf '%q ' "$@")"
+  script="$(declare -p SCHED OWNER RROOT); $(declare -f r_others r_foreign r_busy r_replace_line r_active r_conf r_reserve r_write_scripts r_write_cleanup r_write_watchdog r_push r_exec r_conf_cmd r_release r_status); $(printf '%q ' "$@")"
   ssh "${SSHO[@]}" "cubrid@$h" "bash -c $(printf '%q' "$script")"
 }
 

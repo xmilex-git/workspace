@@ -50,10 +50,10 @@ All commands are `S=.agents/skills/cubrid-perf-server/scripts/perfsrv.sh`, run f
    Server start/stop go inside the command with their output redirected to a file — `cubrid server start` holding the ssh pipe hangs the call (P3).
    Detached work on a node is a simple command with its own redirection, never a backgrounded `&&` chain (P1).
 4. **Release.** `$S release <run>` pulls `out/`, stops the watchdog, sets the line's end to now, stops every
-   process of the run (command groups, then `cubrid server stop` for each of the run's `cub_server`, then kill
-   by exe path under the run dir), deletes the run dir with a literal `rm -rf`, and prints `CLEANUP OK` only
+   process of the run, deletes the run dir with a literal `rm -rf`, and prints `CLEANUP OK` only
    when `ls -1A ~` equals the listing taken before the reservation and no run process is left. A
    `CLEANUP DIFF` is reported and fixed before the task closes.
+   The run's servers stop first, through `cubrid server stop` while their `cub_master` still runs, then the exec process groups, then every process whose exe lies under the run dir (P5).
 
 Completion: `RELEASED` printed, `CLEANUP OK`, and the run's results in `/home/cubrid/perf-run-out/<run-id>/`.
 

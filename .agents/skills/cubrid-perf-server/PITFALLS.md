@@ -30,3 +30,9 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Standard conf
 - Case (2026-11-06, user decision): QAHome runs `data_buffer_size=15G`; the containers' `memory.max` is 17179869184, leaving ~1 GiB for the server's threads, sort buffers and eight concurrent loaddb clients — an OOM kill during the load. The user approved 12G and kept `parallelism=32` for plan parity with QA.
 - Source: this session
+
+### P5 — the exec group holds `cub_master`
+- Rule: The run's servers stop first, through `cubrid server stop` while their `cub_master` still runs, then the exec process groups, then every process whose exe lies under the run dir (P5).
+- Applies at: Steps 4 (Release) and the watchdog's cleanup
+- Case (2026-11-06, TPC-H 99fa309 vs develop): killing the exec's process group to restart a pass also killed `cub_master` (it does not leave the group), so `cubrid server stop` answered "Could not connect to master server" and the server on the shared SF10 DB was left to a signal; `timeout` puts `csql` in its own group, so the csql survived the group kill too. SIGTERM ended the server in 3 s; cleanup.sh now stops servers first and falls back to SIGTERM, and the exe-path kill catches what `timeout` moved out of the group.
+- Source: this session
