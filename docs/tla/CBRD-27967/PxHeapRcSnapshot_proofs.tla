@@ -1,7 +1,8 @@
 ---------------------- MODULE PxHeapRcSnapshot_proofs ----------------------
 (* TLAPS proof that IndInv is an inductive invariant of the fix (the snapshot
    exists before any bitmap is collected, and every build is one test-and-build
-   step) and that it implies C1 (SameAsSnapshot) and C2 (SnapshotStable), for
+   step) and that it implies C1 (SameAsSnapshot), C2 (SnapshotStable) and C4
+   (WorkerReuses), for statements without a nested statement (~Nested) and
    any number of scans, workers, pages and rows: the premises of the TLA rule
    INV1 (cubrid-tla PROOFS.md). One lemma per action; within it each typing part
    and each conjunct of IndInv is its own step (cubrid-tla P4, P15). *)
@@ -10,7 +11,7 @@ EXTENDS PxHeapRcSnapshot, TLAPS
 
 \* the fix variants: SnapshotAt = "collect" with the leader's build under the mutex,
 \* SnapshotAt = "query_start", or REPEATABLE READ; OtherPx either way
-ASSUME Fix == CollectNeedsSnap /\ (~LeaderLock => ~LeaderBuilds) /\ Mutant = "none"
+ASSUME Fix == CollectNeedsSnap /\ (~LeaderLock => ~LeaderBuilds) /\ Mutant = "none" /\ ~Nested
 
 USE Assm, Fix DEF Rows, Pages, RIdx, PIdx, NoPage
 
@@ -662,6 +663,10 @@ LEMMA LVacuumPage == ASSUME NEW pg \in Pages PROVE IndInv /\ VacuumPage(pg) => I
 <1>20. R_done' BY <1>1, <1>2, <1>3, RowFacts, PageFacts DEF IndInv, TypeOK, BoolOK, NatOK, SetOK, R_fix, R_snap, R_q, R_lsnap, R_clock, R_order, R_home, R_init, R_gone, R_alloc, R_vis, R_open, R_start, R_left, R_bitmap, R_count, R_done, VisibleAt, Build, IsInit, Page, AllDone, scanVars, PageEmpty, VacuumPage
 <1>. QED BY <1>1, <1>2, <1>3, <1>4, <1>5, <1>6, <1>7, <1>8, <1>9, <1>10, <1>11, <1>12, <1>13, <1>14, <1>15, <1>16, <1>17, <1>18, <1>19, <1>20 DEF IndInv, TypeOK
 
+LEMMA LNested == IndInv /\ NestedInvalidate => IndInv'
+  BY DEF NestedInvalidate
+
+
 \* ---- the INV1 premises ----
 THEOREM StepInv == IndInv /\ [Next]_vars => IndInv'
 <1> SUFFICES ASSUME IndInv, [Next]_vars PROVE IndInv'
@@ -677,7 +682,8 @@ THEOREM StepInv == IndInv /\ [Next]_vars => IndInv'
 <1>7. CASE \E r \in Rows : Delete(r) BY <1>7, LDelete
 <1>8. CASE \E pg \in Pages : VacuumRows(pg) \/ VacuumPage(pg) BY <1>8, LVacuumRows, LVacuumPage
 <1>9. CASE UNCHANGED vars BY <1>9, LUnchanged
-<1>. QED BY <1>1, <1>2, <1>3, <1>4, <1>5, <1>6, <1>7, <1>8, <1>9 DEF Next, ScanStep
+<1>10. CASE NestedInvalidate BY <1>10, LNested
+<1>. QED BY <1>1, <1>2, <1>3, <1>4, <1>5, <1>6, <1>7, <1>8, <1>9, <1>10 DEF Next, ScanStep
 
 THEOREM Safe == Spec => []IndInv
   BY InitInv, StepInv, PTL DEF Spec
@@ -719,7 +725,8 @@ THEOREM StepStable == IndInv /\ [Next]_vars => [snap # 0 => snap' = snap]_vars
 <1>7. CASE \E r \in Rows : Delete(r) BY <1>7 DEF Delete
 <1>8. CASE \E pg \in Pages : VacuumRows(pg) \/ VacuumPage(pg) BY <1>8 DEF VacuumRows, VacuumPage
 <1>9. CASE UNCHANGED vars BY <1>9 DEF vars
-<1>. QED BY <1>1, <1>2, <1>3, <1>4, <1>5, <1>6, <1>7, <1>8, <1>9 DEF Next, ScanStep
+<1>10. CASE NestedInvalidate BY <1>10 DEF NestedInvalidate
+<1>. QED BY <1>1, <1>2, <1>3, <1>4, <1>5, <1>6, <1>7, <1>8, <1>9, <1>10 DEF Next, ScanStep
 
 \* C4: a heap worker reuses the snapshot the leader built
 THEOREM StepReuse == IndInv /\ [Next]_vars => [\A s \in Scans, w \in Workers : Start(s, w) => snap # 0]_vars

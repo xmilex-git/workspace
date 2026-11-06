@@ -1,0 +1,50 @@
+diff --git a/src/query/parallel/px_scan/px_scan.cpp b/src/query/parallel/px_scan/px_scan.cpp
+index 1f89ba5b6..44c564b29 100644
+--- a/src/query/parallel/px_scan/px_scan.cpp
++++ b/src/query/parallel/px_scan/px_scan.cpp
+@@ -21,6 +21,10 @@
+  */
+ 
+ #include "px_scan.hpp"
++#include <cstdlib>
++#include <cstdio>
++#include <unistd.h>
++#include "log_impl.h"
+ 
+ #include "error_code.h"
+ #include "object_primitive.h"
+@@ -603,6 +607,19 @@ extern "C"
+ 
+     scan_id->type = S_PARALLEL_HEAP_SCAN;
+ 
++    {
++      /* TLA+ probe (scratch only): widen the window between the bitmap and the first snapshot */
++      LOG_TDES *tla_tdes = LOG_FIND_TDES (LOG_FIND_THREAD_TRAN_INDEX (thread_p));
++      fprintf (stderr, "TLATRACE a=L_open p=leader tran=%d snapshot_valid=%d\n", LOG_FIND_THREAD_TRAN_INDEX (thread_p),
++	       tla_tdes != NULL ? (int) tla_tdes->mvccinfo.snapshot.valid : -1);
++      fflush (stderr);
++      const char *tla_delay = getenv ("CUBRID_TLA_PX_OPEN_DELAY_MS");
++      if (tla_delay != NULL)
++	{
++	  usleep ((useconds_t) atoi (tla_delay) * 1000);
++	}
++    }
++
+     ASSERT_NO_ERROR_OR_INTERRUPTED ();
+     return NO_ERROR;
+   }
+diff --git a/src/transaction/log_tran_table.c b/src/transaction/log_tran_table.c
+index 83122266c..da18b621c 100644
+--- a/src/transaction/log_tran_table.c
++++ b/src/transaction/log_tran_table.c
+@@ -4397,6 +4397,10 @@ logtb_get_mvcc_snapshot (THREAD_ENTRY * thread_p)
+   if (!tdes->mvccinfo.snapshot.valid)
+     {
+       log_Gl.mvcc_table.build_mvcc_info (*tdes);
++      /* TLA+ probe (scratch only) */
++      fprintf (stderr, "TLATRACE a=snapshot_built p=%s tran=%d\n", main_thread_p != NULL ? "px_worker" : "own_thread",
++	       LOG_FIND_THREAD_TRAN_INDEX (thread_p));
++      fflush (stderr);
+     }
+ 
+   if (main_thread_p != NULL)

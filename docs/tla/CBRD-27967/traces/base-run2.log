@@ -1,0 +1,2 @@
+TLATRACE a=L_open p=leader tran=1 snapshot_valid=0
+TLATRACE a=snapshot_built p=px_worker tran=1

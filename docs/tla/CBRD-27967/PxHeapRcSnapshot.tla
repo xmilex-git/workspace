@@ -20,11 +20,16 @@
      OtherPx     another parallel operator's worker of the same statement may
                  build the snapshot at any time (under the mutex)
      Mutant      "none" | "collect_without_build": the leader requires a valid
-                 snapshot before collecting but does not build one *)
+                 snapshot before collecting but does not build one
+   Environment:
+     Nested      an SP in the statement runs SQL from the client, which
+                 invalidates the statement's snapshot (READ COMMITTED,
+                 network_sr.c:924) for the next builder to rebuild; existing
+                 behavior the claims leave out of scope *)
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS Scans, Workers, NPages, NInit, NNew, VacuumRounds,
-          Isolation, SnapshotAt, LeaderLock, OtherPx, Mutant
+          Isolation, SnapshotAt, LeaderLock, OtherPx, Mutant, Nested
 
 \* Types for Apalache (tools/tla/apalache-types writes them into the declarations).
 \* apalache-type: Scans Set(Str)
@@ -38,6 +43,7 @@ CONSTANTS Scans, Workers, NPages, NInit, NNew, VacuumRounds,
 \* apalache-type: LeaderLock Bool
 \* apalache-type: OtherPx Bool
 \* apalache-type: Mutant Str
+\* apalache-type: Nested Bool
 \* apalache-type: alloc <<Str, Int>> -> Bool
 \* apalache-type: home <<Str, Int>> -> Int
 \* apalache-type: insC <<Str, Int>> -> Int
@@ -64,6 +70,7 @@ ASSUME Assm ==
   /\ SnapshotAt \in {"worker_start", "collect", "query_start"}
   /\ LeaderLock \in BOOLEAN /\ OtherPx \in BOOLEAN
   /\ Mutant \in {"none", "collect_without_build"}
+  /\ Nested \in BOOLEAN
 
 PIdx == 1..NPages
 Pages == Scans \X PIdx                     \* page <<s, i>>: page i of scan s's heap
@@ -187,6 +194,12 @@ OtherBuild ==
   /\ snap' = Build
   /\ UNCHANGED <<dataVars, readCnt, rounds, qstarted, scanVars>>
 
+\* an SP's SQL, sent by the client, invalidates the statement's snapshot (logtb_invalidate_snapshot_data)
+NestedInvalidate ==
+  /\ Nested /\ qstarted /\ ~AllDone /\ snap > 0
+  /\ snap' = 0
+  /\ UNCHANGED <<dataVars, readCnt, rounds, qstarted, otherDone, scanVars>>
+
 \* ---- other transactions and vacuum ----
 \* @type: (<<Str, Int>>, Int) => Bool;
 Insert(r, i) ==
@@ -230,6 +243,7 @@ Next ==
   \/ Terminated
   \/ ScanStep
   \/ OtherBuild
+  \/ NestedInvalidate
   \/ \E r \in Rows, i \in PIdx : Insert(r, i)
   \/ \E r \in Rows : Delete(r)
   \/ \E pg \in Pages : VacuumRows(pg) \/ VacuumPage(pg)
@@ -259,18 +273,19 @@ TypeOK == BoolOK /\ NatOK /\ SetOK
 SameAsSnapshot ==
   \A s \in Scans : done[s] => \A r \in Rows : r[1] = s => readCnt[r] = IF VisibleAt(r, snap) THEN 1 ELSE 0
 
-\* C2: once built, the statement's snapshot never changes (one snapshot per statement).
+\* C2: once built, the statement's snapshot never changes (one snapshot per statement);
+\* for statements without a nested statement (Nested = FALSE).
 SnapshotStable == [][snap # 0 => snap' = snap]_vars
 
 \* C4: a heap worker never builds the snapshot; it reuses the one the leader built
-\* (the fix's optdebug assert before px_scan_task.cpp's heap scan_start_scan).
+\* (statements without a nested statement; with one, a late worker may rebuild it).
 WorkerReuses == [][\A s \in Scans, w \in Workers : Start(s, w) => snap # 0]_vars
 
 \* C3: every scan of the statement finishes.
 StatementFinishes == <>AllDone
 
 \* ---- inductive invariant of the fix (SnapshotAt = "collect", LeaderLock, Mutant = "none") ----
-R_fix == CollectNeedsSnap /\ (~LeaderLock => ~LeaderBuilds) /\ Mutant = "none"
+R_fix == CollectNeedsSnap /\ (~LeaderLock => ~LeaderBuilds) /\ Mutant = "none" /\ ~Nested
 R_snap == clock > 0 /\ snap <= clock /\ (\A s \in Scans : opened[s] => snap > 0)
 R_q == ~qstarted => snap = 0 /\ (\A s \in Scans : ~opened[s] /\ lsnap[s] = "idle")
 R_lsnap == \A s \in Scans : lsnap[s] # "saw_invalid" /\ (lsnap[s] = "built" => snap > 0)
@@ -310,5 +325,5 @@ CInit ==
   /\ Scans = {"s1", "s2"} /\ Workers = {"w1", "w2"}
   /\ NPages = 2 /\ NInit = 1 /\ NNew = 1 /\ VacuumRounds \in Nat
   /\ Isolation = "READ_COMMITTED" /\ SnapshotAt = "collect" /\ LeaderLock = TRUE /\ OtherPx = TRUE
-  /\ Mutant = "none"
+  /\ Mutant = "none" /\ Nested = FALSE
 =============================================================================
