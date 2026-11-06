@@ -1,6 +1,6 @@
 ---
 name: cubrid-tla
-description: "Verify a CUBRID design or code change in TLA+ — model it from the code, model-check it with TLC, prove its safety invariant with TLAPS, validate recorded runs against it, and hunt the holes (races, lost wakeups, deadlocks, use-after-free, lost errors, crash and vacuum interleavings, unhandled input classes). Use when designing or changing concurrent or stateful engine logic (latches, locks, MVCC/vacuum, parallel query workers, WAL/recovery, state machines, decision tables), when asked to \"TLA+로 검증\", \"모델 체킹\", \"증명해줘\", \"설계 구멍 찾아\", and as the TLA+ step of cubrid-pr-review and grill-with-tla."
+description: "Verify a CUBRID design or code change in TLA+ — model it from the code, model-check it with TLC, check its inductive invariant with Apalache (TLAPS proof only on an explicit request), validate recorded runs against it, and hunt the holes (races, lost wakeups, deadlocks, use-after-free, lost errors, crash and vacuum interleavings, unhandled input classes). Use when designing or changing concurrent or stateful engine logic (latches, locks, MVCC/vacuum, parallel query workers, WAL/recovery, state machines, decision tables), when asked to \"TLA+로 검증\", \"모델 체킹\", \"증명해줘\", \"설계 구멍 찾아\", and as the TLA+ step of cubrid-pr-review and grill-with-tla."
 argument-hint: "<spec dir> | <claim or ticket to model>"
 allowed-tools: Bash(tools/tla/*), Bash(just tla-*), Bash(tools/code-index/*), Bash(git *), Read, Write, Edit, Glob, Grep, Skill
 ---
@@ -23,16 +23,19 @@ rule, or as a new rule added to both files in one commit.
   (tlapm 1.6.0-pre with Isabelle2025, LS4, Zenon and Z3, the release build re-linked against nixpkgs' glibc in
   `tools/tla/tlapm-next.nix`) and Apalache 0.62.4 (`tools/tla/apalache.nix`), pinned in
   `tools/tla/tools.nix`, GC root `.git_ignored_dir/tla/tools`.
-- `tools/tla/tla-check [--workers N] [--heap SIZE] [--stretch F] DIR...` (or `just tla-check DIR...`)
-  translates PlusCal, runs every cfg, proves every theorem and checks completeness. Evidence goes to
+- `tools/tla/tla-check [--prove] [--workers N] [--heap SIZE] [--stretch F] DIR...` (or `just tla-check DIR...`)
+  translates PlusCal, runs every cfg, proves every theorem only with `--prove`, and checks completeness.
+  `--only GLOB` reruns the matching cfgs or proof modules while iterating; it ends in `RESULT: PARTIAL`,
+  never a result. Evidence goes to
   `.git_ignored_dir/scratch/tla/<dir>-<stamp>/`; read only the `PASS`/`FAIL` lines and the last line.
 - `tools/tla/trace2tla <Module> <Op>=<log>...` turns `TLATRACE` lines of an instrumented run into a
   TLA+ data module (`TRACE.md`).
 - `just tla-selftest` runs `examples/`; run it after touching `tools/tla/` or this skill's rules.
+- TLAPS runs only when the user's own message explicitly asks for a proof ("TLAPS", "증명해줘", "명확히 검증해줘"): then `tools/tla/tla-check --prove` proves every proof module and requires one; otherwise no proof module is written, step 6 ends at the inductive cfgs, and the report says TLAPS 요청 없음. A generic "TLA+로 검증", a skill, a ticket or a review step never counts as that request. (P48)
 - TLC and tlapm run only through `tools/tla/tla-check`, whose verdict is read per cfg and per obligation, never from a tool's exit status. (P1)
 - Change `tools/tla/tla-check` by writing a new file and renaming it over the old one: bash reads a running script from its open file, so an in-place rewrite corrupts the runs other sessions have in flight. (P18)
-- Read the `toolchain:` line and every proof log's `TLAPM version` line: a toolchain install during a run swaps the tools under it, and a run whose modules carry different versions is rerun, never judged. (P41)
-- Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: the PROOFS.md table headed 1.4.5 predates it, and 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run. (P46)
+- A toolchain install during a run swaps the tools under it: with `--prove`, `tools/tla/tla-check` fails a run whose proof logs carry different `TLAPM version` lines, and that run is rerun, never judged. (P41)
+- Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run. (P46)
 - Stop only the processes your own runner started, by the pid it recorded; other sessions run tlapm and TLC on this host at the same time, so never kill by pattern or by a pid read from `ps`. (P29)
 - Size `tools/tla/tla-check --workers` to the free cores for a proof module of more than a few hundred obligations: `--workers` is also tlapm's `--threads` (default 4) and the proof runs under a fixed 1800 s timeout, so at the default a large module ends as a timeout, not a verdict; check `nproc` and the load average first, and give a module that needs longer a `\* timeout: <seconds>` line in its proof file. (P39)
 
@@ -55,9 +58,9 @@ rule, or as a new rule added to both files in one commit.
 | `<Module>.scale-<n>.cfg` | the same check with constants one size up |
 | `<Module>.mutant-<n>.cfg` | one per claim at least: a known-wrong variant (`Mutant` constant) the properties must reject |
 | `<Module>.witness-<n>.cfg` | an outcome that must be reachable, as an invariant `Not<Outcome>` expected violated |
-| `<Module>.inductive-<n>.cfg` | `INIT IndInv`, `NEXT Next`, `INVARIANT IndInv`: TLC's check that IndInv is inductive |
-| `<Module>.apalache-<n>.cfg` | the same check by Apalache over every value of the integer constants (`PROOFS.md`, "Apalache"); counts as an inductive cfg |
-| `<Module>_proofs.tla` | TLAPS proof of the three INV1 premises for the correct variant (`PROOFS.md`) |
+| `<Module>.apalache-<n>.cfg` | `INIT IndInv`, `NEXT Next`, `INVARIANT IndInv` checked by Apalache over every value of the integer constants (`PROOFS.md`, "Apalache"): the inductive check |
+| `<Module>.inductive-<n>.cfg` | the same check by TLC, only when IndInv's types do not fit Apalache (P42) |
+| `<Module>_proofs.tla` | only when the user asked for a proof (P48): TLAPS proof of the three INV1 premises for the correct variant (`PROOFS.md`) |
 | `MAP.md` | claims, refinement map, properties, fault model, mutants, witnesses, dead expressions, bounds |
 | trace files (protocol changes) | `<Module>Trace.tla`, its data module, `*.witness-trace-*.cfg`, `*.reject-*.cfg` (`TRACE.md`) |
 
@@ -117,7 +120,6 @@ provides it. Done when every checklist row is answered.
 - Constants: the smallest values that still exhibit each interleaving class: at least 2 of every
   concurrent role (3 when a claim is about "all" or "any other"), every input class of a decision
   (NULL, each type class, boundary values). The scale cfg goes one size up.
-- `TypeOK` split into boolean and integer parts when TLAPS will prove it (P4).
 - Ghost variables flag violations (`uaf`, `badConsume`) and record outcomes for witnesses.
 - `Mutant` is a constant; each mutant re-enables one wrong ordering, missing guard or missing
   check the claims depend on. In a review, the pre-change behavior is a mutant: the defect the
@@ -143,12 +145,13 @@ either adds a cfg that passes or produces a finding:
 5. **Scale.** The scale cfg must pass; a property that fails only at N+1 is a finding.
 6. **Liveness.** A liveness counterexample in the correct model that loops through an unfair lock retake is a fairness assumption to state in MAP.md (and to put to the user when it is a design question), never a reason to weaken the property. (P7)
 
-### 6. Prove
+### 6. Inductive invariant (and proof on request)
 
-Write `IndInv`, check it with the Apalache and TLC inductive cfgs, then prove the INV1 premises and their temporal
-conclusion `Spec => []IndInv` with TLAPS (`PROOFS.md`).
+Write `IndInv` and check it with the Apalache inductive cfg (TLC's only where Apalache cannot type it). Only when the user asked for a
+proof (P48), prove the INV1 premises and their temporal conclusion `Spec => []IndInv` with TLAPS
+(`PROOFS.md`).
 
-- Run the Apalache inductive cfg before the TLC inductive cfg and before TLAPS whenever IndInv's types fit Apalache: it checks every value of the integer constants in seconds, where `INIT IndInv` enumeration takes minutes and a failed TLAPS step tells only that the provers gave up. (P42)
+- The inductive check is the Apalache cfg; write a TLC inductive cfg only when IndInv's types do not fit Apalache: Apalache checks every value of the integer constants in seconds, where TLC's `INIT IndInv` enumeration takes minutes at small constants and a failed TLAPS step tells only that the provers gave up. (P42)
 - An inductive-cfg counterexample from a state the system cannot reach means IndInv is too weak: strengthen IndInv, never the spec, and keep IndInv in the main cfg's INVARIANTS so TLC confirms the strengthened conjunct on every reachable state. (P6)
 - TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish. (P23)
 - An obligation fails until the proof is right: split it, never `OMITTED`, never a weaker theorem.
@@ -184,18 +187,18 @@ recorded as such in the report.
 
 ### 10. Record and report
 
-- A model is a result only once `tools/tla/tla-check` has run it to `RESULT: OK`: TLC on the main and scale cfgs, every mutant rejected, every witness reached, IndInv inductive (Apalache, then TLC), TLAPS proving the INV1 theorems, and trace validation where step 8 requires it; a spec written but not run, or run without its proof, is reported as 미완, never as verified. (P45)
+- A model is a result only once `tools/tla/tla-check` has run it to `RESULT: OK`: TLC on the main and scale cfgs, every mutant rejected, every witness reached, IndInv inductive (Apalache, or TLC where Apalache cannot type IndInv), TLAPS proving the INV1 theorems when the user asked for a proof (P48), and trace validation where step 8 requires it; a spec written but not run, or run without a proof the user asked for, is reported as 미완, never as verified. (P45)
 
 MAP.md's last section, `## Result`, holds the facts: date, `RESULT: OK` line, run dir, per-cfg
-states and depth, obligations proved, the spec sha256 lines from `summary.txt`, the engine sha and
+states and depth, obligations proved (or TLAPS 요청 없음), the spec sha256 lines from `summary.txt`, the engine sha and
 build the trace ran on. The report (review or design) carries a TLA+ block in Korean:
 
 ```
 TLA+ 검증: <통과 | 실패 | 미완> — <spec dir>
-- 속성: C1 <safety|liveness> <TLC 통과|실패> <TLAPS: 이 spec | 추상 spec + TLC refinement | 없음> ... (claim별 한 줄, 출처)
+- 속성: C1 <safety|liveness> <TLC 통과|실패> <TLAPS: 이 spec | 추상 spec + TLC refinement | 요청 없음> ... (claim별 한 줄, 출처)
 - 결함: <없음 | H<n> 코드 cfg 실패, 런타임 재현(빌드 fingerprint, 결과), 후보 수정 cfg 통과>
 - mutant: <n>개 모두 위반 검출 / 살아남은 mutant: <없음 | 목록>
-- 경계: <상수>, scale <상수>; TLAPS는 safety (`Spec => []IndInv`), liveness는 공정성 증명을 쓴 claim만 (나머지는 TLC 경계 안에서만)
+- 경계: <상수>, scale <상수>; IndInv 귀납성은 Apalache로 정수 상수 전 범위(역할 집합 크기는 고정); TLAPS(요청 시)는 safety (`Spec => []IndInv`), liveness는 공정성 증명을 쓴 claim만 (나머지는 TLC 경계 안에서만)
 - trace validation: <수용 n건, 거부 n건 | 해당 없음(이유)>
 - 반례: <없음 | 분류와 재현 여부>
 ```

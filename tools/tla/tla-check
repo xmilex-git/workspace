@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# usage: tools/tla/tla-check [--workers N] [--heap SIZE] [--stretch F] DIR...
+# usage: tools/tla/tla-check [--prove] [--only GLOB] [--workers N] [--heap SIZE] [--stretch F] DIR...
 #
 # Checks every spec directory given against the cubrid-tla skill's definition of a verified model:
 #   1. PlusCal: every .tla holding an algorithm is translated in place (its .old backup moves into the run dir).
@@ -22,16 +22,19 @@
 #      (--cinit=<op> --length=1 for the inductive check), on a run-dir copy whose CONSTANTS and
 #      VARIABLES declarations tools/tla/apalache-types annotated from the spec's
 #      `\* apalache-type: <name> <type>` lines. It counts as an inductive cfg.
-#   3. TLAPS: every .tla holding a THEOREM is proved by tlapm (Z3, Zenon, Isabelle, LS4) on a copy in the run dir;
+#   3. TLAPS, only with --prove (the user asked for a proof, cubrid-tla P48): every .tla holding a THEOREM is proved by tlapm (Z3, Zenon, Isabelle, LS4) on a copy in the run dir;
 #      every obligation must come back proved — none failed, none OMITTED. A proof module's
 #      `\* timeout: <seconds>` line (default 1800) bounds its tlapm run, as a cfg's does TLC's.
 #   4. Completeness: only *.mutant-* and *.witness-* cfgs may expect an error. The directory holds
 #      MAP.md, a pass cfg, a mutant cfg (*.mutant-*.cfg expecting an error), a witness cfg
-#      (*.witness-*.cfg expecting a violation), an inductive cfg (*.inductive-*.cfg expecting pass),
+#      (*.witness-*.cfg expecting a violation), an inductive cfg (*.apalache-*.cfg, or *.inductive-*.cfg, expecting pass),
 #      a scale cfg (*.scale-*.cfg expecting pass, whose CONSTANT lines differ from the
-#      main <Module>.cfg: the same check one size up) and a proof module; a directory with a trace
+#      main <Module>.cfg: the same check one size up) and, with --prove, a proof module; a directory with a trace
 #      witness also holds a reject cfg. Every claim id (| C<n> |) in MAP.md's "## Claim" section must
 #      appear in its "## Mutants" section: a claim no mutant kills has not been shown checkable.
+# --only GLOB runs only the cfgs (name without .cfg) and proof modules (name without .tla) GLOB matches,
+# for iterating on one check; its last line is RESULT: PARTIAL, never RESULT: OK.
+# With --prove, proof logs that carry different TLAPM versions fail the run (cubrid-tla P41).
 # A cfg with both SYMMETRY and PROPERTY is refused: TLC's liveness check is unsound under symmetry.
 # Evidence (logs, summary.txt with the spec sha256) goes to .git_ignored_dir/scratch/tla/<dir>-<stamp>/;
 # the last line printed is RESULT: OK or RESULT: FAILED (<n>).
@@ -46,10 +49,14 @@ java="$(/usr/bin/grep -o '/nix/store/[^" ]*/bin/java' "$tools/bin/tlc" | head -1
 
 workers="${TLA_WORKERS:-4}"
 heap="${TLA_HEAP:-8g}"
+prove=0
+only=""
 stretch="${TLA_STRETCH:-1}"
 dirs=()
 while [ $# -gt 0 ]; do
   case "$1" in
+    --prove) prove=1; shift ;;
+    --only) only="$2"; shift 2 ;;
     --workers) workers="$2"; shift 2 ;;
     --heap) heap="$2"; shift 2 ;;
     --stretch) stretch="$2"; shift 2 ;;
@@ -57,7 +64,7 @@ while [ $# -gt 0 ]; do
     *) dirs+=("$1"); shift ;;
   esac
 done
-[ ${#dirs[@]} -gt 0 ] || { echo "usage: $0 [--workers N] [--heap SIZE] [--stretch F] DIR..." >&2; exit 2; }
+[ ${#dirs[@]} -gt 0 ] || { echo "usage: $0 [--prove] [--only GLOB] [--workers N] [--heap SIZE] [--stretch F] DIR..." >&2; exit 2; }
 
 failures=0
 fail() { echo "FAIL $*"; failures=$((failures + 1)); }
@@ -109,7 +116,7 @@ for arg in "${dirs[@]}"; do
   [ $npass -gt 0 ] || fail "$dir: no pass cfg (<Module>.cfg with '\\* expect: pass')"
   [ $nmut -gt 0 ] || fail "$dir: no mutant cfg (<Module>.mutant-<name>.cfg expecting an error)"
   [ $nwit -gt 0 ] || fail "$dir: no witness cfg (<Module>.witness-<name>.cfg expecting a violation)"
-  [ $nind -gt 0 ] || fail "$dir: no inductive cfg (<Module>.inductive-<name>.cfg: INIT TypeOK /\\ IndInv, expecting pass)"
+  [ $nind -gt 0 ] || fail "$dir: no inductive cfg (<Module>.apalache-<name>.cfg, or <Module>.inductive-<name>.cfg where Apalache cannot type IndInv: INIT IndInv, expecting pass)"
   if [ -f "$dir/MAP.md" ]; then
     claims="$(awk '/^## /{sec=$0} sec ~ /^## Claim/ && /^\| *C[0-9]+ *\|/{gsub(/[| ]/,"",$2); print $2}' FS='|' "$dir/MAP.md" | sort -u)"
     [ -n "$claims" ] || fail "$dir: MAP.md has no '## Claim' table rows (| C1 | ... |)"
@@ -120,7 +127,7 @@ for arg in "${dirs[@]}"; do
   fi
   [ $nscale -gt 0 ] || fail "$dir: no scale cfg (<Module>.scale-<name>.cfg expecting pass, constants one size above <Module>.cfg)"
   [ $ntrace -eq 0 ] || [ $nrej -gt 0 ] || fail "$dir: trace witness without a reject cfg (a corrupted trace the spec must refuse)"
-  [ $nproof -gt 0 ] || fail "$dir: no proof module (a .tla with the TLAPS THEOREMs for IndInv)"
+  [ $prove -eq 0 ] || [ $nproof -gt 0 ] || fail "$dir: no proof module (a .tla with the TLAPS THEOREMs for IndInv)"
 
   # 1. PlusCal translation, in place.
   for t in "${tlas[@]}"; do
@@ -135,6 +142,7 @@ for arg in "${dirs[@]}"; do
   # 2. TLC: every cfg against its expectation.
   for c in "${cfgs[@]}"; do
     name="$(basename "$c" .cfg)"
+    [ -z "$only" ] || [[ "$name" == $only ]] || continue
     module="${name%%.*}"
     log="$run/$name.log"
     expect="$(head -1 "$c" | sed -n 's/^\\\* expect: *//p')"
@@ -164,7 +172,7 @@ for arg in "${dirs[@]}"; do
       if [ "$got" = "$expect" ]; then echo "PASS $line"; else fail "$line"; fi
       continue
     fi
-    if /usr/bin/grep -q '^ *SYMMETRY' "$c" && /usr/bin/grep -q '^ *PROPERTY' "$c"; then
+    if /usr/bin/grep -q '^ *SYMMETRY' "$c" && /usr/bin/grep -qE '^ *PROPERT(Y|IES)' "$c"; then
       fail "$name: SYMMETRY together with PROPERTY (TLC liveness is unsound under symmetry)"; continue
     fi
     if /usr/bin/grep -q '^ *CHECK_DEADLOCK *FALSE' "$c" && ! /usr/bin/grep -q '^\\\* deadlock-off: *[^ ]' "$c"; then
@@ -210,10 +218,13 @@ for arg in "${dirs[@]}"; do
   done
 
   # 3. TLAPS: prove every module holding a theorem, on a copy (tlapm writes <Module>.tlaps/ beside it).
+  [ $prove -eq 1 ] || [ $nproof -eq 0 ] || echo "skip: TLAPS, $nproof proof module(s) (--prove runs them, cubrid-tla P48)"
   cp "${tlas[@]}" "$run/proof/"
   for t in "${tlas[@]}"; do
+    [ $prove -eq 1 ] || break
     /usr/bin/grep -qE '^ *(THEOREM|LEMMA|PROPOSITION)' "$t" || continue
     name="$(basename "$t" .tla)"
+    [ -z "$only" ] || [[ "$name" == $only ]] || continue
     log="$run/$name.tlapm.log"
     start=$(date +%s)
     mkdir -p "$run/proof/home"
@@ -238,9 +249,14 @@ for arg in "${dirs[@]}"; do
     else fail "$line not proved (line:col):${bad:- see log}"; fi
   done
 
+  if [ $prove -eq 1 ]; then
+    vers="$(cat "$run"/*.tlapm.log 2>/dev/null | sed -n 's/^\\\* TLAPM version *//p' | sort -u)"
+    [ "$(printf '%s' "$vers" | /usr/bin/grep -c .)" -le 1 ] || fail "$dir: proof logs carry different TLAPM versions ($(echo $vers)): a toolchain install ran during the run; rerun (cubrid-tla P41)"
+  fi
   { echo "spec sha256:"; (cd "$dir" && sha256sum *.tla *.cfg MAP.md 2>/dev/null); } > "$run/summary.txt"
   sed 's/^/  /' "$run/summary.txt"
 done
 
+if [ -n "$only" ]; then echo "RESULT: PARTIAL (--only $only; $failures failed)"; [ $failures -eq 0 ]; exit; fi
 if [ $failures -eq 0 ]; then echo "RESULT: OK"; exit 0; fi
 echo "RESULT: FAILED ($failures)"; exit 1

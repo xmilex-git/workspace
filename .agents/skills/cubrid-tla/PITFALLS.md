@@ -27,10 +27,11 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Case (2026-11-05, condvar-handoff): `BoolOK'` would not prove from a step that said `~sleeping'`; the action assigns `sleeping' = FALSE`, and once the step said so the case proved (100/100).
 
 ### P4 — SMT cannot mix boolean typing and integers
-- Rule: split `TypeOK` into a boolean part and an integer part and prove them in separate steps
-- Applies at: PROOFS.md (table); SKILL.md step 4
+- Rule: when such a step times out, split `TypeOK` into a boolean part and an integer part and prove them in separate steps
+- Applies at: PROOFS.md (table)
 - Case (2026-11-05, CBRD-27215/27361 expr-prog-exec, page-batch-walk): `TBool'` failed in ExprProgExec until it stood apart from `TRest`, and in PageBatchWalk the steps for `IFix'`/`IChunk'`/`IPhase'` kept failing (13 of 2749 obligations, `--stretch 5`) while `fixed`/`more`/`learned \in BOOLEAN` sat in those conjuncts; split out as `IFixB`/`IChunkB`/`IPhaseB`.
 - Case (2026-11-05, condvar-handoff): `ASSUME spuriousLeft = MaxSpurious, MaxSpurious \in Nat, locked = FALSE PROVE spuriousLeft \in 0..MaxSpurious /\ locked \in BOOLEAN` timed out in Z3 (30 s with `--stretch 6`) and Zenon exhausted its search; the captured SMT input encoded `locked = FALSE` as `(not (boolify locked))` with no axiom back to `tla__BOOLEAN`. Each half proved alone.
+- Case (2026-11-06, rule review, tlapm 1.6.0-pre): the condvar goal above, verbatim, proved at once (`probe16`, 5 s for four goals); both cases above ran on 1.4.5, so the split is now the fallback for a timeout, not a step every TypeOK takes.
 
 ### P18 — tla-check is replaced, never rewritten in place
 - Rule: Change `tools/tla/tla-check` by writing a new file and renaming it over the old one: bash reads a running script from its open file, so an in-place rewrite corrupts the runs other sessions have in flight.
@@ -114,16 +115,17 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Case (2026-11-05, CBRD-27819 cmp-dispatch): `CONSTANTS Vals = {-10, -5, 0, 5, 10}` stopped every cfg with `ConfigFileException ... expecting }`; `MaxV = 10` with `Vals == {v \in -MaxV..MaxV : v % 5 = 0}` in the spec ran.
 
 ### P20 — decision tables: literal chains, no poisoned facts
-- Rule: A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, boolean assignments written `IF … THEN TRUE ELSE FALSE`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover.
+- Rule: A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover.
 - Applies at: PROOFS.md
 - Case (2026-11-05, CBRD-27819 cmp-dispatch): one obligation per (client, site, type pair) with the whole decision unfolded timed out (34/843 in 1800 s); `conv = <<a # tgt, b # tgt>>` and `[d EXCEPT !.cmp = ...]` failed even for one concrete pair, and `BY <2>1` failed while `<2>1` held `inst' = CASE ...` although the same equality proved from `DEF Install`. With 0/1 flags, fresh records, a generated literal chain per pair and facts taken one by one from the action, 7652/7652 proved in 866 s.
 - Case (2026-11-06, parallel sort merge queue): ghost updates written `poolOver' = (poolOver \/ inf >= PoolSize)` and `err' = (err \/ ~tok[t])` left `poolOver' = FALSE` / `err' = TRUE` unprovable in SMT and Zenon (timeouts on one-line goals); the same updates as `IF inf >= PoolSize THEN TRUE ELSE poolOver` proved at once.
+- Case (2026-11-06, rule review, tlapm 1.6.0-pre): the goal `poolOver' = FALSE` from `poolOver' = (poolOver \/ inf >= PoolSize)`, verbatim, proved at once (`probe16`); the `IF … THEN TRUE ELSE` clause left the rule.
 
 ### P21 — higher-order library theorems need Isa
-- Rule: A library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) applies only through the Isabelle back end: `DEFINE` the predicate, `HIDE DEF` it, and cite the theorem with `Isa`; where a least element is all the action needs, `\E x \in S : Least(x, S)` in the action instead of `Min(S)` / `CHOOSE` avoids the lemma, and TLC's deadlock check shows one exists.
+- Rule: A library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) applies only through the Isabelle back end: `DEFINE` the predicate, `HIDE DEF` it, and cite the theorem with `Isa`.
 - Applies at: PROOFS.md (limits)
 - Case (2026-11-05, tlapm 1.6.0-pre smoke): `\E m \in Nat : Q(m) /\ \A j \in 0 .. m-1 : ~Q(j)` with `Q(x) == x \in S` hidden proved `BY <2>1, SmallestNatural, Isa` (Isabelle2025); cited without the hidden predicate it failed.
-- Case (2026-11-05, CBRD-27361 page-batch-walk, tlapm 1.4.5 without Isabelle): `MinExists` by `NatInduction` and then by `SmallestNatural` failed in every prover (`BY ..., NatInduction, Isa` cannot run here); rewriting `Hop`, `Collect`'s first off-page record and the three row emissions as `\E s \in S : Least(s, S) /\ ...` removed the lemma, and the deadlock check of the pass cfgs still shows a least element exists.
+- Case (2026-11-05, CBRD-27361 page-batch-walk, tlapm 1.4.5 without Isabelle — superseded, the `Least` workaround was dropped from the rule on 1.6): `MinExists` by `NatInduction` and then by `SmallestNatural` failed in every prover (`BY ..., NatInduction, Isa` cannot run here); rewriting `Hop`, `Collect`'s first off-page record and the three row emissions as `\E s \in S : Least(s, S) /\ ...` removed the lemma, and the deadlock check of the pass cfgs still shows a least element exists.
 
 ### P22 — a hidden definition under a prime needs its own equality
 - Rule: Under `HIDE DEF`, state the equality for the primed term exactly as the goal writes it (`HasAns(cur)' = HasAns(cur)`); a `\A p : Ans(p, s)' = Ans(p, s)` the prover must instantiate under the prime does not prove the goal.
@@ -222,14 +224,16 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Case (2026-11-06, parallel sort merge queue): a step `/\ \A t \in Tasks : tpc[t] \in {"idle", "done"} /\ Q = {} /\ sleeping = FALSE` put `Q = {}` inside the `\A`; a later `AfterStage' => Q' = {} BY <1>3, <1>4` failed in SMT, Zenon and Isabelle until the quantifier was parenthesized.
 
 ### P41 — one toolchain per run
-- Rule: Read the `toolchain:` line and every proof log's `TLAPM version` line: a toolchain install during a run swaps the tools under it, and a run whose modules carry different versions is rerun, never judged.
+- Rule: A toolchain install during a run swaps the tools under it: with `--prove`, `tools/tla/tla-check` fails a run whose proof logs carry different `TLAPM version` lines, and that run is rerun, never judged.
 - Applies at: SKILL.md (Toolchain)
 - Case (2026-11-06, parallel sort merge queue): the tools link moved from tlapm 1.4.5 to 1.6.0-pre at 01:31 during a 01:12 run; three proof modules logged `TLAPM version 1.4.5` and two `efe4f2d`, `Safe` failed with `ls4 not found`, and the 1.4.5 modules failed steps that had proved before. The rerun on one toolchain proved `Safe`.
+- Case (2026-11-06, rule review): the check moved into `tla-check` (with `--prove`, different `TLAPM version` lines across a run's proof logs fail it), so no session reads the lines by hand.
 
 ### P42 — the symbolic inductive check comes first
-- Rule: Run the Apalache inductive cfg before the TLC inductive cfg and before TLAPS whenever IndInv's types fit Apalache: it checks every value of the integer constants in seconds, where `INIT IndInv` enumeration takes minutes and a failed TLAPS step tells only that the provers gave up. (P42)
+- Rule: The inductive check is the Apalache cfg; write a TLC inductive cfg only when IndInv's types do not fit Apalache: Apalache checks every value of the integer constants in seconds, where TLC's `INIT IndInv` enumeration takes minutes at small constants and a failed TLAPS step tells only that the provers gave up.
 - Applies at: SKILL.md step 6
 - Case (2026-11-06, parallel hash join): the 2-worker TLC inductive cfg enumerated 31 072 256 initial states in 15 min (26 min under load), and each IndInv strengthening (W_fl with p = NP, mutant-only labels) was found that way before a TLAPS round of up to 40 min per module; Apalache 0.62.4 checks CondVarHandoff's IndInv for every `MaxSpurious \in Nat` in 5 s and rejects a weakened IndInv in the same time.
+- Case (2026-11-06, rule review): with TLAPS on request only (P48) the TLC inductive cfg no longer feeds a proof; P45 asked for both checks, and the TLC one cost up to 1 319 s where Apalache answers for every integer value, so the TLC cfg became the fallback for types Apalache cannot express.
 
 ### P43 — a wait's return branches each name their lock
 - Rule: Map each return branch of a wait separately and name the lock it holds: a primitive that returns unlocked (`thread_suspend_timeout_wakeup_and_unlock_entry`) gets one row per branch of its caller, and a branch that does not re-lock is split at each shared read and write, never copied from the branch that does.
@@ -242,12 +246,12 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Case (2026-11-06, CBRD-26425 atomic latch): the first report listed the flush errors, the FLUSH waiter interrupt, the post-flush hand-off, invalidation and `pgbuf_search_hash_chain_no_bcb_lock` as not covered; the user asked why. Modeling them found hole E: `pgbuf_bcb_flush_with_wal` returns on a TDE or DWB error after `pgbuf_bcb_mark_is_flushing` (page_buffer.c:10986, 10998) with FLUSHING set and DIRTY cleared and wakes no FLUSH waiter (TLC deadlock at depth 17; optdebug assert `LSA_ISNULL(oldest_unflush_lsa) || dirty` on the next unfix).
 
 ### P45 — verified means run, not written
-- Rule: A model is a result only once `tools/tla/tla-check` has run it to `RESULT: OK`: TLC on the main and scale cfgs, every mutant rejected, every witness reached, IndInv inductive (Apalache, then TLC), TLAPS proving the INV1 theorems, and trace validation where step 8 requires it; a spec written but not run, or run without its proof, is reported as 미완, never as verified.
+- Rule: A model is a result only once `tools/tla/tla-check` has run it to `RESULT: OK`: TLC on the main and scale cfgs, every mutant rejected, every witness reached, IndInv inductive (Apalache, or TLC where Apalache cannot type IndInv), TLAPS proving the INV1 theorems when the user asked for a proof (P48), and trace validation where step 8 requires it; a spec written but not run, or run without a proof the user asked for, is reported as 미완, never as verified.
 - Applies at: SKILL.md step 10
 - Case (2026-11-06, PR #8356 review, per-row partition walk): the model and its cfgs were written and the first TLC passes were in when the user asked mid-turn: "tla+ 모델링만 하는게 아니라 그걸로 검증까지해야하는건 알고있지?" The review's TLA+ step stays open until the inductive checks and the TLAPS proof run to `RESULT: OK`.
 
 ### P46 — tlapm 1.6.0-pre is the prover
-- Rule: Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: the PROOFS.md table headed 1.4.5 predates it, and 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run.
+- Rule: Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run.
 - Applies at: SKILL.md (Toolchain), PROOFS.md
 - Case (2026-11-06, PR #8356 review): the user asked "1.6버전으로 하고잇는건알고잇지?" before the proof was written; `.git_ignored_dir/tla/tools/bin/tlapm --version` printed `efe4f2d`, and ADR 0045 records 1.4.5-proved obligations that time out on 1.6 (`ExprProgExec_proofs` 23:87, `PxHeapSnapshot_proofs` 118:5 and 196:3).
 
@@ -255,3 +259,8 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: Write every CONSTANTS and VARIABLES declaration with its first name on the keyword's line (`VARIABLES kind, prune,`): `tools/tla/apalache-types` rewrites only a block whose keyword line already holds a name, so a bare `VARIABLES` line leaves every variable untyped and the Apalache cfg fails with `Expected a type annotation for VARIABLE <name>` (rc=255).
 - Applies at: PROOFS.md (Apalache)
 - Case (2026-11-06, PR #8356 review): `PartWalk.tla` declared `VARIABLES` on a line of its own with one commented name per line below; `PartWalk.apalache-indinv` failed at `PartWalk.tla:78` with `Expected a type annotation for VARIABLE memoOn` although all 31 `apalache-type` lines were present. With `VARIABLES kind, prune, home, data, outer,` on one line the script wrote all 31 `@type` annotations.
+
+### P48 — TLAPS only on an explicit request
+- Rule: TLAPS runs only when the user's own message explicitly asks for a proof ("TLAPS", "증명해줘", "명확히 검증해줘"): then `tools/tla/tla-check --prove` proves every proof module and requires one; otherwise no proof module is written, step 6 ends at the inductive cfgs, and the report says TLAPS 요청 없음. A generic "TLA+로 검증", a skill, a ticket or a review step never counts as that request.
+- Applies at: SKILL.md (Toolchain), steps 6 and 10; PROOFS.md; cubrid-pr-review Step 3d; grill-with-tla; enforced by `tools/tla/tla-check --prove`
+- Case (2026-11-06, rule review): of 124 tla-check runs, tlapm took 26 214 s against 22 866 s for every TLC cfg together (parallel-hash-join alone: 7 proof modules, 11 371 s in sequence), 19 of 47 rules existed to get proofs through, and every code defect in this file (P13, P14, P27, P43, P44 cases) came from a TLC counterexample or deadlock. The user decided: "내가 명확히 검증해줘 라고 하지 않는 이상 TLAPS는 빼자 ... 명확히 검증해달라고 하면 TLAPS도 포함". ADR 0046.

@@ -247,7 +247,7 @@ Every engine PR is verified in TLA+ with the `cubrid-tla` skill (invoke it with 
 
 The report's TL;DR label is `Blocking` or `작성자 확인 필요` while TLA+ verification is 실패 or 미완, and the engine PR's review event is never Approve then.
 
-- Step 3d is done when `tools/tla/tla-check` prints `RESULT: OK` on the PR's model, not when the model is written: the review runs TLC with its mutants and witnesses, the Apalache and TLC inductive checks and the TLAPS proof on tlapm 1.6.0-pre (`cubrid-tla` P45, P46), and a TLA+ section filled before that run says 미완. (P27)
+- Step 3d is done when `tools/tla/tla-check` prints `RESULT: OK` on the PR's model, not when the model is written: the review runs TLC with its mutants and witnesses, the Apalache inductive check (TLC's where Apalache cannot type IndInv), and the TLAPS proof on tlapm 1.6.0-pre only when the user explicitly asked for one (`cubrid-tla` P45, P46, P48), and a TLA+ section filled before that run says 미완. (P27)
 
 Completion: the `## TLA+ Verification` section is filled from the skill's report block, with the spec directory, every claim's result, mutants, bounds, trace validation, and the `RESULT:` line of the final run.
 

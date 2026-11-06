@@ -1,6 +1,6 @@
 # TLAPS proofs on this host
 
-Reached from SKILL.md step 6. Shape anchors: `examples/*/<Module>_proofs.tla`.
+Reached from SKILL.md step 6, and the TLAPS sections only when the user asked for a proof (P48). Shape anchors: `examples/*/<Module>_proofs.tla`.
 
 ## What gets proved
 
@@ -47,20 +47,19 @@ branches, then by stating the facts it needs as numbered steps.
 
 - Name each conjunct of IndInv beyond `TypeOK` (`R_x == ...`), prove each in its own step with `TypeOK`, its parts and every `R_` in the DEF list, and join them in the QED; one step over the whole conjunction times out. (P15)
 
-## tlapm 1.4.5 on this host: limits and the sound workaround
+## tlapm 1.6.0-pre on this host: limits and the sound workaround
 
 | Symptom | Cause | Workaround |
 |---|---|---|
-| a step with `PTL` fails, "ls4 not found" | the toolchain in the GC root is older than `tools/tla/tools.nix` | `just tla-install` (P2) |
-| a trivial typing goal times out in SMT and Zenon "exhausted search space" | the SMT encoding turns `x = FALSE` into `not (boolify x)`, which loses `x \in BOOLEAN` once integer arithmetic is in the same goal | split `TypeOK` into a boolean part and an integer part and prove them in separate steps (P4) |
+| a trivial typing goal times out in SMT and Zenon "exhausted search space" | the SMT encoding turns `x = FALSE` into `not (boolify x)`, which loses `x \in BOOLEAN` once integer arithmetic is in the same goal | when such a step times out, split `TypeOK` into a boolean part and an integer part and prove them in separate steps (P4) |
 | `x' \in BOOLEAN` fails after `~x'` | TLA+ is untyped: `~x'` says nothing about `x'` being a boolean | state the value the action assigns (`x' = FALSE`) (P3) |
 | an obligation over `pc = [self \in ProcSet |-> CASE ...]` times out | PlusCal's CASE function literal is heavy for both provers | prove each `pc[p]` value, then `DOMAIN pc = ProcSet`, then the function-set membership from the two; never `DEF Init` in a QED that does not need it |
 | `"<op>" not found` in the proof module | the PlusCal translation is stale | run `tools/tla/tla-check`, which translates before proving |
 | tlapm exits 0 with obligations failed | `--toolbox` mode reports failures as messages | `tla-check` counts each obligation's final status (P1) |
 
-- A library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) applies only through the Isabelle back end: `DEFINE` the predicate, `HIDE DEF` it, and cite the theorem with `Isa`; where a least element is all the action needs, `\E x \in S : Least(x, S)` in the action instead of `Min(S)` / `CHOOSE` avoids the lemma, and TLC's deadlock check shows one exists. (P21)
+- A library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) applies only through the Isabelle back end: `DEFINE` the predicate, `HIDE DEF` it, and cite the theorem with `Isa`. (P21)
 - Under `HIDE DEF`, state the equality for the primed term exactly as the goal writes it (`HasAns(cur)' = HasAns(cur)`); a `\A p : Ans(p, s)' = Ans(p, s)` the prover must instantiate under the prime does not prove the goal. (P22)
-- A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, boolean assignments written `IF … THEN TRUE ELSE FALSE`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover. (P20)
+- A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover. (P20)
 
 - Parenthesize every `a + b - c` a proof step states: TLA+ binds `-` (precedence 11) tighter than `+` (10), so `qn + 1 - k` is `qn + (1 - k)` and does not match a fact written `(qn + 1) - k` without integer typing in the context. (P30)
 - In a conjunct list, a quantifier written `/\ \A x \in S : P(x) /\ Q` takes every later conjunct on the line into its body: parenthesize it, `/\ (\A x \in S : P(x)) /\ Q`, or put it last. (P40)

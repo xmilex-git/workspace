@@ -1,7 +1,6 @@
 ---
 name: grill-with-tla
-description: A relentless interview to sharpen a CUBRID design, in which every decision is written into a TLA+ model that TLC checks and TLAPS proves before the next round, the glossary and ADRs are written as we go, and the CBRD issue is re-drafted from the verified spec.
-disable-model-invocation: true
+description: A relentless interview to sharpen a CUBRID design, in which every decision is written into a TLA+ model that TLC and Apalache check before the next round (TLAPS proves it only on an explicit request), the glossary and ADRs are written as we go, and the CBRD issue is re-drafted from the verified spec. Use when the user wants a CUBRID design, ticket or fix direction grilled against a TLA+ model ("TLA+로 grill", "설계를 TLA로 따져보자", "grill-with-tla").
 ---
 
 Call the Skill tool three times, for "grilling", "domain-modeling" and "cubrid-tla". Then run them
@@ -25,7 +24,8 @@ as one loop over a single spec directory, `docs/tla/<CBRD-key or slug>/`:
   the claim it settles and the `RESULT: OK` run that verified it.
 
 The session is done when the grilling frontier is empty, `tools/tla/tla-check docs/tla/<key>/`
-prints `RESULT: OK` (every claim with its mutant, TLAPS obligations all proved), MAP.md has no
+prints `RESULT: OK` (every claim with its mutant, IndInv inductive; with `--prove` and its TLAPS
+obligations all proved only when the user asked for a proof, cubrid-tla P48), MAP.md has no
 blank row, and the user confirms the shared understanding. The verified spec is the abstract spec
 the implementation must later refine (cubrid-tla step 9).
 

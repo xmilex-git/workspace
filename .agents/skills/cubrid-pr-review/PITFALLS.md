@@ -131,9 +131,10 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 ## TLA+ verification (Step 3d)
 
 ### P27 — the TLA+ step ends at RESULT: OK
-- Rule: Step 3d is done when `tools/tla/tla-check` prints `RESULT: OK` on the PR's model, not when the model is written: the review runs TLC with its mutants and witnesses, the Apalache and TLC inductive checks and the TLAPS proof on tlapm 1.6.0-pre (`cubrid-tla` P45, P46), and a TLA+ section filled before that run says 미완.
+- Rule: Step 3d is done when `tools/tla/tla-check` prints `RESULT: OK` on the PR's model, not when the model is written: the review runs TLC with its mutants and witnesses, the Apalache inductive check (TLC's where Apalache cannot type IndInv), and the TLAPS proof on tlapm 1.6.0-pre only when the user explicitly asked for one (`cubrid-tla` P45, P46, P48), and a TLA+ section filled before that run says 미완.
 - Applies at: Step 3d
 - Case (2026-11-06, PR #8356 CBRD-27866): while the per-row partition walk model had its first TLC passes and no inductive check or proof yet, the user asked "tla+ 모델링만 하는게 아니라 그걸로 검증까지해야하는건 알고있지?" and "1.6버전으로 하고잇는건알고잇지?".
+- Case (2026-11-06, rule review): the user took TLAPS out of the default gate ("내가 명확히 검증해줘 라고 하지 않는 이상 TLAPS는 빼자"); a review proves only when the user's own message asks for it (`cubrid-tla` P48, ADR 0046).
 
 ## Rendering and posting (Step 6)
 

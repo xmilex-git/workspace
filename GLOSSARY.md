@@ -1148,7 +1148,7 @@ _Avoid_: IS 락 fastpath(IX·SCH_S 누락), 경량 락
 _Avoid_: 강한 락 플래그, 락 잠금 카운터
 
 **검증된 모델 (verified model)**:
-설계나 코드 변경을 옮긴 TLA+ spec 디렉터리로, 모든 claim이 출처와 함께 적혀 있고, 각 claim을 깨는 mutant가 실제로 거부되며, 주요 안전성 불변식이 상수 크기와 무관하게 증명되고, 정해진 검사(`tools/tla/tla-check`)가 `RESULT: OK`를 내는 상태다. 통과는 모델에 대한 사실이며 경계(상수, 다룬 fault, 원자성 가정)와 함께만 말한다.
+설계나 코드 변경을 옮긴 TLA+ spec 디렉터리로, 모든 claim이 출처와 함께 적혀 있고, 각 claim을 깨는 mutant가 실제로 거부되며, 귀납 불변식(IndInv)이 Apalache로 정수 상수 전 범위에서 귀납적임이 확인되고(TLAPS 증명은 사용자가 요청할 때만, ADR 0046), 정해진 검사(`tools/tla/tla-check`)가 `RESULT: OK`를 내는 상태다. 통과는 모델에 대한 사실이며 경계(상수, 다룬 fault, 원자성 가정)와 함께만 말한다.
 _Avoid_: TLA+ 통과(경계 없이), 정형 검증 완료
 
 **Refinement map (대응표)**:

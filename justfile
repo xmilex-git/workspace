@@ -582,7 +582,7 @@ tla-install:
 tla-check +DIRS:
     "{{justfile_directory()}}/tools/tla/tla-check" {{DIRS}}
 
-# Run the cubrid-tla skill's examples: the toolchain and the wrapper's verdict logic must both hold.
+# Run the cubrid-tla skill's examples: the toolchain and the wrapper's verdict logic must both hold, tlapm included.
 [doc("Self-test the TLA+ toolchain on the cubrid-tla examples")]
 tla-selftest:
-    "{{justfile_directory()}}/tools/tla/tla-check" "{{justfile_directory()}}"/.agents/skills/cubrid-tla/examples/*/
+    "{{justfile_directory()}}/tools/tla/tla-check" --prove "{{justfile_directory()}}"/.agents/skills/cubrid-tla/examples/*/
