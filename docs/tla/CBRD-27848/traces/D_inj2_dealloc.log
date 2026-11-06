@@ -1,0 +1,8 @@
+TLATRACE seq=0 p=s a=Start
+TLATRACE seq=1 p=s a=PrevLatched
+TLATRACE seq=2 p=s a=PrevLatchFails started=1 curnull=0
+TLATRACE seq=3 p=s a=GapRequestP
+TLATRACE seq=4 p=s a=GapFixP o=unlinked
+TLATRACE seq=5 p=s a=Resume
+TLATRACE seq=6 p=s a=PrevLatched
+TLATRACE seq=7 p=s a=PrevLatched
