@@ -141,6 +141,11 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Step 3d
 - Case (2026-11-06, PR #8356 CBRD-27866): the per-row partition walk touched a lock only through a re-granted IS_LOCK, yet the four recorded runs of the instrumented 60058202c build found three model errors (a re-executed subquery builds a new memo, ANTI is entered again after its row goes through, the first outer row is rewound twice) and one behavior the PR text did not state (an out-of-range range key walks every partition), posted as Q2. The user: "trace validation은 필수로 해서 커밋+푸쉬좀".
 
+### P29 — an optimization is not turned off to fill a value develop never had
+- Rule: A PR that turns off a develop optimization (the statistics/index aggregate evaluation, a count-only scan, the parallel scan, the page batch) to give a shape a value it already lacked before the regressing commit is a Blocking finding: measure develop against the head on that shape (`perf stat -e instructions:u`, release build) and ask to keep develop's path, with the value left to its own issue; only the exclusion that undoes the regression itself stays.
+- Applies at: Step 4 (Filter), Step 3c (Runtime Verification)
+- Case (2026-11-06, PR #8364 CBRD-27870 r3): to put a value into the hidden ODKU column, the head cleared `agg_optimized` at generation, skipped the count-only scan and set `CANNOT_PARALLEL_SCAN` for the flagged BUILDVALUE; the r3 draft called it Non-blocking and only asked for a JIRA line. The user: "AGL이나 MINMAX 최적화안되는거자나", then "C로가야돼 다막으면 그 기능 deprecate한다고하던가". Release, 1,000,000 rows, `insert into tt (id) select max(s.g) + 1 from big s on duplicate key update c = s.c`: develop 1.31G instructions:u with `c` NULL, head 4.0G with `c` = 'v999739' (the last scan row, not the MAX row). Posted REQUEST_CHANGES 5794917472: fast path and parallel stay develop, only the page-batch decline (the #8196 regression) and the per-row copy stay.
+
 ## Rendering and posting (Step 6)
 
 ### P18 — `NIT:` marks trivia only

@@ -42,6 +42,7 @@ tools/tla/trace2tla <Module>TraceData OkTrace=<run1.log> [Run2=<run2.log> ...] >
   instrumentation allows, since each hidden action widens what the trace can match.
 - `TraceNotDone == i < Len(TraceLog)`.
 - A trace spec builds the values an event leaves open from the event's own fields (its types, codesets and flags fixed, only the unlogged numbers chosen), never by filtering the spec's whole input set per event: `tools/tla/tla-check` runs TLC with `-coverage 60`, under which a filter over every input value advances about one event a minute. (P51)
+- A trace spec whose inputs the build does not log (a decision's input classes chosen in `Init`) starts from initial states the run contradicts, which stop at the first event: its `witness-trace-*` cfgs carry `CHECK_DEADLOCK FALSE` with a `deadlock-off` reason, or TLC reports that dead end as a deadlock before the run is consumed. (P53)
 
 | cfg | Expectation | Meaning |
 |---|---|---|
