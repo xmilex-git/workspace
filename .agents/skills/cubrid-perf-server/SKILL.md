@@ -93,6 +93,7 @@ When a build cannot open it (a disk format change), reloading means deleting a s
 
 ## Measuring
 
+- Per-query timing (TPC-H and the like) restarts the server before each query, then times one cold and one warm run of it and reports both (P7).
 - A and B run on the same node in the same reservation, interleaved (A B A B …), never A on one node and B on
   the other: the NUMA nodes differ and the disk is shared.
 - Profiling: `perf_event_paranoid` is -1 in the containers and release installs carry debug_info, so `perf record -p <cub_server pid>` resolves engine symbols without sudo; `SET TRACE ON` + `SHOW TRACE` beside it separates a plan change (fetch counts differ) from buffer residency (same fetches, different ioread).

@@ -42,3 +42,9 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Measuring
 - Case (2026-11-06, q18-q21 analysis): eight `perf record -p` runs left `/home/cubrid/.debug` (1.3 GiB of build-id and kallsyms copies) outside the run dir; release printed `CLEANUP DIFF` with `> .debug` and the directory was deleted by hand.
 - Source: this session
+
+### P7 — a sequential pass times the previous query's footprint
+- Rule: Per-query timing (TPC-H and the like) restarts the server before each query, then times one cold and one warm run of it and reports both (P7).
+- Applies at: Measuring
+- Case (2026-11-06, 99fa309 vs develop): one warm-up pass then one measured pass of q1-q22 on one server showed q19-q21 20-70% faster on develop, but their plans and fetch counts were identical; only ioread differed, because the old q18 plan read 847K pages and evicted what q19-q21 reuse (19.3 GB data, 12 GB buffer). The user set the per-query restart, cold then warm, on 2026-11-07.
+- Source: user decision 2026-11-07
