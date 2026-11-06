@@ -38,10 +38,11 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-10-04, #377 gate 1, self-caught): `assert ((item->flags & DOMAIN_PLAN_ITEM_COMPARES) != 0)` inside a helper the stream walk calls for every arith node; items without compares are the normal case. I called it "belt and braces" and passed it; release was unaffected, the optdebug CTP gate found it at once — one full gate (~45 min, 190 GB of cores).
 - Source: memory:review-asserts-are-claims
 
-### P4 — "under sysop → serial" is settled
-- Rule: In PX reviews, "a transaction inside a system operation runs its query serially" is settled — its false positives (nondeterministic degree, missing `parallel workers` trace lines) are not findings, while a worker-spawning path that skips the sysop gate is.
+### P4 — "inside its own or a re-entered sysop → serial" is settled
+- Rule: In PX reviews, a thread inside a system operation — its own, or one it entered through PL re-entry — runs its query serially, and this is settled; another thread's short system operation (a sibling's temp file) no longer makes a decision serial since PR 8424 (CBRD-27938). A worker-spawning path that skips the gate is a finding; a serial fallback caused only by another thread's system operation is the CBRD-27938 defect, not a principle.
 - Applies at: Step 3
 - Case (PR 8046, CBRD-27492 grill): I proposed narrowing `compute_parallel_degree()`'s `is_under_sysop()` gate to the statement-level sysop because sibling workers' internal sysops (temp file creation) also fire it. The user: "걍 sysop 랑 엮여있는 작업중에 병렬질의를 안하는게 근본적으로 맞는 처리임", and on the plan-level MERGE block: "직렬로 막는게 맞는데, 그럼 이걸 논의할 필요가있나?"
+- Case (2026-11-06, PR #8424 CBRD-27938 grill): the PR narrowed the gate to the owner being this thread, empty, or a thread registered in the PL session; TLA+ (`px-sysop-gate`, TLAPS 641/641) and instrumented runs (base 7 serial-by-sibling decisions in 15 runs, head 0 in 16) showed it safe. The user accepted the narrowing: "응 전부 추천대로".
 - Source: memory:no-parallel-under-sysop-principle
 
 ### P5 — worker → leader error handoff
