@@ -280,10 +280,12 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Applies at: TRACE.md (3. Check)
 - Case (2026-11-06, PR #8378 review, `str-share`): `StrShareTrace` over the 600-event run of TC `cbrd_27847` filtered the ~1,800 values of `CharVals` per Assign and re-read `TraceLog[i + 1]` in every conjunct; it reached depth 53 in 4 min. With `TCols(e)` / `TVals(e)` built from the event's fields (about 100 candidates) and `LET e == TraceLog[i + 1]`, the whole run was accepted in 405 s.
 
-### P52 — Apalache IndInv binds its variables and types its record operators
-- Rule: An Apalache `INIT IndInv` binds every variable before a conjunct reads it (`x = FALSE`, `x \in BOOLEAN`, `x \in Nat /\ x <= N`, `s \in SUBSET [f : S]`), an operator that takes or returns a record carries a `\* @type:` line over `\* @typeAlias:` records, and a pair of strings is a record, never a tuple (`<<"u", "ubin">>` matches both a tuple and a `Seq(Str)`).
+### P52 — Apalache IndInv binds its variables and types its record and tuple operators
+- Rule: An Apalache `INIT IndInv` binds every variable before a conjunct reads it (`x = FALSE`, `x \in BOOLEAN`, `x \in Nat /\ x <= N`, `s \in SUBSET [f : S]`), an operator that takes or returns a record or a tuple carries a `\* @type:` line (over `\* @typeAlias:` records), and a pair of strings is a record, never a tuple (`<<"u", "ubin">>` matches both a tuple and a `Seq(Str)`).
 - Applies at: PROOFS.md (Apalache)
 - Case (2026-11-06, PR #8378 review, `StrShare.apalache-indinv`): three failures in a row — `Annotation required ... ((a, a) => Seq(a))` at the codeset/collation pair literals, `Cannot apply pr to the argument "cs"` in `Col(t, pr, p)` until 22 `@type` lines over six `@typeAlias` records were added, and `borrows' is used before it is assigned` while IndInv read `\A b \in borrows` before binding it. Then it passed in 67 s, and a scratch copy whose `CInit` set `Mutant = "no_codeset"` failed it (`violation IndInv`).
+
+- Case (2026-11-06, CBRD-27967 design, `PxHeapRcSnapshot.apalache-indinv`): rows and pages are `<<scan, index>>` tuples; `IsInit(r) == r[2] <= NInit` failed Snowcat with `Cannot apply r to the argument 2 in r[2]` (rc=120), because `r[2]` alone fits a tuple, a sequence and a function. A `\* @type: (<<Str, Int>>) => Bool;` line on each of the eight operators taking a row or a page made it pass in 71 s.
 
 ### P53 — a trace witness over unlogged inputs runs without the deadlock check
 - Rule: A trace spec whose inputs the build does not log (a decision's input classes chosen in `Init`) starts from initial states the run contradicts, which stop at the first event: its `witness-trace-*` cfgs carry `CHECK_DEADLOCK FALSE` with a `deadlock-off` reason, or TLC reports that dead end as a deadlock before the run is consumed.

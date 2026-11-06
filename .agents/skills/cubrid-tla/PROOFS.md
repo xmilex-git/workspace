@@ -102,7 +102,7 @@ INVARIANT IndInv
   `apalache-<cfg>/out/**/violation1.tla`; read it as an inductive-cfg counterexample (below).
 - Example: `examples/condvar-handoff/CondVarHandoff.apalache-indinv.cfg`.
 - Write every CONSTANTS and VARIABLES declaration with its first name on the keyword's line (`VARIABLES kind, prune,`): `tools/tla/apalache-types` rewrites only a block whose keyword line already holds a name, so a bare `VARIABLES` line leaves every variable untyped and the Apalache cfg fails with `Expected a type annotation for VARIABLE <name>` (rc=255). (P47)
-- An Apalache `INIT IndInv` binds every variable before a conjunct reads it (`x = FALSE`, `x \in BOOLEAN`, `x \in Nat /\ x <= N`, `s \in SUBSET [f : S]`), an operator that takes or returns a record carries a `\* @type:` line over `\* @typeAlias:` records, and a pair of strings is a record, never a tuple (`<<"u", "ubin">>` matches both a tuple and a `Seq(Str)`). (P52)
+- An Apalache `INIT IndInv` binds every variable before a conjunct reads it (`x = FALSE`, `x \in BOOLEAN`, `x \in Nat /\ x <= N`, `s \in SUBSET [f : S]`), an operator that takes or returns a record or a tuple carries a `\* @type:` line (over `\* @typeAlias:` records), and a pair of strings is a record, never a tuple (`<<"u", "ubin">>` matches both a tuple and a `Seq(Str)`). (P52)
 
 ## Strengthening IndInv
 
