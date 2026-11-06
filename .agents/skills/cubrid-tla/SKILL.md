@@ -10,7 +10,7 @@ allowed-tools: Bash(tools/tla/*), Bash(just tla-*), Bash(tools/code-index/*), Ba
 A **verified model** is a spec directory for which `tools/tla/tla-check <dir>` prints `RESULT: OK`.
 The check is mechanical; this skill is how to build a model that deserves it. A TLC pass proves the
 model, not the code: what ties the two is the **refinement map** (every model step named at a code
-site, with the protection that makes it one step) and, for protocol changes, **trace validation**
+site, with the protection that makes it one step) and **trace validation**
 (a run of the real build accepted by the spec). A model that never fails is suspect until its
 **mutants** fail.
 
@@ -62,7 +62,7 @@ rule, or as a new rule added to both files in one commit.
 | `<Module>.inductive-<n>.cfg` | the same check by TLC, only when IndInv's types do not fit Apalache (P42) |
 | `<Module>_proofs.tla` | only when the user asked for a proof (P48): TLAPS proof of the three INV1 premises for the correct variant (`PROOFS.md`) |
 | `MAP.md` | claims, refinement map, properties, fault model, mutants, witnesses, dead expressions, bounds |
-| trace files (protocol changes) | `<Module>Trace.tla`, its data module, `*.witness-trace-*.cfg`, `*.reject-*.cfg` (`TRACE.md`) |
+| trace files (every model of code; `trace-exempt:` in MAP.md only for a design with no implementation or a pattern example) | `<Module>Trace.tla`, its data module, `*.witness-trace-*.cfg`, `*.reject-*.cfg` (`TRACE.md`) |
 
 Each cfg's first line is its expectation (`\* expect: pass | violation <Name> | deadlock | liveness |
 refinement`); only mutant and witness cfgs may expect an error, and `tools/tla/tla-check`'s header
@@ -170,10 +170,11 @@ Every TLC counterexample from a correct-variant cfg is classified in MAP.md befo
 - A counterexample that needs the scan or buffer to stop where the code's capacity checks forbid it is a model error: derive a stop or overflow condition from the code's arithmetic (what the check counts, what it reserves) before a hole is reported. (P28)
 - A hole confirmed in the code stays a failing `\* expect: pass` cfg of the code as it stands, so the directory reports `RESULT: FAILED` until the code is fixed; the candidate fix gets its own pass cfg, and the code cfg's expectation is never flipped to make the directory pass. (P9)
 
-### 8. Trace validation (protocol changes)
+### 8. Trace validation (every model of code)
 
-Required when the change touches a latch, lock, mutex, condvar or atomic protocol, WAL or
-recovery, vacuum, or PX worker coordination. Instrument a scratch worktree of the exact sha,
+- Every model of code that exists — a PR head, a branch, develop — is tied to it by trace validation: an instrumented build of the exact sha records runs the trace spec accepts and a corrupted run it refuses, and `tools/tla/tla-check` fails a directory without a `*.witness-trace-*` and a `*.reject-*` cfg. Only a design spec with no implementation yet, or a pattern example, carries a MAP.md line `trace-exempt: <reason>`, and the implementation's spec adds the trace later. (P50)
+
+Instrument a scratch worktree of the exact sha,
 record runs that cover every action of the refinement map, and check them (`TRACE.md`). An
 accepted run and a rejected corrupted run are both required; a run the spec refuses is a
 divergence between code and model, resolved like a counterexample (step 7).
@@ -199,7 +200,7 @@ TLA+ 검증: <통과 | 실패 | 미완> — <spec dir>
 - 결함: <없음 | H<n> 코드 cfg 실패, 런타임 재현(빌드 fingerprint, 결과), 후보 수정 cfg 통과>
 - mutant: <n>개 모두 위반 검출 / 살아남은 mutant: <없음 | 목록>
 - 경계: <상수>, scale <상수>; IndInv 귀납성은 Apalache로 정수 상수 전 범위(역할 집합 크기는 고정); TLAPS(요청 시)는 safety (`Spec => []IndInv`), liveness는 공정성 증명을 쓴 claim만 (나머지는 TLC 경계 안에서만)
-- trace validation: <수용 n건, 거부 n건 | 해당 없음(이유)>
+- trace validation: <수용 n건, 거부 n건 | trace-exempt(구현 전 설계 또는 패턴 예제)>
 - 반례: <없음 | 분류와 재현 여부>
 ```
 

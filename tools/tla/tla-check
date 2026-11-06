@@ -26,7 +26,8 @@
 #      every obligation must come back proved — none failed, none OMITTED. A proof module's
 #      `\* timeout: <seconds>` line (default 1800) bounds its tlapm run, as a cfg's does TLC's.
 #   4. Completeness: only *.mutant-* and *.witness-* cfgs may expect an error. The directory holds
-#      MAP.md, a pass cfg, a mutant cfg (*.mutant-*.cfg expecting an error), a witness cfg
+#      MAP.md, a trace witness and a reject cfg unless MAP.md has a 'trace-exempt: <reason>' line
+#      (cubrid-tla P50), a pass cfg, a mutant cfg (*.mutant-*.cfg expecting an error), a witness cfg
 #      (*.witness-*.cfg expecting a violation), an inductive cfg (*.apalache-*.cfg, or *.inductive-*.cfg, expecting pass),
 #      a scale cfg (*.scale-*.cfg expecting pass, whose CONSTANT lines differ from the
 #      main <Module>.cfg: the same check one size up) and, with --prove, a proof module; a directory with a trace
@@ -127,6 +128,15 @@ for arg in "${dirs[@]}"; do
   fi
   [ $nscale -gt 0 ] || fail "$dir: no scale cfg (<Module>.scale-<name>.cfg expecting pass, constants one size above <Module>.cfg)"
   [ $ntrace -eq 0 ] || [ $nrej -gt 0 ] || fail "$dir: trace witness without a reject cfg (a corrupted trace the spec must refuse)"
+  # Trace validation is part of every model of code (cubrid-tla P50); only a design with no
+  # implementation yet, or a pattern example, is exempt by a MAP.md line "trace-exempt: <reason>".
+  exempt="$(/usr/bin/grep -m1 -E '^trace-exempt: *[^ ]' "$dir/MAP.md" 2>/dev/null)"
+  if [ -n "$exempt" ]; then
+    echo "skip: trace validation (${exempt#trace-exempt: })"
+  else
+    [ $ntrace -gt 0 ] || fail "$dir: no trace witness (<Module>Trace.witness-trace-<run>.cfg accepting a run of the instrumented build, cubrid-tla P50; a design with no implementation carries 'trace-exempt: <reason>' in MAP.md)"
+    [ $nrej -gt 0 ] || fail "$dir: no reject cfg (<Module>Trace.reject-<case>.cfg: a corrupted run the trace spec refuses, cubrid-tla P50)"
+  fi
   [ $prove -eq 0 ] || [ $nproof -gt 0 ] || fail "$dir: no proof module (a .tla with the TLAPS THEOREMs for IndInv)"
 
   # 1. PlusCal translation, in place.

@@ -136,6 +136,11 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-11-06, PR #8356 CBRD-27866): while the per-row partition walk model had its first TLC passes and no inductive check or proof yet, the user asked "tla+ 모델링만 하는게 아니라 그걸로 검증까지해야하는건 알고있지?" and "1.6버전으로 하고잇는건알고잇지?".
 - Case (2026-11-06, rule review): the user took TLAPS out of the default gate ("내가 명확히 검증해줘 라고 하지 않는 이상 TLAPS는 빼자"); a review proves only when the user's own message asks for it (`cubrid-tla` P48, ADR 0046).
 
+### P28 — every engine PR's model carries a trace
+- Rule: Step 3d passes only with trace validation, for every engine PR: an instrumented build of the PR head records runs the model accepts and a corrupted run it refuses (`cubrid-tla` P50); a change that touches no latch or lock is no exemption.
+- Applies at: Step 3d
+- Case (2026-11-06, PR #8356 CBRD-27866): the per-row partition walk touched a lock only through a re-granted IS_LOCK, yet the four recorded runs of the instrumented 60058202c build found three model errors (a re-executed subquery builds a new memo, ANTI is entered again after its row goes through, the first outer row is rewound twice) and one behavior the PR text did not state (an out-of-range range key walks every partition), posted as Q2. The user: "trace validation은 필수로 해서 커밋+푸쉬좀".
+
 ## Rendering and posting (Step 6)
 
 ### P18 — `NIT:` marks trivia only

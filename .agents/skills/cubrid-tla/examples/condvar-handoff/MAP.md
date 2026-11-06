@@ -4,6 +4,8 @@ Pattern example for the cubrid-tla skill: a mutex + condition variable handoff (
 loops in CUBRID's daemons, job queues and parallel joins). Code names the roles generically; a real
 model names `file:function` and the symbol at each row.
 
+trace-exempt: pattern example with no CUBRID code under it
+
 ## Claim and sources
 
 | # | Claim | Source |
