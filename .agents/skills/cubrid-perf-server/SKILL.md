@@ -95,5 +95,7 @@ When a build cannot open it (a disk format change), reloading means deleting a s
 
 - A and B run on the same node in the same reservation, interleaved (A B A B …), never A on one node and B on
   the other: the NUMA nodes differ and the disk is shared.
+- Profiling: `perf_event_paranoid` is -1 in the containers and release installs carry debug_info, so `perf record -p <cub_server pid>` resolves engine symbols without sudo; `SET TRACE ON` + `SHOW TRACE` beside it separates a plan change (fetch counts differ) from buffer residency (same fetches, different ioread).
+- `perf record` on a node runs with `--no-buildid-cache`, and `perf report` reads the data inside the run dir before release (P6).
 - The report names the node, run-id, both fingerprints, the conf if not standard, every repetition with
   median and spread, and whether the other node had a reservation during the run (shared-disk interference).

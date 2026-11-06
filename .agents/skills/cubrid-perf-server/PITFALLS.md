@@ -36,3 +36,9 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Steps 4 (Release) and the watchdog's cleanup
 - Case (2026-11-06, TPC-H 99fa309 vs develop): killing the exec's process group to restart a pass also killed `cub_master` (it does not leave the group), so `cubrid server stop` answered "Could not connect to master server" and the server on the shared SF10 DB was left to a signal; `timeout` puts `csql` in its own group, so the csql survived the group kill too. SIGTERM ended the server in 3 s; cleanup.sh now stops servers first and falls back to SIGTERM, and the exe-path kill catches what `timeout` moved out of the group.
 - Source: this session
+
+### P6 — `perf record` writes a build-id cache into `~`
+- Rule: `perf record` on a node runs with `--no-buildid-cache`, and `perf report` reads the data inside the run dir before release (P6).
+- Applies at: Measuring
+- Case (2026-11-06, q18-q21 analysis): eight `perf record -p` runs left `/home/cubrid/.debug` (1.3 GiB of build-id and kallsyms copies) outside the run dir; release printed `CLEANUP DIFF` with `> .debug` and the directory was deleted by hand.
+- Source: this session
