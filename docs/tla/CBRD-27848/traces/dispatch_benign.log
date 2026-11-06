@@ -1,0 +1,9 @@
+TLATRACE seq=0 p=d a=D_leaf page=4740
+TLATRACE seq=1 p=d a=D_fix_prev o=linked page=4739 last=4740
+TLATRACE seq=2 p=d a=D_check_last o=changed last=4740 valid_leaf=1 keys=214
+TLATRACE seq=3 p=d a=D_fix_prev o=linked page=4739 last=4740
+TLATRACE seq=4 p=d a=D_check_last o=unchanged last=4740 valid_leaf=1 keys=214
+TLATRACE seq=5 p=d a=D_desc_take page=4739
+TLATRACE seq=6 p=d a=D_fix_prev o=linked page=4738 last=4739
+TLATRACE seq=7 p=d a=D_check_last o=unchanged last=4739 valid_leaf=1 keys=643
+TLATRACE seq=8 p=d a=D_desc_take page=4738
