@@ -85,12 +85,14 @@ index, statistics), and on again before any measurement.
 
 ## Shared SF10 DB
 
-`/home/cubrid/databases/tpch_sf10` on both nodes (loaded 2026-11-06 with develop `dcbab24d0` release, rows
-checked against TPC-H SF10; ~8 minutes per node) is the one thing a release leaves behind. Measurements only
+`/home/cubrid/databases/tpch_sf10` on both nodes (reloaded 2026-11-07 with develop `dcbab24d0` release by
+`scripts/load-sf10.sh`: SA mode, tables one after another, logging index build; rows checked against TPC-H SF10;
+~40 minutes per node) is the one thing a release leaves behind. Measurements only
 read it; a workload that writes copies it into the run first (`cubrid copydb` into the run's `databases/`).
 When a build cannot open it (a disk format change), reloading means deleting a shared DB: ask the user, then
 `$S exec <run> <sha12> "$(cat scripts/load-sf10.sh)"` after `cubrid deletedb tpch_sf10` with
-`CUBRID_DATABASES=/home/cubrid/databases`.
+`CUBRID_DATABASES=/home/cubrid/databases` and `rmdir` of the `lob/` and DB directories it leaves. A build-specific
+DB loaded in a run uses the same script's steps, so both sides of a comparison share one load method.
 
 ## Measuring
 
