@@ -302,3 +302,8 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Applies at: MODELING.md (fault checklist)
 - Case (2026-11-06, CBRD-27967 design): the fault table had no such row, so C2 ("one snapshot per statement") and a worker-side assert built on it were settled in grilling. A probe run of `select /*+ parallel(4) */ f27967 (b.id), b.id from t b where b.id < 4` (the function runs a SELECT) logged one `snapshot_built` per SP call after `L_open snapshot_valid=1`; the assert was dropped and C2/C4 were scoped to statements without a nested statement (`Nested`, two witness cfgs).
 
+
+### P56 — overlapping CASE guards are a choice, not an order
+- Rule: A CASE whose guards can hold together is a nondeterministic choice in TLA+, not TLC's first-match: an ordered decision is an IF ... ELSE IF chain, and a CASE keeps only guards that exclude each other or end in OTHER.
+- Applies at: SKILL.md (4. Spec and cfgs)
+- Case (2026-11-07, CBRD-27430 A3 boundary, `FoldBoundary.apalache-indinv`): `Exit` set the client's RR-lock mirror with `CASE e = "unilat" -> FALSE [] ... [] k = "hint" -> ~rrMirror`. TLC took the first true arm and every cfg passed; Apalache took the `hint` arm on a victim's exit and left the mirror set after the rollback, violating IndInv. Rewritten as an IF chain, the inductive check passed.
