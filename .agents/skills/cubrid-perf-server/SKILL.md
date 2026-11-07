@@ -68,6 +68,7 @@ anything only in the remote `out/` is gone, so pull after each measurement.
 ## Standard conf
 
 `push` writes it: QAHome values with `data_buffer_size=12G` instead of 15G, because the containers are capped at 16 GiB (P4).
+An SA-mode utility (`loaddb -S`, `csql -S`) allocates `data_buffer_size` (12G) in its own process, so a container runs one at a time and never beside a running server (P9).
 `$S conf <run> <sha12> dwb-on|dwb-off` rewrites it. A measurement that needs other values edits `$CUBRID/conf/cubrid.conf` inside its
 `exec` command and says so in the report.
 

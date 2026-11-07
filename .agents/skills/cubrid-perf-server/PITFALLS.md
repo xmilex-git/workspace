@@ -54,3 +54,9 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Measuring
 - Case (2026-11-07, TPC-H 4adcd4090 vs develop): 4adcd4090 cannot open the shared DB (catalog change 5a3e7a14b), so it ran on a DB loaded in the run and q21 showed +8.5% on develop. The same develop build then ran q21 at 18.2 s on the shared DB and 15.7 s on a fresh load with the same script (median of 15). Heap statistics, fetch and ioread were identical and evicting the page cache kept the gap; the fresh load needed ~5% fewer disk read requests for the same 12.2 GB at the same time per request (sda is an AVAGO SMC3108 MegaRAID virtual disk; its rotational=1 does not tell the media). Page placement from the eight parallel loaders differs per load.
 - Source: this session
+
+### P9 — an SA-mode process holds the whole buffer pool
+- Rule: An SA-mode utility (`loaddb -S`, `csql -S`) allocates `data_buffer_size` (12G) in its own process, so a container runs one at a time and never beside a running server (P9).
+- Applies at: Standard conf
+- Case (2026-11-07, SA reload of the shared DB): two SA loads ran at once on perf-node0 (the shared `tpch_sf10` and the run's `tpch_e0`); the memory cgroup killed the `cub_admin` of the shared load at lineitem row 35.4M (anon-rss 8.4 GB, `FINISH rc=254`) and left the shared DB half loaded. The same load alone on perf-node1 finished. The node0 DB was deleted and reloaded alone.
+- Source: this session
