@@ -1,0 +1,69 @@
+TLATRACE seq=1 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=2 a=Exit p=S e=none abort=0
+TLATRACE seq=3 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=4 a=Exit p=S e=none abort=0
+TLATRACE seq=5 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=6 a=Exit p=S e=none abort=0
+TLATRACE seq=7 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=8 a=Exit p=S e=none abort=0
+TLATRACE seq=9 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=10 a=Exit p=S e=none abort=0
+TLATRACE seq=11 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=12 a=Exit p=S e=none abort=0
+TLATRACE seq=13 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=14 a=Exit p=S e=none abort=0
+TLATRACE seq=15 a=StmtStart p=S
+TLATRACE seq=16 a=Enter p=S k=read inv=1 d=1
+TLATRACE seq=17 a=Read p=S built=1
+TLATRACE seq=18 a=Read p=S built=0
+TLATRACE seq=19 a=Read p=S built=0
+TLATRACE seq=20 a=Exit p=S e=none abort=0
+TLATRACE seq=21 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=22 a=Exit p=S e=none abort=0
+TLATRACE seq=23 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=24 a=Exit p=S e=none abort=0
+TLATRACE seq=25 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=26 a=Exit p=S e=none abort=0
+TLATRACE seq=27 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=28 a=Exit p=S e=none abort=0
+TLATRACE seq=29 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=30 a=Exit p=S e=none abort=0
+TLATRACE seq=31 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=32 a=Exit p=S e=none abort=0
+TLATRACE seq=33 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=34 a=Exit p=S e=none abort=0
+TLATRACE seq=35 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=36 a=Exit p=S e=none abort=0
+TLATRACE seq=37 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=38 a=Exit p=S e=none abort=0
+TLATRACE seq=39 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=40 a=Exit p=S e=none abort=0
+TLATRACE seq=41 a=StmtStart p=S
+TLATRACE seq=42 a=Enter p=S k=read inv=1 d=1
+TLATRACE seq=43 a=Read p=S built=1
+TLATRACE seq=44 a=Exit p=S e=none abort=0
+TLATRACE seq=45 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=46 a=Exit p=S e=none abort=0
+TLATRACE seq=47 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=48 a=Exit p=S e=none abort=0
+TLATRACE seq=49 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=50 a=Exit p=S e=none abort=0
+TLATRACE seq=51 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=52 a=Exit p=S e=none abort=0
+TLATRACE seq=53 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=54 a=Exit p=S e=none abort=0
+TLATRACE seq=55 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=56 a=Exit p=S e=none abort=0
+TLATRACE seq=57 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=58 a=Exit p=S e=none abort=0
+TLATRACE seq=59 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=60 a=Exit p=S e=none abort=0
+TLATRACE seq=61 a=Enter p=S k=read inv=0 d=1
+TLATRACE seq=62 a=Exit p=S e=none abort=0
+TLATRACE seq=63 a=StmtStart p=S
+TLATRACE seq=64 a=Enter p=S k=read inv=1 d=1
+TLATRACE seq=65 a=Read p=S built=1
+TLATRACE seq=66 a=Read p=S built=0
+TLATRACE seq=67 a=LockWait p=S
+TLATRACE seq=68 a=Victim p=E
+TLATRACE seq=69 a=Exit p=S e=unilat abort=1
