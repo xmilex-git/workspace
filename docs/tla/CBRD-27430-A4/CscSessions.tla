@@ -30,15 +30,18 @@
      Xfer     a tracer frees in the client half a chunk the server half of the
               same call allocated (the assumption census A-XFER says the fold
               boundary never does this)
+     ServerInit  the server boot initialized the client modules the sessions share before it accepted one (A5,
+              docs/tla/CBRD-27430-A5): the areas exist from the start and no session boot takes a boot lock
      Mutant   "none" | see MAP.md, "Mutants" *)
 EXTENDS Naturals, FiniteSets
 
-CONSTANTS N, MaxWork, Attach, Xfer, Mutant
+CONSTANTS N, MaxWork, Attach, Xfer, ServerInit, Mutant
 
 \* apalache-type: N Int
 \* apalache-type: MaxWork Int
 \* apalache-type: Attach Bool
 \* apalache-type: Xfer Bool
+\* apalache-type: ServerInit Bool
 \* apalache-type: Mutant Str
 \* apalache-type: pc Int -> Str
 \* apalache-type: cst Int -> Str
@@ -128,8 +131,8 @@ Init ==
   /\ torn = [s \in Sess |-> 0]
   /\ bootMx = 0
   /\ sawArea = [t \in Thr |-> FALSE]
-  /\ areaCnt = 0
-  /\ areaLive = FALSE
+  /\ areaCnt = IF ServerInit /\ Mutant # "lazy_init" THEN 1 ELSE 0
+  /\ areaLive = (ServerInit /\ Mutant # "lazy_init")
   /\ inv = [s \in Sess |-> FALSE]
   /\ sharedInv = FALSE
   /\ fresh = [s \in Sess |-> FALSE]
@@ -264,10 +267,12 @@ TAct(s) ==
   /\ UNCHANGED <<cst, orphan, sst, ref, smx, cscp, connRef, adopted, orphL, work, tgt, aRef,
                  clsH, pvH, torn, bootMx, sawArea, areaCnt, areaLive, TmVars, badFree, areaUaf, viaOrphan, busyEnd>>
 
-\* client boot is serialized until A5 makes it reentrant (tracer_Boot_mutex)
+\* client boot is serialized until A5 makes it reentrant (tracer_Boot_mutex); from A5 no boot lock exists
+NoBootLock == Mutant = "no_boot_lock" \/ ServerInit
+
 TBootLock(s) ==
   /\ pc[s] = "bootlk"
-  /\ IF Mutant = "no_boot_lock" THEN UNCHANGED bootMx ELSE bootMx = 0 /\ bootMx' = s
+  /\ IF NoBootLock THEN UNCHANGED bootMx ELSE bootMx = 0 /\ bootMx' = s
   /\ Goto(s, "area")
   /\ UNCHANGED <<cst, orphan, owner, active, sst, ref, smx, cscp, connRef, adopted, orphL, work, tgt, aRef,
                  clsH, pvH, torn, sawArea, areaCnt, areaLive, TmVars, uaf, nested, badFree, areaUaf,
@@ -290,7 +295,7 @@ TAreaMake(s) ==
                  clsH, pvH, torn, bootMx, sawArea, TmVars, uaf, nested, badFree, areaUaf,
                  viaOrphan, daemonWaited, busyEnd>>
 
-ReleaseBoot(s) == IF Mutant = "no_boot_lock" THEN UNCHANGED bootMx ELSE bootMx' = 0
+ReleaseBoot(s) == IF NoBootLock THEN UNCHANGED bootMx ELSE bootMx' = 0
 
 \* db_restart_ex succeeds: boot_register_client creates the session with one reference (the conn's), the boot
 \* loads classes through the client half (set_get_element allocates with db_private_alloc in the client hat)
@@ -901,7 +906,8 @@ R_heap == \A s \in Sess : clsH[s] \in {0, s} /\ pvH[s] \in {0, s}
 \* areas: created once under the boot lock, alive once a tracer booted
 R_area ==
   /\ areaLive = (areaCnt = 1)
-  /\ \A s \in Sess : (bootMx = s) = (pc[s] \in {"area", "area2", "reg"})
+  /\ ServerInit => areaCnt = 1
+  /\ \A s \in Sess : (bootMx = s) = (~ServerInit /\ pc[s] \in {"area", "area2", "reg"})
   /\ \A s \in Sess : pc[s] = "area2" => areaCnt = (IF sawArea[s] THEN 1 ELSE 0)
   /\ \A s \in Sess : pc[s] \notin {"new", "act", "bootlk", "area", "area2"} => areaCnt = 1
 
@@ -917,7 +923,7 @@ IndInv == R_type /\ R_pc /\ R_bracket /\ R_tgt /\ R_sess /\ R_attach /\ R_daemon
 \* Apalache: the role sets fixed, the work bound open
 CInit ==
   /\ N = 2 /\ MaxWork \in Nat /\ MaxWork >= 1
-  /\ Attach \in BOOLEAN /\ Xfer = FALSE /\ Mutant = "none"
+  /\ Attach \in BOOLEAN /\ Xfer = FALSE /\ ServerInit \in BOOLEAN /\ Mutant = "none"
 
 \* witnesses
 NotViaOrphan == ~viaOrphan

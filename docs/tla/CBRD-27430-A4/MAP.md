@@ -185,43 +185,45 @@ save/restore works on them unchanged.
 
 | Line | Expression | Why TLC never evaluates it in the pass cfgs |
 |---|---|---|
-| CscSessions.tla:143 | `Goto` (operator line) | its uses in mutant-only branches: the nesting abort of `Acquire` and `EndSess` (`retire_reactivate`), `TLateOp` (`sessop_unref`), `AUnrefEarly` (`a_unref_early`), `TReread`/`AReread` (`reread`); every other use evaluates it |
-| CscSessions.tla:151 | `Acquire` nesting branch | no correct-variant activation finds the thread inside a bracket (`R_bracket`: `active[t] = 0` at every acquire label); the code aborts there (`csc_activate`, assert + `abort ()`); `mutant-retire-reactivate` reaches the same abort through `EndSess` |
-| CscSessions.tla:152 | `Acquire` nesting branch | as line 151 |
-| CscSessions.tla:153 | `Acquire` `no_mutex` branch | mutant-only (`no_mutex`); `mutant-no-mutex` fires it |
-| CscSessions.tla:194 | `Unlock` `no_mutex` branch | mutant-only (`no_mutex`) |
-| CscSessions.tla:199 | `Reread` | mutant-only action (`reread`, the old `csc_deactivate`); `mutant-reread` fires it |
-| CscSessions.tla:200 | `Reread` | as line 199 |
-| CscSessions.tla:221 | `EndSess` busy branch, `AEnd2` context | the attacher's end is always the session's last reference: it holds the bracket only after the tracer's `csc_deactivate`, which follows the tracer's `css_free_conn` (`TUnreg` before `TDeact`; `R_attach`: an attacher inside the csc has its tracer at `del`/`na`/`done` with `connRef` false). In the `TEnd2` context the branch fires (`witness-busy-end`) |
-| CscSessions.tla:222 | `EndSess` busy branch, `AEnd2` context | as line 221 |
-| CscSessions.tla:227 | `EndSess` `retire_reactivate` branch | mutant-only; `mutant-retire-reactivate` fires it |
-| CscSessions.tla:228 | `EndSess` `retire_reactivate` branch | as line 227 |
-| CscSessions.tla:241 | `SetInv` `shared_tm` branch | mutant-only; the `mutant-shared-tm-*` cfgs fire it |
-| CscSessions.tla:243 | `SetMir` `shared_tm` branch | mutant-only |
-| CscSessions.tla:248 | `Touch` (operator line), `TXfer` context | `TXfer` is disabled with `Xfer = FALSE` (assumption A-XFER); `mutant-xfer` fires it; every other use evaluates it |
-| CscSessions.tla:249 | `Touch`, `TXfer` context | as line 248 |
-| CscSessions.tla:270 | `TBootLock` `no_boot_lock` branch | mutant-only; `mutant-no-boot-lock` fires it |
-| CscSessions.tla:293 | `ReleaseBoot` `no_boot_lock` branch | mutant-only |
-| CscSessions.tla:334 | `Step` (operator line), `TXfer` context | as line 248 |
-| CscSessions.tla:348 | `Enter` flag-set branch, `TEnter2` context | the flag is consumed by the statement's first enter (`R_tm`: `inv[s]` only at `enter1`); in the `TEnter1` context it fires. Under `shared_tm` another session's start sets it (`mutant-shared-tm-unstable`) |
-| CscSessions.tla:349 | `Enter` flag-set branch, `TEnter2` context | as line 348 |
-| CscSessions.tla:351 | `Enter` flag-set branch, `TEnter2` context | as line 348 |
-| CscSessions.tla:352 | `Enter` flag-clear branch, `TEnter1` context | the statement start always sets the session's flag before its first enter (`R_tm`); in the `TEnter2` context it fires. Under `shared_tm` another session consumes it first (`mutant-shared-tm-stale`) |
-| CscSessions.tla:353 | `Enter` flag-clear branch, `TEnter1` context | as line 352 |
-| CscSessions.tla:372 | `TRR` mirror-set branch (main cfg only) | a second `tran_lock_rep_read` in one transaction needs two work steps; `MaxWork = 1` in `CscSessions.cfg`. `CscSessions.scale-work2` (`MaxWork = 2`) evaluates it |
-| CscSessions.tla:402 | `TXfer` | disabled with `Xfer = FALSE` (assumption A-XFER); `mutant-xfer` fires it |
-| CscSessions.tla:405 | `TXfer` | as line 402 |
-| CscSessions.tla:460 | `TLateOp` | mutant-only action (`sessop_unref`); `mutant-sessop-unref` reaches it |
-| CscSessions.tla:480 | `TReread` | mutant-only action (`reread`) |
-| CscSessions.tla:545 | `AUnrefEarly` | mutant-only action (`a_unref_early`); `mutant-attach-unref-early` fires it |
-| CscSessions.tla:546 | `AUnrefEarly` | as line 545 |
-| CscSessions.tla:548 | `AUnrefEarly` | as line 545 |
-| CscSessions.tla:592 | `AReread` | mutant-only action (`reread`) |
+| CscSessions.tla:146 | `Goto` (operator line) | its uses in mutant-only branches: the nesting abort of `Acquire` and `EndSess` (`retire_reactivate`), `TLateOp` (`sessop_unref`), `AUnrefEarly` (`a_unref_early`), `TReread`/`AReread` (`reread`); every other use evaluates it |
+| CscSessions.tla:154 | `Acquire` nesting branch | no correct-variant activation finds the thread inside a bracket (`R_bracket`: `active[t] = 0` at every acquire label); the code aborts there (`csc_activate`, assert + `abort ()`); `mutant-retire-reactivate` reaches the same abort through `EndSess` |
+| CscSessions.tla:155 | `Acquire` nesting branch | as line 151 |
+| CscSessions.tla:156 | `Acquire` `no_mutex` branch | mutant-only (`no_mutex`); `mutant-no-mutex` fires it |
+| CscSessions.tla:197 | `Unlock` `no_mutex` branch | mutant-only (`no_mutex`) |
+| CscSessions.tla:202 | `Reread` | mutant-only action (`reread`, the old `csc_deactivate`); `mutant-reread` fires it |
+| CscSessions.tla:203 | `Reread` | as line 199 |
+| CscSessions.tla:224 | `EndSess` busy branch, `AEnd2` context | the attacher's end is always the session's last reference: it holds the bracket only after the tracer's `csc_deactivate`, which follows the tracer's `css_free_conn` (`TUnreg` before `TDeact`; `R_attach`: an attacher inside the csc has its tracer at `del`/`na`/`done` with `connRef` false). In the `TEnd2` context the branch fires (`witness-busy-end`) |
+| CscSessions.tla:225 | `EndSess` busy branch, `AEnd2` context | as line 221 |
+| CscSessions.tla:230 | `EndSess` `retire_reactivate` branch | mutant-only; `mutant-retire-reactivate` fires it |
+| CscSessions.tla:231 | `EndSess` `retire_reactivate` branch | as line 227 |
+| CscSessions.tla:244 | `SetInv` `shared_tm` branch | mutant-only; the `mutant-shared-tm-*` cfgs fire it |
+| CscSessions.tla:246 | `SetMir` `shared_tm` branch | mutant-only |
+| CscSessions.tla:251 | `Touch` (operator line), `TXfer` context | `TXfer` is disabled with `Xfer = FALSE` (assumption A-XFER); `mutant-xfer` fires it; every other use evaluates it |
+| CscSessions.tla:252 | `Touch`, `TXfer` context | as line 248 |
+| CscSessions.tla:275 | `TBootLock` `no_boot_lock` branch | mutant-only; `mutant-no-boot-lock` fires it |
+| CscSessions.tla:298 | `ReleaseBoot` `no_boot_lock` branch | mutant-only |
+| CscSessions.tla:339 | `Step` (operator line), `TXfer` context | as line 248 |
+| CscSessions.tla:353 | `Enter` flag-set branch, `TEnter2` context | the flag is consumed by the statement's first enter (`R_tm`: `inv[s]` only at `enter1`); in the `TEnter1` context it fires. Under `shared_tm` another session's start sets it (`mutant-shared-tm-unstable`) |
+| CscSessions.tla:354 | `Enter` flag-set branch, `TEnter2` context | as line 348 |
+| CscSessions.tla:356 | `Enter` flag-set branch, `TEnter2` context | as line 348 |
+| CscSessions.tla:357 | `Enter` flag-clear branch, `TEnter1` context | the statement start always sets the session's flag before its first enter (`R_tm`); in the `TEnter2` context it fires. Under `shared_tm` another session consumes it first (`mutant-shared-tm-stale`) |
+| CscSessions.tla:358 | `Enter` flag-clear branch, `TEnter1` context | as line 352 |
+| CscSessions.tla:377 | `TRR` mirror-set branch (main cfg only) | a second `tran_lock_rep_read` in one transaction needs two work steps; `MaxWork = 1` in `CscSessions.cfg`. `CscSessions.scale-work2` (`MaxWork = 2`) evaluates it |
+| CscSessions.tla:407 | `TXfer` | disabled with `Xfer = FALSE` (assumption A-XFER); `mutant-xfer` fires it |
+| CscSessions.tla:410 | `TXfer` | as line 402 |
+| CscSessions.tla:465 | `TLateOp` | mutant-only action (`sessop_unref`); `mutant-sessop-unref` reaches it |
+| CscSessions.tla:485 | `TReread` | mutant-only action (`reread`) |
+| CscSessions.tla:550 | `AUnrefEarly` | mutant-only action (`a_unref_early`); `mutant-attach-unref-early` fires it |
+| CscSessions.tla:551 | `AUnrefEarly` | as line 545 |
+| CscSessions.tla:553 | `AUnrefEarly` | as line 545 |
+| CscSessions.tla:597 | `AReread` | mutant-only action (`reread`) |
 
 ## Bounds
 
 Main: `N = 2` sessions (+ attacher + daemon), `MaxWork = 1`; scale: `MaxWork = 2`. IndInv: Apalache with
-`N = 2` fixed and every `MaxWork`, both `Attach` values.
+`N = 2` fixed and every `MaxWork`, both `Attach` and both `ServerInit` values. Every A4 cfg sets `ServerInit = FALSE`
+(the tracer's boot lock, areas created by the first boot); the A5 model `docs/tla/CBRD-27430-A5` extends this module
+with `ServerInit = TRUE` (the server boot creates the areas, no boot lock).
 
 ## Trace validation
 
@@ -255,8 +257,9 @@ injected), the attacher (`ARef` … `AUnref`: no A4 caller; B1), `TEnd2` busy (n
 ## Result
 
 - 2026-11-07, `tools/tla/tla-check docs/tla/CBRD-27430-A4`: `RESULT: OK` (27 cfgs), run dir
-  `.git_ignored_dir/scratch/tla/CBRD-27430-A4-20261107-194650-1886692`.
-- spec sha256: `09c0dabb23a7022f4edb64fb47c909987a5df6fb5c9d612e4aacb1b926e9a434  CscSessions.tla`,
+  `.git_ignored_dir/scratch/tla/CBRD-27430-A4-20261107-212533-1925838` (rerun after A5 added the `ServerInit`
+  constant, `FALSE` in every A4 cfg; the first run was `CBRD-27430-A4-20261107-194650-1886692`).
+- spec sha256: `670dd2522b53bae6cced155073cf0b41cb69555ccf1948f8c49a9b9e974d1e7e  CscSessions.tla`,
   `f9869d510bf972d00863a13ef7e1bcce03a65e2e86a2ea1036895927310c9da4  CscSessionsTrace.tla` (cfgs in the run's
   `summary.txt`; this section was written after the run).
 - Correct variant: `CscSessions` 1,280,323 states / 421,923 distinct, depth 50; `.scale-work2` 8,245,835 /
