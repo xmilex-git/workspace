@@ -48,3 +48,9 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Measuring
 - Case (2026-11-06, 99fa309 vs develop): one warm-up pass then one measured pass of q1-q22 on one server showed q19-q21 20-70% faster on develop, but their plans and fetch counts were identical; only ioread differed, because the old q18 plan read 847K pages and evicted what q19-q21 reuse (19.3 GB data, 12 GB buffer). The user set the per-query restart, cold then warm, on 2026-11-07.
 - Source: user decision 2026-11-07
+
+### P8 — two loads of the same SF10 DB are not the same disk workload
+- Rule: A and B read the same DB files; a build that cannot open the shared SF10 DB is compared only against builds run on a DB loaded in the same run, never against the shared DB (P8).
+- Applies at: Measuring
+- Case (2026-11-07, TPC-H 4adcd4090 vs develop): 4adcd4090 cannot open the shared DB (catalog change 5a3e7a14b), so it ran on a DB loaded in the run and q21 showed +8.5% on develop. The same develop build then ran q21 at 18.2 s on the shared DB and 15.7 s on a fresh load with the same script (median of 15). Heap statistics, fetch and ioread were identical and evicting the page cache kept the gap; the fresh load needed ~5% fewer disk read requests for the same 12.2 GB at the same time per request (HDD, rotational=1). Page placement from the eight parallel loaders differs per load.
+- Source: this session

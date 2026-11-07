@@ -96,6 +96,7 @@ When a build cannot open it (a disk format change), reloading means deleting a s
 - Per-query timing (TPC-H and the like) restarts the server before each query, then times one cold and one warm run of it and reports both (P7).
 - A and B run on the same node in the same reservation, interleaved (A B A B …), never A on one node and B on
   the other: the NUMA nodes differ and the disk is shared.
+- A and B read the same DB files; a build that cannot open the shared SF10 DB is compared only against builds run on a DB loaded in the same run, never against the shared DB (P8).
 - Profiling: `perf_event_paranoid` is -1 in the containers and release installs carry debug_info, so `perf record -p <cub_server pid>` resolves engine symbols without sudo; `SET TRACE ON` + `SHOW TRACE` beside it separates a plan change (fetch counts differ) from buffer residency (same fetches, different ioread).
 - `perf record` on a node runs with `--no-buildid-cache`, and `perf report` reads the data inside the run dir before release (P6).
 - The report names the node, run-id, both fingerprints, the conf if not standard, every repetition with
