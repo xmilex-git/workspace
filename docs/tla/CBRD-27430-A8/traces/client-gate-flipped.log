@@ -1,0 +1,12 @@
+TLATRACE seq=1 a=Enter p=1
+TLATRACE seq=2 a=Exit p=1
+TLATRACE seq=3 a=Enter p=1
+TLATRACE seq=4 a=Exit p=1
+TLATRACE seq=5 a=Fail p=1 h=client
+TLATRACE seq=6 a=Gate p=1 go=0
+TLATRACE seq=7 a=AbortEffect p=1 h=client
+TLATRACE seq=8 a=Ret p=1 h=client e=unilat
+TLATRACE seq=9 a=Enter p=1
+TLATRACE seq=10 a=Exit p=1
+TLATRACE seq=11 a=Enter p=1
+TLATRACE seq=12 a=Exit p=1

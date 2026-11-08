@@ -400,6 +400,14 @@ _Avoid_: "스냅샷 일관 권한"(폴드의 규칙이 아님), REVOKE가 grante
 폴드 서버(SERVER_MODE)가 클래스의 사용자 정의 native C METHOD를 `sm_dynamic_link_class`에서 METHOD 파일을 적재하기 전에 `ER_SM_DYNAMIC_LINK_PROBLEMS`(-237)로 거절하는 규칙(ADR 0049). 내장(static) 메서드와 Java·PL/CSQL 루틴은 해당 없다. CS/SA는 바뀌지 않는다.
 _Avoid_: "METHOD 미지원"(내장 메서드와 PL 루틴은 지원된다)
 
+**client 절반 AREA abort (client-half AREA abort)**:
+폴드 서버에서 AREA 할당 실패가 트랜잭션을 abort하는 범위: 등록된 세션 브래킷의 client 절반(`db_on_server == 0`, dispatch 안 포함)일 때만, 국면(컴파일·읽기·변이) 무관하게 abort한다(develop CAS와 같음, ADR 0050). 브래킷 없는 스레드·등록 클라이언트 없는 브래킷·서버 절반은 할당만 실패시킨다.
+_Avoid_: "OOM이면 세션 abort"(서버 절반은 문장 에러), "변이 중 OOM만 abort"(#128 D8의 대체된 문언)
+
+**파서 중첩 한도 (parser nesting limit)**:
+식 트리의 중첩 깊이 한도 16384(`PT_MAX_NESTING_DEPTH`). 넘으면 파스 에러이며 CS·SA·폴드 모두 같다(ADR 0051). 목록을 사슬로 펴는 구문은 목록 길이 + 인자 깊이로 세고, 중첩 서브쿼리는 세지 않는다.
+_Avoid_: "스택 가드"(스택 잔량을 재지 않는다)
+
 **머지 조건 / 릴리스 게이트 (merge condition / release gate)**:
 폴드가 다음 버전 라인의 시작점(11.5.0 code freeze 직후 develop)에 들어가기 위한 조건과, 그 버전이 출시되기 위한 조건의 구분. 머지 조건 = CI 4종 green·코어 0·YCSB C/sysbench RO develop 비악화; 릴리스 게이트 = 제품화 과제(#259의 6대 과제)·QA 인계 test.md. 머지는 일방향 문이며 실패 시나리오는 롤백이 아니라 릴리스 연기다.
 _Avoid_: 머지와 릴리스를 한 "검증" 으로 묶는 서술, feature 브랜치 장기 존치(월 34% 파일 겹침으로 기각), 런타임 CAS 공존 모드(기각)
