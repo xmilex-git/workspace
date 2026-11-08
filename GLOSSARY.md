@@ -396,6 +396,10 @@ _Avoid_: 2.17배를 폴드 효과로 서술, 독립 최적화를 폴드 필요�
 폴드 서버(SERVER_MODE)의 권한 캐시 갱신(`authenticate_cache::update`)이 사용자의 그룹과 grant를 트랜잭션 스냅샷이 아니라 최신 커밋 버전(`LC_FETCH_COMMITTED_VERSION`, 락·스냅샷 없음)으로 읽는 규칙(ADR 0048). REVOKE 커밋 전에 시작한 REPEATABLE READ 트랜잭션도 커밋 뒤의 컴파일에서 거부되고, 커밋된 GRANT도 진행 중 트랜잭션의 다음 컴파일부터 보인다. 클래스 메타데이터가 이미 최신 커밋(락) 기준인 것과 같다. CS/SA는 바뀌지 않는다.
 _Avoid_: "스냅샷 일관 권한"(폴드의 규칙이 아님), REVOKE가 grantee 트랜잭션을 기다리게 하는 S 락 읽기(기각)
 
+**native METHOD 거절 (native method refusal)**:
+폴드 서버(SERVER_MODE)가 클래스의 사용자 정의 native C METHOD를 `sm_dynamic_link_class`에서 METHOD 파일을 적재하기 전에 `ER_SM_DYNAMIC_LINK_PROBLEMS`(-237)로 거절하는 규칙(ADR 0049). 내장(static) 메서드와 Java·PL/CSQL 루틴은 해당 없다. CS/SA는 바뀌지 않는다.
+_Avoid_: "METHOD 미지원"(내장 메서드와 PL 루틴은 지원된다)
+
 **머지 조건 / 릴리스 게이트 (merge condition / release gate)**:
 폴드가 다음 버전 라인의 시작점(11.5.0 code freeze 직후 develop)에 들어가기 위한 조건과, 그 버전이 출시되기 위한 조건의 구분. 머지 조건 = CI 4종 green·코어 0·YCSB C/sysbench RO develop 비악화; 릴리스 게이트 = 제품화 과제(#259의 6대 과제)·QA 인계 test.md. 머지는 일방향 문이며 실패 시나리오는 롤백이 아니라 릴리스 연기다.
 _Avoid_: 머지와 릴리스를 한 "검증" 으로 묶는 서술, feature 브랜치 장기 존치(월 34% 파일 겹침으로 기각), 런타임 CAS 공존 모드(기각)
