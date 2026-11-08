@@ -1,0 +1,186 @@
+TLATRACE seq=1 a=Call p=1 deep=0
+TLATRACE seq=2 a=Exit p=1 drain=0
+TLATRACE seq=3 a=Call p=1 deep=0
+TLATRACE seq=4 a=Exit p=1 drain=0
+TLATRACE seq=5 a=Call p=1 deep=0
+TLATRACE seq=6 a=Query1 p=1
+TLATRACE seq=7 a=Call p=1 deep=0
+TLATRACE seq=8 a=Exit p=1 drain=0
+TLATRACE seq=9 a=Call p=1 deep=0
+TLATRACE seq=10 a=Exit p=1 drain=0
+TLATRACE seq=11 a=Call p=1 deep=0
+TLATRACE seq=12 a=Query1 p=1
+TLATRACE seq=13 a=Call p=1 deep=0
+TLATRACE seq=14 a=Exit p=1 drain=0
+TLATRACE seq=15 a=Call p=1 deep=0
+TLATRACE seq=16 a=Exit p=1 drain=0
+TLATRACE seq=17 a=Call p=1 deep=0
+TLATRACE seq=18 a=Query1 p=1
+TLATRACE seq=19 a=Call p=1 deep=0
+TLATRACE seq=20 a=Exit p=1 drain=0
+TLATRACE seq=21 a=Call p=1 deep=0
+TLATRACE seq=22 a=Exit p=1 drain=0
+TLATRACE seq=23 a=Call p=1 deep=0
+TLATRACE seq=24 a=Query1 p=1
+TLATRACE seq=25 a=Call p=1 deep=0
+TLATRACE seq=26 a=Exit p=1 drain=0
+TLATRACE seq=27 a=Call p=1 deep=0
+TLATRACE seq=28 a=Exit p=1 drain=0
+TLATRACE seq=29 a=Call p=1 deep=0
+TLATRACE seq=30 a=Query1 p=1
+TLATRACE seq=31 a=Call p=1 deep=0
+TLATRACE seq=32 a=Exit p=1 drain=0
+TLATRACE seq=33 a=Call p=1 deep=0
+TLATRACE seq=34 a=Exit p=1 drain=0
+TLATRACE seq=35 a=Call p=1 deep=0
+TLATRACE seq=36 a=Query1 p=1
+TLATRACE seq=37 a=Call p=1 deep=0
+TLATRACE seq=38 a=Exit p=1 drain=0
+TLATRACE seq=39 a=Call p=1 deep=0
+TLATRACE seq=40 a=Exit p=1 drain=0
+TLATRACE seq=41 a=Call p=1 deep=0
+TLATRACE seq=42 a=Query1 p=1
+TLATRACE seq=43 a=Call p=1 deep=0
+TLATRACE seq=44 a=Exit p=1 drain=0
+TLATRACE seq=45 a=Call p=1 deep=0
+TLATRACE seq=46 a=Exit p=1 drain=0
+TLATRACE seq=47 a=Call p=1 deep=0
+TLATRACE seq=48 a=Query1 p=1
+TLATRACE seq=49 a=Call p=1 deep=0
+TLATRACE seq=50 a=Exit p=1 drain=0
+TLATRACE seq=51 a=Call p=1 deep=0
+TLATRACE seq=52 a=Exit p=1 drain=0
+TLATRACE seq=53 a=Call p=1 deep=0
+TLATRACE seq=54 a=Query1 p=1
+TLATRACE seq=55 a=Call p=1 deep=0
+TLATRACE seq=56 a=Exit p=1 drain=0
+TLATRACE seq=57 a=Call p=1 deep=0
+TLATRACE seq=58 a=Exit p=1 drain=0
+TLATRACE seq=59 a=Call p=1 deep=0
+TLATRACE seq=60 a=Query1 p=1
+TLATRACE seq=61 a=Call p=1 deep=0
+TLATRACE seq=62 a=Exit p=1 drain=0
+TLATRACE seq=63 a=Call p=1 deep=0
+TLATRACE seq=64 a=Exit p=1 drain=0
+TLATRACE seq=65 a=Call p=1 deep=0
+TLATRACE seq=66 a=Query1 p=1
+TLATRACE seq=67 a=Call p=1 deep=0
+TLATRACE seq=68 a=Exit p=1 drain=0
+TLATRACE seq=69 a=Call p=1 deep=0
+TLATRACE seq=70 a=Exit p=1 drain=0
+TLATRACE seq=71 a=Call p=1 deep=0
+TLATRACE seq=72 a=Query1 p=1
+TLATRACE seq=73 a=Call p=1 deep=0
+TLATRACE seq=74 a=Exit p=1 drain=0
+TLATRACE seq=75 a=Call p=1 deep=0
+TLATRACE seq=76 a=Exit p=1 drain=0
+TLATRACE seq=77 a=Call p=1 deep=0
+TLATRACE seq=78 a=Query1 p=1
+TLATRACE seq=79 a=Call p=1 deep=0
+TLATRACE seq=80 a=Exit p=1 drain=0
+TLATRACE seq=81 a=Call p=1 deep=0
+TLATRACE seq=82 a=Exit p=1 drain=0
+TLATRACE seq=83 a=Call p=1 deep=0
+TLATRACE seq=84 a=Query1 p=1
+TLATRACE seq=85 a=Call p=1 deep=0
+TLATRACE seq=86 a=Exit p=1 drain=0
+TLATRACE seq=87 a=Call p=1 deep=0
+TLATRACE seq=88 a=Exit p=1 drain=0
+TLATRACE seq=89 a=Call p=1 deep=0
+TLATRACE seq=90 a=Query1 p=1
+TLATRACE seq=91 a=Call p=1 deep=0
+TLATRACE seq=92 a=Exit p=1 drain=0
+TLATRACE seq=93 a=Call p=1 deep=1
+TLATRACE seq=94 a=Exit p=1 drain=0
+TLATRACE seq=95 a=Call p=1 deep=0
+TLATRACE seq=96 a=Exit p=1 drain=0
+TLATRACE seq=97 a=Query2 p=1
+TLATRACE seq=98 a=Exit p=1 drain=0
+TLATRACE seq=99 a=Call p=1 deep=0
+TLATRACE seq=100 a=Exit p=1 drain=0
+TLATRACE seq=101 a=Call p=1 deep=0
+TLATRACE seq=102 a=Exit p=1 drain=0
+TLATRACE seq=103 a=Query2 p=1
+TLATRACE seq=104 a=Exit p=1 drain=0
+TLATRACE seq=105 a=Call p=1 deep=0
+TLATRACE seq=106 a=Exit p=1 drain=0
+TLATRACE seq=107 a=Call p=1 deep=0
+TLATRACE seq=108 a=Exit p=1 drain=0
+TLATRACE seq=109 a=Query2 p=1
+TLATRACE seq=110 a=Exit p=1 drain=0
+TLATRACE seq=111 a=Call p=1 deep=0
+TLATRACE seq=112 a=Exit p=1 drain=0
+TLATRACE seq=113 a=Call p=1 deep=0
+TLATRACE seq=114 a=Exit p=1 drain=0
+TLATRACE seq=115 a=Query2 p=1
+TLATRACE seq=116 a=Exit p=1 drain=0
+TLATRACE seq=117 a=Call p=1 deep=0
+TLATRACE seq=118 a=Exit p=1 drain=0
+TLATRACE seq=119 a=Call p=1 deep=0
+TLATRACE seq=120 a=Exit p=1 drain=0
+TLATRACE seq=121 a=Query2 p=1
+TLATRACE seq=122 a=Exit p=1 drain=0
+TLATRACE seq=123 a=Call p=1 deep=0
+TLATRACE seq=124 a=Exit p=1 drain=0
+TLATRACE seq=125 a=Call p=1 deep=0
+TLATRACE seq=126 a=Exit p=1 drain=0
+TLATRACE seq=127 a=Query2 p=1
+TLATRACE seq=128 a=Exit p=1 drain=0
+TLATRACE seq=129 a=Call p=1 deep=0
+TLATRACE seq=130 a=Exit p=1 drain=0
+TLATRACE seq=131 a=Call p=1 deep=0
+TLATRACE seq=132 a=Exit p=1 drain=0
+TLATRACE seq=133 a=Query2 p=1
+TLATRACE seq=134 a=Exit p=1 drain=0
+TLATRACE seq=135 a=Call p=1 deep=0
+TLATRACE seq=136 a=Exit p=1 drain=0
+TLATRACE seq=137 a=Call p=1 deep=0
+TLATRACE seq=138 a=Exit p=1 drain=0
+TLATRACE seq=139 a=Query2 p=1
+TLATRACE seq=140 a=Exit p=1 drain=0
+TLATRACE seq=141 a=Call p=1 deep=0
+TLATRACE seq=142 a=Exit p=1 drain=0
+TLATRACE seq=143 a=Call p=1 deep=0
+TLATRACE seq=144 a=Exit p=1 drain=0
+TLATRACE seq=145 a=Query2 p=1
+TLATRACE seq=146 a=Exit p=1 drain=0
+TLATRACE seq=147 a=Call p=1 deep=0
+TLATRACE seq=148 a=Exit p=1 drain=0
+TLATRACE seq=149 a=Call p=1 deep=0
+TLATRACE seq=150 a=Exit p=1 drain=0
+TLATRACE seq=151 a=Query2 p=1
+TLATRACE seq=152 a=Exit p=1 drain=0
+TLATRACE seq=153 a=Call p=1 deep=0
+TLATRACE seq=154 a=Exit p=1 drain=0
+TLATRACE seq=155 a=Call p=1 deep=0
+TLATRACE seq=156 a=Exit p=1 drain=0
+TLATRACE seq=157 a=Query2 p=1
+TLATRACE seq=158 a=Exit p=1 drain=0
+TLATRACE seq=159 a=Call p=1 deep=0
+TLATRACE seq=160 a=Exit p=1 drain=0
+TLATRACE seq=161 a=Call p=1 deep=0
+TLATRACE seq=162 a=Exit p=1 drain=0
+TLATRACE seq=163 a=Query2 p=1
+TLATRACE seq=164 a=Exit p=1 drain=0
+TLATRACE seq=165 a=Call p=1 deep=0
+TLATRACE seq=166 a=Exit p=1 drain=0
+TLATRACE seq=167 a=Call p=1 deep=0
+TLATRACE seq=168 a=Exit p=1 drain=0
+TLATRACE seq=169 a=Query2 p=1
+TLATRACE seq=170 a=Exit p=1 drain=0
+TLATRACE seq=171 a=Call p=1 deep=0
+TLATRACE seq=172 a=Exit p=1 drain=0
+TLATRACE seq=173 a=Call p=1 deep=0
+TLATRACE seq=174 a=Exit p=1 drain=0
+TLATRACE seq=175 a=Query2 p=1
+TLATRACE seq=176 a=Exit p=1 drain=0
+TLATRACE seq=177 a=Call p=1 deep=0
+TLATRACE seq=178 a=Exit p=1 drain=0
+TLATRACE seq=179 a=Call p=1 deep=0
+TLATRACE seq=180 a=Exit p=1 drain=0
+TLATRACE seq=181 a=Query2 p=1
+TLATRACE seq=182 a=Exit p=1 drain=0
+TLATRACE seq=183 a=Call p=1 deep=0
+TLATRACE seq=184 a=Exit p=1 drain=0
+TLATRACE seq=185 a=Call p=1 deep=0
+TLATRACE seq=186 a=Exit p=1 drain=0

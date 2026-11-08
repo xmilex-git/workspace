@@ -1,0 +1,23 @@
+TLATRACE seq=1 a=Call p=1 deep=0
+TLATRACE seq=2 a=Exit p=1 drain=0
+TLATRACE seq=3 a=Call p=1 deep=0
+TLATRACE seq=4 a=Exit p=1 drain=0
+TLATRACE seq=5 a=Call p=1 deep=0
+TLATRACE seq=6 a=Query1 p=1
+TLATRACE seq=7 a=Call p=1 deep=0
+TLATRACE seq=8 a=Exit p=1 drain=0
+TLATRACE seq=9 a=Call p=1 deep=0
+TLATRACE seq=10 a=Exit p=1 drain=0
+TLATRACE seq=11 a=Call p=1 deep=0
+TLATRACE seq=12 a=Query1 p=1
+TLATRACE seq=13 a=Query2 p=1
+TLATRACE seq=14 a=Exit p=1 drain=0
+TLATRACE seq=15 a=Call p=1 deep=0
+TLATRACE seq=16 a=Exit p=1 drain=0
+TLATRACE seq=17 a=Call p=1 deep=0
+TLATRACE seq=18 a=Exit p=1 drain=0
+TLATRACE seq=20 a=Exit p=1 drain=0
+TLATRACE seq=21 a=Call p=1 deep=0
+TLATRACE seq=22 a=Exit p=1 drain=0
+TLATRACE seq=23 a=Call p=1 deep=0
+TLATRACE seq=24 a=Exit p=1 drain=0
