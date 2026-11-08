@@ -135,12 +135,19 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Rule: A probe that needs vacuum to remove deleted keys while a long query runs (a merge or page reuse inside an injected delay) fills the deletes' log block before that query takes its snapshot (a bulk statement right after the deletes, while a held snapshot still blocks vacuum), and logs the vacuum lag (`show log header` Current_append page minus `cubrid vacuumdb -C --dump` "First log page ID referenced") through the window, because vacuum cleans a block only when every transaction in it is older than every snapshot: a block the query's later statements complete waits until the query ends.
 - Applies at: Instrumenting
 - Case (2026-11-06, CBRD-27968 pass-after): the dispatcher waited 300-900 s at its first `fix_prev_leaf` while the scenario waited for vacuum to empty and merge the last leaf handed out. Seven runs saw the merge only after Q ended (or after the split it had to precede); the lag log showed vacuum fixed at one page while Q ran (1312 -> 8326 pages behind) although it had caught up (10 pages) before the deletes. Moving the 200000-row pump between the deletes and Q, with the RR session still holding vacuum, gave the merge two rounds after H's commit, inside the delay, on the first try (runs fix9 and base1).
+- Case (2026-11-09, lazy-snapshot H2): the deletes of a REPEATABLE READ probe were vacuumed only after the scan ended, until the deleting transaction itself wrote a 20000-row insert after its deletes; then 187 pages were deallocated and one reused as a file table page inside the scan's delay.
 - Source: session 2026-11-06 (CBRD-27968)
 
 ### P21 — a crashed server revives and crashes again
 - Rule: A probe that crashes the server on purpose expects `auto_restart_server` (default yes) to revive it with the same environment and crash it again: count one core per revival, read the first core by its pid, and stop the install's master by pid once no `cub_server` of the install is left (`cubrid-server-control` P4).
 - Applies at: Instrumenting
 - Case (2026-11-09, map #618 A8 trace runs): an injected AREA failure crashed the tracer's server (core 32428); cub_master revived it within seconds with the tracer environment, which crashed at the same step (core 32759, a different symptom: an assert instead of SIGSEGV), and the wrapper's `stop` returned `RESULT: FAILED` with the install's master still listening. Four runs left a master each until it was stopped by pid.
+
+### P22 — vacuum frees a heap page only after its single pending vacuum
+- Rule: A probe that needs vacuum to deallocate heap pages gives each page one row (records over half a page, `enable_string_compression=no` in the server conf, which also keeps `CHAR` padding uncompressed), because `vacuum_heap_page` removes an emptied page only when its status is `HEAP_PAGE_VACUUM_ONCE` (`vacuum.c:1825`), i.e. one MVCC operation since its last vacuum; and it holds a parallel scan's workers before their first page fix (not after `scan_open_parallel_heap_scan`), since the workers start reading inside the open.
+- Applies at: Instrumenting
+- Case (2026-11-09, lazy-snapshot H2): 47699 deleted rows spread at 59 rows per page (compressed `CHAR(1200)`) left 0 pages deallocated though vacuum removed the rows; with string compression off and one 3000-byte row per page, deleting one row per sector deallocated all 187 pages. A 40 s delay after `scan_open_parallel_heap_scan` held nothing: the worker `Fix` events came right after `Collect`; the delay at the worker's first `get_next_vpid_with_fix` held them.
+- Source: session 2026-11-09 (lazy-snapshot)
 
 ## Reporting a triage
 

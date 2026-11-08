@@ -128,6 +128,8 @@ provides it. Done when every checklist row is answered.
 - A worker loop is bounded by a counter every iteration advances (its share of the input), never by one only some iterations advance, or TLC reports a false liveness counterexample. (P25)
 - A TLC cfg cannot write a negative integer: put a natural constant in the cfg and build the value set from it in the spec. (P19)
 - A CASE whose guards can hold together is a nondeterministic choice in TLA+, not TLC's first-match: an ordered decision is an IF ... ELSE IF chain, and a CASE keeps only guards that exclude each other or end in OTHER. (P56)
+- A constant that is a statement's program or any sequence is a function over `1..N` with `N` its own constant, substituted in the cfg from a spec operator (`Prog <- ProgScanCount`), and a range bounded by a variable is written as inequalities (`0 <= v /\ v <= curVer`, `\E v \in 0..NW : v <= curVer /\ ...`): a TLC cfg cannot write a sequence, and Apalache rejects `Seq(_)` and any `a..b` whose bound is not a constant, in ASSUME and in IndInv alike. (P59)
+- Write `COUNT-star` (never `COUNT(*)`) in a spec's comments, `\*` lines included: the `(*` opens a nested block comment and SANY reports an EOF or an open comment far below it. (P60)
 
 ### 5. Check, then hunt
 

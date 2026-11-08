@@ -313,3 +313,15 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Rule: An injected failure armed for a phase fires at that phase's first matching step, which is often a cache fill the model does not name (a class decode): warm the caches with a statement before arming or filter by the allocation site, and before blaming the modeled step for a crash, rerun the injection with the modeled reaction switched off to see whether the caller's own error path crashes the same way.
 - Applies at: TRACE.md (4. Reproducing a hole)
 - Case (2026-11-09, map #618 A8, `FoldOom` trace runs): failing the tracer's first client-half AREA allocation hit `tf_disk_to_class` decoding `_db_synonym`, and the server asserted in `or_get_int`; it looked like the abort's fault until the same injection with the callback disabled (`CUBRID_TLA_A8_NULL_GATE=1`) crashed on the same stack — the decoder ignores the failed domain allocation (a develop defect). With the class cache warmed by a PRE statement the failure landed in the compile's domain allocation, and the run gave the modeled abort and -72 with no core.
+
+### P59 — sequences and variable-bounded ranges break TLC cfgs and Apalache
+- Rule: A constant that is a statement's program or any sequence is a function over `1..N` with `N` its own constant, substituted in the cfg from a spec operator (`Prog <- ProgScanCount`), and a range bounded by a variable is written as inequalities (`0 <= v /\ v <= curVer`, `\E v \in 0..NW : v <= curVer /\ ...`): a TLC cfg cannot write a sequence, and Apalache rejects `Seq(_)` and any `a..b` whose bound is not a constant, in ASSUME and in IndInv alike.
+- Applies at: SKILL.md (4. Spec and cfgs)
+- Case (2026-11-09, lazy-snapshot `LazySnapshot`): `Prog = <<"scan", "count">>` in a cfg stopped TLC at the cfg line; Apalache then failed in turn on `Prog \in Seq(...)` in ASSUME, on `1..NOps` in ASSUME, on `0..curVer` in `I_hist`, and on an untyped `<<...>>` of six booleans in UNCHANGED (`\* @type:` on `gVars`), before it reached the inductive check.
+- Source: session 2026-11-09 (lazy-snapshot)
+
+### P60 — `(*` inside a comment opens a block comment
+- Rule: Write `COUNT-star` (never `COUNT(*)`) in a spec's comments, `\*` lines included: the `(*` opens a nested block comment and SANY reports an EOF or an open comment far below it.
+- Applies at: SKILL.md (4. Spec and cfgs)
+- Case (2026-11-09, lazy-snapshot `LazySnapshot`): the header comment and a `\*` comment said `COUNT(*)`; SANY reported "EOF reached, possibly open comment starting around line 468" on a 470-line module.
+- Source: session 2026-11-09 (lazy-snapshot)
