@@ -314,6 +314,11 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Applies at: TRACE.md (4. Reproducing a hole)
 - Case (2026-11-09, map #618 A8, `FoldOom` trace runs): failing the tracer's first client-half AREA allocation hit `tf_disk_to_class` decoding `_db_synonym`, and the server asserted in `or_get_int`; it looked like the abort's fault until the same injection with the callback disabled (`CUBRID_TLA_A8_NULL_GATE=1`) crashed on the same stack — the decoder ignores the failed domain allocation (a develop defect). With the class cache warmed by a PRE statement the failure landed in the compile's domain allocation, and the run gave the modeled abort and -72 with no core.
 
+### P58 — a variable both assigned and UNCHANGED silently narrows an action
+- Rule: An action that assigns a variable and also lists it in UNCHANGED is enabled only where the two agree, and TLC reports nothing: after editing UNCHANGED lists in bulk, check each action that assigns the variable, and a mutant that survives where a counterexample was expected first gets a reachability probe of its precondition states.
+- Applies at: SKILL.md (4. Spec and cfgs)
+- Case (2026-11-09, map #618 B1a, `Handoff`): adding `latest` to every UNCHANGED list that named `mFreed` also put it into `SCrash`, which sets `latest' = 0`. The crash then fired only before the first HELLO, the main cfg passed 40 M states, the coverage check saw `SCrash` fire, and `mutant-cancel-by-db` ran 60 levels without a counterexample. A probe invariant (a token of a dead channel while another channel is published, after a crash) came back unreachable, bisecting it pointed at `SCrash`, and removing `latest` from its UNCHANGED made the crash reachable after HELLO.
+
 ### P59 — sequences and variable-bounded ranges break TLC cfgs and Apalache
 - Rule: A constant that is a statement's program or any sequence is a function over `1..N` with `N` its own constant, substituted in the cfg from a spec operator (`Prog <- ProgScanCount`), and a range bounded by a variable is written as inequalities (`0 <= v /\ v <= curVer`, `\E v \in 0..NW : v <= curVer /\ ...`): a TLC cfg cannot write a sequence, and Apalache rejects `Seq(_)` and any `a..b` whose bound is not a constant, in ASSUME and in IndInv alike.
 - Applies at: SKILL.md (4. Spec and cfgs)
@@ -325,3 +330,8 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 - Applies at: SKILL.md (4. Spec and cfgs)
 - Case (2026-11-09, lazy-snapshot `LazySnapshot`): the header comment and a `\*` comment said `COUNT(*)`; SANY reported "EOF reached, possibly open comment starting around line 468" on a 470-line module.
 - Source: session 2026-11-09 (lazy-snapshot)
+
+### P61 — Apalache leaves an out-of-domain application unconstrained
+- Rule: In an Apalache inductive check a function applied outside its domain (`bCh[0]`, `bCh[x.gen]` with `x.gen` unbounded) is an unconstrained value the solver picks to break the invariant: IndInv bounds every field it uses as an index (`dpc \in {...} => dch \in Conns`, each token and message field in its range) before a conjunct applies it, an operator taking `DOMAIN` of a parameter carries an `@type` annotation, and while iterating, IndInv is checked in groups of conjuncts run in parallel (`IndInv => Grp'`), because one run stops at its first counterexample after tens of minutes.
+- Applies at: SKILL.md (6. Inductive invariant (and proof on request))
+- Case (2026-11-09, map #618 B1a, `HandoffInd`): the first inductive runs failed at State0 on states no action could build — `bCh[dch]` with `dch = 0`, `bCh[x.gen]` for a token whose `gen` was out of range, `cx.gen` while no cancel was in flight; a `FieldsOK` conjunct bounding every index field removed them. `Positions(q) == 1..Len(q)` was refused ("Expected a constant integer range") and `DOMAIN q` needed `\* @type: (Seq($msg)) => Set(Int);`. Seven to nine groups of IndInv's 54 conjuncts ran 400–3500 s each, against 1380 s for one single run that reported one counterexample.
