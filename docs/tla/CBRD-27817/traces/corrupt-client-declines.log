@@ -1,0 +1,19 @@
+TLATRACE seq=1 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=2 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=3 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=4 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=5 a=Load p=srv site=single ann=fixed
+TLATRACE seq=6 a=Compile p=cli site=list cls=left ann=fixed
+TLATRACE seq=7 a=Load p=srv site=list ann=fixed
+TLATRACE seq=8 a=Compile p=cli site=single cls=left ann=fixed
+TLATRACE seq=9 a=Load p=srv site=single ann=fixed
+TLATRACE seq=10 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=11 a=Load p=srv site=single ann=fixed
+TLATRACE seq=12 a=Compile p=cli site=box cls=fixed ann=none
+TLATRACE seq=13 a=Load p=srv site=box ann=none
+TLATRACE seq=14 a=Decide p=cli conv=1 decl=1
+TLATRACE seq=15 a=Decide p=cli conv=1 decl=0
+TLATRACE seq=16 a=Decide p=cli conv=1 decl=0
+TLATRACE seq=17 a=Decide p=srv conv=1 decl=0
+TLATRACE seq=18 a=Decide p=srv conv=1 decl=0
+TLATRACE seq=19 a=Decide p=srv conv=1 decl=0
