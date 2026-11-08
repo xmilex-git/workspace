@@ -1,0 +1,5 @@
+TLATRACE seq=1 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=2 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=3 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=4 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=5 a=Load p=srv site=single ann=fixed

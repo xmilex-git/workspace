@@ -54,47 +54,65 @@ TLATRACE seq=53 a=Load p=srv site=single ann=fixed
 TLATRACE seq=54 a=Load p=srv site=single ann=fixed
 TLATRACE seq=55 a=Load p=srv site=single ann=fixed
 TLATRACE seq=56 a=Compile p=cli site=box cls=fixed ann=none
-TLATRACE seq=57 a=Load p=srv site=box ann=none
-TLATRACE seq=58 a=Compile p=cli site=box cls=fixed ann=none
-TLATRACE seq=59 a=Load p=srv site=box ann=none
-TLATRACE seq=60 a=Compile p=cli site=box cls=fixed ann=none
-TLATRACE seq=61 a=Compile p=cli site=box cls=fixed ann=none
-TLATRACE seq=62 a=Load p=srv site=box ann=none
-TLATRACE seq=63 a=Load p=srv site=box ann=none
+TLATRACE seq=57 a=Compile p=cli site=key cls=left ann=fixed
+TLATRACE seq=58 a=Compile p=cli site=key cls=left ann=fixed
+TLATRACE seq=59 a=Compile p=cli site=key cls=left ann=fixed
+TLATRACE seq=60 a=Load p=srv site=box ann=none
+TLATRACE seq=61 a=Load p=srv site=key ann=fixed
+TLATRACE seq=62 a=Load p=srv site=key ann=fixed
+TLATRACE seq=63 a=Load p=srv site=key ann=fixed
 TLATRACE seq=64 a=Compile p=cli site=box cls=fixed ann=none
-TLATRACE seq=65 a=Load p=srv site=box ann=none
-TLATRACE seq=66 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=67 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=68 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=69 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=70 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=71 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=72 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=73 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=74 a=Load p=srv site=single ann=fixed
-TLATRACE seq=75 a=Load p=srv site=single ann=fixed
-TLATRACE seq=76 a=Load p=srv site=single ann=fixed
-TLATRACE seq=77 a=Load p=srv site=single ann=fixed
-TLATRACE seq=78 a=Load p=srv site=single ann=fixed
-TLATRACE seq=79 a=Load p=srv site=single ann=fixed
-TLATRACE seq=80 a=Load p=srv site=single ann=fixed
-TLATRACE seq=81 a=Load p=srv site=single ann=fixed
-TLATRACE seq=82 a=Decide p=cli conv=1 decl=0
-TLATRACE seq=83 a=Decide p=cli conv=1 decl=0
-TLATRACE seq=84 a=Decide p=srv conv=1 decl=0
+TLATRACE seq=65 a=Compile p=cli site=key cls=left ann=fixed
+TLATRACE seq=66 a=Compile p=cli site=key cls=left ann=fixed
+TLATRACE seq=67 a=Load p=srv site=box ann=none
+TLATRACE seq=68 a=Load p=srv site=key ann=fixed
+TLATRACE seq=69 a=Load p=srv site=key ann=fixed
+TLATRACE seq=70 a=Compile p=cli site=box cls=fixed ann=none
+TLATRACE seq=71 a=Compile p=cli site=key cls=fixed ann=fixed
+TLATRACE seq=72 a=Compile p=cli site=key cls=fixed ann=fixed
+TLATRACE seq=73 a=Compile p=cli site=box cls=fixed ann=none
+TLATRACE seq=74 a=Compile p=cli site=key cls=fixed ann=fixed
+TLATRACE seq=75 a=Load p=srv site=box ann=none
+TLATRACE seq=76 a=Load p=srv site=key ann=fixed
+TLATRACE seq=77 a=Load p=srv site=key ann=fixed
+TLATRACE seq=78 a=Load p=srv site=box ann=none
+TLATRACE seq=79 a=Load p=srv site=key ann=fixed
+TLATRACE seq=80 a=Compile p=cli site=box cls=fixed ann=none
+TLATRACE seq=81 a=Compile p=cli site=key cls=fixed ann=fixed
+TLATRACE seq=82 a=Load p=srv site=box ann=none
+TLATRACE seq=83 a=Load p=srv site=key ann=fixed
+TLATRACE seq=84 a=Compile p=cli site=single cls=fixed ann=fixed
 TLATRACE seq=85 a=Compile p=cli site=single cls=fixed ann=fixed
 TLATRACE seq=86 a=Compile p=cli site=single cls=fixed ann=fixed
 TLATRACE seq=87 a=Compile p=cli site=single cls=fixed ann=fixed
 TLATRACE seq=88 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=89 a=Load p=srv site=single ann=fixed
-TLATRACE seq=90 a=Load p=srv site=single ann=fixed
-TLATRACE seq=91 a=Load p=srv site=single ann=fixed
+TLATRACE seq=89 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=90 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=91 a=Compile p=cli site=single cls=fixed ann=fixed
 TLATRACE seq=92 a=Load p=srv site=single ann=fixed
-TLATRACE seq=93 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=94 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=95 a=Compile p=cli site=single cls=fixed ann=fixed
-TLATRACE seq=96 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=93 a=Load p=srv site=single ann=fixed
+TLATRACE seq=94 a=Load p=srv site=single ann=fixed
+TLATRACE seq=95 a=Load p=srv site=single ann=fixed
+TLATRACE seq=96 a=Load p=srv site=single ann=fixed
 TLATRACE seq=97 a=Load p=srv site=single ann=fixed
 TLATRACE seq=98 a=Load p=srv site=single ann=fixed
 TLATRACE seq=99 a=Load p=srv site=single ann=fixed
-TLATRACE seq=100 a=Load p=srv site=single ann=fixed
+TLATRACE seq=100 a=Decide p=cli conv=1 decl=0
+TLATRACE seq=101 a=Decide p=cli conv=1 decl=0
+TLATRACE seq=102 a=Decide p=srv conv=1 decl=0
+TLATRACE seq=103 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=104 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=105 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=106 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=107 a=Load p=srv site=single ann=fixed
+TLATRACE seq=108 a=Load p=srv site=single ann=fixed
+TLATRACE seq=109 a=Load p=srv site=single ann=fixed
+TLATRACE seq=110 a=Load p=srv site=single ann=fixed
+TLATRACE seq=111 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=112 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=113 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=114 a=Compile p=cli site=single cls=fixed ann=fixed
+TLATRACE seq=115 a=Load p=srv site=single ann=fixed
+TLATRACE seq=116 a=Load p=srv site=single ann=fixed
+TLATRACE seq=117 a=Load p=srv site=single ann=fixed
+TLATRACE seq=118 a=Load p=srv site=single ann=fixed
