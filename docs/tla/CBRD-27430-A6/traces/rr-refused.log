@@ -1,0 +1,7 @@
+TLATRACE seq=1 a=RUpdate p=0
+TLATRACE seq=2 a=RTouch p=0
+TLATRACE seq=3 a=RCommit p=0
+TLATRACE seq=4 a=RCleanup p=0
+TLATRACE seq=5 a=RUnlock p=0
+TLATRACE seq=6 a=SPLock p=1
+TLATRACE seq=7 a=SAu p=1 ok=0

@@ -1,0 +1,16 @@
+TLATRACE seq=1 a=SPLock p=1
+TLATRACE seq=2 a=SAu p=1 ok=1
+TLATRACE seq=3 a=SIns p=1 new=1
+TLATRACE seq=4 a=SELook p=1 found=1
+TLATRACE seq=5 a=SELock p=1
+TLATRACE seq=6 a=SECheck p=1 run=1
+TLATRACE seq=7 a=SCommit p=1
+TLATRACE seq=8 a=RUpdate p=0
+TLATRACE seq=9 a=RTouch p=0
+TLATRACE seq=10 a=RCommit p=0
+TLATRACE seq=11 a=RCleanup p=0
+TLATRACE seq=12 a=RUnlock p=0
+TLATRACE seq=13 a=SELook p=1 found=0
+TLATRACE seq=14 a=SPLock p=1
+TLATRACE seq=15 a=SAu p=1 ok=0
+TLATRACE seq=16 a=SCommit p=1
