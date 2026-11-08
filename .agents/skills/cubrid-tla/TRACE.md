@@ -54,6 +54,7 @@ tools/tla/trace2tla <Module>TraceData OkTrace=<run1.log> [Run2=<run2.log> ...] >
 A TLC counterexample in the correct model is a hole only after a run of the build takes the same
 steps (SKILL.md step 7). A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole. (P17)
 
+- A hole whose window is a few instructions wide is reproduced by an injection at the window that waits, polling the shared state, until the counterexample's precondition holds (bounded, traced), and then runs the real step; the load that creates the precondition runs for the whole bound. (P26)
 - Widen a narrow window with an env-gated delay on the scratch worktree (`CUBRID_TLA_<WHAT>_DELAY_MS`,
   read once, default off), at the step the counterexample waits in.
 - An env-gated delay at a shared step holds every statement that reaches it, the racing session's included: the racing session's statements carry a hint that keeps them off the delayed path (`/*+ no_parallel_scan */`), and the report reads both sessions' elapsed times before counting a run. (P54)

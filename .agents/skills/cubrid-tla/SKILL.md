@@ -28,16 +28,15 @@ rule, or as a new rule added to both files in one commit.
   `--only GLOB` reruns the matching cfgs or proof modules while iterating; it ends in `RESULT: PARTIAL`,
   never a result. Evidence goes to
   `.git_ignored_dir/scratch/tla/<dir>-<stamp>/`; read only the `PASS`/`FAIL` lines and the last line.
+- `tools/tla/apalache-split DIR CFG K/N [CONJ...]` checks group K of N of an Apalache inductive cfg's IndInv
+  conjuncts and prints PASS, or the counterexample's step diff (step 6).
 - `tools/tla/trace2tla <Module> <Op>=<log>...` turns `TLATRACE` lines of an instrumented run into a
   TLA+ data module (`TRACE.md`).
 - `just tla-selftest` runs `examples/`; run it after touching `tools/tla/` or this skill's rules.
 - TLAPS runs only when the user's own message explicitly asks for a proof ("TLAPS", "증명해줘", "명확히 검증해줘"): then `tools/tla/tla-check --prove` proves every proof module and requires one; otherwise no proof module is written, step 6 ends at the inductive cfgs, and the report says TLAPS 요청 없음. A generic "TLA+로 검증", a skill, a ticket or a review step never counts as that request. (P48)
 - TLC and tlapm run only through `tools/tla/tla-check`, whose verdict is read per cfg and per obligation, never from a tool's exit status. (P1)
 - Change `tools/tla/tla-check` by writing a new file and renaming it over the old one: bash reads a running script from its open file, so an in-place rewrite corrupts the runs other sessions have in flight. (P18)
-- A toolchain install during a run swaps the tools under it: with `--prove`, `tools/tla/tla-check` fails a run whose proof logs carry different `TLAPM version` lines, and that run is rerun, never judged. (P41)
-- Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run. (P46)
 - Stop only the processes your own runner started, by the pid it recorded; other sessions run tlapm and TLC on this host at the same time, so never kill by pattern or by a pid read from `ps`. (P29)
-- Size `tools/tla/tla-check --workers` to the free cores for a proof module of more than a few hundred obligations: `--workers` is also tlapm's `--threads` (default 4) and the proof runs under a fixed 1800 s timeout, so at the default a large module ends as a timeout, not a verdict; check `nproc` and the load average first, and give a module that needs longer a `\* timeout: <seconds>` line in its proof file. (P39)
 
 ## Where the model lives
 
@@ -111,9 +110,7 @@ victim, OOM, crash / `kill -9`, spurious wakeup, concurrent DML, vacuum, checkpo
 record each as modeled or not applicable with the reason. Faults are nondeterministic actions,
 enabled wherever the code can raise them. Environment assumptions (fairness, bounded spurious
 wakeups) go in the same table; a liveness claim names the fairness it needs and the code that
-provides it. Done when every checklist row is answered.
-
-- A crash fault's intermediate state is the exact page write of the function that performs the first half, read in that function (a replace that re-inserts in order, a move that shifts), never the caller's comment. (P27)
+provides it. Done when every checklist row is answered (the crash row: P27).
 
 ### 4. Spec and cfgs
 
@@ -124,13 +121,8 @@ provides it. Done when every checklist row is answered.
 - `Mutant` is a constant; each mutant re-enables one wrong ordering, missing guard or missing
   check the claims depend on. In a review, the pre-change behavior is a mutant: the defect the
   ticket describes must fail on it (fail-before) and pass on the change (pass-after).
-- An environment process that loops (an OS, vacuum, a DML stream) must be able to end when the system ends, or TLC reports a false deadlock. (P8)
-- A worker loop is bounded by a counter every iteration advances (its share of the input), never by one only some iterations advance, or TLC reports a false liveness counterexample. (P25)
-- A TLC cfg cannot write a negative integer: put a natural constant in the cfg and build the value set from it in the spec. (P19)
-- A CASE whose guards can hold together is a nondeterministic choice in TLA+, not TLC's first-match: an ordered decision is an IF ... ELSE IF chain, and a CASE keeps only guards that exclude each other or end in OTHER. (P56)
-- An action that assigns a variable and also lists it in UNCHANGED is enabled only where the two agree, and TLC reports nothing: after editing UNCHANGED lists in bulk, check each action that assigns the variable, and a mutant that survives where a counterexample was expected first gets a reachability probe of its precondition states. (P58)
-- A constant that is a statement's program or any sequence is a function over `1..N` with `N` its own constant, substituted in the cfg from a spec operator (`Prog <- ProgScanCount`), and a range bounded by a variable is written as inequalities (`0 <= v /\ v <= curVer`, `\E v \in 0..NW : v <= curVer /\ ...`): a TLC cfg cannot write a sequence, and Apalache rejects `Seq(_)` and any `a..b` whose bound is not a constant, in ASSUME and in IndInv alike. (P59)
-- Write `COUNT-star` (never `COUNT(*)`) in a spec's comments, `\*` lines included: the `(*` opens a nested block comment and SANY reports an EOF or an open comment far below it. (P60)
+- Before the first TLC run, read the spec against `MODELING.md`'s "Spec traps": each is a wrong verdict TLC reports
+  silently or a parse error far from its cause. (P8, P19, P25, P56, P58, P59, P60)
 
 ### 5. Check, then hunt
 
@@ -151,14 +143,13 @@ either adds a cfg that passes or produces a finding:
 
 ### 6. Inductive invariant (and proof on request)
 
-Write `IndInv` and check it with the Apalache inductive cfg (TLC's only where Apalache cannot type it). Only when the user asked for a
-proof (P48), prove the INV1 premises and their temporal conclusion `Spec => []IndInv` with TLAPS
-(`PROOFS.md`).
+Write `IndInv` as a list of named conjuncts, one `  /\ Name` per line, and check it with the Apalache inductive cfg
+(`PROOFS.md`, "Apalache": the cfg, the typing and the traps; TLC's inductive cfg only where Apalache cannot type it). Only
+when the user asked for a proof (P48), prove the INV1 premises and their temporal conclusion `Spec => []IndInv` with
+TLAPS (`PROOFS.md`).
 
-- The inductive check is the Apalache cfg; write a TLC inductive cfg only when IndInv's types do not fit Apalache: Apalache checks every value of the integer constants in seconds, where TLC's `INIT IndInv` enumeration takes minutes at small constants and a failed TLAPS step tells only that the provers gave up. (P42)
+- Iterate the inductive check with `tools/tla/apalache-split`, one background job per group of conjuncts, never with repeated single runs: IndInv's first version already carries the well-formedness conjuncts every protocol needs (each index field in range, each idle handler's fields reset, each message in the shape its sender builds, each queue holding only what its phase allows, each record not yet in use equal to its initial value); a group is classified and fixed as soon as it ends, while the others run; after a fix only the added or changed conjuncts rerun, since a stronger IndInv keeps every other group's pass (a weakened conjunct reruns them all); `tools/tla/tla-check`'s single run is the record once every group passed. (P62)
 - An inductive-cfg counterexample from a state the system cannot reach means IndInv is too weak: strengthen IndInv, never the spec, and keep IndInv in the main cfg's INVARIANTS so TLC confirms the strengthened conjunct on every reachable state. (P6)
-- TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish. (P23)
-- In an Apalache inductive check a function applied outside its domain (`bCh[0]`, `bCh[x.gen]` with `x.gen` unbounded) is an unconstrained value the solver picks to break the invariant: IndInv bounds every field it uses as an index (`dpc \in {...} => dch \in Conns`, each token and message field in its range) before a conjunct applies it, an operator taking `DOMAIN` of a parameter carries an `@type` annotation, and while iterating, IndInv is checked in groups of conjuncts run in parallel (`IndInv => Grp'`), because one run stops at its first counterexample after tens of minutes. (P61)
 - An obligation fails until the proof is right: split it, never `OMITTED`, never a weaker theorem.
   `PROOFS.md` lists what tlapm on this host cannot do and the sound workaround for each.
 
@@ -171,7 +162,7 @@ Every TLC counterexample from a correct-variant cfg is classified in MAP.md befo
 - **Hole**: every step maps to code, and no protection forbids the interleaving. It becomes a
   finding only after a runtime reproduction (`cubrid-diagnose`: a fail-before run on a build, with
   a delay injected on a scratch worktree when the window is narrow); until then it is a question
-  carrying the step-by-step trace mapped to `file:line`. A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole. (P17) A hole whose window is a few instructions wide is reproduced by an injection at the window that waits, polling the shared state, until the counterexample's precondition holds (bounded, traced), and then runs the real step; the load that creates the precondition runs for the whole bound. (P26)
+  carrying the step-by-step trace mapped to `file:line`. `TRACE.md` "Reproducing a hole" says which runs count. (P17, P26)
 - A counterexample that needs the scan or buffer to stop where the code's capacity checks forbid it is a model error: derive a stop or overflow condition from the code's arithmetic (what the check counts, what it reserves) before a hole is reported. (P28)
 - A hole confirmed in the code stays a failing `\* expect: pass` cfg of the code as it stands, so the directory reports `RESULT: FAILED` until the code is fixed; the candidate fix gets its own pass cfg, and the code cfg's expectation is never flipped to make the directory pass. (P9)
 

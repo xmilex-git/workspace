@@ -1,4 +1,4 @@
-# TLAPS proofs on this host
+# Inductive invariant: Apalache and TLAPS on this host
 
 Reached from SKILL.md step 6, and the TLAPS sections only when the user asked for a proof (P48). Shape anchors: `examples/*/<Module>_proofs.tla`.
 
@@ -46,6 +46,12 @@ One case per action; a case that fails is split further, first by the action's `
 branches, then by stating the facts it needs as numbered steps.
 
 - Name each conjunct of IndInv beyond `TypeOK` (`R_x == ...`), prove each in its own step with `TypeOK`, its parts and every `R_` in the DEF list, and join them in the QED; one step over the whole conjunction times out. (P15)
+
+## Running tlapm
+
+- A toolchain install during a run swaps the tools under it: with `--prove`, `tools/tla/tla-check` fails a run whose proof logs carry different `TLAPM version` lines, and that run is rerun, never judged. (P41)
+- Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run. (P46)
+- Size `tools/tla/tla-check --workers` to the free cores for a proof module of more than a few hundred obligations: `--workers` is also tlapm's `--threads` (default 4) and the proof runs under a fixed 1800 s timeout, so at the default a large module ends as a timeout, not a verdict; check `nproc` and the load average first, and give a module that needs longer a `\* timeout: <seconds>` line in its proof file. (P39)
 
 ## tlapm 1.6.0-pre on this host: limits and the sound workaround
 
@@ -103,6 +109,10 @@ INVARIANT IndInv
 - Example: `examples/condvar-handoff/CondVarHandoff.apalache-indinv.cfg`.
 - Write every CONSTANTS and VARIABLES declaration with its first name on the keyword's line (`VARIABLES kind, prune,`): `tools/tla/apalache-types` rewrites only a block whose keyword line already holds a name, so a bare `VARIABLES` line leaves every variable untyped and the Apalache cfg fails with `Expected a type annotation for VARIABLE <name>` (rc=255). (P47)
 - An Apalache `INIT IndInv` binds every variable before a conjunct reads it (`x = FALSE`, `x \in BOOLEAN`, `x \in Nat /\ x <= N`, `s \in SUBSET [f : S]`), an operator that takes or returns a record or a tuple carries a `\* @type:` line (over `\* @typeAlias:` records), and a pair of strings is a record, never a tuple (`<<"u", "ubin">>` matches both a tuple and a `Seq(Str)`). (P52)
+
+- The inductive check is the Apalache cfg; write a TLC inductive cfg only when IndInv's types do not fit Apalache: Apalache checks every value of the integer constants in seconds, where TLC's `INIT IndInv` enumeration takes minutes at small constants and a failed TLAPS step tells only that the provers gave up. (P42)
+- TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish. (P23)
+- In an Apalache inductive check a function applied outside its domain (`bCh[0]`, `bCh[x.gen]` with `x.gen` unbounded) is an unconstrained value the solver picks to break the invariant: IndInv bounds every field it uses as an index (`dpc \in {...} => dch \in Conns`, each token and message field in its range) before a conjunct applies it, and an operator taking `DOMAIN` of a parameter carries an `@type` annotation. (P61)
 
 ## Strengthening IndInv
 

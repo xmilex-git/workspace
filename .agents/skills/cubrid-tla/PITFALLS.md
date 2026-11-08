@@ -58,7 +58,7 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 
 ### P8 — environment processes must be able to end
 - Rule: An environment process that loops (an OS, vacuum, a DML stream) must be able to end when the system ends, or TLC reports a false deadlock.
-- Applies at: SKILL.md step 4
+- Applies at: MODELING.md (Spec traps)
 - Case (2026-11-05, condvar-handoff): the spurious-wakeup process `while TRUE do await sleeping` blocked forever after the waiter finished, so `Terminating` was never enabled and the correct model reported "Deadlock reached". It now loops while the waiter is not Done.
 
 ## Checking, proving and reproducing
@@ -105,14 +105,14 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 
 ### P17 — a runtime reproduction logs the interleaving
 - Rule: A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole.
-- Applies at: TRACE.md (Reproducing a hole); SKILL.md step 7
+- Applies at: TRACE.md (4. Reproducing a hole)
 - Case (2026-11-05, parallel scan index H2): of three runs with the same delay, one returned 474416 / 1125355077360 instead of 474552 / 1126000376280; its TLATRACE lines showed `btree_merge left=13744 right=13742`, `btree_alloc page=13742`, `link_trusted last=changed`, while the other two runs' bulk loads had laid out the leaves so that no merge hit the last leaf. statdump counters stayed 0 throughout and could not tell the runs apart.
 - Case (2026-11-05, parallel scan probes): a race did not hold vacuum back because csql auto-committed the scanning session; `--no-auto-commit` fixed it. A rebuild of the probe install under a running server left a master the wrapper could not stop.
 - Case (2026-11-07, CBRD-27430 A5 H1/H4): a later session's SHOW after the first session's teardown destroyed the heap holding the SHOW metadata returned the right rows on the pre-fix build (the freed lea memory stayed readable); a probe logging `init heap=`, `destroy heap=` and `read heap=` with the thread showed four reads by the second session after the destroy. The plan-cache key hole showed no wrong answer with `CAST(DATETIME ... AS DATETIMETZ)`, which the server computes per run; the literal `DATETIMETZ '...'`, folded into the plan at compile, gave the second session the first session's time zone.
 
 ### P19 — no negative integers in a cfg
 - Rule: A TLC cfg cannot write a negative integer: put a natural constant in the cfg and build the value set from it in the spec.
-- Applies at: SKILL.md step 4
+- Applies at: MODELING.md (Spec traps)
 - Case (2026-11-05, CBRD-27819 cmp-dispatch): `CONSTANTS Vals = {-10, -5, 0, 5, 10}` stopped every cfg with `ConfigFileException ... expecting }`; `MaxV = 10` with `Vals == {v \in -MaxV..MaxV : v % 5 = 0}` in the spec ran.
 
 ### P20 — decision tables: literal chains, no poisoned facts
@@ -136,7 +136,7 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 
 ### P23 — INIT IndInv must enumerate
 - Rule: TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish.
-- Applies at: SKILL.md step 6
+- Applies at: PROOFS.md (Apalache: the symbolic inductive check)
 - Case (2026-11-05, CBRD-27361 page-batch-walk): `INIT IndInv` with `TypeOK` first spent 7 min on 656 448 initial states at NP = 1, NS = 3 and ran past 10 min for the iter mode; IndInv rewritten in binding order, the chunk slots zeroed outside a chunk (`ClearChunk`) and NS = 2 / NP = 2, NS = 1 brought each inductive cfg to 4-6 s. RtfLifecycle's `TypeOK`-first IndInv also ran past 10 min, and `bkeys \subseteq Keys` could not be enumerated at all (`\in SUBSET`).
 
 ### P24 — a guard and its access are two steps
@@ -146,17 +146,17 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 
 ### P25 — a loop bound every iteration advances
 - Rule: A worker loop is bounded by a counter every iteration advances (its share of the input), never by one only some iterations advance, or TLC reports a false liveness counterexample.
-- Applies at: SKILL.md step 4
+- Applies at: MODELING.md (Spec traps)
 - Case (2026-11-05, CBRD-27361 runtime-filter): `LeaderFinishes` failed on the correct model: a worker whose filter the sample took off counted no rows, so `rows[w] < MaxRows` never stopped its row loop and `WEnd` was never continuously enabled; a per-worker `left` budget fixed it.
 
 ### P26 — a narrow window waits for its precondition
 - Rule: A hole whose window is a few instructions wide is reproduced by an injection at the window that waits, polling the shared state, until the counterexample's precondition holds (bounded, traced), and then runs the real step; the load that creates the precondition runs for the whole bound.
-- Applies at: SKILL.md step 7
+- Applies at: TRACE.md (4. Reproducing a hole)
 - Case (2026-11-05, CBRD-26425 atomic latch H1): `pgbuf_lockfree_fix_ro` held its window between the vpid check and the CAS open until the BCB held another page whose latch word equalled the loaded one; the first run closed it unmatched after 30 s (`matched=0`) because the buffer churn (8 scans, 0.3 s) ended long before the page could age out; with two sessions churning for the whole bound it matched in 2 s, the real CAS succeeded on page 1|3992 for a fix of 1|641, and the caller asserted in `pgbuf_check_page_ptype`.
 
 ### P27 — a crash state is the code's write
 - Rule: A crash fault's intermediate state is the exact page write of the function that performs the first half, read in that function (a replace that re-inserts in order, a move that shifts), never the caller's comment.
-- Applies at: SKILL.md step 3
+- Applies at: MODELING.md (Fault checklist)
 - Case (2026-11-06, CBRD-24094 leaf swap): the first crash model put the removed leaf object in the first overflow page's last slot, from `btree_replace_first_oid_with_ovfl_oid`'s comment ("swap ... with last object"); two injected crashes recovered cleanly. `btree_record_replace_object` removes the old object and re-inserts the new one in OID order (`btree.c:38577`); with that write the model found H2 (an object above page 2's separator left in page 1), reproduced on the third run.
 
 ### P28 — a stop the capacity checks forbid is a model error
@@ -216,7 +216,7 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 
 ### P39 — a large proof module needs `--workers`
 - Rule: Size `tools/tla/tla-check --workers` to the free cores for a proof module of more than a few hundred obligations: `--workers` is also tlapm's `--threads` (default 4) and the proof runs under a fixed 1800 s timeout, so at the default a large module ends as a timeout, not a verdict; check `nproc` and the load average first, and give a module that needs longer a `\* timeout: <seconds>` line in its proof file.
-- Applies at: SKILL.md (Toolchain)
+- Applies at: PROOFS.md (Running tlapm)
 - Case (2026-11-06, CBRD-27361 page-batch-walk): `tla-check --stretch 3` on `PageBatchWalk_proofs` (3673 obligations) ran tlapm with `--threads 4` and was 26 min into its 30-min limit when stopped; the same proof at 16 threads had finished in 31 min. Rerun with `--workers 24 --stretch 2` at load average 32 on 64 CPUs. That rerun proved 1737 of 3679 obligations, none failed, before the 1800 s limit cut it at load average 93; the proof file now carries `\* timeout: 7200`.
 
 ### P40 — a quantifier swallows the conjuncts after it
@@ -226,13 +226,13 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 
 ### P41 — one toolchain per run
 - Rule: A toolchain install during a run swaps the tools under it: with `--prove`, `tools/tla/tla-check` fails a run whose proof logs carry different `TLAPM version` lines, and that run is rerun, never judged.
-- Applies at: SKILL.md (Toolchain)
+- Applies at: PROOFS.md (Running tlapm)
 - Case (2026-11-06, parallel sort merge queue): the tools link moved from tlapm 1.4.5 to 1.6.0-pre at 01:31 during a 01:12 run; three proof modules logged `TLAPM version 1.4.5` and two `efe4f2d`, `Safe` failed with `ls4 not found`, and the 1.4.5 modules failed steps that had proved before. The rerun on one toolchain proved `Safe`.
 - Case (2026-11-06, rule review): the check moved into `tla-check` (with `--prove`, different `TLAPM version` lines across a run's proof logs fail it), so no session reads the lines by hand.
 
 ### P42 — the symbolic inductive check comes first
 - Rule: The inductive check is the Apalache cfg; write a TLC inductive cfg only when IndInv's types do not fit Apalache: Apalache checks every value of the integer constants in seconds, where TLC's `INIT IndInv` enumeration takes minutes at small constants and a failed TLAPS step tells only that the provers gave up.
-- Applies at: SKILL.md step 6
+- Applies at: PROOFS.md (Apalache: the symbolic inductive check)
 - Case (2026-11-06, parallel hash join): the 2-worker TLC inductive cfg enumerated 31 072 256 initial states in 15 min (26 min under load), and each IndInv strengthening (W_fl with p = NP, mutant-only labels) was found that way before a TLAPS round of up to 40 min per module; Apalache 0.62.4 checks CondVarHandoff's IndInv for every `MaxSpurious \in Nat` in 5 s and rejects a weakened IndInv in the same time.
 - Case (2026-11-06, rule review): with TLAPS on request only (P48) the TLC inductive cfg no longer feeds a proof; P45 asked for both checks, and the TLC one cost up to 1 319 s where Apalache answers for every integer value, so the TLC cfg became the fallback for types Apalache cannot express.
 
@@ -253,7 +253,7 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 
 ### P46 — tlapm 1.6.0-pre is the prover
 - Rule: Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run.
-- Applies at: SKILL.md (Toolchain), PROOFS.md
+- Applies at: PROOFS.md (Running tlapm)
 - Case (2026-11-06, PR #8356 review): the user asked "1.6버전으로 하고잇는건알고잇지?" before the proof was written; `.git_ignored_dir/tla/tools/bin/tlapm --version` printed `efe4f2d`, and ADR 0045 records 1.4.5-proved obligations that time out on 1.6 (`ExprProgExec_proofs` 23:87, `PxHeapSnapshot_proofs` 118:5 and 196:3).
 
 ### P47 — a declaration keyword carries its first name
@@ -306,7 +306,7 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 
 ### P56 — overlapping CASE guards are a choice, not an order
 - Rule: A CASE whose guards can hold together is a nondeterministic choice in TLA+, not TLC's first-match: an ordered decision is an IF ... ELSE IF chain, and a CASE keeps only guards that exclude each other or end in OTHER.
-- Applies at: SKILL.md (4. Spec and cfgs)
+- Applies at: MODELING.md (Spec traps)
 - Case (2026-11-07, CBRD-27430 A3 boundary, `FoldBoundary.apalache-indinv`): `Exit` set the client's RR-lock mirror with `CASE e = "unilat" -> FALSE [] ... [] k = "hint" -> ~rrMirror`. TLC took the first true arm and every cfg passed; Apalache took the `hint` arm on a victim's exit and left the mirror set after the rollback, violating IndInv. Rewritten as an IF chain, the inductive check passed.
 
 ### P57 — an injected fault lands on the first matching step
@@ -316,22 +316,27 @@ A new rule only when no rule fits — then add the sentence to the skill in the 
 
 ### P58 — a variable both assigned and UNCHANGED silently narrows an action
 - Rule: An action that assigns a variable and also lists it in UNCHANGED is enabled only where the two agree, and TLC reports nothing: after editing UNCHANGED lists in bulk, check each action that assigns the variable, and a mutant that survives where a counterexample was expected first gets a reachability probe of its precondition states.
-- Applies at: SKILL.md (4. Spec and cfgs)
+- Applies at: MODELING.md (Spec traps)
 - Case (2026-11-09, map #618 B1a, `Handoff`): adding `latest` to every UNCHANGED list that named `mFreed` also put it into `SCrash`, which sets `latest' = 0`. The crash then fired only before the first HELLO, the main cfg passed 40 M states, the coverage check saw `SCrash` fire, and `mutant-cancel-by-db` ran 60 levels without a counterexample. A probe invariant (a token of a dead channel while another channel is published, after a crash) came back unreachable, bisecting it pointed at `SCrash`, and removing `latest` from its UNCHANGED made the crash reachable after HELLO.
 
 ### P59 — sequences and variable-bounded ranges break TLC cfgs and Apalache
 - Rule: A constant that is a statement's program or any sequence is a function over `1..N` with `N` its own constant, substituted in the cfg from a spec operator (`Prog <- ProgScanCount`), and a range bounded by a variable is written as inequalities (`0 <= v /\ v <= curVer`, `\E v \in 0..NW : v <= curVer /\ ...`): a TLC cfg cannot write a sequence, and Apalache rejects `Seq(_)` and any `a..b` whose bound is not a constant, in ASSUME and in IndInv alike.
-- Applies at: SKILL.md (4. Spec and cfgs)
+- Applies at: MODELING.md (Spec traps)
 - Case (2026-11-09, lazy-snapshot `LazySnapshot`): `Prog = <<"scan", "count">>` in a cfg stopped TLC at the cfg line; Apalache then failed in turn on `Prog \in Seq(...)` in ASSUME, on `1..NOps` in ASSUME, on `0..curVer` in `I_hist`, and on an untyped `<<...>>` of six booleans in UNCHANGED (`\* @type:` on `gVars`), before it reached the inductive check.
 - Source: session 2026-11-09 (lazy-snapshot)
 
 ### P60 — `(*` inside a comment opens a block comment
 - Rule: Write `COUNT-star` (never `COUNT(*)`) in a spec's comments, `\*` lines included: the `(*` opens a nested block comment and SANY reports an EOF or an open comment far below it.
-- Applies at: SKILL.md (4. Spec and cfgs)
+- Applies at: MODELING.md (Spec traps)
 - Case (2026-11-09, lazy-snapshot `LazySnapshot`): the header comment and a `\*` comment said `COUNT(*)`; SANY reported "EOF reached, possibly open comment starting around line 468" on a 470-line module.
 - Source: session 2026-11-09 (lazy-snapshot)
 
 ### P61 — Apalache leaves an out-of-domain application unconstrained
-- Rule: In an Apalache inductive check a function applied outside its domain (`bCh[0]`, `bCh[x.gen]` with `x.gen` unbounded) is an unconstrained value the solver picks to break the invariant: IndInv bounds every field it uses as an index (`dpc \in {...} => dch \in Conns`, each token and message field in its range) before a conjunct applies it, an operator taking `DOMAIN` of a parameter carries an `@type` annotation, and while iterating, IndInv is checked in groups of conjuncts run in parallel (`IndInv => Grp'`), because one run stops at its first counterexample after tens of minutes.
-- Applies at: SKILL.md (6. Inductive invariant (and proof on request))
+- Rule: In an Apalache inductive check a function applied outside its domain (`bCh[0]`, `bCh[x.gen]` with `x.gen` unbounded) is an unconstrained value the solver picks to break the invariant: IndInv bounds every field it uses as an index (`dpc \in {...} => dch \in Conns`, each token and message field in its range) before a conjunct applies it, and an operator taking `DOMAIN` of a parameter carries an `@type` annotation.
+- Applies at: PROOFS.md (Apalache: the symbolic inductive check)
 - Case (2026-11-09, map #618 B1a, `HandoffInd`): the first inductive runs failed at State0 on states no action could build — `bCh[dch]` with `dch = 0`, `bCh[x.gen]` for a token whose `gen` was out of range, `cx.gen` while no cancel was in flight; a `FieldsOK` conjunct bounding every index field removed them. `Positions(q) == 1..Len(q)` was refused ("Expected a constant integer range") and `DOMAIN q` needed `\* @type: (Seq($msg)) => Set(Int);`. Seven to nine groups of IndInv's 54 conjuncts ran 400–3500 s each, against 1380 s for one single run that reported one counterexample.
+
+### P62 — the inductive check is iterated by group, from a well-formed IndInv
+- Rule: Iterate the inductive check with `tools/tla/apalache-split`, one background job per group of conjuncts, never with repeated single runs: IndInv's first version already carries the well-formedness conjuncts every protocol needs (each index field in range, each idle handler's fields reset, each message in the shape its sender builds, each queue holding only what its phase allows, each record not yet in use equal to its initial value); a group is classified and fixed as soon as it ends, while the others run; after a fix only the added or changed conjuncts rerun, since a stronger IndInv keeps every other group's pass (a weakened conjunct reruns them all); `tools/tla/tla-check`'s single run is the record once every group passed.
+- Applies at: SKILL.md (6. Inductive invariant (and proof on request))
+- Case (2026-11-09, map #618 B1a, `HandoffInd`): from 04:17 to 08:15 the inductive check went through one single run and four rounds of 7–10 parallel groups. Each round was read only after its slowest group ended (48–59 min, while most groups ended in 7–25), every passed group was rerun, and each round's 4–7 counterexamples were mostly well-formedness the first IndInv lacked: an idle handler holding a finished cancel's fields, a HELLO with stray fields, a RESYNC queued behind an unanswered HELLO, a SESSION_END on the wire for a session still registered, a job not yet handed off whose session was already dead. The fix is the tool `tools/tla/apalache-split` (one group per background job, rerun by conjunct name) and well-formedness conjuncts before the first run.

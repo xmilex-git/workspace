@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# usage: tools/tla/apalache-split DIR CFG K/N [CONJ...]
+#
+# Iterates an Apalache inductive cfg one group at a time (cubrid-tla P62). CFG is the cfg's name
+# without .cfg (HandoffInd.apalache-indinv); its INVARIANT (IndInv) must be defined as a list of named
+# conjuncts, one `  /\ Name` per line. Group K of N checks `IndInv => Grp'` for the conjuncts at
+# positions K, K+N, ... of that list, or of the CONJ names given. Launch each group as its own
+# background job so each one is classified as soon as it ends.
+#
+# Prints `PASS <conjuncts> <secs>s`, or `CTI <conjuncts> <secs>s` followed by the violated formula and
+# the counterexample's State0 -> State1 diff (`DUMP=1` adds the whole State0). Exit 0 pass, 1 CTI,
+# 2 error or timeout. Evidence: .git_ignored_dir/scratch/tla/<dir>-split-<stamp>-<K>of<N>/.
+# A pass is a step, never the record: the record is tools/tla/tla-check's single run of CFG.
+set -u
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+tools="$root/.git_ignored_dir/tla/tools"
+dir="$(cd "${1:?usage: apalache-split DIR CFG K/N [CONJ...]}" && pwd)"
+cfg="$dir/${2:?CFG}.cfg"; kn="${3:?K/N}"; shift 3
+k="${kn%/*}"; n="${kn#*/}"
+[ -f "$cfg" ] || { echo "error: $cfg not found"; exit 2; }
+module="$(basename "$cfg" .cfg)"; module="${module%%.*}"
+inv="$(sed -n 's/^ *INVARIANTS\{0,1\} *//p' "$cfg" | xargs)"
+if [ $# -gt 0 ]; then all=("$@")
+else
+  mapfile -t all < <(cat "$dir"/*.tla | awk -v inv="$inv" '$0 ~ "^"inv" *==" {f=1; next} f && /^  \/\\ [A-Za-z_][A-Za-z0-9_]* *$/ {print $2; next} f {exit}')
+fi
+[ ${#all[@]} -gt 0 ] || { echo "error: $inv is not a list of '  /\\ Name' lines"; exit 2; }
+grp=(); for ((i = k - 1; i < ${#all[@]}; i += n)); do grp+=("${all[$i]}"); done
+[ ${#grp[@]} -gt 0 ] || { echo "error: group $kn is empty (${#all[@]} conjuncts)"; exit 2; }
+run="$root/.git_ignored_dir/scratch/tla/$(basename "$dir")-split-$(date +%Y%m%d-%H%M%S)-$$-${k}of$n"
+mkdir -p "$run/tmp"; cp "$dir"/*.tla "$run/"
+for f in "$run"/*.tla; do "$root/tools/tla/apalache-types" "$f"; done
+sed -i -E '/^={4,} *$/d' "$run/$module.tla"
+{ printf 'SplitGrp =='; printf ' /\\ %s' "${grp[@]}"; printf '\n====\n'; } >> "$run/$module.tla"
+sed "s/^\( *INVARIANTS\{0,1\} *\).*/\1SplitGrp/" "$cfg" > "$run/split.cfg"
+read -r -a aargs <<< "$(sed -n 's/^\\\* apalache: *//p' "$cfg" | head -1)"
+tmo="${TMO:-$(sed -n 's/^\\\* timeout: *\([0-9]*\).*/\1/p' "$cfg" | head -1)}"
+start=$(date +%s)
+(cd "$run" && timeout "${tmo:-1800}" /usr/bin/env -u LD_LIBRARY_PATH -u JAVA_HOME -u CLASSPATH -u JAVA_TOOL_OPTIONS \
+  TMPDIR="$run/tmp" JVM_ARGS="-Xmx${HEAP:-6g}" \
+  "$tools/bin/apalache-mc" check --out-dir="$run/out" --config=split.cfg "${aargs[@]}" "$module.tla") > "$run/log" 2>&1
+rc=$?; secs=$(( $(date +%s) - start ))
+case $rc in
+  0) echo "PASS ${grp[*]} ${secs}s run=$run"; exit 0 ;;
+  12) echo "CTI ${grp[*]} ${secs}s run=$run" ;;
+  124) echo "ERROR ${grp[*]} timeout after ${tmo:-1800}s run=$run"; exit 2 ;;
+  *) echo "ERROR ${grp[*]} rc=$rc $(/usr/bin/grep -m1 'E@' "$run/log" | sed 's/ *E@.*//') run=$run"; exit 2 ;;
+esac
+v="$(ls "$run"/out/*/*/violation1.tla | head -1)"
+sed -n '/^InvariantViolation/,/^====/p' "$v" | head -40
+python3 - "${v%.tla}.itf.json" "${DUMP:-0}" <<'PY'
+import json, sys
+def norm(v):
+    if isinstance(v, dict):
+        if '#map' in v: return {json.dumps(norm(a)): norm(b) for a, b in v['#map']}
+        if '#set' in v: return sorted((norm(x) for x in v['#set']), key=json.dumps)
+        if '#tup' in v: return [norm(x) for x in v['#tup']]
+        if '#bigint' in v: return int(v['#bigint'])
+        return {a: norm(b) for a, b in v.items() if not a.startswith('#')}
+    if isinstance(v, list): return [norm(x) for x in v]
+    return v
+s0, s1 = [{a: norm(b) for a, b in s.items() if not a.startswith('#')} for s in json.load(open(sys.argv[1]))['states'][:2]]
+def show(tag, a, b):
+    for key in a:
+        if sys.argv[2] == '0' and a[key] == b[key]: continue
+        if isinstance(a[key], dict):
+            for sub in a[key]:
+                if sys.argv[2] != '0' or a[key][sub] != b[key].get(sub):
+                    print(f'{tag}{key}[{sub}]: {json.dumps(a[key][sub])}' + ('' if a[key][sub] == b[key].get(sub) else f' -> {json.dumps(b[key][sub])}'))
+        else:
+            print(f'{tag}{key}: {json.dumps(a[key])}' + ('' if a[key] == b[key] else f' -> {json.dumps(b[key])}'))
+show('  ', s0, s1)
+PY
+exit 1

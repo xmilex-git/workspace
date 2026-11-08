@@ -35,6 +35,16 @@ row of a real refinement map is grounded on the worktree at the reviewed or desi
 - Model when the MVCC snapshot is built relative to every set the scan collects at open (the page bitmap, the leaf chain, the partition list), per isolation level: under READ COMMITTED the statement's first `logtb_get_mvcc_snapshot` builds it, which may run after open. (P13)
 - A check that a page is the same page by VPID alone is a reuse hole whenever the page can be freed and reallocated during the protocol: model the free pool with reuse (`file_alloc` takes the lowest free page) and check what the code compares besides the VPID (LSA, key range). (P14)
 
+## Spec traps (SKILL.md step 4)
+
+- An environment process that loops (an OS, vacuum, a DML stream) must be able to end when the system ends, or TLC reports a false deadlock. (P8)
+- A worker loop is bounded by a counter every iteration advances (its share of the input), never by one only some iterations advance, or TLC reports a false liveness counterexample. (P25)
+- A TLC cfg cannot write a negative integer: put a natural constant in the cfg and build the value set from it in the spec. (P19)
+- A CASE whose guards can hold together is a nondeterministic choice in TLA+, not TLC's first-match: an ordered decision is an IF ... ELSE IF chain, and a CASE keeps only guards that exclude each other or end in OTHER. (P56)
+- An action that assigns a variable and also lists it in UNCHANGED is enabled only where the two agree, and TLC reports nothing: after editing UNCHANGED lists in bulk, check each action that assigns the variable, and a mutant that survives where a counterexample was expected first gets a reachability probe of its precondition states. (P58)
+- A constant that is a statement's program or any sequence is a function over `1..N` with `N` its own constant, substituted in the cfg from a spec operator (`Prog <- ProgScanCount`), and a range bounded by a variable is written as inequalities (`0 <= v /\ v <= curVer`, `\E v \in 0..NW : v <= curVer /\ ...`): a TLC cfg cannot write a sequence, and Apalache rejects `Seq(_)` and any `a..b` whose bound is not a constant, in ASSUME and in IndInv alike. (P59)
+- Write `COUNT-star` (never `COUNT(*)`) in a spec's comments, `\*` lines included: the `(*` opens a nested block comment and SANY reports an EOF or an open comment far below it. (P60)
+
 ## Fault checklist (SKILL.md step 3)
 
 Answer each row in MAP.md's fault table as modeled, or not applicable with the reason.
@@ -55,6 +65,8 @@ Answer each row in MAP.md's fault table as modeled, or not applicable with the r
 | nested statement (SP SQL from the client) | the READ COMMITTED statement snapshot the change reads |
 
 - A model that reads the READ COMMITTED statement snapshot gives the fault table a row for a nested statement (an SP's SQL sent by the client) that invalidates and rebuilds it mid-statement (`network_sr.c` `logtb_invalidate_snapshot_data`), and a claim that the snapshot stays put names that row's scope. (P55)
+
+- A crash fault's intermediate state is the exact page write of the function that performs the first half, read in that function (a replace that re-inserts in order, a move that shifts), never the caller's comment. (P27)
 
 ## Fairness
 
