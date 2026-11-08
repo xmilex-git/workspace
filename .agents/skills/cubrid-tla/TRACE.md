@@ -57,6 +57,7 @@ steps (SKILL.md step 7). A hole's runtime reproduction logs the structural event
 - Widen a narrow window with an env-gated delay on the scratch worktree (`CUBRID_TLA_<WHAT>_DELAY_MS`,
   read once, default off), at the step the counterexample waits in.
 - An env-gated delay at a shared step holds every statement that reaches it, the racing session's included: the racing session's statements carry a hint that keeps them off the delayed path (`/*+ no_parallel_scan */`), and the report reads both sessions' elapsed times before counting a run. (P54)
+- An injected failure armed for a phase fires at that phase's first matching step, which is often a cache fill the model does not name (a class decode): warm the caches with a statement before arming or filter by the allocation site, and before blaming the modeled step for a crash, rerun the injection with the modeled reaction switched off to see whether the caller's own error path crashes the same way. (P57)
 - Stop the server before rebuilding its install; a server running on a rebuilt install leaves a
   stale master that the wrapper cannot stop.
 - A session that must hold a snapshot (to keep vacuum from removing rows) runs `csql --no-auto-commit`;

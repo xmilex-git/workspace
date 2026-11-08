@@ -137,6 +137,11 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-11-06, CBRD-27968 pass-after): the dispatcher waited 300-900 s at its first `fix_prev_leaf` while the scenario waited for vacuum to empty and merge the last leaf handed out. Seven runs saw the merge only after Q ended (or after the split it had to precede); the lag log showed vacuum fixed at one page while Q ran (1312 -> 8326 pages behind) although it had caught up (10 pages) before the deletes. Moving the 200000-row pump between the deletes and Q, with the RR session still holding vacuum, gave the merge two rounds after H's commit, inside the delay, on the first try (runs fix9 and base1).
 - Source: session 2026-11-06 (CBRD-27968)
 
+### P21 — a crashed server revives and crashes again
+- Rule: A probe that crashes the server on purpose expects `auto_restart_server` (default yes) to revive it with the same environment and crash it again: count one core per revival, read the first core by its pid, and stop the install's master by pid once no `cub_server` of the install is left (`cubrid-server-control` P4).
+- Applies at: Instrumenting
+- Case (2026-11-09, map #618 A8 trace runs): an injected AREA failure crashed the tracer's server (core 32428); cub_master revived it within seconds with the tracer environment, which crashed at the same step (core 32759, a different symptom: an assert instead of SIGSEGV), and the wrapper's `stop` returned `RESULT: FAILED` with the install's master still listening. Four runs left a master each until it was stopped by pid.
+
 ## Reporting a triage
 
 ### P16 — the triage report
