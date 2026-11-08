@@ -27,8 +27,8 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-09-24, #350): after both kills the master relaunched `cub_server <db>` before the conf edit was applied, so the relaunched server ran the old parallelism. 2026-09-28 (#363): the `to_char` crash run twice within 2 minutes left the server down until a manual start (`SERVER_MONITOR_UNACCEPTABLE_REVIVE_TIMEDIFF_IN_SECS = 120`).
 - Source: memory:cub-master-respawns-killed-server, CUBRID_SSOT.md §3.6
 
-### P4 — `server stop` leaves the master; stop it by pid
-- Rule: `cubrid server stop <db>` does not stop `cub_master`; a stray master keeps the claimed port (a listener with no `cub_server`) and a rebuilt binary then fails to bind, so stop that master by its exact pid with SIGTERM — the one whose `/proc/<pid>/exe` (or `CUBRID=` in `/proc/<pid>/environ`) is under the install — never `pkill cub` or `cubrid service stop` on this shared host, and always `server stop` (confirmed by process absence) before any master stop, so an in-flight stop is not lost and no `cub_server` is orphaned; an orphan is ended with SIGTERM, not `kill -9`.
+### P4 — `server stop` leaves the master; the wrapper's stop ends it
+- Rule: `cubrid server start <db>` spawns the install's `cub_master` and `cubrid server stop <db>` leaves it holding the claimed port (a listener with no `cub_server`; a rebuilt binary then fails to bind), so the wrapper's `stop` waits until no `cub_server` of the install is left and then SIGTERMs that install's master (prints `MASTER: stopped|kept|none`) — only this user's, in the caller's pid/net namespace, with the caller's `CUBRID_TMP`, never `~/CUBRID`; a master stopped by hand is stopped by its exact pid with SIGTERM — the one whose `/proc/<pid>/exe` (or `CUBRID=` in `/proc/<pid>/environ`) is under the install — never `pkill cub` or `cubrid service stop` on this shared host, and always after `server stop` (confirmed by process absence), so an in-flight stop is not lost and no `cub_server` is orphaned; an orphan is ended with SIGTERM, not `kill -9`.
 - Applies at: Stopping and restarting
 - Case (SSOT §3.5, §3.14): stopping the master first lost a pending server stop and left `cub_server` orphaned; `cubrid master stop` does not exist in archive builds ("utility-name is invalid").
 - Case (2026-08-28): CTP's host-side teardown ran `pkill cub` and killed every cub_* of the user on every port — the reason CTP runs only in containers and nothing on this host broadens a stop to a pattern.
@@ -53,7 +53,8 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Source: CUBRID_SSOT.md §3.10
 
 ### P8 — leave the host as found
-- Rule: When the effort ends, stop its servers through the wrapper, stop its master by pid (P4), `just port-release` the claim, and restore any install conf a smoke rewrote; servers left running are not fine, short SA jobs are.
+- Rule: When the effort ends, stop its servers through the wrapper (which stops the master too, P4; a `MASTER: kept` line means a server is still up), `just port-release` the claim (it refuses while the port has a listener and prints the pid), and restore any install conf a smoke rewrote; servers left running are not fine, short SA jobs are.
 - Applies at: Stopping and restarting
 - Case (SSOT §3.9, §6): a tree left dirty and daemons left running were the first thing the next session tripped on; a leftover `xasl_debug_dump=yes` in an install conf pollutes the next CTP or smoke.
+- Case (2026-11-08): six `cub_master` processes (ports 1708, 1711–1715; cbrd27819 smoke installs and `CUBRID-pr8398-trace`) had been listening for 2–5 days with no `cub_server` and no claim — the smoke scripts had stopped through the wrapper and released their claims, but the wrapper stopped only the server and `port-release` dropped claims on live ports; the wrapper's `stop` now ends the master and `port-release` refuses a live port.
 - Source: CUBRID_SSOT.md §3.9, memory:server-stack-at-error-without-gdb

@@ -514,6 +514,19 @@ port-release key:
     set -eu
     f="{{_ports_file}}"
     [ -f "$f" ] || { echo "ERROR: no claims file: $f" >&2; exit 1; }
+    # A listener on the claimed port is a master or server still up: releasing would hide it.
+    for p in $(awk -F'|' -v key="{{key}}" 'NR>4 { p=$2; d=$4; gsub(/ /,"",p); gsub(/ /,"",d);
+                 if (p==key || d==key) print p }' "$f"); do
+        l=$(ss -ltnpH "sport = :$p" 2>/dev/null || true)
+        if [ -n "$l" ]; then
+            echo "ERROR: port $p still has a listener — stop it first (cubrid-server-control P4), then release:" >&2
+            echo "$l" >&2
+            for pid in $(echo "$l" | /usr/bin/grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u); do
+                echo "  pid $pid: $(readlink /proc/$pid/exe 2>/dev/null)" >&2
+            done
+            exit 1
+        fi
+    done
     before=$(wc -l < "$f")
     awk -F'|' -v key="{{key}}" '
         NR<=4 {print; next}

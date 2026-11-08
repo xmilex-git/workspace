@@ -9,7 +9,7 @@ avoid collisions.
 ```bash
 just ports                      # show claims + live CUBRID listeners
 just port-claim <db> <effort>   # auto-pick a free cubrid_port_id + broker block, record the claim
-just port-release <db-or-port>  # drop the claim when the effort is done
+just port-release <db-or-port>  # drop the claim when the effort is done (refused while the port has a listener)
 ```
 
 The recipes implement the protocol below — use them instead of hand-editing.

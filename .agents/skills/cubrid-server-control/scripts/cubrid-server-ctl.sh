@@ -109,6 +109,44 @@ else
   echo "RESULT: FAILED. exit=$rc"
 fi
 
+# --- stop: also stop the master `server start` spawned (P4) ---------------------
+# `cubrid server stop` leaves cub_master listening on the port.  Once no cub_server of
+# this install is left, SIGTERM the install's masters — only this user's, in this
+# shell's pid/net namespace (namespace jobs keep theirs) and with the same CUBRID_TMP
+# (another session's socket dir is its own).  ~/CUBRID is the shared install: never.
+proc_env() { tr '\0' '\n' < "/proc/$1/environ" 2>/dev/null | sed -n "s/^$2=//p"; }
+install_pids() {  # <binary name>: pids of this install's <binary>, same namespaces and CUBRID_TMP
+  local p exe
+  for p in $(pgrep -u "$(id -u)" -x "$1"); do
+    exe="$(readlink "/proc/$p/exe" 2>/dev/null)"; exe="${exe% (deleted)}"
+    [ "$exe" = "$root/bin/$1" ] || continue
+    [ "$(readlink "/proc/$p/ns/pid")" = "$(readlink /proc/self/ns/pid)" ] || continue
+    [ "$(readlink "/proc/$p/ns/net")" = "$(readlink /proc/self/ns/net)" ] || continue
+    [ "$(proc_env "$p" CUBRID_TMP)" = "${CUBRID_TMP:-}" ] || continue
+    echo "$p"
+  done
+}
+if [ "$action" = stop ] && [ "$rc" -eq 0 ]; then
+  root="$(dirname "$(dirname "$(readlink -f "$CUBRID_BIN")")")"
+  if [ "$root" = "$(readlink -f "$HOME/CUBRID")" ]; then
+    echo "MASTER: kept (shared install $root)"
+  else
+    for _ in $(seq 30); do [ -z "$(install_pids cub_server)" ] && break; sleep 1; done
+    servers="$(install_pids cub_server | tr '\n' ' ')"
+    masters="$(install_pids cub_master | tr '\n' ' ')"
+    if [ -n "$servers" ]; then
+      echo "MASTER: kept (cub_server still running: $servers)"
+    elif [ -z "$masters" ]; then
+      echo "MASTER: none running for $root"
+    else
+      kill -TERM $masters
+      for _ in $(seq 10); do [ -z "$(install_pids cub_master)" ] && break; sleep 1; done
+      left="$(install_pids cub_master | tr '\n' ' ')"
+      if [ -z "$left" ]; then echo "MASTER: stopped $masters"; else echo "MASTER: still running after SIGTERM: $left"; fi
+    fi
+  fi
+fi
+
 # Quick state confirmation (status is short-lived and safe to capture directly).
 echo "----- cubrid server status ------------------------------------------------"
 "$CUBRID_BIN" server status </dev/null 2>&1 || true
