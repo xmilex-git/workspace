@@ -31,6 +31,8 @@ Run until every action of the refinement map appears in at least one accepted tr
 included (inject the error, the interrupt, the concurrent DML or vacuum the fault table models). An
 action no run reaches is listed in MAP.md with the reason (crash, for example).
 
+- A trace file the server holds open is truncated (`: > trace.log`), never deleted, and a per-key dump switch (`CUBRID_TLA_DUMP_KEY`) is off on a server that a checkdb or another whole-index pass reads: a deleted file keeps taking the events unseen, and a dump per scanned key fills the disk. (P75)
+
 ## 3. Check
 
 ```bash

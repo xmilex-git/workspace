@@ -272,6 +272,11 @@ line under "Folded" at the end.
 - Applies at: TRACE.md
 - Case (2026-11-06, PR #8364 review `bv-last-row`): six booleans chosen in `Init` and logged only by their effects; all five `witness-trace-*` cfgs failed `got=[deadlock] depth=1` on initial states the first event contradicts. With the deadlock check off each run was accepted and the three corrupted runs still refused. The 2024 trace-validation paper gives the general reason: a state with no matching successor may still be matched elsewhere, so the constrained spec is never checked for deadlock.
 
+### P75 — truncate a live trace file, keep key dumps off a checkdb
+- Rule: A trace file the server holds open is truncated (`: > trace.log`), never deleted, and a per-key dump switch (`CUBRID_TLA_DUMP_KEY`) is off on a server that a checkdb or another whole-index pass reads: a deleted file keeps taking the events unseen, and a dump per scanned key fills the disk.
+- Applies at: TRACE.md
+- Case (2026-11-09, PR 8432 review `leafswap-route`): `rm -f trace.log` before a repro left `cub_server` writing to the unlinked inode, so the script's wait for a `Swap` event timed out on an empty file until the server restarted; later `cubrid checkdb -C --check-btree-entries` against a server started with `CUBRID_TLA_DUMP_KEY=1` dumped every key it scanned (1.9 GB in a few minutes) until it was stopped; restarted without the dump variable and run with `-i` naming `dba.t5`, checkdb finished at once.
+
 ## Step 10 — report
 
 ### P45 — verified means run, not written
