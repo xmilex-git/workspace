@@ -1,6 +1,6 @@
 # Apalache, the symbolic model checker for TLA+ (SMT through its bundled Z3): the v0.62.4 release
 # asset (apalache-mc/apalache GitHub release, fetched 2026-11-06), run on the pinned nixpkgs JDK 21.
-# tla-check uses it for the bounded-free inductive check (`*.apalache-*.cfg`, cubrid-tla PROOFS.md).
+# tla-check uses it for the bounded-free inductive check (`*.apalache-*.cfg`, cubrid-tla INDUCTIVE.md).
 # tools.nix includes it; `just tla-install` builds it into the GC root .git_ignored_dir/tla/tools.
 let
   nixpkgs = builtins.fetchTarball {

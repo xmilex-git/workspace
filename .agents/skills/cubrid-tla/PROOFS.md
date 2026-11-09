@@ -1,12 +1,11 @@
-# Inductive invariant: Apalache and TLAPS on this host
+# TLAPS proofs — only on an explicit request
 
-Reached from SKILL.md step 6, and the TLAPS sections only when the user asked for a proof (P48). Shape anchors: `examples/*/<Module>_proofs.tla`.
+TLAPS runs only when the user's own message asks for a proof ("TLAPS", "증명해줘", "명확히 검증해줘"); a generic "TLA+로 검증", a skill, a ticket or a review step is not that request, and without it no proof module is written and the report says TLAPS 요청 없음. (P48)
+
+Reached from SKILL.md step 6 when that request exists. Shape anchors: `examples/*/<Module>_proofs.tla`.
+What a proof adds over the Apalache check: the role sets (`Workers`) become arbitrary, not fixed.
 
 ## What gets proved
-
-The safety claims of the correct variant, for every value of the constants (any number of workers,
-any `MaxSpurious`): the premises of the TLA invariance rule INV1, their temporal conclusion, and the
-implication:
 
 ```tla
 ---- MODULE <Module>_proofs ----
@@ -21,104 +20,44 @@ THEOREM Safe == Spec => []IndInv
 ====
 ```
 
-`Safe` with `InvSafe` gives `Spec => []Safety`.
-
-- `PTL` steps prove through LS4 (tlapm 1.6.0-pre): keep the INV1 premises as their own theorems and conclude `Spec => []IndInv` from them `BY InitInv, StepInv, PTL DEF Spec`, so a temporal failure is told apart from a step failure. (P2)
-- Liveness is proved only with a fairness (`WF`/`SF`) argument written for it; without one it stays a TLC result inside the cfg bounds, and the report says so.
-- The proof module is never loaded by TLC; the `Correct` assumption cannot leak into a mutant cfg.
+- `PTL` steps prove through LS4: keep the INV1 premises as their own theorems and conclude `Spec => []IndInv` from them `BY InitInv, StepInv, PTL DEF Spec`. (P2)
+- Liveness is proved only with a fairness (`WF`/`SF`) argument written for it; otherwise it stays a TLC result inside the cfg bounds, and the report says so.
+- TLC never loads the proof module, so `Correct` cannot leak into a mutant cfg.
+- A TLAPS proof of an abstract spec reaches the code-level model only through a refinement PROPERTY TLC checks inside its bounds; the report says per claim what it has. (P16)
 
 ## Writing `StepInv`
 
 ```tla
 THEOREM StepInv == IndInv /\ [Next]_vars => IndInv'
-<1> SUFFICES ASSUME IndInv, [Next]_vars PROVE IndInv'
-  OBVIOUS
+<1> SUFFICES ASSUME IndInv, [Next]_vars PROVE IndInv'  OBVIOUS
 <1> USE Assm, Correct DEF IndInv, TypeOK, ...
 <1>1. CASE Action1             BY <1>1 DEF Action1
-<1>2. ASSUME NEW self \in Workers, WorkerAction(self) PROVE IndInv'
-  BY <1>2 DEF WorkerAction
-...
+<1>2. ASSUME NEW self \in Workers, WorkerAction(self) PROVE IndInv'  BY <1>2 DEF WorkerAction
 <1>k. CASE UNCHANGED vars      BY <1>k DEF vars
 <1>. QED  BY <1>1, ..., <1>k DEF Next, ...
 ```
 
-One case per action; a case that fails is split further, first by the action's `either` / `IF`
-branches, then by stating the facts it needs as numbered steps.
+One case per action; a case that fails is split further, first by the action's branches, then by stating the facts it needs as numbered steps. Every workaround below keeps the theorem statement and decomposes only the proof; a weakened theorem, an `OMITTED` step, or a property moved to "TLC only" without saying so in MAP.md is not a workaround.
 
-- Name each conjunct of IndInv beyond `TypeOK` (`R_x == ...`), prove each in its own step with `TypeOK`, its parts and every `R_` in the DEF list, and join them in the QED; one step over the whole conjunction times out. (P15)
+- Each conjunct of IndInv beyond `TypeOK` is named (`R_x == ...`) and proved in its own step; one step over the whole conjunction times out. (P15)
+- A branching action is proved through an effect step: one `CASE` per branch condition, then each IndInv part from one branch's conjunction with the action left unexpanded. (P33)
+- When a typing step times out, split `TypeOK` into a boolean part and an integer part and prove them in separate steps. (P4)
+- A step states the value the action assigns (`x' = FALSE`, never `~x'`), and a conjunct tying a boolean to a predicate is written `x \in BOOLEAN /\ (x <=> P)`, never `x = (P)`. (P3)
+- Parenthesize every primed right side (`uaf' = (uaf \/ freed)`), every `a + b - c` (`-` binds tighter than `+`), and every quantifier followed by more conjuncts on its line. (P35)
+- A step comparing a variable with `<` or `<=` has that variable's type in scope (`USE np \in 0..MaxP` per lemma); structural assumptions stay out of the module's global `USE`. (P38)
+- `Assm` states what a TLC model value gives for free: a constant set is nonempty, and a sentinel is not one of its members. (P36)
+- A decision table is proved per input as a chain of equalities to record literals (generated), with flags as 0/1 integers, records built instead of `EXCEPT`, and each cited fact free of `CASE`, `\E` and boolean-valued `IF`. (P20)
+- A library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) applies only through Isabelle: `DEFINE` the predicate, `HIDE DEF` it, cite the theorem with `Isa`. (P21)
+- Under `HIDE DEF`, state the equality for the primed term exactly as the goal writes it (`HasAns(cur)' = HasAns(cur)`). (P22)
+- An obligation over `pc = [self \in ProcSet |-> CASE ...]` is proved per `pc[p]` value, then `DOMAIN pc = ProcSet`, then the function-set membership from the two.
+- A step that proves only with one back end pins it with its timeout (`BY ... Z3T(30)`), as the TLAPS community does for reproducible proofs.
 
 ## Running tlapm
 
-- A toolchain install during a run swaps the tools under it: with `--prove`, `tools/tla/tla-check` fails a run whose proof logs carry different `TLAPM version` lines, and that run is rerun, never judged. (P41)
-- Proofs are written and judged on tlapm 1.6.0-pre, whose `tlapm --version` and proof-log `TLAPM version` line print the build hash `efe4f2d`, not `1.6`: 1.6's SMT encoding times out on steps 1.4.5 proved (ADR 0045), so a timeout is split into named-conjunct lemmas that carry their own type facts, never settled by an older log or a 1.4.5 run. (P46)
-- Size `tools/tla/tla-check --workers` to the free cores for a proof module of more than a few hundred obligations: `--workers` is also tlapm's `--threads` (default 4) and the proof runs under a fixed 1800 s timeout, so at the default a large module ends as a timeout, not a verdict; check `nproc` and the load average first, and give a module that needs longer a `\* timeout: <seconds>` line in its proof file. (P39)
-
-## tlapm 1.6.0-pre on this host: limits and the sound workaround
-
-| Symptom | Cause | Workaround |
-|---|---|---|
-| a trivial typing goal times out in SMT and Zenon "exhausted search space" | the SMT encoding turns `x = FALSE` into `not (boolify x)`, which loses `x \in BOOLEAN` once integer arithmetic is in the same goal | when such a step times out, split `TypeOK` into a boolean part and an integer part and prove them in separate steps (P4) |
-| `x' \in BOOLEAN` fails after `~x'` | TLA+ is untyped: `~x'` says nothing about `x'` being a boolean | state the value the action assigns (`x' = FALSE`) (P3) |
-| an obligation over `pc = [self \in ProcSet |-> CASE ...]` times out | PlusCal's CASE function literal is heavy for both provers | prove each `pc[p]` value, then `DOMAIN pc = ProcSet`, then the function-set membership from the two; never `DEF Init` in a QED that does not need it |
-| `"<op>" not found` in the proof module | the PlusCal translation is stale | run `tools/tla/tla-check`, which translates before proving |
-| tlapm exits 0 with obligations failed | `--toolbox` mode reports failures as messages | `tla-check` counts each obligation's final status (P1) |
-
-- A library theorem over an operator parameter (`NatInduction`, `SmallestNatural`) applies only through the Isabelle back end: `DEFINE` the predicate, `HIDE DEF` it, and cite the theorem with `Isa`. (P21)
-- Under `HIDE DEF`, state the equality for the primed term exactly as the goal writes it (`HasAns(cur)' = HasAns(cur)`); a `\A p : Ans(p, s)' = Ans(p, s)` the prover must instantiate under the prime does not prove the goal. (P22)
-- A decision table is proved per input as a chain of equalities to record literals (generate the steps), with flags as 0/1 integers, records built instead of `EXCEPT`, and each fact a step needs taken from the action's definition alone — a cited fact holding a `CASE`, an `\E` or a boolean-valued `IF` makes the step fail in every prover. (P20)
-
-- Parenthesize every `a + b - c` a proof step states: TLA+ binds `-` (precedence 11) tighter than `+` (10), so `qn + 1 - k` is `qn + (1 - k)` and does not match a fact written `(qn + 1) - k` without integer typing in the context. (P30)
-- In a conjunct list, a quantifier written `/\ \A x \in S : P(x) /\ Q` takes every later conjunct on the line into its body: parenthesize it, `/\ (\A x \in S : P(x)) /\ Q`, or put it last. (P40)
-- A tlapm run that ends with `rc=3` and its obligations left "to be proved" crashed before proving: read the log's `Error:` / `ending abnormally` line first. On 1.6 a prime over an expression that already holds a prime (`Exp(outer'[x])'`; write `(Exp(outer[x]))'`) aborts level checking with an `e_levels.ml` assertion, and `Lemma!n` cannot name a conjunct of an ASSUME/PROVE lemma (`Cannot resolve !4`): name the conclusion as an operator and cite the lemma with `DEF` of it. (P49)
-- `tla-check` gives each proof module one 1800 s tlapm run: split a proof past about a thousand obligations into modules that `EXTEND` a shared base module (tlapm proves only the theorems of the module it is given), each under the limit, and keep the INV1 theorems in the top module. (P31)
-- A PlusCal action with branches is proved through an effect step: state each branch as its guard, every assignment and `UNCHANGED` of the rest, prove their disjunction by one `CASE` per branch condition (a primed predicate such as `failed'[self] = "err"` tells `either` branches apart), then prove each IndInv part from one branch's conjunction with the action's definition left unexpanded. (P33)
-- Write an IndInv conjunct that ties a boolean variable to a predicate as `x \in BOOLEAN /\ (x <=> P)`; written `x = (P)` it stays unprovable in SMT and Zenon, even in InitInv. (P34)
-- Parenthesize the right side of every `x' = ...` a proof step states: `uaf' = uaf \/ freed` parses as `(uaf' = uaf) \/ freed`, and an `IF c THEN a ELSE b` right side swallows the conjuncts written after it. (P35)
-- State in `Assm` what a TLC model value gives for free: a constant set is nonempty, and a sentinel the spec compares with its members is not one (`Workers # {}`, `"none" \notin Workers`); TLAPS reads every constant as an arbitrary set. (P36)
-- Fix a failing obligation in a test module that `EXTEND`s the spec and states only that step, then rerun the whole proof once: obligations that fail run to their timeout and set the whole run's wall time, and `--threads` above the free cores only takes CPU from other sessions' provers. (P37)
-- A step that compares a variable with `<` or `<=` needs that variable's type in its context: when `IndInv` stays folded, `USE` a fact such as `np \in 0..MaxP` in each action lemma; keep a structural assumption (`o = <<o[1], o[2]>>`) out of the module's global `USE` and cite it only in the lemma that needs it. (P38)
-
-Every workaround keeps the theorem statement; only the proof is decomposed, and the QED that joins
-the parts is itself an obligation. A theorem weakened to make it prove, an `OMITTED` step, or a
-property moved from TLAPS to "TLC only" without saying so in MAP.md is not a workaround.
-
-## Apalache: the symbolic inductive check
-
-`<Module>.apalache-<n>.cfg` asks Apalache whether `IndInv /\ Next => IndInv'` holds, by SMT over
-every value of the constants the `--cinit` operator leaves open:
-
-```
-\* expect: pass
-\* apalache: --cinit=CInit --length=1
-INIT IndInv
-NEXT Next
-INVARIANT IndInv
-```
-
-- `CInit` (in the spec, after the translation) fixes the role sets to string literals
-  (`Workers = {"w1", "w2"}`, TLC's model values become strings) and leaves the integer bounds open
-  (`MaxSpurious \in Nat`, `NU \in Nat /\ NU >= 1`). Set sizes stay fixed; integer sizes are
-  unbounded. That is what TLC's inductive cfg cannot give and TLAPS gives only after the proof is written.
-- Apalache's type checker needs every CONSTANT and VARIABLE typed. The PlusCal translator drops
-  comments, so the spec states each type once as `\* apalache-type: <name> <type>` (`pc Str -> Str`,
-  `temp Str -> (Int -> Set(<<Int, Str>>))`) and `tools/tla/apalache-types` writes them into the
-  declarations of tla-check's run-dir copy. An untyped name fails the cfg with `error rc=255` and
-  the name in the log.
-- A counterexample (`got=[violation IndInv]`) is the pair of states in the run dir's
-  `apalache-<cfg>/out/**/violation1.tla`; read it as an inductive-cfg counterexample (below).
-- Example: `examples/condvar-handoff/CondVarHandoff.apalache-indinv.cfg`.
-- Write every CONSTANTS and VARIABLES declaration with its first name on the keyword's line (`VARIABLES kind, prune,`): `tools/tla/apalache-types` rewrites only a block whose keyword line already holds a name, so a bare `VARIABLES` line leaves every variable untyped and the Apalache cfg fails with `Expected a type annotation for VARIABLE <name>` (rc=255). (P47)
-- An Apalache `INIT IndInv` binds every variable before a conjunct reads it (`x = FALSE`, `x \in BOOLEAN`, `x \in Nat /\ x <= N`, `s \in SUBSET [f : S]`), an operator that takes or returns a record or a tuple carries a `\* @type:` line (over `\* @typeAlias:` records), and a pair of strings is a record, never a tuple (`<<"u", "ubin">>` matches both a tuple and a `Seq(Str)`). (P52)
-
-- The inductive check is the Apalache cfg; write a TLC inductive cfg only when IndInv's types do not fit Apalache: Apalache checks every value of the integer constants in seconds, where TLC's `INIT IndInv` enumeration takes minutes at small constants and a failed TLAPS step tells only that the provers gave up. (P42)
-- TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish. (P23)
-- In an Apalache inductive check a function applied outside its domain (`bCh[0]`, `bCh[x.gen]` with `x.gen` unbounded) is an unconstrained value the solver picks to break the invariant: IndInv bounds every field it uses as an index (`dpc \in {...} => dch \in Conns`, each token and message field in its range) before a conjunct applies it, and an operator taking `DOMAIN` of a parameter carries an `@type` annotation. (P61)
-
-- A conjunct whose inductive check outruns one Apalache run is split by transition: Apalache's log names the count (`Found N transitions`), each part checks a subset with `search.transitionFilter` (`TF='0->0|1->(0|8|16)'` for `tools/tla/apalache-split`, `--tuning-options=search.transitionFilter=0->0|1->(...)` on a part cfg's `\* apalache:` line), the parts together cover every transition `0..N-1`, and the parts run in parallel; a part's timeout is never read as a pass. (P63)
-
-## Strengthening IndInv
-
-The inductive cfg finds a state satisfying IndInv whose successor violates it. Read the state: if
-the system cannot reach it, add the conjunct that excludes it (P6), keep IndInv in the main cfg's
-INVARIANTS so TLC checks the new conjunct on every reachable state, and re-run. If the system can
-reach it, the claim is false: that is a counterexample (SKILL.md step 7).
+- Proofs are written and judged on tlapm 1.6.0-pre (`tlapm --version` prints `efe4f2d`); an obligation that times out there is split, never settled by an older log. (P46)
+- A toolchain install during a run invalidates it: `tla-check --prove` fails a run whose proof logs carry different `TLAPM version` lines, and the run is repeated. (P41)
+- `tools/tla/tla-check --workers` is sized to the free cores for a module of more than a few hundred obligations, and a module that needs longer carries a `\* timeout: <seconds>` line. (P39)
+- A proof past about a thousand obligations is split into modules that `EXTEND` a shared base module, each under the 1800 s limit, with the INV1 theorems in the top module. (P31)
+- A failing obligation is fixed in a test module that `EXTEND`s the spec and states only that step, then the whole proof reruns once. (P37)
+- A tlapm run ending `rc=3` with obligations "to be proved" crashed: read the `Error:` line; a double prime (`Exp(outer'[x])'`) and `Lemma!n` over an ASSUME/PROVE lemma crash 1.6. (P49)
+- `"<op>" not found` in the proof module means a stale PlusCal translation: `tla-check` translates before proving. tlapm exits 0 with failed obligations; `tla-check` counts each obligation's final status (P1).

@@ -1,32 +1,35 @@
 # Trace validation
 
-Reached from SKILL.md step 8. Shape anchor: `examples/px-error-handoff/` (`traces/`,
-`PxErrorHandoffTrace.tla`, the `witness-trace-ok` and `reject-free-before-join` cfgs).
+Reached from SKILL.md steps 7 and 8. Shape anchor: `examples/px-error-handoff/` (`traces/`,
+`PxErrorHandoffTrace.tla`, the `witness-trace-ok` and `reject-free-before-join` cfgs). The method is
+the one of Cirstea, Kuppe, Loillier and Merz, "Validating Traces of Distributed Programs Against TLA+
+Specifications" (2024): the run constrains the spec, and TLC asks whether some behavior consumes it.
 
-A trace check asks whether a run of the real build is a behavior of the spec. It is what ties the
-refinement map to the code: a map row that is wrong shows up as a run the spec refuses.
+Every model of code that exists is tied to it by trace validation: an instrumented build of the exact sha records runs the trace spec accepts and a corrupted run it refuses; only a design with no implementation or a pattern example carries `trace-exempt: <reason>` in MAP.md. (P50)
 
 ## 1. Instrument a scratch worktree
 
-- A worktree of the exact engine sha under review or design, never a peer worktree and never a
-  commit: the instrumentation is evidence tooling and is thrown away with the worktree.
+- A worktree of the exact engine sha, never a peer worktree and never a commit: the instrumentation
+  is evidence tooling, thrown away with the worktree.
 - One event per action of the refinement map, emitted **inside the step it records** (under the
-  same latch, lock or mutex, or right after the atomic operation), so log order cannot disagree
-  with execution order. Events from several threads carry `seq=` from one global
-  `std::atomic<uint64_t>` fetch-add done inside the step.
-- An event for a step that starts another thread (`push_task`, `pthread_create`, a signal) is emitted before that start, or the started thread's first event can land ahead of it and the run diverges from the spec. (P32)
-- Line format, anywhere in a log line: `TLATRACE seq=<n> a=<Action> p=<process> <field>=<value>...`;
-  `a` is the TLA+ action name, `p` the process id the spec uses, fields are the outcomes the spec
-  must match (`err=1`, `page=3`). Write to a dedicated file opened by the instrumented build in the
-  run's scratch directory (`er_log_debug` is compiled out of release and interleaves other text).
-- Build optdebug through `cubrid-build` with a dedicated prefix; run the scenario through
-  `cubrid-server-control` on a claimed port; stop the server and release the port after.
+  same latch, lock or mutex, or right after the atomic), with `seq=` from one global
+  `std::atomic<uint64_t>` fetch-add done inside the step, so log order cannot disagree with
+  execution order.
+- An event for a step that starts another thread (`push_task`, `pthread_create`, a signal) is emitted before that start, or the started thread's first event lands ahead of it. (P32)
+- Line format, anywhere in a log line: `TLATRACE seq=<n> a=<Action> p=<process> <field>=<value>...`.
+  Log every outcome the spec can match (`err=1`, `page=3`, the chosen index): the fewer values the
+  spec has to guess, the smaller its search — the paper's runs with events only exploded where runs
+  with events and values finished. Write to a dedicated file in the run's scratch directory
+  (`er_log_debug` is compiled out of release and interleaves other text).
+- Build optdebug through `cubrid-build` with a dedicated prefix; run through `cubrid-server-control`
+  on a claimed port; stop the server and release the port after. Stop the server before rebuilding
+  its install (a server on a rebuilt install leaves a master the wrapper cannot stop).
 
 ## 2. Record runs that cover the map
 
-Run until every action of the refinement map appears in at least one accepted trace, including the
-fault branches (inject the error, the interrupt, the concurrent DML or vacuum the fault table
-models). An action no run reaches is listed in MAP.md with the reason (for example, crash).
+Run until every action of the refinement map appears in at least one accepted trace, fault branches
+included (inject the error, the interrupt, the concurrent DML or vacuum the fault table models). An
+action no run reaches is listed in MAP.md with the reason (crash, for example).
 
 ## 3. Check
 
@@ -36,35 +39,27 @@ tools/tla/trace2tla <Module>TraceData OkTrace=<run1.log> [Run2=<run2.log> ...] >
 
 `<Module>Trace.tla` EXTENDS the spec and the data module and adds a cursor `i`:
 
-- `Logged`: the next event names an action; that action of that process fires, its outcome matches
-  the event's fields, and `i' = i + 1`.
-- `Hidden`: actions the build does not log fire with `UNCHANGED i`; keep this set as small as the
-  instrumentation allows, since each hidden action widens what the trace can match.
+- `Logged`: `LET e == TraceLog[i + 1]` names an action; that action of process `e.p` fires, its outcome matches `e`'s fields, and `i' = i + 1`.
+- `Hidden`: actions the build does not log fire with `UNCHANGED i`; keep the set as small as the instrumentation allows, since each hidden action widens what the trace can match.
 - `TraceNotDone == i < Len(TraceLog)`.
-- A trace spec builds the values an event leaves open from the event's own fields (its types, codesets and flags fixed, only the unlogged numbers chosen), never by filtering the spec's whole input set per event: `tools/tla/tla-check` runs TLC with `-coverage 60`, under which a filter over every input value advances about one event a minute. (P51)
-- A trace spec whose inputs the build does not log (a decision's input classes chosen in `Init`) starts from initial states the run contradicts, which stop at the first event: its `witness-trace-*` cfgs carry `CHECK_DEADLOCK FALSE` with a `deadlock-off` reason, or TLC reports that dead end as a deadlock before the run is consumed. (P53)
+- A trace spec builds the values an event leaves open from the event's own fields, never by filtering the spec's whole input set per event: under `-coverage` such a filter advances about one event a minute. (P51)
+- Every trace cfg runs with `CHECK_DEADLOCK FALSE` (`deadlock-off: trace`): a branch of the unlogged nondeterminism that dead-ends is not a deadlock while another branch consumes the run, and the first unconsumed event is read from TLC's depth line. (P53)
 
 | cfg | Expectation | Meaning |
 |---|---|---|
 | `<Module>Trace.witness-trace-<run>.cfg` | `violation TraceNotDone` | the whole run is a behavior of the spec |
-| `<Module>Trace.reject-<case>.cfg` | `pass` (`CHECK_DEADLOCK FALSE` with a `deadlock-off` reason) | a corrupted run (two events swapped, an event dropped, an outcome flipped) is refused, so the trace spec is not vacuous |
+| `<Module>Trace.reject-<case>.cfg` | `pass` | a corrupted run (two events swapped, an event dropped, an outcome flipped) is refused, so the trace spec is not vacuous |
+
+A recorded run the spec refuses is a divergence. TLC's `The depth of the complete state graph search is d` line gives the deepest cursor: with no hidden steps event `d` is the first the spec could not consume (`i` starts at 0 at depth 1); with hidden steps, truncate the log to bisect. Classify the divergence like a counterexample (SKILL.md step 7).
 
 ## 4. Reproducing a hole
 
-A TLC counterexample in the correct model is a hole only after a run of the build takes the same
-steps (SKILL.md step 7). A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites the trace passes through), so a run shows the interleaving happened and not only a wrong answer; a run without those events counts neither for nor against the hole. (P17)
+A TLC counterexample in the correct model is a hole only after a run of the build takes the same steps.
 
-- A hole whose window is a few instructions wide is reproduced by an injection at the window that waits, polling the shared state, until the counterexample's precondition holds (bounded, traced), and then runs the real step; the load that creates the precondition runs for the whole bound. (P26)
-- Widen a narrow window with an env-gated delay on the scratch worktree (`CUBRID_TLA_<WHAT>_DELAY_MS`,
-  read once, default off), at the step the counterexample waits in.
-- An env-gated delay at a shared step holds every statement that reaches it, the racing session's included: the racing session's statements carry a hint that keeps them off the delayed path (`/*+ no_parallel_scan */`), and the report reads both sessions' elapsed times before counting a run. (P54)
-- An injected failure armed for a phase fires at that phase's first matching step, which is often a cache fill the model does not name (a class decode): warm the caches with a statement before arming or filter by the allocation site, and before blaming the modeled step for a crash, rerun the injection with the modeled reaction switched off to see whether the caller's own error path crashes the same way. (P57)
-- Stop the server before rebuilding its install; a server running on a rebuilt install leaves a
-  stale master that the wrapper cannot stop.
-- A session that must hold a snapshot (to keep vacuum from removing rows) runs `csql --no-auto-commit`;
-  auto-commit ends the transaction, and its snapshot, after each statement.
-- A layout the counterexample needs (a merge of the last leaf handed out, a reused page) depends on
-  the load: log the page ids, and count only the runs whose events show the layout.
-
-A recorded run the spec refuses is a divergence: find the first event `i` could not consume (the
-`reject` cfg's TLC log shows the deepest state) and classify it as a counterexample (SKILL.md step 7).
+- A hole's runtime reproduction logs the structural events of the counterexample (TLATRACE at the snapshot, alloc, free and fix sites), so a run shows the interleaving happened and not only a wrong answer. (P17)
+- Widen a narrow window with an env-gated delay on the scratch worktree (`CUBRID_TLA_<WHAT>_DELAY_MS`, read once, default off) at the step the counterexample waits in.
+- A hole whose window is a few instructions wide is reproduced by an injection at the window that waits, polling the shared state, until the counterexample's precondition holds, while the load that creates the precondition runs for the whole bound. (P26)
+- An env-gated delay at a shared step holds the racing session too: its statements carry a hint that keeps them off the delayed path, and both sessions' elapsed times are read before a run counts. (P54)
+- An injected fault lands on the first matching step, often a cache fill the model does not name: warm the caches before arming, and rerun the injection with the modeled reaction switched off before blaming the modeled step for a crash. (P57)
+- A session that must hold a snapshot (to keep vacuum from removing rows) runs `csql --no-auto-commit`.
+- A layout the counterexample needs (a merge of the last leaf handed out, a reused page) depends on the load: log the page ids and count only the runs whose events show the layout.
