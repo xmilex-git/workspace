@@ -74,6 +74,7 @@ Read the code at the exact sha (`tools/code-index/code-index <worktree> body|cal
 - Each return branch of a wait is its own row naming the lock it holds on return; a branch that returns unlocked is split at every shared read and write. (P43)
 - Every function the change's diff touches, and every path between its acquire and release points, has a map row or a fault-table row with the code fact that excludes it; "not covered" is never a report line. (P44)
 - A guard and the shared-state access it protects are two steps when the code reads them apart; a mutant that survives the coarser step is the signal to split it. (P24)
+- A field or value class a model leaves out as "checked at runtime" names a runtime check that observes it; a diff of query output does not see a field no reader prints (precision, a compression cache, a length cache). (P73)
 - A write into a cached plan (an XASL clone's flag or field, reused by later executions and other transactions) is shared state across executions: it gets a map row, the model runs one plan across at least two executions, and a fallback the change takes for one execution is checked not to carry into the next. (P70)
 
 `MODELING.md` has the CUBRID primitive patterns (page latch, lock manager, MVCC snapshot and vacuum, WAL, PX workers, condvar, decision table) and the code each one is read from. Done when every action and every variable of the spec has a row.
@@ -119,12 +120,13 @@ Spec traps — each a wrong verdict TLC or Apalache reports silently, or a parse
 - Comments say `COUNT-star`, never `COUNT(*)`: `(*` opens a nested block comment and SANY reports the EOF far below it. (P60)
 - Apalache takes no `Seq(_)` and no `a..b` with a non-constant bound: a program is a function over `1..N` with `N` a constant, and a variable-bounded range is written as inequalities over a constant range. (P59)
 - Every CONSTANTS and VARIABLES declaration carries its first name on the keyword's line, or `tools/tla/apalache-types` leaves the block untyped. (P47)
+- An operator whose body reads a parameter more than once takes a name, never a compound expression: the call site binds the expression in a LET and passes the name, because TLC's `-coverage` and Apalache's InlinePass copy the argument per reference, which multiplies through nested calls. (P72)
 
 ### 5. Check, then hunt
 
 Run `tools/tla/tla-check <dir>`; iterate until `RESULT: OK`. A pass is suspect until the model fails on demand, so attack it — each attack adds a cfg that passes or produces a finding:
 
-1. **Mutation.** For every guard, ordering, latch hold and check in the mapped code, add the mutant that removes it. A guard whose removal violates nothing is a surviving mutant: a property is missing (add it) or the guard is not needed (a finding or a question).
+1. **Mutation.** For every guard, ordering, latch hold and check in the mapped code, add the mutant that removes it. A guard whose removal violates nothing is a surviving mutant: a property is missing (add it) or the guard is not needed (a finding or a question). A mutant that survives because a second code site restores the property removes both protections, and MAP.md names the second site at `file:line`: the claim then holds by either one. (P74)
 2. **Dead expressions.** `tla-check` lists sub-expressions TLC never evaluated; MAP.md explains each as a mutant-only branch, a violation ghost, or a hole in the model. A dead expression that maps to code is explained by the code fact that makes it unreachable (`file:line`), or the model grows until it fires; "not reached at these bounds" counts only after a larger bound leaves it dead too. (P12)
 3. **Atomicity.** Split every step adjacent to shared state once more; a pass that holds only with the coarser step means the code relies on a protection the map must name.
 4. **Faults.** Enable each fault at every point the code can raise it.

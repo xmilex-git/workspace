@@ -44,6 +44,7 @@ value. Nearly every CTI of a first draft is a well-formedness gap.
 
 - An Apalache IndInv binds every variable before a conjunct reads it, every operator over a record or tuple carries a `\* @type:` line, and a pair of strings is a record, never a tuple. (P52)
 - Apalache leaves a function applied outside its domain unconstrained: IndInv bounds every field it uses as an index before a conjunct applies it. (P61)
+- An Apalache IndInit draws a record-valued variable with `Gen` in a `<Module>Ind.tla` that EXTENDS the spec and `Apalache`, and TypeOK states its domain and field ranges as predicates (`DOMAIN dev = Nodes`, `x.p \in 1..MaxP`), never `dev \in [Nodes -> [p: Int, ...]]`: Int fields fail with "set map over an infinite set", and finite field ranges make Apalache enumerate the whole record set. (P71)
 - Every CONSTANTS and VARIABLES declaration carries its first name on the keyword's line, or `tools/tla/apalache-types` leaves the block untyped. (P47)
 - Apalache takes no `Seq(_)` and no `a..b` with a non-constant bound: a program is a function over `1..N` with `N` a constant, and a variable-bounded range is written as inequalities over a constant range. (P59) Apalache's own workarounds: `range(a, b) == {x \in Nmin..Nmax : a <= x /\ x <= b}`, and `Gen(n)` from the `Apalache` module for a bounded sequence.
 

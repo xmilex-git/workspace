@@ -86,6 +86,11 @@ line under "Folded" at the end.
 - Applies at: MODELING.md (Patterns)
 - Case (2026-11-05, parallel scan index H2): descending `fix_prev_leaf` trusted `next_vpid == m_last_leaf_vpid`; the last leaf was merged into its left neighbour, freed and reused by that neighbour's split (`btree_alloc page=13742` right after `btree_merge right=13742`), and the scan skipped 136 keys. The model found it only once the free pool allowed reuse.
 
+### P73 — an excluded field names the check that sees it
+- Rule: A field or value class a model leaves out as "checked at runtime" names a runtime check that observes it; a diff of query output does not see a field no reader prints (precision, a compression cache, a length cache).
+- Applies at: SKILL.md step 2
+- Case (2026-11-09, PR 8398 review `GcBuf` → `GcFields`): GcBuf's MAP.md excluded the accumulator's value fields as "a decision table over value classes, checked at runtime" by a develop-vs-head output diff. A reviewer found `db_string_append` leaving precision `TP_FLOATING_PRECISION_VALUE` where develop leaves the maximum; csql prints no precision, so the diff could not see it. The field model `GcFields` (dev and pr side by side, every field) fails `AccEq` on `ea06eca48` (`mutant-float-prec`) and also found an `oracle_style_empty_string` + parallel scan + `SEPARATOR ''` heap abort (value2 made on heap 0 by the merge, freed by the coordinator).
+
 ## Step 3 — fault model
 
 ### P27 — a crash state is the code's write
@@ -146,6 +151,11 @@ line under "Folded" at the end.
 - Applies at: SKILL.md step 4; INDUCTIVE.md
 - Case (2026-11-06, PR #8356 review `PartWalk`): a bare `VARIABLES` line with one commented name per line below failed Apalache with `Expected a type annotation for VARIABLE memoOn` although all 31 `apalache-type` lines were present.
 
+### P72 — pass a name, not an expression, to a multi-reference parameter
+- Rule: An operator whose body reads a parameter more than once takes a name, never a compound expression: the call site binds the expression in a LET and passes the name, because TLC's `-coverage` and Apalache's InlinePass copy the argument per reference, which multiplies through nested calls.
+- Applies at: SKILL.md step 4
+- Case (2026-11-09, PR 8398 review `GcFields`): `AppStep(..., CutV(x, res, adj, cnt), ...)` with its value parameter read in several branches ran TLC out of heap under `-coverage`, and Apalache's InlinePass ran out of 12 GB on the same calls; `Feed` binding `LET v == CutV(...) IN AppStep(..., v, v, ...)` fixed both.
+
 ## Step 5 — check, then hunt
 
 ### P12 — a dead expression needs a code reason or a larger bound
@@ -172,6 +182,11 @@ line under "Folded" at the end.
 - Rule: A liveness PROPERTY runs in its own cfg at the smallest bound that still reaches the behavior, never beside the invariants and a refinement PROPERTY in the main cfg: the tableau check slows TLC by an order of magnitude or more.
 - Applies at: SKILL.md step 4
 - Case (2026-11-09, PR 8431 review): the main cfg with `PROPERTY ScanFinishes GuardRefined` ran at about 12 k states/min; without `ScanFinishes` (refinement kept, `VIEW` on) it ran at about 600 k states/min and finished 917,557 distinct states in 545 s, while the separate liveness cfg at the same bound reached 165 k distinct states in 13 minutes.
+
+### P74 — a mutant survived by a second protection removes both
+- Rule: A mutant that survives because a second code site restores the property removes both protections, and MAP.md names the second site at `file:line`: the claim then holds by either one.
+- Applies at: SKILL.md step 5
+- Case (2026-11-09, PR 8398 review `GcFields`): `mutant-compress-mid` (compress the accumulator between appends) passed in 56,113 distinct states: `db_string_fix_string_size` remakes the value through `qstr_make_typed_string`, and `db_make_db_char` resets `compressed_size` (dbtype_function.i:1109), so a stale cache never reaches the write. With `FixSize` also keeping the cache the mutant fails `NoStaleWrite`.
 
 ## Step 6 — inductive invariant
 
@@ -216,6 +231,11 @@ line under "Folded" at the end.
 - Rule: TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, write `x \in SUBSET W` (never `x \subseteq W`), keep the constants below the main cfg's, and when the enumeration still does not finish, probe with a randomized `IInit` (`RandomSubset`, `RandomSetOfSubsets`) whose pass is a probe, never the record.
 - Applies at: INDUCTIVE.md (TLC fallback)
 - Case (2026-11-05, CBRD-27361 page-batch-walk): `TypeOK`-first IndInv spent 7 min on 656 448 initial states and ran past 10 min; rewritten in binding order with the chunk slots zeroed outside a chunk and smaller constants, 4–6 s. RtfLifecycle's `bkeys \subseteq Keys` could not be enumerated at all. Lamport's note ("Using TLC to Check Inductive Invariance", 2018) prescribes the same ordering, the `SUBSET` form, and `Randomization` for the models enumeration cannot reach.
+
+### P71 — Apalache draws record variables with Gen
+- Rule: An Apalache IndInit draws a record-valued variable with `Gen` in a `<Module>Ind.tla` that EXTENDS the spec and `Apalache`, and TypeOK states its domain and field ranges as predicates (`DOMAIN dev = Nodes`, `x.p \in 1..MaxP`), never `dev \in [Nodes -> [p: Int, ...]]`: Int fields fail with "set map over an infinite set", and finite field ranges make Apalache enumerate the whole record set.
+- Applies at: INDUCTIVE.md
+- Case (2026-11-09, PR 8398 review `GcFields`): `dev \in [Nodes -> ValT]` with finite field ranges made Apalache enumerate 207,360,000 records; with `Int` fields it stopped on "Found a set map over an infinite set of CellTFrom(Int)". `GcFieldsInd.tla` with `IndInit == sepv = Gen(1) /\ dev = Gen(2) /\ pr = Gen(2) /\ outv = Gen(2) /\ IndInv` and `ValR` range predicates in TypeOK reached the inductive check (the B1a `HandoffInd` shape).
 
 ## Step 7 — counterexamples and holes
 
