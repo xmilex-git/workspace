@@ -66,6 +66,11 @@ line under "Folded" at the end.
 - Applies at: SKILL.md step 2
 - Case (2026-11-06, CBRD-26425): the first report listed flush errors, the FLUSH waiter interrupt, the post-flush hand-off, invalidation and `pgbuf_search_hash_chain_no_bcb_lock` as not covered; the user asked why. Modeling them found hole E: `pgbuf_bcb_flush_with_wal` returns on a TDE or DWB error after `pgbuf_bcb_mark_is_flushing` (page_buffer.c:10986, 10998) with FLUSHING set, DIRTY cleared and no FLUSH waiter woken (TLC deadlock at depth 17; optdebug assert on the next unfix).
 
+### P70 — a write into the cached plan outlives the execution
+- Rule: A write into a cached plan (an XASL clone's flag or field, reused by later executions and other transactions) is shared state across executions: it gets a map row, the model runs one plan across at least two executions, and a fallback the change takes for one execution is checked not to carry into the next.
+- Applies at: SKILL.md step 2
+- Case (2026-11-09, PR #8438 H3 fix, `docs/tla/lazy-snapshot/stmt`): the map row for `CountConf` said "still not `COS_LOADED` -> a scan answers" and left out `agg_ptr->flag.agg_optimized = false` (`query_executor.c` `qexec_evaluate_aggregates_optimize`), a write into the cached XASL clone; every claim was about the answer, so TLC passed. The reviewer measured `SELECT COUNT(*)` 300x on 2M rows at 0.23 s on develop and 6.76 s on the PR with 4 writers on another table, still 6.70 s after the writers stopped, until a restart. develop already does this on one path: one REPEATABLE READ execution turns `agl: pk_t_id` into a heap scan for every later READ COMMITTED execution, in a new session too (optdebug develop `2d928e34b`, libcubrid `1e706e05…`).
+
 ### P24 — a guard and its access are two steps
 - Rule: A guard and the shared-state access it protects are two steps when the code reads them apart; a mutant that survives the coarser step is the signal to split it.
 - Applies at: SKILL.md step 2

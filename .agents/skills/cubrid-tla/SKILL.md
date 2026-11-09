@@ -74,6 +74,7 @@ Read the code at the exact sha (`tools/code-index/code-index <worktree> body|cal
 - Each return branch of a wait is its own row naming the lock it holds on return; a branch that returns unlocked is split at every shared read and write. (P43)
 - Every function the change's diff touches, and every path between its acquire and release points, has a map row or a fault-table row with the code fact that excludes it; "not covered" is never a report line. (P44)
 - A guard and the shared-state access it protects are two steps when the code reads them apart; a mutant that survives the coarser step is the signal to split it. (P24)
+- A write into a cached plan (an XASL clone's flag or field, reused by later executions and other transactions) is shared state across executions: it gets a map row, the model runs one plan across at least two executions, and a fallback the change takes for one execution is checked not to carry into the next. (P70)
 
 `MODELING.md` has the CUBRID primitive patterns (page latch, lock manager, MVCC snapshot and vacuum, WAL, PX workers, condvar, decision table) and the code each one is read from. Done when every action and every variable of the spec has a row.
 
