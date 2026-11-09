@@ -17,7 +17,7 @@ Read [`tone_guide.md`](./tone_guide.md) before drafting. It is authoritative for
 - Write only the JIRA Description field body in the file. Do not put the proposed Summary/title in it.
 - In the completion message, report the file path, issue type, proposed Summary, and whether `design.md`/`test.md` were written or skipped (with the reason) separately.
 - If `.git_ignored_dir/jira/` does not exist, stop and ask the user to create it. The per-ticket directory may be created as needed.
-- Nothing is created, commented, attached or linked in JIRA unless the user asked for that specific item; a defect found along the way goes to this repo's own tracker (`gh issue create` on xmilex-git/workspace) and the report names which tracker was used; up to the ask, the work stops at the draft body under `.git_ignored_dir/jira/<KEY>/`. (P1)
+- Nothing is created, commented, attached or linked in JIRA unless the user asked for that specific item; a defect found along the way goes to this repo's own tracker (`gh issue create` on xmilex-git/workspace) and the report names which tracker was used; up to the ask, the work stops at the draft body under `.git_ignored_dir/jira/<KEY>/`. A `cubrid-jira` write passes `--server https://jira.cubrid.org` and is read back by the id it returns (`--output json`): the default `http://` URL answers 302 and urllib replays the POST as a GET, printing success with nothing written. (P1)
 
 The tickets behind each `(P<n>)` are in `PITFALLS.md`; a new lesson goes there as a case under its rule, or as a new rule added to both files in one commit.
 

@@ -8,9 +8,10 @@ Adding a case: one `Case (YYYY-MM-DD):` line under the rule it confirms, in the 
 A new rule only when no rule fits — then add the sentence to SKILL.md in the same commit.
 
 ### P1 — nothing reaches JIRA without a per-item ask
-- Rule: Nothing is created, commented, attached or linked in JIRA unless the user asked for that specific item; a defect found along the way goes to this repo's own tracker (`gh issue create` on xmilex-git/workspace) and the report names which tracker was used; up to the ask, the work stops at the draft body under `.git_ignored_dir/jira/<KEY>/`.
+- Rule: Nothing is created, commented, attached or linked in JIRA unless the user asked for that specific item; a defect found along the way goes to this repo's own tracker (`gh issue create` on xmilex-git/workspace) and the report names which tracker was used; up to the ask, the work stops at the draft body under `.git_ignored_dir/jira/<KEY>/`. A `cubrid-jira` write passes `--server https://jira.cubrid.org` and is read back by the id it returns (`--output json`): the default `http://` URL answers 302 and urllib replays the POST as a GET, printing success with nothing written.
 - Applies at: Output
 - Case (2026-09-24, #340): about to file the D7 develop defect in JIRA; the user: "무슨이슈를 올림?? jira에 올리면안되는건알지??". When the user does ask ("내 jira 이슈에 분석내용 comment로 올려", CBRD-27510), the comment matches the body's style — plain Korean, no campaign D-numbers or workspace issue numbers — and goes through `cubrid-jira comment <KEY> --body-file F --from jira` (dry run first, then `--yes`).
+- Case (2026-11-08, CBRD-27817): `cubrid-jira comment … --yes` printed "Commented on CBRD-27817" and `comment-list` still showed one comment; `curl -X POST http://jira.cubrid.org/rest/api/2/…` answered 302 to https. Reposted with `--server https://jira.cubrid.org --output json` → comment id 4778190, read back.
 - Source: memory:no-jira-posting
 
 ### P2 — titles are decided with the user; evidence is develop's
