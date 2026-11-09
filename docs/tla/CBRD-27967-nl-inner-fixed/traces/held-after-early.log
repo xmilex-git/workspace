@@ -1,0 +1,33 @@
+TLATRACE seq=1 a=OuterRow p=R
+TLATRACE seq=2 a=MStart p=R
+TLATRACE seq=3 a=MRow p=R pg=M1 fix=1
+TLATRACE seq=4 a=IReset p=R held=0
+TLATRACE seq=5 a=IStart p=R
+TLATRACE seq=6 a=IRow p=R held=1
+TLATRACE seq=7 a=IEarly p=R
+TLATRACE seq=8 a=IBack p=R held=1
+TLATRACE seq=9 a=MRow p=R pg=M1 fix=0
+TLATRACE seq=10 a=IReset p=R held=0
+TLATRACE seq=11 a=IStart p=R
+TLATRACE seq=12 a=IRow p=R held=1
+TLATRACE seq=13 a=IEarly p=R
+TLATRACE seq=14 a=IBack p=R held=0
+TLATRACE seq=15 a=MNextPage p=R copy=0
+TLATRACE seq=16 a=MEnd p=R
+TLATRACE seq=17 a=OuterRow p=R
+TLATRACE seq=18 a=MStart p=R
+TLATRACE seq=19 a=MRow p=R pg=M1 fix=1
+TLATRACE seq=20 a=IReset p=R held=0
+TLATRACE seq=21 a=IStart p=R
+TLATRACE seq=22 a=IRow p=R held=1
+TLATRACE seq=23 a=IEarly p=R
+TLATRACE seq=24 a=IBack p=R held=0
+TLATRACE seq=25 a=MRow p=R pg=M1 fix=0
+TLATRACE seq=26 a=IReset p=R held=0
+TLATRACE seq=27 a=IStart p=R
+TLATRACE seq=28 a=IRow p=R held=1
+TLATRACE seq=29 a=IEarly p=R
+TLATRACE seq=30 a=IBack p=R held=0
+TLATRACE seq=31 a=MNextPage p=R copy=0
+TLATRACE seq=32 a=MEnd p=R
+TLATRACE seq=33 a=OuterEnd p=R

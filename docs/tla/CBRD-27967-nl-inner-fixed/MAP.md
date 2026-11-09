@@ -29,7 +29,7 @@ and the cached scan is allowed on the level-0 spec only (22312), so the inner `h
 |---|---|---|
 | C1 | No two or three threads wait for each other's page latches (no latch wait cycle). | `query_executor.c` 22216-22218 ("Fixed cannot be allowed while new scans start which also need to fix pages. This may lead to page deadlocks."), D2 |
 | C2 | While the query works at another level (the outer index scan, the outer row's heap lookup, a middle row), the innermost scan holds no page. | D3 (the user's claim "어쨌든 fix를 놓고 join level을 이동") |
-| C3 | One innermost pass fixes each of its pages once; one middle pass fixes the middle page once (develop: once per row). | D2, the defect above |
+| C3 | One innermost pass fixes each of its pages once; one middle pass fixes each middle page once (develop: once per row). | D2, the defect above |
 | C4 | A middle row read from a page copy reads the copy its own pass took. | D2 (a restarted scan may not read the previous outer row's copy: a header page copy's next link can name a page vacuum has since removed) |
 | C5 | Every thread finishes (with weak fairness on each thread). | C1's liveness counterpart |
 
@@ -41,6 +41,7 @@ and the cached scan is allowed on the level-0 spec only (22312), so the inner `h
 | `RLookup`, `RLookupYield`, `RRefix` ("refix") | `scan_next_index_lookup_heap` -> `heap_get_visible_version` -> `pgbuf_ordered_fix` of the outer row's page (`PGBUF_ORDERED_HEAP_NORMAL`); the ordered fix unfixes held heap pages of a higher rank when it would wait, and refixes them while it holds the requested page | one call; the yield and refix are the ordered fix's own steps |
 | `RMStart` | `scan_reset_scan_block` of the middle heap scan (`scan_manager.c:4337`); D2 adds `VPID_SET_NULL (&scan_cache->local_cache_vpid)` | |
 | `RMRow`, `RMRowYield`, "mrefix" | `heap_next_internal` on a cached scan: page in the local copy (`heap_file.c:7651-7657`) or fix, copy (`7734`), unfix (`7951`) | the copy and unfix happen before the row is returned (assert at `heap_file.c:7955`) |
+| `RMNextPage`, `RMEnd` | `heap_next_internal` past the middle page's last slot: `heap_vpid_next`, fix of the next page (copied when it holds a row), unfix; S_END at the chain's end | as `RMRow`: no middle page is held when the call returns |
 | `RIStart`, `RIStartYield` | `heap_next_internal` from a null OID: the header page first (`heap_file.c:7612-7617`); an old page still held is replaced as the old watcher and unfixed after the new fix (`7640-7670`) | |
 | `RIRow` | a row of the held page (fixed: `cache_last_fix_page`) or fix-read-unfix (develop) | |
 | `RINextPage` | `heap_vpid_next` + fix of the next page before the held one is released (`heap_file.c:7700-7722`, `OLD_PAGE_PREVENT_DEALLOC`) | |
@@ -49,7 +50,7 @@ and the cached scan is allowed on the level-0 spec only (22312), so the inner `h
 | `RIBack` | D3: `scan_handle_single_scan` (`scan_manager.c`), on the S_END a `single_fetched` scan returns without reading (QPROC_SINGLE_INNER / QPROC_SINGLE_OUTER), unfixes `scan_cache->page_watcher`; develop keeps the page until the next pass's `heap_next` (`Mutant = "no-reset-unfix"`). The reset itself comes too late: SA gdb on the defect query shows the order outer `scan_next_scan` -> inner `scan_reset_scan_block` -> inner rows, so the outer moves before the inner is reset | |
 | `RONext` | the next outer row; at the query's end `heap_scancache_end` unfixes a held page | |
 | `WStep` | a DML: the heap page (`locator_*` -> `heap_*`) then its index entry (`btree_*`), modeled with the heap page still held (the worst order); a relocation over two pages in rank order (`pgbuf_ordered_fix`); write latches only | |
-| `VStep` | vacuum: the index, then the heap pages, one page at a time | |
+| `VStep` | vacuum: the index, then the heap pages (both middle pages among them), one page at a time | |
 | `WProg = "btree-holds-heap"` | not code: a heap page requested while a leaf is held, an edge no code takes (btree code unfixes before it reads the heap, `btree.c:26538`) | |
 
 ## Fault table
@@ -83,7 +84,7 @@ and the cached scan is allowed on the level-0 spec only (22312), so the inner `h
 
 C1 holds by either of two protections: the reset release (D3, C2), and the code's latch orders (the ordered fix
 among heap pages, no btree-to-heap request). Each removed alone leaves C1 true: `btree-holds-heap` (D3 kept) and
-`code-keep-held` / `code-keep-held-hclow` (the code's latch orders kept; 42,091 and 43,159 distinct states, both ranks of the outer heap) pass; the mutants remove both (cubrid-tla P74).
+`code-keep-held` / `code-keep-held-hclow` (the code's latch orders kept; 96,937 and 97,789 distinct states, both ranks of the outer heap) pass; the mutants remove both (cubrid-tla P74).
 
 ## Witnesses
 
@@ -96,56 +97,95 @@ among heap pages, no btree-to-heap request). Each removed alone leaves C1 true: 
 
 ## Dead expressions
 
-Pass cfgs of the design (`NlInnerFixed`, `hclow`, `liveness`, `scale-no3`, `btree-holds-heap`) leave these
-unevaluated; each is the design's own consequence or a mutant-only branch:
+Pass cfgs of the design (`NlInnerFixed`, `hclow`, `liveness`, `scale-no3`, `header-empty`, `btree-holds-heap`) leave
+these unevaluated; each is the design's own consequence or a mutant-only branch:
 
-- `NlInnerFixed.tla:112`, `NlInnerFixed.tla:113`, `NlInnerFixed.tla:125`, `NlInnerFixed.tla:129`, `NlInnerFixed.tla:140`, `NlInnerFixed.tla:141`, `NlInnerFixed.tla:143`, `NlInnerFixed.tla:144`, `NlInnerFixed.tla:157`, `NlInnerFixed.tla:166`, `NlInnerFixed.tla:174`, `NlInnerFixed.tla:175`, `NlInnerFixed.tla:176`: the ordered fix's yield and refix (`YieldTo`, `RLookupYield`, the refix branch of `RLookup`, `RRefix`,
-  `RMRowYield`, the "mrefix" branch of `RMRow`, `RIStartYield`), and `NlInnerFixed.tla:180`, `RIStart` with an innermost page still
-  held. Under C2 R holds no innermost page when it requests a page of another level (`RIEnd` and `RIBack` release
-  it first), and inside the innermost pass it requests its pages in rank order (B1, then B2), so no request ever
-  has a higher-ranked page to yield and no restart finds a page held. They fire once the release is removed:
-  `witness-yield` and `witness-restart-held` (`Mutant = "no-reset-unfix"`), `code-keep-held-hclow` (the outer
-  lookup's yield, which needs the outer heap ranked below the inner one), `mutant-no-ordered`. In the code the
-  same branches are `pgbuf_ordered_fix`'s unfix-and-refix of held watchers (`page_buffer.c` `pgbuf_ordered_fix_debug`)
-  and `heap_next_internal`'s replacement of a still-held page (`heap_file.c:7640-7670`), both kept for the other
-  scans that use them.
-- `NlInnerFixed.tla:185`, `NlInnerFixed.tla:192`, `NlInnerFixed.tla:209`: develop's per-row fix of the innermost scan (`RIStart`, `RIRow`, `RINextPage` with `IFixed` false), only under
-  `Mutant = "inner-unfixed"` (`mutant-inner-unfixed`).
-- `NlInnerFixed.tla:220`: the reset that keeps the page (`RIBack` without `ResetUnfix`), only under `Mutant = "no-reset-unfix"`
+- `NlInnerFixed.tla:123`, `NlInnerFixed.tla:124`, `NlInnerFixed.tla:136`, `NlInnerFixed.tla:140`, `NlInnerFixed.tla:151`, `NlInnerFixed.tla:152`, `NlInnerFixed.tla:154`, `NlInnerFixed.tla:155`, `NlInnerFixed.tla:171`, `NlInnerFixed.tla:180`, `NlInnerFixed.tla:190`, `NlInnerFixed.tla:202`, `NlInnerFixed.tla:203`, `NlInnerFixed.tla:204`: the ordered fix's yield and refix (`YieldTo`, `RLookupYield`, the refix branch of `RLookup`, `RRefix`,
+  `RMRowYield`, the "mrefix" branches of `RMRow` and `RMNextPage`, `RIStartYield`), and `NlInnerFixed.tla:208`, `RIStart` with an
+  innermost page still held. Under C2 R holds no innermost page when it requests a page of another level (`RIEnd`
+  and `RIBack` release it first), and inside the innermost pass it requests its pages in rank order (B1, then B2),
+  so no request ever has a higher-ranked page to yield and no restart finds a page held. They fire once the release
+  is removed: `witness-yield` and `witness-restart-held` (`Mutant = "no-reset-unfix"`), `code-keep-held` (the
+  middle row's and M2's yield), `code-keep-held-hclow` (also the outer lookup's yield, which needs the outer heap
+  ranked below the inner one), `mutant-no-ordered`. In the code the same branches are `pgbuf_ordered_fix`'s
+  unfix-and-refix of held watchers (`page_buffer.c` `pgbuf_ordered_fix_debug`) and `heap_next_internal`'s
+  replacement of a still-held page (`heap_file.c:7640-7670`), both kept for the other scans that use them.
+- `NlInnerFixed.tla:213`, `NlInnerFixed.tla:220`, `NlInnerFixed.tla:237`: develop's per-row fix of the innermost scan (`RIStart`, `RIRow`, `RINextPage` with `IFixed` false),
+  only under `Mutant = "inner-unfixed"` (`mutant-inner-unfixed`).
+- `NlInnerFixed.tla:248`: the reset that keeps the page (`RIBack` without `ResetUnfix`), only under `Mutant = "no-reset-unfix"`
   (`mutant-no-reset-unfix`, `code-keep-held`).
 
-`code-keep-held` and `code-keep-held-hclow` (the release removed, the code's latch orders kept) leave `NlInnerFixed.tla:185`, `NlInnerFixed.tla:192`, `NlInnerFixed.tla:209` and
-`NlInnerFixed.tla:220` dead for the same reasons (develop's per-row branches; the release is what they remove), and `code-keep-held`
-also `NlInnerFixed.tla:112`, `NlInnerFixed.tla:113`, `NlInnerFixed.tla:125`, `NlInnerFixed.tla:129`: with `HcLow = FALSE` the outer heap ranks above every inner page, so the lookup never yields; the hclow
+`code-keep-held` and `code-keep-held-hclow` (the release removed, the code's latch orders kept) leave `NlInnerFixed.tla:213`, `NlInnerFixed.tla:220`, `NlInnerFixed.tla:237` and
+`NlInnerFixed.tla:248` dead for the same reasons (develop's per-row branches; the release is what they remove), and `code-keep-held`
+also `NlInnerFixed.tla:123`, `NlInnerFixed.tla:124`, `NlInnerFixed.tla:136`, `NlInnerFixed.tla:140`: with `HcLow = FALSE` the outer heap ranks above every inner page, so the lookup never yields; the hclow
 cfg fires it.
 
 ## Bounds
 
-`NO = 2` outer rows, `RPP = 2` rows per page, a two-page inner chain, one middle page, `EarlyStop`, both ranks of
-the outer heap (`HcLow`, `hclow` cfg); scale `NO = 3`. The Apalache check (`NlInnerFixedInd.apalache-indinv`)
-leaves `NO` and `RPP` over every natural >= 1 and `EarlyStop`, `HcLow` open; the thread and page sets are fixed.
+`NO = 2` outer rows; `R1 = R2 = 2` rows on the two inner pages; the middle chain's header page M1 with `MR1 = 2`
+rows and M2 with `MR2 = 1` (`header-empty`: `R1 = 0`, `R2 = 1`, `MR2 = 0`, the shape a small table takes: rows on
+one page and an empty next page; `mutant-keep-copy`: `MR2 = 0`); `EarlyStop`; both ranks of the outer heap
+(`HcLow`, `hclow` cfg); scale `NO = 3`. The Apalache check (`NlInnerFixedInd.apalache-g1`, `-g2-t0` .. `-g2-t7`, `-g3`: IndInv's conjuncts in three groups, the second split by transition) leaves `NO` and
+`MR1` over every natural >= 1, `R1`, `R2` and `MR2` over every natural, and `EarlyStop`, `HcLow` open; the thread
+and page sets are fixed.
 
-trace-exempt: design before implementation (the record run below checked the design before `5bc4812c1` was
-written). The implementation now exists, so trace validation (a TLATRACE run of the fix, unfix, early-stop release
-and copy events on an instrumented build) is still owed; until then the implementation is tied to the model by the
-runtime checks in Result.
+## Trace validation
+
+Instrumented build: a scratch worktree of `5bc4812c1` (`traces/instrument.diff`, never committed; optdebug
+install `CUBRID-CBRD-27967-nltrace`). `scan_manager.c` logs `Next` (with the result, `single_fetched` and whether
+the scan still holds its page), `Reset` and `Early` per scan; `heap_file.c` `heap_next_internal` logs `Fix` after
+the page is fixed, `Copy`, `CopyHit` and `End`; each line carries `seq=` from one atomic counter and the scan kind
+(`O` index, `M` cached heap, `I` fixed heap) set by `scan_next_scan`. Run: `traces/run1.sql` on a CS server
+(`tools/fast-gate/fast-cs-csql.sh`, `CUBRID_TLATRACE_FILE`), memoize off (`memoize_memory_limit=0`, so every outer
+row runs a middle and an innermost pass): the 3-level inner join (outer index scan of `corr`, middle `mid`, inner
+`fact`) and the semi join (the inner scan stops at its first match), each executed twice; raw log
+`traces/run1.raw`. `traces/post.py` cuts one execution (from the outer scan's first `Next` to its S_END) and turns
+the scan events into R's actions (`full.log`, `semi.log`; executions 3 and 4 give the same logs as 1 and 2).
+`NlInnerFixedTrace.tla` maps each event to its action and checks the logged outcome: the middle page a row came
+from and whether that row fixed it, whether the innermost scan holds its page at a reset, a row and the step
+back. RLeaf and every RONext but the last are hidden (the build does not log them).
+
+| cfg | Expected | Got |
+|---|---|---|
+| `witness-trace-full` | the 45 events are a behavior | accepted (`TraceNotDone` violated at depth 49) |
+| `witness-trace-semi` | the 33 events are a behavior | accepted (depth 37) |
+| `reject-keep-copy` | `full.log` with the second outer row's first middle row read from the old copy (`fix=0`): the pre-D2 reset | refused at event 25 (depth 28) |
+| `reject-held-after-early` | `semi.log` with the page still held after the early stop (`held=1`): develop | refused at event 8 (depth 9) |
+
+Actions the recorded runs reach: RLookup, RONext, RMStart, RMRow (fix and copy branches), RMNextPage (no row on
+M2), RMEnd, RIStart, RIRow, RIEarly, RINextPage, RIEnd, RIBack. Not reached, with the reason:
+
+- `RMNextPage` with a copy and `RIRow` on B2 (rows on the second page): every heap the runs built is the header page
+  with its rows, an empty second page, then further pages (4865 rows / 4866 empty for `mid`, 4929 / 4930 for
+  `fact`; 1,000- and 5,000-byte rows give six-page chains with 4866 still empty). A two-page chain with rows on both
+  does not occur, and the model has two pages per level; a chain of more pages repeats `RINextPage`'s
+  fix-next-then-release, which the single-table fixed scan already runs on develop.
+- `WStep`, `VStep` and the ordered fix's yield and refix: the instrumentation logs the query thread's scans only;
+  a writer's or vacuum's page latch is not logged, and the yield branches are dead in the design (Dead expressions).
+  Concurrency is checked by model checking only.
+
+The model's chains are in rank order (B1 below B2, M1 below M2). A chain whose next page ranks lower takes
+`pgbuf_ordered_fix`'s yield on `heap_next_internal`'s next-page fix, the path the single-table fixed scan takes on
+develop; it is not modeled.
 
 ## Result
 
-- 2026-11-09, `tools/tla/tla-check docs/tla/CBRD-27926-nl-inner-fixed` (the directory's name before it moved to
-  CBRD-27967; spec files unchanged since): `RESULT: OK`, run dir
-  `.git_ignored_dir/scratch/tla/CBRD-27926-nl-inner-fixed-20261109-182424-1917693`.
-- TLC (distinct states / depth): main 14,535 / 67, `hclow` 14,535 / 67, `liveness` 14,535 / 67, `scale-no3` 23,123 / 89,
-  `btree-holds-heap` 6,108 / 59, `code-keep-held` 42,091 / 67, `code-keep-held-hclow` 43,159 / 67; mutants
-  `inner-unfixed` (IFixBound, 228), `middle-unfixed` (MFixBound, 206), `no-reset-unfix` (LevelRelease, 125),
-  `keep-copy` (NoStale, 1,496), `btree-holds-heap` (NoWaitCycle, 1,084), `no-ordered` (NoWaitCycle, 1,186),
-  `liveness-btree-holds-heap` (deadlock, 1,563); witnesses early, copy-read, restart-held, v-waits-r, w-waits-r,
-  yield reached.
-- Apalache `NlInnerFixedInd.apalache-indinv`: IndInv inductive for every `NO >= 1`, `RPP >= 1`, both `EarlyStop`,
-  both `HcLow` (1,716 s).
+- 2026-11-09, `tools/tla/tla-check docs/tla/CBRD-27967-nl-inner-fixed`: `RESULT: OK`, run dir
+  `.git_ignored_dir/scratch/tla/CBRD-27967-nl-inner-fixed-20261109-204906-2125683`. Supersedes the 18:24 run
+  (`CBRD-27926-nl-inner-fixed-20261109-182424-1917693`), whose model had a one-page middle scan, no row count of 0
+  on the innermost pages and no trace validation.
+- TLC (distinct states / depth): main 27,759 / 91, `hclow` 27,759 / 91, `liveness` 27,759 / 91, `header-empty`
+  9,468 / 61, `scale-no3` 43,221 / 124, `btree-holds-heap` 11,666 / 83, `code-keep-held` 96,937 / 91,
+  `code-keep-held-hclow` 97,789 / 91; mutants `inner-unfixed` (IFixBound, 219), `middle-unfixed` (MFixBound, 796),
+  `no-reset-unfix` (LevelRelease, 132), `keep-copy` (NoStale, 2,301), `btree-holds-heap` (NoWaitCycle, 3,945),
+  `no-ordered` (NoWaitCycle, 1,302), `liveness-btree-holds-heap` (deadlock, 4,798); witnesses early, copy-read,
+  restart-held, v-waits-r, w-waits-r, yield reached.
+- Trace: `witness-trace-full` and `witness-trace-semi` accepted, `reject-keep-copy` and `reject-held-after-early`
+  refused (Trace validation above).
+- Apalache: IndInv inductive for every `NO, MR1 >= 1` and `R1, R2, MR2 >= 0`, both `EarlyStop`, both `HcLow`:
+  `g1` 831 s, `g3` 499 s, `g2-t0` .. `g2-t7` 571-1,131 s (group 2 as one run timed out at 1,800 s).
 - TLAPS 요청 없음.
-- spec sha256: `NlInnerFixed.tla` 575ced0685bc0e7b74c227222ad88acc2b1a7601d624180d4db47ff0a5240b3f,
-  `NlInnerFixedInd.tla` 4bd7af33c00ef277944a060a2ca74baa0b56ca7b2d8c61454344f00b77088719.
+- spec sha256: `NlInnerFixed.tla` 718cce781f7a560dab739a6d46174eb9f5fc0faec35496c49aa5c06b5691a323, `NlInnerFixedInd.tla` cecda8d5352a1bccacb81a254b1244b65c246dbda7d909bd3fb1e4f518de6a10, `NlInnerFixedTrace.tla` d05500cdefc68bd4ffbdafa0e7c69852ecfeffdee480dfe232c71131e6846523.
 - Runtime (release and optdebug of `5bc4812c1`, fast-cs-csql, 9 NL queries, 534 result lines): answers equal
   develop `2d928e34b` (0 differing lines). Inner fetch, develop -> change: 161,648 -> 1,648 (index outer, 206-page
   inner, 8 passes); 1,374,008 -> 14,008 (range); anti / outer join inner 231 -> 93, 240 -> 96; three-level middle
