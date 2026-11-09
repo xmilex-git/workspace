@@ -344,6 +344,16 @@ line under "Folded" at the end.
 - Applies at: PROOFS.md
 - Case (2026-11-06, PR #8356 `PartWalk_proofs`): a `SUFFICES` with `Exp(outer'[x])'` turned a 439-obligation run into `rc=3` (`e_levels.ml line 502 Assertion failed`); `(Exp(outer[x]))'` proved all 439. `ORFacts!1` stopped parsing with `Cannot resolve !4`; an operator for the lemma's conclusion cited with `DEF` proved 735/735.
 
+### P65 — a proof starts after the fix is decided, scoped to the changed claims
+- Rule: A proof starts only after the fix is decided, and for a model past about thirty variables it proves the claims the change touches on an abstract spec that the code-level model refines by a TLC PROPERTY, not every claim on the whole model.
+- Applies at: PROOFS.md
+- Case (2026-11-09, lazy-snapshot `LazySnapshot`: 51 variables, 36 IndInv conjuncts, 35 actions): the proof of a candidate H3 fix (statistics stored in each history entry) reached 4716/4993 and was dropped when the fix became a version check; the decided fix's module grew to 15337 obligations, one full run took over an hour at load average 96, its first run failed 161 writer-action steps, and the user stopped the proof, leaving TLC, Apalache and trace validation as the record. Only C3 changed; the same model's px-heap-coverage sibling (about 20 variables) proved 1613/1613 in 16 minutes.
+
+### P66 — a generated per-action proof cites only what the step reads
+- Rule: A generated per-action proof states each changed variable's type and the action's effect facts as numbered steps and cites only those the step reads, never `DEF IndInv, TypeOK` with every conjunct, and is tried on a few lemmas (an action that writes shared history, the fix's own actions) before the whole module runs.
+- Applies at: PROOFS.md
+- Case (2026-11-09, lazy-snapshot): a generator citing the whole IndInv and TypeOK in every step failed 1119 of 4692 obligations on SMT internal timeouts in a 99-minute run, and its frame steps without `IndInv` in the DEF list failed even for conjuncts the action leaves alone; with per-variable type steps and narrow citation a 9-lemma trial proved 4630/4656, then 4097/4103 after hand case splits (the reader's entry is or is not the one a commit starts; history monotonicity at `v2 = curVer + 1`).
+
 ## Folded
 
 - P30 (`-` binds tighter than `+`) and P40 (a quantifier swallows later conjuncts) → P35.

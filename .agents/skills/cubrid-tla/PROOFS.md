@@ -7,6 +7,8 @@ What a proof adds over the Apalache check: the role sets (`Workers`) become arbi
 
 ## What gets proved
 
+- A proof starts only after the fix is decided, and for a model past about thirty variables it proves the claims the change touches on an abstract spec that the code-level model refines by a TLC PROPERTY, not every claim on the whole model. (P65)
+
 ```tla
 ---- MODULE <Module>_proofs ----
 EXTENDS <Module>, TLAPS
@@ -39,6 +41,7 @@ THEOREM StepInv == IndInv /\ [Next]_vars => IndInv'
 
 One case per action; a case that fails is split further, first by the action's branches, then by stating the facts it needs as numbered steps. Every workaround below keeps the theorem statement and decomposes only the proof; a weakened theorem, an `OMITTED` step, or a property moved to "TLC only" without saying so in MAP.md is not a workaround.
 
+- A generated per-action proof states each changed variable's type and the action's effect facts as numbered steps and cites only those the step reads, never `DEF IndInv, TypeOK` with every conjunct, and is tried on a few lemmas (an action that writes shared history, the fix's own actions) before the whole module runs. (P66)
 - Each conjunct of IndInv beyond `TypeOK` is named (`R_x == ...`) and proved in its own step; one step over the whole conjunction times out. (P15)
 - A branching action is proved through an effect step: one `CASE` per branch condition, then each IndInv part from one branch's conjunction with the action left unexpanded. (P33)
 - When a typing step times out, split `TypeOK` into a boolean part and an integer part and prove them in separate steps. (P4)
