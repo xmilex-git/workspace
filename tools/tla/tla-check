@@ -21,7 +21,9 @@
 #      `apalache-mc check` instead of TLC, with the arguments of its `\* apalache: <args>` line
 #      (--cinit=<op> --length=1 for the inductive check), on a run-dir copy whose CONSTANTS and
 #      VARIABLES declarations tools/tla/apalache-types annotated from the spec's
-#      `\* apalache-type: <name> <type>` lines. It counts as an inductive cfg.
+#      `\* apalache-type: <name> <type>` lines. It counts as an inductive cfg. Apalache cfgs start before
+#      the TLC cfgs and run in the background, one JVM each, so an IndInv split over several cfgs
+#      (each INVARIANT a part of IndInv, all assuming INIT IndInv) checks in parallel (cubrid-tla P62).
 #   3. TLAPS, only with --prove (the user asked for a proof, cubrid-tla P48): every .tla holding a THEOREM is proved by tlapm (Z3, Zenon, Isabelle, LS4) on a copy in the run dir;
 #      every obligation must come back proved — none failed, none OMITTED. A proof module's
 #      `\* timeout: <seconds>` line (default 1800) bounds its tlapm run, as a cfg's does TLC's.
@@ -69,6 +71,28 @@ done
 
 failures=0
 fail() { echo "FAIL $*"; failures=$((failures + 1)); }
+# Apalache: symbolic check over every value of the constants the --cinit operator leaves open.
+# Runs in the background (one JVM per cfg, single-threaded) while TLC runs; writes its verdict line.
+apalache_cfg() {  # c name module log expect tmo
+  local c="$1" name="$2" module="$3" log="$4" expect="$5" tmo="$6" adir="$run/apalache-$2" rc start secs got aargs
+  mkdir -p "$adir/tmp"
+  cp "$dir"/*.tla "$adir/"
+  for f in "$adir"/*.tla; do "$root/tools/tla/apalache-types" "$f"; done
+  read -r -a aargs <<< "$(sed -n 's/^\\\* apalache: *//p' "$c" | head -1)"
+  start=$(date +%s)
+  (cd "$adir" && timeout "${tmo:-1800}" "${clean_env[@]}" TMPDIR="$adir/tmp" JVM_ARGS="-Xmx$heap" \
+    "$tools/bin/apalache-mc" check --out-dir="$adir/out" --config="$c" "${aargs[@]}" "$module.tla") > "$log" 2>&1
+  rc=$?
+  secs=$(( $(date +%s) - start ))
+  case $rc in
+    0) got="pass" ;;
+    12) got="violation $(sed -n 's/^ *INVARIANTS\{0,1\} *//p' "$c" | xargs)" ;;
+    124) got="timeout after ${tmo:-1800}s" ;;
+    *) got="error rc=$rc ($(/usr/bin/grep -m1 'E@' "$log" | sed 's/ *E@.*//'))" ;;
+  esac
+  line="$name expect=[$expect] got=[$got] apalache ${secs}s log=$log"
+  if [ "$got" = "$expect" ]; then echo "PASS $line"; else echo "FAIL $line"; fi > "$adir.verdict"
+}
 # CUBRID shells export LD_LIBRARY_PATH with the system Java 8 libs, which break the nix JDK 21.
 clean_env=(/usr/bin/env -u LD_LIBRARY_PATH -u JAVA_HOME -u CLASSPATH -u JAVA_TOOL_OPTIONS)
 
@@ -149,39 +173,33 @@ for arg in "${dirs[@]}"; do
     [ "$before" = "$(sha256sum < "$t")" ] || echo "note: $t PlusCal translation updated in place"
   done
 
+  # 2a. Apalache cfgs start first, in the background, so they overlap the TLC cfgs.
+  apids=(); anames=()
+  for c in "${cfgs[@]}"; do
+    name="$(basename "$c" .cfg)"
+    [[ "$name" == *.apalache-* ]] || continue
+    [ -z "$only" ] || [[ "$name" == $only ]] || continue
+    module="${name%%.*}"
+    expect="$(head -1 "$c" | sed -n 's/^\\\* expect: *//p')"
+    [ -n "$expect" ] || { fail "$name: first line must be '\\* expect: pass'"; continue; }
+    [ -f "$dir/$module.tla" ] || { fail "$name: module $module.tla not found"; continue; }
+    [ -x "$tools/bin/apalache-mc" ] || { fail "$name: apalache-mc missing from the pinned toolchain; run 'just tla-install'"; continue; }
+    tmo="$(sed -n 's/^\\\* timeout: *\([0-9]*\).*/\1/p' "$c" | head -1)"
+    apalache_cfg "$c" "$name" "$module" "$run/$name.log" "$expect" "$tmo" &
+    apids+=($!); anames+=("$name")
+  done
+
   # 2. TLC: every cfg against its expectation.
   for c in "${cfgs[@]}"; do
     name="$(basename "$c" .cfg)"
     [ -z "$only" ] || [[ "$name" == $only ]] || continue
+    [[ "$name" != *.apalache-* ]] || continue  # launched above, judged after the TLC cfgs
     module="${name%%.*}"
     log="$run/$name.log"
     expect="$(head -1 "$c" | sed -n 's/^\\\* expect: *//p')"
     [ -n "$expect" ] || { fail "$name: first line must be '\\* expect: pass|violation <Name>|deadlock|liveness|refinement'"; continue; }
     [ -f "$dir/$module.tla" ] || { fail "$name: module $module.tla not found"; continue; }
     tmo="$(sed -n 's/^\\\* timeout: *\([0-9]*\).*/\1/p' "$c" | head -1)"
-    if [[ "$name" == *.apalache-* ]]; then
-      # Apalache: symbolic check over every value of the constants the --cinit operator leaves open.
-      [ -x "$tools/bin/apalache-mc" ] || { fail "$name: apalache-mc missing from the pinned toolchain; run 'just tla-install'"; continue; }
-      adir="$run/apalache-$name"
-      mkdir -p "$adir/tmp"
-      cp "$dir"/*.tla "$adir/"
-      for f in "$adir"/*.tla; do "$root/tools/tla/apalache-types" "$f"; done
-      read -r -a aargs <<< "$(sed -n 's/^\\\* apalache: *//p' "$c" | head -1)"
-      start=$(date +%s)
-      (cd "$adir" && timeout "${tmo:-1800}" "${clean_env[@]}" TMPDIR="$adir/tmp" JVM_ARGS="-Xmx$heap" \
-        "$tools/bin/apalache-mc" check --out-dir="$adir/out" --config="$c" "${aargs[@]}" "$module.tla") > "$log" 2>&1
-      rc=$?
-      secs=$(( $(date +%s) - start ))
-      case $rc in
-        0) got="pass" ;;
-        12) got="violation $(sed -n 's/^ *INVARIANTS\{0,1\} *//p' "$c" | xargs)" ;;
-        124) got="timeout after ${tmo:-1800}s" ;;
-        *) got="error rc=$rc ($(/usr/bin/grep -m1 'E@' "$log" | sed 's/ *E@.*//'))" ;;
-      esac
-      line="$name expect=[$expect] got=[$got] apalache ${secs}s log=$log"
-      if [ "$got" = "$expect" ]; then echo "PASS $line"; else fail "$line"; fi
-      continue
-    fi
     if /usr/bin/grep -q '^ *SYMMETRY' "$c" && /usr/bin/grep -qE '^ *PROPERT(Y|IES)' "$c"; then
       fail "$name: SYMMETRY together with PROPERTY (TLC liveness is unsound under symmetry)"; continue
     fi
@@ -225,6 +243,13 @@ for arg in "${dirs[@]}"; do
     elif [ -n "$unexplained" ]; then fail "$line dead expressions not explained in MAP.md:$unexplained"
     elif [ "$got" = "$expect" ]; then echo "PASS $line"
     else fail "$line"; fi
+  done
+
+  # 2b. The Apalache verdicts, once every background check ended.
+  for i in "${!apids[@]}"; do
+    wait "${apids[$i]}"
+    v="$(cat "$run/apalache-${anames[$i]}.verdict" 2>/dev/null)"
+    case "$v" in PASS*) echo "$v" ;; FAIL*) fail "${v#FAIL }" ;; *) fail "${anames[$i]}: no verdict" ;; esac
   done
 
   # 3. TLAPS: prove every module holding a theorem, on a copy (tlapm writes <Module>.tlaps/ beside it).
