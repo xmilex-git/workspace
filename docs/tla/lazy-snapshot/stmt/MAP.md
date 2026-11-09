@@ -176,8 +176,11 @@ and its states, depth and dead lines are those below. The spec is the same in bo
 | `LazySnapshotTrace.witness-trace-count-fix-run1-on-fix` | accepted | 717 / 408 | 28 |
 | `LazySnapshotTrace.reject-count-fix-run1-corrupt-on-fix` | refused | 593 / 336 | 23 |
 
-TLAPS: not complete. The proof for the earlier candidate fix (statistics stored in each history entry) reached 4716 of 4993 obligations
-(SMT timeouts) before the fix changed to the version check; no proof module of the decided fix is in this directory. C1-C7 hold here
+TLAPS: not complete; stopped by the user's decision on 2026-11-09 (TLC, Apalache and trace validation are the record). The proof for the
+earlier candidate fix (statistics stored in each history entry) reached 4716 of 4993 obligations (SMT timeouts). A proof of the decided fix
+(generator `.git_ignored_dir/scratch/lazysnap/gen/genproof_a5.py` + `overrides_a5.py`, with lemmas `NoFlightStats`, `SnapCommitted`,
+`CountOK`, `ScanOK`, `StaleOK`) proved 4097 of 4103 obligations for the reader's and the fix's actions and WLock/WStart; the full module was not
+finished, so no proof module is in this directory. C1-C7 hold here
 inside the TLC bounds above, and IndInv is inductive by Apalache at the `CInit` constants.
 
 Spec sha256: `LazySnapshot.tla` ea247d9d750d4e9a0877aaac730a1757c537d0d46b3c54fc4d2b8726df9ee037,
