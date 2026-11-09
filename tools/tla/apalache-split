@@ -9,7 +9,7 @@
 #
 # Prints `PASS <conjuncts> <secs>s`, or `CTI <conjuncts> <secs>s` followed by the violated formula and
 # the counterexample's State0 -> State1 diff (`DUMP=1` adds the whole State0). Exit 0 pass, 1 CTI,
-# 2 error or timeout. Evidence: .git_ignored_dir/scratch/tla/<dir>-split-<stamp>-<K>of<N>/.
+# 2 error or timeout; TF=<regex> checks a subset of Next's transitions (below). Evidence: .git_ignored_dir/scratch/tla/<dir>-split-<stamp>-<K>of<N>/.
 # A pass is a step, never the record: the record is tools/tla/tla-check's single run of CFG.
 set -u
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -34,6 +34,9 @@ sed -i -E '/^={4,} *$/d' "$run/$module.tla"
 { printf 'SplitGrp =='; printf ' /\\ %s' "${grp[@]}"; printf '\n====\n'; } >> "$run/$module.tla"
 sed "s/^\( *INVARIANTS\{0,1\} *\).*/\1SplitGrp/" "$cfg" > "$run/split.cfg"
 read -r -a aargs <<< "$(sed -n 's/^\\\* apalache: *//p' "$cfg" | head -1)"
+# TF=<regex> restricts the step-1 transitions (Apalache search.transitionFilter over "<step>-><n>"), e.g.
+# TF='0->0|1->([0-9]|1[0-8])'; the union of the filters must cover every transition the log's "Found N" counts
+[ -z "${TF:-}" ] || aargs+=("--tuning-options=search.transitionFilter=$TF")
 tmo="${TMO:-$(sed -n 's/^\\\* timeout: *\([0-9]*\).*/\1/p' "$cfg" | head -1)}"
 start=$(date +%s)
 (cd "$run" && timeout "${tmo:-1800}" /usr/bin/env -u LD_LIBRARY_PATH -u JAVA_HOME -u CLASSPATH -u JAVA_TOOL_OPTIONS \
