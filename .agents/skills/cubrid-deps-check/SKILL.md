@@ -32,10 +32,10 @@ ending with `Summary: N OK / M MISS / K WARN`.
   starts with (AGENTS.md "Code lookup").
 - **WARN** — an optional or per-skill dependency is absent: `~/CUBRID` runtime, CTP
   (`CTP_HOME`), the testcase repos, `cubrid-manual`, `podman`, `ssh`/`tmux`, `node`, `gh` (auth),
-  `uv`, `cubrid-jira-search`, the prebuilt locale `.so`.
+  `uv`, `cubrid-jira`, the prebuilt locale `.so`.
 - **Hard-gated skills** are always annotated so you know what stays blocked:
   - `md-to-presentation` ABORTS without the frontend-design plugin **and** a Playwright MCP server.
-  - `jira` HALTS without `uv` + `cubrid-jira-search`.
+  - `jira` HALTS without `uv` + `cubrid-jira`.
 
 ## Contract
 

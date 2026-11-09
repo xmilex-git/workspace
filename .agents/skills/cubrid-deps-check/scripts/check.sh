@@ -87,7 +87,7 @@ else
   emit MISS "code-index toolchain not installed (.git_ignored_dir/code-index/tools)" "just code-index-install  (needs nix-build)"
 fi
 have uv && emit OK "uv (jira)" || emit WARN "uv not found (jira)" "install uv (astral.sh)"
-have cubrid-jira-search && emit OK "cubrid-jira-search (jira)" || emit WARN "cubrid-jira-search not on PATH (jira)" "install/link the cubrid-jira-search helper"
+have cubrid-jira && emit OK "cubrid-jira (jira)" || emit WARN "cubrid-jira not on PATH (jira)" "uv tool install git+https://github.com/vimkim/cubrid-jira"
 
 # --- Bundled locale lib (informational) ---
 if [ -n "$REPO" ] && [ -f "$REPO/.claude/locale/libcubrid_all_locales.so" ]; then
@@ -99,7 +99,7 @@ fi
 # --- Hard-gated skills (cannot be auto-verified from a shell; annotate) ---
 emit WARN "frontend-design plugin (md-to-presentation)" "md-to-presentation ABORTS (hard-gate) without the frontend-design plugin"
 emit WARN "Playwright MCP server (md-to-presentation)" "md-to-presentation ABORTS (hard-gate) without a Playwright MCP server"
-emit WARN "jira hard-gate" "jira HALTS without uv + cubrid-jira-search"
+emit WARN "jira hard-gate" "jira HALTS without uv + cubrid-jira"
 
 echo
 printf 'Summary: %d OK / %d MISS / %d WARN\n' "$ok" "$miss" "$warn"
