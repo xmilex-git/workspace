@@ -114,6 +114,8 @@ INVARIANT IndInv
 - TLC enumerates `INIT IndInv` conjunct by conjunct: bind each variable just before the conjuncts that constrain it, have the actions reset values no later phase reads to a constant, and keep the inductive cfg's constants smaller than the main cfg's, or the initial states never finish. (P23)
 - In an Apalache inductive check a function applied outside its domain (`bCh[0]`, `bCh[x.gen]` with `x.gen` unbounded) is an unconstrained value the solver picks to break the invariant: IndInv bounds every field it uses as an index (`dpc \in {...} => dch \in Conns`, each token and message field in its range) before a conjunct applies it, and an operator taking `DOMAIN` of a parameter carries an `@type` annotation. (P61)
 
+- A conjunct whose inductive check outruns one Apalache run is split by transition: Apalache's log names the count (`Found N transitions`), each part checks a subset with `search.transitionFilter` (`TF='0->0|1->(0|8|16)'` for `tools/tla/apalache-split`, `--tuning-options=search.transitionFilter=0->0|1->(...)` on a part cfg's `\* apalache:` line), the parts together cover every transition `0..N-1`, and the parts run in parallel; a part's timeout is never read as a pass. (P63)
+
 ## Strengthening IndInv
 
 The inductive cfg finds a state satisfying IndInv whose successor violates it. Read the state: if

@@ -29,7 +29,8 @@ rule, or as a new rule added to both files in one commit.
   never a result. Evidence goes to
   `.git_ignored_dir/scratch/tla/<dir>-<stamp>/`; read only the `PASS`/`FAIL` lines and the last line.
 - `tools/tla/apalache-split DIR CFG K/N [CONJ...]` checks group K of N of an Apalache inductive cfg's IndInv
-  conjuncts and prints PASS, or the counterexample's step diff (step 6).
+  conjuncts and prints PASS, or the counterexample's step diff (step 6); `TF=<regex>` checks a subset of Next's
+  transitions (P63).
 - `tools/tla/trace2tla <Module> <Op>=<log>...` turns `TLATRACE` lines of an instrumented run into a
   TLA+ data module (`TRACE.md`).
 - `just tla-selftest` runs `examples/`; run it after touching `tools/tla/` or this skill's rules.
