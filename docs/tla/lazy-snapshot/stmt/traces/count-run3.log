@@ -1,0 +1,5 @@
+TLATRACE seq=35 a=Invalidate p=T1 valid=0
+TLATRACE seq=38 a=StatsPublish p=T2 mvccid=89
+TLATRACE seq=39 a=Complete p=T2 mvccid=89 committed=1 pos=5 ver=5
+TLATRACE seq=40 a=StatsLoad p=T1 btid=641 oids=101 where=build
+TLATRACE seq=41 a=Build p=T1 lowest=89 hi=89 pos=4 ver=4 retries=1 stats_pos=5 waited=1

@@ -1,0 +1,8 @@
+TLATRACE seq=12052 a=Collect p=L2 vfid=16384 snap=1 npages=12006 nsects=188
+TLATRACE seq=12055 a=Dealloc p=F vfid=16384 page=16451 kind=user
+TLATRACE seq=12056 a=Dealloc p=F vfid=16384 page=16515 kind=user
+TLATRACE seq=12173 a=Alloc p=F vfid=16384 page=16451 kind=table
+TLATRACE seq=12701 a=Reused p=W4225 vpid=16451 ptype=1
+TLATRACE seq=12708 a=Fix p=W4225 vfid=16384 page=16451 ptype=-1
+TLATRACE seq=13298 a=Fix p=W4225 vfid=16384 page=16515 ptype=-1
+TLATRACE seq=17414 a=Fix p=W4225 vfid=16384 page=18861 ptype=2

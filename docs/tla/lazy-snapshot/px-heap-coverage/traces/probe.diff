@@ -1,0 +1,315 @@
+diff --git a/src/query/parallel/px_scan/px_scan.cpp b/src/query/parallel/px_scan/px_scan.cpp
+index 1f89ba5b6..0e5d1fc5d 100644
+--- a/src/query/parallel/px_scan/px_scan.cpp
++++ b/src/query/parallel/px_scan/px_scan.cpp
+@@ -21,6 +21,8 @@
+  */
+ 
+ #include "px_scan.hpp"
++#include <cstdlib>
++#include <unistd.h>
+ 
+ #include "error_code.h"
+ #include "object_primitive.h"
+@@ -42,6 +44,9 @@
+ #include "thread_manager.hpp"			/* cubthread::system_core_count */
+ 
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
++/* TLA+ probe (scratch only) */
++extern void tla_trace (const char *fmt, ...);
++extern thread_local int tla_in_build;
+ #include "memory_wrapper.hpp"
+ 
+ extern "C"
+@@ -603,6 +608,15 @@ extern "C"
+ 
+     scan_id->type = S_PARALLEL_HEAP_SCAN;
+ 
++    {
++      /* TLA+ probe (scratch only): widen the window between the bitmap and the workers */
++      const char *tla_delay = getenv ("CUBRID_TLA_PX_OPEN_DELAY_MS");
++      if (tla_delay != NULL)
++	{
++	  usleep ((useconds_t) atoi (tla_delay) * 1000);
++	}
++    }
++
+     ASSERT_NO_ERROR_OR_INTERRUPTED ();
+     return NO_ERROR;
+   }
+diff --git a/src/query/parallel/px_scan/px_scan_input_handler_heap.cpp b/src/query/parallel/px_scan/px_scan_input_handler_heap.cpp
+index 50d94597d..1fcb4d88e 100644
+--- a/src/query/parallel/px_scan/px_scan_input_handler_heap.cpp
++++ b/src/query/parallel/px_scan/px_scan_input_handler_heap.cpp
+@@ -24,8 +24,14 @@
+ #include "error_code.h"
+ #include "bit.h"
+ #include "heap_file.h"
++#include "log_impl.h"
++#include <cstdlib>
++#include <unistd.h>
+ 
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
++/* TLA+ probe (scratch only) */
++extern void tla_trace (const char *fmt, ...);
++extern thread_local int tla_in_build;
+ #include "memory_wrapper.hpp"
+ 
+ namespace parallel_scan
+@@ -69,6 +75,12 @@ namespace parallel_scan
+ 	  }
+ 	return error_code;
+       }
++    {
++      LOG_TDES *tla_tdes = LOG_FIND_TDES (LOG_FIND_THREAD_TRAN_INDEX (thread_p));
++      tla_trace ("a=Collect p=L%d vfid=%d snap=%d npages=%d nsects=%d", LOG_FIND_THREAD_TRAN_INDEX (thread_p),
++		 m_hfid.vfid.fileid, tla_tdes != NULL ? (int) tla_tdes->mvccinfo.snapshot.valid : -1,
++		 collector.npages, collector.nsects);
++    }
+     m_ftab_set.convert (&collector);
+     m_splited_ftab_set = m_ftab_set.split (parallelism);
+     m_splited_ftab_set_idx.store (0);
+@@ -86,6 +98,16 @@ namespace parallel_scan
+     int error_code = NO_ERROR;
+ 
+     bool found = false;
++    {
++      /* TLA+ probe (scratch only): hold each worker before its first bitmap page */
++      static thread_local const void *tla_delayed_for = NULL;
++      const char *tla_delay = getenv ("CUBRID_TLA_PX_WORKER_DELAY_MS");
++      if (tla_delay != NULL && tla_delayed_for != (const void *) m_tl_ftab_set)
++	{
++	  tla_delayed_for = (const void *) m_tl_ftab_set;
++	  usleep ((useconds_t) atoi (tla_delay) * 1000);
++	}
++    }
+     while (!found)
+       {
+ 	if (VPID_ISNULL (&m_tl_vpid))
+@@ -122,6 +144,9 @@ namespace parallel_scan
+ 		error_code = pgbuf_ordered_fix (thread_p, &m_tl_vpid, OLD_PAGE_MAYBE_DEALLOCATED, PGBUF_LATCH_READ,
+ 						&m_tl_scan_cache->page_watcher);
+ 
++		tla_trace ("a=Fix p=W%d vfid=%d page=%d ptype=%d", thread_p->index, m_hfid.vfid.fileid, m_tl_vpid.pageid,
++			   m_tl_scan_cache->page_watcher.pgptr != NULL
++			   ? (int) pgbuf_get_page_ptype (thread_p, m_tl_scan_cache->page_watcher.pgptr) : -1);
+ 		if (m_tl_scan_cache->page_watcher.pgptr == NULL)
+ 		  {
+ 		    if (error_code != NO_ERROR && error_code != ER_PB_BAD_PAGEID)
+diff --git a/src/query/query_executor.c b/src/query/query_executor.c
+index 47b3ff1d6..1a517ffc4 100644
+--- a/src/query/query_executor.c
++++ b/src/query/query_executor.c
+@@ -107,6 +107,9 @@
+ #include <vector>
+ #include "dblink_scan.h"
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
++/* TLA+ probe (scratch only) */
++extern void tla_trace (const char *fmt, ...);
++extern thread_local int tla_in_build;
+ #include "memory_wrapper.hpp"
+ 
+ #define GOTO_EXIT_ON_ERROR \
+diff --git a/src/storage/file_manager.c b/src/storage/file_manager.c
+index 9d7933ad9..dec5df240 100644
+--- a/src/storage/file_manager.c
++++ b/src/storage/file_manager.c
+@@ -67,6 +67,9 @@
+ #include "thread_manager.hpp"	// for thread_get_thread_entry_info
+ #include "partition_sr.h"
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
++/* TLA+ probe (scratch only) */
++extern void tla_trace (const char *fmt, ...);
++extern thread_local int tla_in_build;
+ #include "memory_wrapper.hpp"
+ 
+ 
+@@ -5318,6 +5321,11 @@ file_perm_alloc (THREAD_ENTRY * thread_p, PAGE_PTR page_fhead, FILE_ALLOC_TYPE a
+   /* done */
+ 
+   assert (error_code == NO_ERROR);
++  if (fhead->type == FILE_HEAP || fhead->type == FILE_HEAP_REUSE_SLOTS)
++    {
++      tla_trace ("a=Alloc p=F vfid=%d page=%d kind=%s", fhead->self.fileid, vpid_alloc_out->pageid,
++		 alloc_type == FILE_ALLOC_TABLE_PAGE ? "table" : "user");
++    }
+ 
+ exit:
+   perfmon_inc_stat (thread_p, PSTAT_FILE_NUM_PAGE_ALLOCS);
+@@ -6572,6 +6580,11 @@ file_perm_dealloc (THREAD_ENTRY * thread_p, PAGE_PTR page_fhead, const VPID * vp
+ 
+   pgbuf_dealloc_page (thread_p, page_dealloc);
+   perfmon_inc_stat (thread_p, PSTAT_FILE_NUM_PAGE_DEALLOCS);
++  if (fhead->type == FILE_HEAP || fhead->type == FILE_HEAP_REUSE_SLOTS)
++    {
++      tla_trace ("a=Dealloc p=F vfid=%d page=%d kind=%s", fhead->self.fileid, vpid_dealloc->pageid,
++		 alloc_type == FILE_ALLOC_TABLE_PAGE ? "table" : "user");
++    }
+ 
+   /* done */
+   assert (error_code == NO_ERROR);
+diff --git a/src/transaction/log_tran_table.c b/src/transaction/log_tran_table.c
+index 83122266c..d5c760bf7 100644
+--- a/src/transaction/log_tran_table.c
++++ b/src/transaction/log_tran_table.c
+@@ -81,6 +81,9 @@
+ #include "pl_session.hpp"
+ 
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
++/* TLA+ probe (scratch only) */
++extern void tla_trace (const char *fmt, ...);
++extern thread_local int tla_in_build;
+ #include "memory_wrapper.hpp"
+ 
+ #if defined(CS_MODE)
+@@ -4060,6 +4063,7 @@ logtb_invalidate_snapshot_data (THREAD_ENTRY * thread_p)
+       return NO_ERROR;
+     }
+ 
++  tla_trace ("a=Invalidate p=T%d valid=%d", tdes->tran_index, (int) tdes->mvccinfo.snapshot.valid);
+   if (tdes->mvccinfo.snapshot.valid)
+     {
+       /* Invalidate snapshot */
+@@ -4800,6 +4804,8 @@ logtb_create_unique_stats_from_repr (THREAD_ENTRY * thread_p, OID * class_oid)
+ 	    {
+ 	      goto exit_on_error;
+ 	    }
++	  tla_trace ("a=StatsLoad p=T%d btid=%d oids=%lld where=%s", LOG_FIND_THREAD_TRAN_INDEX (thread_p),
++		     unique_stats->btid.root_pageid, unique_stats->global_stats.num_oids, tla_in_build ? "build" : "late");
+ 	}
+     }
+ 
+diff --git a/src/transaction/mvcc_table.cpp b/src/transaction/mvcc_table.cpp
+index 248f70c7d..2a4edda84 100644
+--- a/src/transaction/mvcc_table.cpp
++++ b/src/transaction/mvcc_table.cpp
+@@ -29,6 +29,47 @@
+ #include "thread_manager.hpp"
+ 
+ #include <cassert>
++#include <cstdarg>
++#include <cstdio>
++#include <cstdlib>
++#include <unistd.h>
++
++/* TLA+ probe (scratch only) */
++static FILE *tla_trace_fp = NULL;
++static std::once_flag tla_trace_once;
++static std::mutex tla_trace_mutex;
++static unsigned long long tla_trace_seq = 0;
++thread_local int tla_in_build = 0;
++void
++tla_trace (const char *fmt, ...)
++{
++  std::call_once (tla_trace_once, [] ()
++  {
++    const char *p = getenv ("CUBRID_TLA_TRACE_FILE");
++    if (p != NULL)
++      {
++	tla_trace_fp = fopen (p, "a");
++      }
++  });
++  if (tla_trace_fp == NULL)
++    {
++      return;
++    }
++  std::lock_guard<std::mutex> g (tla_trace_mutex);
++  fprintf (tla_trace_fp, "TLATRACE seq=%llu ", tla_trace_seq++);
++  va_list ap;
++  va_start (ap, fmt);
++  vfprintf (tla_trace_fp, fmt, ap);
++  va_end (ap);
++  fputc ('\n', tla_trace_fp);
++  fflush (tla_trace_fp);
++}
++static int
++tla_env_ms (const char *name)
++{
++  const char *v = getenv (name);
++  return v != NULL ? atoi (v) : 0;
++}
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
+ #include "memory_wrapper.hpp"
+ 
+@@ -237,6 +278,8 @@ mvcctable::build_mvcc_info (log_tdes &tdes)
+   TSCTIMEVAL tv_diff;
+   UINT64 snapshot_wait_time;
+   UINT64 snapshot_retry_count = 0;
++  int tla_waited = 0, tla_stats_retry = 0;
++  size_t tla_pos_at_stats = 0;
+ 
+   assert (tdes.tran_index >= 0 && tdes.tran_index < logtb_get_number_of_total_tran_indices ());
+ 
+@@ -300,11 +343,30 @@ mvcctable::build_mvcc_info (log_tdes &tdes)
+       trans_status.m_active_mvccs.copy_to (tdes.mvccinfo.snapshot.m_active_mvccs,
+ 					   mvcc_active_tran::copy_safety::THREAD_UNSAFE);
+ 
++      /* TLA+ probe: hold between the status copy and the statistics load until a commit publishes a newer status */
++      {
++	static const int tla_wait_ms = tla_env_ms ("CUBRID_TLA_BUILD_STATS_WAIT_MS");
++	tla_waited = 0;
++	for (int w = 0; w < tla_wait_ms && tla_wait_ms > 0; w++)
++	  {
++	    if (m_trans_status_history_position.load () != index)
++	      {
++		tla_waited = 1;
++		break;
++	      }
++	    usleep (1000);
++	  }
++	tla_pos_at_stats = m_trans_status_history_position.load ();
++      }
++      tla_in_build = 1;
++      tla_stats_retry = (int) snapshot_retry_count;
++
+       if (logtb_load_global_statistics_to_tran (thread_get_thread_entry_info())!= NO_ERROR)
+ 	{
+ 	  /* just error setting without returning for further processing */
+ 	  er_set (ER_ERROR_SEVERITY, ARG_FILE_LINE, ER_MVCC_CANT_GET_SNAPSHOT, 0);
+ 	}
++      tla_in_build = 0;
+ 
+       if (trans_status_version == trans_status.m_version.load ())
+ 	{
+@@ -333,6 +395,10 @@ mvcctable::build_mvcc_info (log_tdes &tdes)
+   tdes.mvccinfo.snapshot.lowest_active_mvccid = crt_status_lowest_active;
+   tdes.mvccinfo.snapshot.highest_completed_mvccid = highest_completed_mvccid;
+   tdes.mvccinfo.snapshot.valid = true;
++  tla_trace ("a=Build p=T%d lowest=%llu hi=%llu pos=%zu ver=%llu retries=%llu stats_pos=%zu waited=%d",
++	     tdes.tran_index, (unsigned long long) crt_status_lowest_active,
++	     (unsigned long long) highest_completed_mvccid, index, (unsigned long long) trans_status_version,
++	     (unsigned long long) snapshot_retry_count, tla_pos_at_stats, tla_waited);
+ 
+   if (is_perf_tracking)
+     {
+@@ -478,6 +544,10 @@ mvcctable::complete_mvcc (int tran_index, MVCCID mvccid, bool committed)
+     {
+       assert (false);
+     }
++  if (committed)
++    {
++      tla_trace ("a=StatsPublish p=T%d mvccid=%llu", tran_index, (unsigned long long) mvccid);
++    }
+ 
+   // update current trans status
+   m_current_trans_status.m_active_mvccs.set_inactive_mvccid (mvccid);
+@@ -486,6 +556,8 @@ mvcctable::complete_mvcc (int tran_index, MVCCID mvccid, bool committed)
+ 
+   // finish next trans status
+   next_tran_status_finish (next_status, next_index);
++  tla_trace ("a=Complete p=T%d mvccid=%llu committed=%d pos=%zu ver=%llu", tran_index, (unsigned long long) mvccid,
++	     (int) committed, next_index, (unsigned long long) next_version);
+ 
+   if (committed)
+     {
+@@ -642,6 +714,10 @@ mvcctable::update_global_oldest_visible ()
+       if (m_ov_lock_count == 0)
+ 	{
+ 	  assert (m_oldest_visible.load () <= oldest_visible);
++	  if (m_oldest_visible.load () != oldest_visible)
++	    {
++	      tla_trace ("a=OldestVisible p=vacuum ov=%llu", (unsigned long long) oldest_visible);
++	    }
+ 	  m_oldest_visible.store (oldest_visible);
+ 	}
+     }

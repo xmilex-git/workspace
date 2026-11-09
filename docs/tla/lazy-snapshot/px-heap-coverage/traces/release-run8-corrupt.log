@@ -1,0 +1,8 @@
+# corrupted copy of release-run8.log: the page that keeps its row (16768) is deallocated instead of read
+TLATRACE seq=12052 a=Collect p=L2 vfid=4800 snap=1 npages=12006 nsects=188
+TLATRACE seq=12055 a=Dealloc p=F vfid=4800 page=4867 kind=user
+TLATRACE seq=12100 a=Dealloc p=F vfid=4800 page=7747 kind=user
+TLATRACE seq=12173 a=Alloc p=F vfid=4800 page=4867 kind=table
+TLATRACE seq=12345 a=Fix p=W4093 vfid=4800 page=7747 ptype=-1
+TLATRACE seq=12346 a=Dealloc p=F vfid=4800 page=16768 kind=user
+TLATRACE seq=12862 a=Fix p=W4225 vfid=4800 page=4867 ptype=1
