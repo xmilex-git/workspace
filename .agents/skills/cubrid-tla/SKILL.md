@@ -31,6 +31,7 @@ whose sentence is added to this file (or the reference file it belongs to) in th
 - TLAPS runs only when the user's own message asks for a proof ("TLAPS", "증명해줘", "명확히 검증해줘"); a generic "TLA+로 검증", a skill, a ticket or a review step is not that request, and without it no proof module is written and the report says TLAPS 요청 없음. (P48)
 - `tools/tla/tla-check` is changed by writing a new file and renaming it over the old one: bash reads a running script from its open file. (P18)
 - Stop only the processes your own runner started, by the pid it recorded; other sessions run TLC and tlapm on this host. (P29)
+- `tools/tla/tla-check --only` matches cfg names without `.cfg` (`--only 'X'`, `--only 'X.mutant-*'`); `--only 'X.cfg'` matches nothing and prints only the completeness lines. (P69)
 
 ## Where the model lives
 
@@ -104,6 +105,7 @@ Answer every row of this checklist in MAP.md's fault table as modeled, or not ap
 - Ghost variables flag violations (`uaf`, `badConsume`) and record outcomes for witnesses.
 - `Mutant` is a constant; each mutant re-enables one wrong ordering, missing guard or missing check the claims depend on. In a review the pre-change behavior is a mutant: the ticket's defect must fail on it and pass on the change.
 - Fairness: weak fairness on a process covers a step that stays enabled; a mutex retake enabled only intermittently is not covered, and a lock or latch is fair only when the code queues waiters in order. Environment processes get no fairness unless a claim needs it, and MAP.md says so. TLC refuses SYMMETRY with PROPERTY (liveness is unsound under it).
+- A liveness PROPERTY runs in its own cfg at the smallest bound that still reaches the behavior, never beside the invariants and a refinement PROPERTY in the main cfg: the tableau check slows TLC by an order of magnitude or more. (P68)
 
 Spec traps — each a wrong verdict TLC or Apalache reports silently, or a parse error far from its cause; read the spec against them before the first run:
 
@@ -127,6 +129,7 @@ Run `tools/tla/tla-check <dir>`; iterate until `RESULT: OK`. A pass is suspect u
 4. **Faults.** Enable each fault at every point the code can raise it.
 5. **Scale.** A property that fails only at N+1 is a finding.
 6. **Liveness.** A liveness counterexample that loops through an unfair lock retake is a fairness assumption to state in MAP.md (and to put to the user when it is a design question), never a reason to weaken the property. (P7)
+- A model extended from another inherits its environment assumptions (the snapshot's objects are never removed); when the extension adds a writer the assumption does not cover (physical deletes of an MVCC-disabled class), restate the assumption for that writer, and read a mutant that passes in under a thousand distinct states as vacuous before reporting it. (P67)
 
 ### 6. Inductive invariant
 

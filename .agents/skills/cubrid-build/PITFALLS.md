@@ -88,3 +88,8 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Rule: When a commit changes a `CMakeLists.txt`, build one real target of the changed list in the optdebug tree (`ninja -C <ws>/build_preset_optdebug -j 32 cubridsa`) before the full build, because `-fsyntax-only` on the changed TUs never sees the source lists; a `.i` file that another TU includes goes into `*_HEADERS` (beside `like_match_lockstep.i`), never `*_SOURCES`, which compiles it as its own TU.
 - Applies at: Smoke before the build
 - Case (2026-10-30, CBRD-27819 #568): `numeric_shortest_decimal.i` (included by `numeric_opfunc.c`) was added to `QUERY_SOURCES` of cubrid/sa/cs; the syntax-only compiles of `numeric_opfunc.c` were clean, and the delegated release build failed with `'uint64_t' does not name a type` at the `.i` compiled alone. Moved to `QUERY_HEADERS`; `ninja … cubridsa` then built 377/377.
+
+### P13 — a 3rdparty download outage is bridged from another worktree
+- Rule: When a fresh build fails with `downloading 'https://github.com/CUBRID/3rdparty/...' failed` (HTTP 504), copy `build_preset_<mode>/3rdparty/Download/<pkg>/<tarball>` from another worktree's tree with `cp -f` (the failed download leaves an empty file, which `cp -n` keeps), check each tarball's sha256 against the `expected:` hash in the build log, and rerun the build.
+- Applies at: Builds
+- Case (2026-11-09, PR 8431 review): two `just build optdebug` runs of a fresh worktree failed on GitHub 504 for `tbb/v2021.11.0.tar.gz` and `rapidjson/v1.1.0-250205.tar.gz`; the first copy with `cp -n` kept the empty files (sha256 `e3b0c442...`), `cp -f` from `develop/build_preset_optdebug/3rdparty/Download` matched all eight hashes, and the third build installed.

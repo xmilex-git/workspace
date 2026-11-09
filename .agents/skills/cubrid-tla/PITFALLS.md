@@ -44,6 +44,11 @@ line under "Folded" at the end.
 - Applies at: SKILL.md Toolchain; PROOFS.md; cubrid-pr-review Step 3d; grill-with-tla; enforced by `tla-check --prove`
 - Case (2026-11-06, rule review): over 124 tla-check runs tlapm took 26 214 s against 22 866 s for every TLC cfg together (parallel-hash-join alone: 7 proof modules, 11 371 s); 19 of 47 rules existed to get proofs through; every code defect in this file (P13, P14, P27, P43, P44) came from a TLC counterexample or deadlock. The user: "내가 명확히 검증해줘 라고 하지 않는 이상 TLAPS는 빼자". ADR 0046.
 
+### P69 — `--only` takes the cfg name without `.cfg`
+- Rule: `tools/tla/tla-check --only` matches cfg names without `.cfg` (`--only 'X'`, `--only 'X.mutant-*'`); `--only 'X.cfg'` matches nothing and prints only the completeness lines.
+- Applies at: Toolchain
+- Case (2026-11-09, PR 8431 review): `--only 'OvfScanStable.cfg'` ran no cfg and ended `RESULT: PARTIAL` with only the MAP/trace completeness FAILs; `--only 'OvfScanStable'` ran the main cfg.
+
 ## Step 2 — refinement map
 
 ### P11 — every exit path of the protocol is an action
@@ -152,6 +157,16 @@ line under "Folded" at the end.
 - Rule: A mutant that only the refinement mapping catches is expected as `\* expect: refinement`: TLC reports a broken refinement by location, not by the PROPERTY's name.
 - Applies at: SKILL.md (directory); MODELING.md (Refinement); enforced by tla-check
 - Case (2026-11-05, parallel scan heap): the `reread_page` mutant only breaks `AbsSpec`; TLC exited 13 with "Action property line 130, col 17 to line 130, col 29 of module PxHeapSnapshot is violated".
+
+### P67 — an extended model re-reads the inherited environment
+- Rule: A model extended from another inherits its environment assumptions (the snapshot's objects are never removed); when the extension adds a writer the assumption does not cover (physical deletes of an MVCC-disabled class), restate the assumption for that writer, and read a mutant that passes in under a thousand distinct states as vacuous before reporting it.
+- Applies at: SKILL.md step 5
+- Case (2026-11-09, PR 8431 review, `OvfScanStable` over `OvfScanResume`): `mutant-no-class-check` (compact an MVCC-disabled class's index) passed in 884 distinct states, because the inherited `Env` never removed an object the scan's snapshot saw, which no snapshot protects without MVCC. With physical deletes allowed the fixed variant showed a loss with no COMPACT step (a develop path), and the class claim was restated as `NoCompactNoMvcc`, which the mutant then violated.
+
+### P68 — liveness in its own cfg
+- Rule: A liveness PROPERTY runs in its own cfg at the smallest bound that still reaches the behavior, never beside the invariants and a refinement PROPERTY in the main cfg: the tableau check slows TLC by an order of magnitude or more.
+- Applies at: SKILL.md step 4
+- Case (2026-11-09, PR 8431 review): the main cfg with `PROPERTY ScanFinishes GuardRefined` ran at about 12 k states/min; without `ScanFinishes` (refinement kept, `VIEW` on) it ran at about 600 k states/min and finished 917,557 distinct states in 545 s, while the separate liveness cfg at the same bound reached 165 k distinct states in 13 minutes.
 
 ## Step 6 — inductive invariant
 
