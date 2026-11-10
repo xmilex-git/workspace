@@ -17,6 +17,8 @@ Terms: **sync** = this three-repo merge of each develop into the PR's three bran
 
 Develop content reaches a PR only through this three-repo sync — never `git merge origin/develop` into one of the three branches alone; a single-repo merge that already exists is dropped (stash, reset to the remote tip, sync, fast-forward, pop), and before the sync the engine side is checked with `git merge-tree --write-tree HEAD origin/develop`, knowing that a clean merge-tree does not prove the merged head builds. (P1)
 
+A PR whose `/run all` or `/run rerun` passed is left as it is and gets no develop sync; when the engine head and a `tc/pr-<N>` branch disagree (the TC branch carries a newer develop's testcases than the engine head), the TC branch is moved back to the develop line the engine head was built on instead of merging develop into all three. (P5)
+
 When the user supplies a PR number or `https://github.com/CUBRID/cubrid/pull/<number>`, run immediately without asking for repository paths or confirmation:
 
 ```bash

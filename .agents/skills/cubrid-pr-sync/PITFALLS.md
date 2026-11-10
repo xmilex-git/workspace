@@ -32,3 +32,8 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Run
 - Case (2026-10-08, #8058): the rollup kept the sweep's FAILURE although the gate workflow had succeeded; a user PAT cannot post check runs, so only a new head cleared it. Close/reopen (`tc-branch-finalize.yml`, `tc-branch-sync.yml`): closing deletes both `tc/pr-<N>` branches and their draft PRs; reopening recreates them from TC develop with new drafts; wait for the finalize run before reopening or the sync skips "branch exists" and the finalize deletes it afterwards; `/run` needs `tc/pr-<N>` to exist but not an open TC PR.
 - Source: memory:tc-merge-gate-stale-sweep-check
+
+### P5 — a passed run is left alone; a mismatch moves the TC branch back
+- Rule: A PR whose `/run all` or `/run rerun` passed is left as it is and gets no develop sync; when the engine head and a `tc/pr-<N>` branch disagree (the TC branch carries a newer develop's testcases than the engine head), the TC branch is moved back to the develop line the engine head was built on instead of merging develop into all three
+- Applies at: Run, before any `/run`
+- Case (2026-11-10, #8470): after `/run rerun` was posted, develop had moved 6 commits that overlapped all 11 files of the PR, and the sync script stopped on OVERLAP; merging would have cost a local merge, build and gate of all three repos. The user: "rerun 통과하면 sync 하지말고 그냥 두자. 앞으로도. 만약 엔진 - tc 어긋남이 발생하면 tc 브랜치를 develop 선으로 후퇴시키는 방안으로 앞으로는 처리하자." Moving a pushed TC branch back needs a force-push or a rebuilt branch: confirm the push with the user the first time.
