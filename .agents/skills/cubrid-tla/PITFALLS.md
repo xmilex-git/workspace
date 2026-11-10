@@ -56,6 +56,11 @@ line under "Folded" at the end.
 
 ## Step 2 — refinement map
 
+### P77 — the inputs of a reused result come from the code, not the model
+- Rule: A reused or cached result's map row lists every code site that produces an input of it — the terms the scan evaluates, a derived table or list it reads, a subquery — enumerated in the code, not taken from the model; before a refusal the change lifts (an empty key, a shape) is dropped, each input class that refusal stopped is named, since a refusal can hide an input the model never had.
+- Applies at: SKILL.md step 2; grill-with-tla decisions that lift a refusal
+- Case (2026-11-10, CBRD-27993): the model's memoize key is "the outer values the inner reads", and the map row took them from the inner's terms only. Decision D17 (memoize an empty key) lifted develop's `key_cnt == 0` refusal, which had kept a correlated derived table inner (`(select count(*) from cs x where x.pk <= o0.g + 1) d`) out of memoize: its list is rebuilt for every outer row, so `o0.g` is an input no term holds. Every cfg passed; the full CTP returned wrong rows in cbrd_27567, cbrd_27602, cbrd_27657, fderiv1 and 6741. The census assert (D10) walked the same terms and missed it until it also walked the list's producer XASL. develop has the same hole when such an inner also has an outer term (memo on 16/8, off 4/4).
+
 ### P11 — every exit path of the protocol is an action
 - Rule: Before the model is final, list the callers of every protocol entry point (code-index `callers`) and give each exit path (LIMIT, error, interrupt, reset, the end of a range) an action or a fault-table row.
 - Applies at: SKILL.md step 2
