@@ -1,0 +1,67 @@
+TLATRACE seq=1 a=DStart p=0 j=1
+TLATRACE seq=2 a=DAdmit p=0 ok=1
+TLATRACE seq=3 a=DGetCh p=0 kind=dial c=1
+TLATRACE seq=4 a=SAccept p=0 c=1
+TLATRACE seq=5 a=SRecv p=0 c=1 op=HELLO
+TLATRACE seq=6 a=RRecv p=0 c=1 op=HELLO_ACK tok=0
+TLATRACE seq=7 a=DHello p=0 c=1
+TLATRACE seq=8 a=SRecv p=0 c=1 op=RESYNC
+TLATRACE seq=9 a=SResync p=0 c=1 n=0
+TLATRACE seq=10 a=RRecv p=0 c=1 op=RESYNC_REPLY tok=0
+TLATRACE seq=11 a=DResync p=0 c=1
+TLATRACE seq=12 a=DSend p=0 ok=1
+TLATRACE seq=13 a=SRecv p=0 c=1 op=HANDOFF
+TLATRACE seq=14 a=SHCheck p=0 c=1 ok=1
+TLATRACE seq=15 a=SHReg p=0 c=1 refused=0 tok=1
+TLATRACE seq=16 a=SHAck p=0 c=1 s=1 ok=1
+TLATRACE seq=17 a=RRecv p=0 c=1 op=ACK tok=1
+TLATRACE seq=18 a=SHSpawn p=0 c=1 s=1
+TLATRACE seq=19 a=DWait p=0 op=ACK
+TLATRACE seq=20 a=SLogin p=0 s=1 x=1
+TLATRACE seq=21 a=BRestart p=0 
+TLATRACE seq=22 a=SEof p=0 c=1
+TLATRACE seq=23 a=DStart p=0 j=2
+TLATRACE seq=24 a=DAdmit p=0 ok=1
+TLATRACE seq=25 a=DGetCh p=0 kind=dial c=2
+TLATRACE seq=26 a=SAccept p=0 c=2
+TLATRACE seq=27 a=SRecv p=0 c=2 op=HELLO
+TLATRACE seq=28 a=RRecv p=0 c=2 op=HELLO_ACK tok=0
+TLATRACE seq=29 a=DHello p=0 c=2
+TLATRACE seq=30 a=SRecv p=0 c=2 op=RESYNC
+TLATRACE seq=31 a=SResync p=0 c=2 n=1
+TLATRACE seq=32 a=RRecv p=0 c=2 op=RESYNC_REPLY tok=1
+TLATRACE seq=33 a=DResync p=0 c=2
+TLATRACE seq=34 a=DSend p=0 ok=1
+TLATRACE seq=35 a=SRecv p=0 c=2 op=HANDOFF
+TLATRACE seq=36 a=SHCheck p=0 c=2 ok=1
+TLATRACE seq=37 a=SHReg p=0 c=2 refused=0 tok=2
+TLATRACE seq=38 a=SHAck p=0 c=2 s=2 ok=1
+TLATRACE seq=39 a=RRecv p=0 c=2 op=ACK tok=2
+TLATRACE seq=40 a=SHSpawn p=0 c=2 s=2
+TLATRACE seq=41 a=DWait p=0 op=ACK
+TLATRACE seq=42 a=SLogin p=0 s=2 x=2
+TLATRACE seq=43 a=SEnd p=0 s=2
+TLATRACE seq=44 a=SClean p=0 s=2
+TLATRACE seq=45 a=SErase p=0 s=2
+TLATRACE seq=46 a=SPick p=0 s=2 c=2
+TLATRACE seq=47 a=SSendEnd p=0 s=2
+TLATRACE seq=48 a=SClose p=0 s=2
+TLATRACE seq=49 a=RRecv p=0 c=2 op=END tok=2
+TLATRACE seq=50 a=SEnd p=0 s=1
+TLATRACE seq=51 a=SClean p=0 s=1
+TLATRACE seq=52 a=SErase p=0 s=1
+TLATRACE seq=53 a=SPick p=0 s=1 c=2
+TLATRACE seq=54 a=SSendEnd p=0 s=1
+TLATRACE seq=55 a=SClose p=0 s=1
+TLATRACE seq=56 a=RRecv p=0 c=2 op=END tok=1
+TLATRACE seq=57 a=StopBegin p=0 
+TLATRACE seq=58 a=StopShutCh p=0 
+TLATRACE seq=59 a=StopShutSess p=0 
+TLATRACE seq=60 a=StopDrain p=0 
+TLATRACE seq=61 a=SEof p=0 c=2
+TLATRACE seq=62 a=StopFinWait p=0 
+TLATRACE seq=63 a=StopJoin p=0 
+TLATRACE seq=64 a=RDie p=0 c=2
+TLATRACE seq=65 a=StopFree p=0 
+TLATRACE seq=66 a=RDrop p=0 c=2
+TLATRACE seq=67 a=BRestart p=0 
