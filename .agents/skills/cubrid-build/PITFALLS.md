@@ -44,11 +44,12 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Source: memory:just-build-lacks-support-xa
 
 ### P6 — a build resets the conf
-- Rule: every build reinstalls `conf/cubrid.conf` from the source template; `build` then re-applies `just conf` (the campaign conf: `double_write_buffer_size=0`, `parallelism=24`, `log_buffer_size=256M`), `rebuild` and `incr` do **not** — after any build, read `parallelism`, `data_buffer_size`, `stored_procedure` and `max_plan_cache_entries` in the install's conf before using it, and restore a gate install's conf to the reference state.
+- Rule: every build reinstalls `conf/cubrid.conf` from the source template; `build` then re-applies `just conf` (the campaign conf: `double_write_buffer_size=0`, `parallelism=24`, `log_buffer_size=256M`), `rebuild` and `incr` do **not** — after any build, read `cubrid_port_id`, `parallelism`, `data_buffer_size`, `stored_procedure` and `max_plan_cache_entries` in the install's conf before using it, and restore a gate install's conf to the reference state.
 - Applies at: Commands
 - Case (workspace#157): CMake's install step reinstalls `conf/cubrid.conf` on every build, silently reverting whatever was there; `just build` now re-derives it, `just incr` does not.
 - Case (2026-10-07, PR 8022 review #389): a develop install and its `-pc0` hardlink variant shared one `conf/cubrid.conf` (same inode), so the base ran with `max_plan_cache_entries=0` and a plan-reuse probe looked like a PR-only defect. Before an A/B: `rg -n '^(max_plan_cache_entries|plus_as_concat|return_null_on_function_errors)' <install>/conf/cubrid.conf` on both, `ls -i` the two conf files, and break a hardlink (`cp -p` to a temp name, `mv` back) before editing one.
 - Case (2026-11-06, CBRD-24094 TLA+ repro): after `just incr` the install conf was the template again (`cubrid_port_id=1523`, no `parallelism`); the next server start brought up a master on the default port 1523 before the conf was read. Stopped it by pid, re-applied the session conf with `just conf`, restarted on the claimed port.
+- Case (2026-11-10, PR 8198 review): the same after three `just incr` of a trace build: the second start ran on 1523 while the first run's master still held the claimed 1701 with the same `CUBRID_TMP`, and the server took a shutdown request from it mid-scenario; the rule now names `cubrid_port_id`, read before every start that follows a build.
 - Source: CUBRID_SSOT.md §3.3, memory:ab-install-conf-check-plan-cache, memory:gate-install-conf-must-match-reference
 
 ### P7 — a comment-only change gets no build

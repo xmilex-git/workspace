@@ -307,6 +307,11 @@ line under "Folded" at the end.
 - Applies at: TRACE.md
 - Case (2026-11-09, PR 8432 review `leafswap-route`): `rm -f trace.log` before a repro left `cub_server` writing to the unlinked inode, so the script's wait for a `Swap` event timed out on an empty file until the server restarted; later `cubrid checkdb -C --check-btree-entries` against a server started with `CUBRID_TLA_DUMP_KEY=1` dumped every key it scanned (1.9 GB in a few minutes) until it was stopped; restarted without the dump variable and run with `-i` naming `dba.t5`, checkdb finished at once.
 
+### P78 — instrumentation only adds lines
+- Rule: The instrumentation diff only adds lines: before the build `git diff | grep -E '^-[^-]'` prints nothing, and a bulk edit (`sed s/A/B/`) is applied to the added lines only, never to the file
+- Applies at: TRACE.md §1
+- Case (2026-11-10, PR 8198 review): to stop the trace calls assigning an MVCCID, `sed s/logtb_get_current_mvccid/logtb_find_current_mvccid/` ran over `locator_sr.c` and also rewrote two engine lines (`mvccid = logtb_get_current_mvccid (thread_p);` in the index delete path); the instrumented server asserted in `btree_mvcc_delete` (`BTREE_MVCC_INFO_IS_DELID_VALID`) on the next DROP TABLE and the master revived it twice, so three scenarios ran against a dead server. Restored the two lines, checked the diff held additions only, rebuilt, re-recorded every run.
+
 ## Step 10 — report
 
 ### P45 — verified means run, not written

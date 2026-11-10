@@ -21,6 +21,7 @@ Every model of code that exists is tied to it by trace validation: an instrument
   spec has to guess, the smaller its search — the paper's runs with events only exploded where runs
   with events and values finished. Write to a dedicated file in the run's scratch directory
   (`er_log_debug` is compiled out of release and interleaves other text).
+- The instrumentation diff only adds lines: before the build `git diff | grep -E '^-[^-]'` prints nothing, and a bulk edit (`sed s/A/B/`) is applied to the added lines only, never to the file. (P78)
 - Build optdebug through `cubrid-build` with a dedicated prefix; run through `cubrid-server-control`
   on a claimed port; stop the server and release the port after. Stop the server before rebuilding
   its install (a server on a rebuilt install leaves a master the wrapper cannot stop).
