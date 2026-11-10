@@ -193,6 +193,11 @@ line under "Folded" at the end.
 - Applies at: SKILL.md step 4
 - Case (2026-11-09, PR 8431 review): the main cfg with `PROPERTY ScanFinishes GuardRefined` ran at about 12 k states/min; without `ScanFinishes` (refinement kept, `VIEW` on) it ran at about 600 k states/min and finished 917,557 distinct states in 545 s, while the separate liveness cfg at the same bound reached 165 k distinct states in 13 minutes.
 
+### P79 — a stuck liveness mutant runs with the deadlock check off
+- Rule: A mutant cfg that expects `liveness` and whose failing state has no step carries `CHECK_DEADLOCK FALSE` with its `\* deadlock-off:` line: with the deadlock check on, TLC reports whichever of the deadlock and the liveness failure it reaches first, and that order changes with the host's load.
+- Applies at: SKILL.md step 4
+- Case (2026-11-11, CBRD-28005): `AsyncRead.mutant-daemon-block-with-staged` (`\* expect: liveness`, a thread sleeping with staged requests) passed as `liveness` in every run (156,584 states, 5 s) until a whole-directory run beside a 16-shard CTP reported `deadlock` after 2,068,739 states and failed the directory. The state the sleeping thread leaves has no step, so it is both. With `CHECK_DEADLOCK FALSE` and a `deadlock-off` line the two block-with-staged mutants report `liveness` every time.
+
 ### P74 — a mutant survived by a second protection removes both
 - Rule: A mutant that survives because a second code site restores the property removes both protections, and MAP.md names the second site at `file:line`: the claim then holds by either one.
 - Applies at: SKILL.md step 5

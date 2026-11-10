@@ -110,6 +110,7 @@ Answer every row of this checklist in MAP.md's fault table as modeled, or not ap
 - `Mutant` is a constant; each mutant re-enables one wrong ordering, missing guard or missing check the claims depend on. In a review the pre-change behavior is a mutant: the ticket's defect must fail on it and pass on the change.
 - Fairness: weak fairness on a process covers a step that stays enabled; a mutex retake enabled only intermittently is not covered, and a lock or latch is fair only when the code queues waiters in order. Environment processes get no fairness unless a claim needs it, and MAP.md says so. TLC refuses SYMMETRY with PROPERTY (liveness is unsound under it).
 - A liveness PROPERTY runs in its own cfg at the smallest bound that still reaches the behavior, never beside the invariants and a refinement PROPERTY in the main cfg: the tableau check slows TLC by an order of magnitude or more. (P68)
+- A mutant cfg that expects `liveness` and whose failing state has no step carries `CHECK_DEADLOCK FALSE` with its `\* deadlock-off:` line: with the deadlock check on, TLC reports whichever of the deadlock and the liveness failure it reaches first, and that order changes with the host's load. (P79)
 
 Spec traps — each a wrong verdict TLC or Apalache reports silently, or a parse error far from its cause; read the spec against them before the first run:
 
