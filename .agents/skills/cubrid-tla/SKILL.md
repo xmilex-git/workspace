@@ -32,6 +32,7 @@ whose sentence is added to this file (or the reference file it belongs to) in th
 - `tools/tla/tla-check` is changed by writing a new file and renaming it over the old one: bash reads a running script from its open file. (P18)
 - Stop only the processes your own runner started, by the pid it recorded; other sessions run TLC and tlapm on this host. (P29)
 - `tools/tla/tla-check --only` matches cfg names without `.cfg` (`--only 'X'`, `--only 'X.mutant-*'`); `--only 'X.cfg'` matches nothing and prints only the completeness lines. (P69)
+- While a model is iterated, a change reruns only the cfgs it touches (`--only`, one glob per call: a second `--only` replaces the first); the whole directory runs once, for the record, after the last spec, cfg and MAP edit, and a comparison cfg (an option the user did not pick) lists only the claims' invariants, never IndInv. (P76)
 
 ## Where the model lives
 

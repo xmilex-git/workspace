@@ -49,6 +49,11 @@ line under "Folded" at the end.
 - Applies at: Toolchain
 - Case (2026-11-09, PR 8431 review): `--only 'OvfScanStable.cfg'` ran no cfg and ended `RESULT: PARTIAL` with only the MAP/trace completeness FAILs; `--only 'OvfScanStable'` ran the main cfg.
 
+### P76 — iterate on the touched cfgs, run the whole directory once
+- Rule: While a model is iterated, a change reruns only the cfgs it touches (`--only`, one glob per call: a second `--only` replaces the first); the whole directory runs once, for the record, after the last spec, cfg and MAP edit, and a comparison cfg (an option the user did not pick) lists only the claims' invariants, never IndInv.
+- Applies at: Toolchain; grill-with-tla rounds
+- Case (2026-11-10, CBRD-27993 grill): one whole-directory run took about 15 min (scale 6 min 50 s, four comparison cfgs at main size with IndInv about 5 min 30 s, main 1 min 52 s); it ran six times, several only to refresh MAP.md explanations, and three runs were stopped midway. `--only A --only B` ran B alone. A session-variable cfg started at main size reached 15 M distinct states in 13 min before it was cut to 2 x rows and 1 execution (380 k states, 18 s). The user: "tlaps 까지 하는것도 아닌데 왤캐느림? pitfall 보고 작업한거맞음?"
+
 ## Step 2 — refinement map
 
 ### P11 — every exit path of the protocol is an action
