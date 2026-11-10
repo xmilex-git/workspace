@@ -1,0 +1,3 @@
+interface:
+  display_name: "TLA+ visualize"
+  short_description: "Draw an issue's TLA+ models, variants and counterexamples as one HTML page"

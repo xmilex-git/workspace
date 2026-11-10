@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+# usage: tools/tla/model-graph <Module>.tla
+#
+# Prints the skeleton of a spec as JSON, for the tla-visualize skill to draw the model's structure.
+#   PlusCal (a BEGIN TRANSLATION block): per process, its labels in order and the pc edges
+#     label -> label, each with the IF conditions enclosing that pc assignment (`Mutant = "x"`,
+#     `~LeaderLock`), so an edge one variant takes and another does not can be drawn dashed.
+#   Plain TLA+: per action (a definition that primes a variable), its parameters, the comment lines
+#     right above it (they name the code site), its guard conjuncts, the variables it writes and the
+#     constants it reads directly (not through a defined operator); and `enables`: action pairs where one writes a variable the other's guard
+#     reads, the candidates for the flow edges of a structure diagram.
+# Both list the module's CONSTANTS and VARIABLES. Only the main module is read, not EXTENDS.
+import json
+import re
+import sys
+
+IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+DEF = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)(\(([^)]*)\))?\s*==(.*)$")
+KEYWORDS = {"IF", "THEN", "ELSE", "LET", "IN", "CASE", "OTHER", "EXCEPT", "UNCHANGED", "TRUE", "FALSE",
+            "DOMAIN", "SUBSET", "UNION", "CHOOSE", "ENABLED", "Cardinality", "Len", "Head", "Tail",
+            "Append", "Seq", "BOOLEAN", "Nat", "Int", "self"}
+
+
+def strip_comments(text):
+    text = re.sub(r"\(\*.*?\*\)", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
+    return re.sub(r"\\\*.*", "", text)
+
+
+def declared(text, kw):
+    out = []
+    for m in re.finditer(rf"(?m)^{kw}\b(.*?)(?=^\S|\Z)", text, re.S):
+        body = re.sub(r"\\\*.*", "", m.group(1))
+        body = re.sub(r"\(\*.*?\*\)", "", body, flags=re.S)
+        out += [n for n in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", body) if n not in KEYWORDS]
+    return out
+
+
+def definitions(lines):
+    """Top-level definitions: name, params, the comment block above, and the body lines."""
+    defs, i = [], 0
+    while i < len(lines):
+        m = DEF.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        comment, j = [], i - 1
+        while j >= 0 and lines[j].lstrip().startswith("\\*"):
+            c = lines[j].lstrip()[2:].strip()
+            if not c.startswith("@type"):
+                comment.insert(0, c)
+            j -= 1
+        body = [m.group(4)]
+        i += 1
+        while i < len(lines) and (not lines[i].strip() or lines[i][0] in " \t") and not DEF.match(lines[i]):
+            if lines[i].strip() and lines[i].lstrip().startswith("\\*") and i + 1 < len(lines) and DEF.match(lines[i + 1]):
+                break
+            body.append(lines[i])
+            i += 1
+        params = [p.strip() for p in (m.group(3) or "").split(",") if p.strip()]
+        defs.append({"name": m.group(1), "params": params, "comment": comment, "body": body})
+    return defs
+
+
+def conds_of(body):
+    """For each line of a definition body, the IF conditions (with THEN/ELSE side) enclosing it."""
+    stack, out = [], []
+    for line in body:
+        code = re.sub(r"\\\*.*", "", line)
+        col = len(code) - len(code.lstrip())
+        stripped = code.strip()
+        while stack and col <= stack[-1]["col"] and not stripped.startswith("ELSE"):
+            stack.pop()
+        if stripped.startswith("ELSE") and stack:
+            stack[-1]["side"] = "ELSE"
+        out.append([(s["cond"] if s["side"] == "THEN" else f"~({s['cond']})") for s in stack])
+        m = re.search(r"\bIF\s+(.*?)\s*(THEN\b|$)", code)
+        if m:
+            stack.append({"col": code.index("IF"), "cond": m.group(1).strip(), "side": "THEN"})
+    return out
+
+
+def pluscal(text, lines, consts):
+    start = next(i for i, l in enumerate(lines) if "BEGIN TRANSLATION" in l)
+    end = next((i for i, l in enumerate(lines) if "END TRANSLATION" in l), len(lines))
+    defs = definitions(lines[start:end])
+    labels = {}
+    for d in defs:
+        joined = "\n".join(d["body"])
+        m = re.search(r'pc(\[[^\]]*\])?\s*=\s*"([^"]+)"', d["body"][0] + (d["body"][1] if len(d["body"]) > 1 else ""))
+        if not m or m.group(2) != d["name"]:
+            continue
+        edges = []
+        for line, conds in zip(d["body"], conds_of(d["body"])):
+            for t in re.findall(r"pc'\s*=\s*(?:\[pc EXCEPT !\[[^\]]*\]\s*=\s*)?\"([^\"]+)\"", line):
+                edges.append({"to": t, "when": conds})
+        used = sorted({c for c in consts if re.search(rf"\b{c}\b", joined)})
+        labels[d["name"]] = {"edges": edges, "constants": used}
+    procs = []
+    for d in defs:
+        joined = " ".join(d["body"]).strip()
+        names = [n for n in re.findall(r"([A-Za-z_][A-Za-z0-9_]*)(?:\(self\))?", joined)]
+        if names and all(n in labels for n in names) and re.fullmatch(r"[\sA-Za-z0-9_()\\/]+", joined):
+            procs.append({"process": d["name"], "labels": names})
+    seen = {l for p in procs for l in p["labels"]}
+    if not procs or seen != set(labels):
+        procs.append({"process": "(other)", "labels": [l for l in labels if l not in seen]})
+    init_pc = re.findall(r'"([^"]+)"', next((l for l in lines[start:end] if re.search(r"/\\\s*pc\s*=", l)), ""))
+    return {"kind": "pluscal", "processes": procs, "labels": labels, "initial_pc": init_pc}
+
+
+def plain(text, lines, consts, variables):
+    defs = definitions(lines)
+    actions = []
+    for d in defs:
+        body = "\n".join(d["body"])
+        code = strip_comments(body)
+        writes = sorted({v for v in variables if re.search(rf"\b{v}'", code)})
+        if not writes:
+            continue
+        conj = [c.strip() for c in re.split(r"\n\s*/\\|^\s*/\\", code) if c.strip()]
+        guards = [c for c in conj if "'" not in c and not c.startswith("UNCHANGED")]
+        reads = sorted({v for g in guards for v in re.findall(IDENT, g) if v in variables})
+        actions.append({
+            "name": d["name"],
+            "params": d["params"],
+            "comment": d["comment"],
+            "guards": [re.sub(r"\s+", " ", g) for g in guards],
+            "reads": reads,
+            "writes": writes,
+            "constants": sorted({c for c in consts if re.search(rf"\b{c}\b", code)}),
+        })
+    enables = []
+    for a in actions:
+        for b in actions:
+            via = sorted(set(a["writes"]) & set(b["reads"]))
+            if a is not b and via:
+                enables.append({"from": a["name"], "to": b["name"], "via": via})
+    return {"kind": "plain", "actions": actions, "enables": enables}
+
+
+def main():
+    if len(sys.argv) != 2:
+        sys.exit("usage: tools/tla/model-graph <Module>.tla")
+    text = open(sys.argv[1]).read()
+    lines = text.splitlines()
+    consts, variables = declared(text, "CONSTANTS?"), declared(text, "VARIABLES?")
+    if any("BEGIN TRANSLATION" in l for l in lines):
+        out = pluscal(text, lines, consts)
+    else:
+        out = plain(text, lines, consts, variables)
+    out.update({"module": sys.argv[1], "constants": consts, "variables": variables})
+    json.dump(out, sys.stdout, ensure_ascii=False, indent=1)
+    print()
+
+
+if __name__ == "__main__":
+    main()

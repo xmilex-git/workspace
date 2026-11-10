@@ -590,6 +590,19 @@ tla-install:
     nix-build "{{justfile_directory()}}/tools/tla/tools.nix" -o "$out"
     ls "$out/share/java/tla2tools.jar"
 
+# Build the tla-visualize toolchain (tools/tla-visualize/tools.nix: pele, node, fonts, fonttools) into the GC root
+# .git_ignored_dir/tla-visualize/tools, the only binaries the tla-visualize skill's build.mjs runs.
+[doc("Install the pinned tla-visualize toolchain with nix-build (GC root under .git_ignored_dir/)")]
+tla-visualize-install:
+    #!/usr/bin/env bash
+    set -eu
+    command -v nix-build >/dev/null || { echo "ERROR: nix-build not found; install nix first" >&2; exit 1; }
+    out="{{justfile_directory()}}/.git_ignored_dir/tla-visualize/tools"
+    export TMPDIR="{{justfile_directory()}}/.git_ignored_dir/scratch/tmp"
+    mkdir -p "$(dirname "$out")" "$TMPDIR"
+    nix-build "{{justfile_directory()}}/tools/tla-visualize/tools.nix" -o "$out"
+    ls "$out/lib/pele/dist/pele.global.js" "$out"/share/fonts/
+
 # Check every spec directory given (parse, PlusCal translation, each .cfg against its `\* expect:` line).
 [doc("Model-check TLA+ spec directories with tools/tla/tla-check")]
 tla-check +DIRS:

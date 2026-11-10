@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+# usage: tools/tla/trace-steps <TLC log> [--all-vars]
+#
+# Prints the first counterexample of a TLC log as JSON, for the tla-visualize skill: the violated
+# property and, per state, the action that produced it (with its source line), the actors whose part
+# of the state changed, and every changed value as a path (`started.s1.w2: FALSE -> TRUE`). Function,
+# record, tuple and set values are diffed key by key, so a PlusCal `pc` change names the process that
+# stepped; for a plain TLA+ action, whose arguments TLC does not print, `keys` lists the function keys
+# its changes touched (`s1`, `w2`), from which the actor is read. --all-vars adds each state's full assignment. A log with no counterexample is an error.
+import json
+import re
+import sys
+
+STATE = re.compile(r"^State (\d+): <(.*)>\s*$")
+ACTION = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)(?:\((.*?)\))? line (\d+), col \d+ to line (\d+), col \d+ of module (\w+)$")
+VIOLATION = re.compile(r"^Error: (Invariant (\S+) is violated|Temporal properties were violated|Deadlock reached|Action property (\S+) is violated|The (\S+) property .* violated).*")
+
+
+class Parser:
+    """Reads TLC's printed values: records, functions (:> @@), tuples, sets, strings, numbers."""
+
+    def __init__(self, text):
+        self.s, self.i = text, 0
+
+    def ws(self):
+        while self.i < len(self.s) and self.s[self.i] in " \t\r\n":
+            self.i += 1
+
+    def peek(self, tok):
+        self.ws()
+        return self.s.startswith(tok, self.i)
+
+    def eat(self, tok):
+        if not self.peek(tok):
+            raise ValueError(f"expected {tok!r} at {self.s[self.i:self.i + 40]!r}")
+        self.i += len(tok)
+
+    def value(self):
+        v = self.atom()
+        if self.peek(":>"):  # function written as k :> v @@ k :> v
+            fn = {}
+            while True:
+                self.eat(":>")
+                fn[key(v)] = self.value_no_fn()
+                if not self.peek("@@"):
+                    return fn
+                self.eat("@@")
+                v = self.atom()
+        return v
+
+    def value_no_fn(self):
+        return self.atom()
+
+    def atom(self):
+        self.ws()
+        c = self.s[self.i]
+        if c == "(":
+            self.i += 1
+            v = self.value()
+            self.eat(")")
+            return v
+        if self.s.startswith("<<", self.i):
+            self.i += 2
+            return {"<<>>": self.items(">>")}
+        if c == "{":
+            self.i += 1
+            return {"{}": self.items("}")}
+        if c == "[":
+            self.i += 1
+            rec = {}
+            if self.peek("]"):
+                self.eat("]")
+                return rec
+            while True:
+                self.ws()
+                m = re.compile(r"[A-Za-z0-9_]+").match(self.s, self.i)
+                k = m.group(0)
+                self.i = m.end()
+                self.eat("|->")
+                rec[k] = self.value()
+                if self.peek("]"):
+                    self.eat("]")
+                    return rec
+                self.eat(",")
+        if c == '"':
+            j = self.i + 1
+            while self.s[j] != '"':
+                j += 2 if self.s[j] == "\\" else 1
+            v = self.s[self.i + 1:j]
+            self.i = j + 1
+            return v
+        m = re.compile(r"-?[0-9]+|TRUE|FALSE|[A-Za-z_][A-Za-z0-9_]*").match(self.s, self.i)
+        if not m:
+            raise ValueError(f"cannot read value at {self.s[self.i:self.i + 40]!r}")
+        self.i = m.end()
+        t = m.group(0)
+        if t in ("TRUE", "FALSE"):
+            return t == "TRUE"
+        return int(t) if re.fullmatch(r"-?[0-9]+", t) else t
+
+    def items(self, close):
+        out = []
+        if self.peek(close):
+            self.eat(close)
+            return out
+        while True:
+            out.append(self.value())
+            if self.peek(close):
+                self.eat(close)
+                return out
+            self.eat(",")
+
+
+def key(v):
+    if isinstance(v, dict) and "<<>>" in v:
+        return "<<" + ",".join(str(key(x)) for x in v["<<>>"]) + ">>"
+    return str(v).upper() if isinstance(v, bool) else str(v)
+
+
+def show(v):
+    if isinstance(v, bool):
+        return "TRUE" if v else "FALSE"
+    if isinstance(v, str):
+        return v
+    if isinstance(v, int):
+        return str(v)
+    if "<<>>" in v:
+        return "<<" + ", ".join(show(x) for x in v["<<>>"]) + ">>"
+    if "{}" in v:
+        return "{" + ", ".join(show(x) for x in v["{}"]) + "}"
+    return "[" + ", ".join(f"{k} |-> {show(x)}" for k, x in v.items()) + "]"
+
+
+def diff(path, a, b, out):
+    if a == b:
+        return
+    plain = lambda v: isinstance(v, dict) and "<<>>" not in v and "{}" not in v
+    if plain(a) and plain(b) and a.keys() == b.keys():
+        for k in a:
+            diff(f"{path}.{k}", a[k], b[k], out)
+        return
+    if isinstance(a, dict) and isinstance(b, dict) and "<<>>" in a and "<<>>" in b and len(a["<<>>"]) == len(b["<<>>"]):
+        for n, (x, y) in enumerate(zip(a["<<>>"], b["<<>>"]), 1):
+            diff(f"{path}[{n}]", x, y, out)
+        return
+    out.append({"path": path, "from": show(a), "to": show(b)})
+
+
+def states(lines):
+    cur = None
+    buf = []
+    for line in lines:
+        m = STATE.match(line)
+        if m:
+            if cur:
+                yield cur, buf
+            cur, buf = m, []
+            continue
+        if cur is None:
+            continue
+        if not line.strip() or line.startswith(("The coverage", "Error:", "Finished", "Progress", "Back to state")):
+            if cur:
+                yield cur, buf
+            cur, buf = None, []
+            continue
+        buf.append(line)
+    if cur:
+        yield cur, buf
+
+
+def assignment(buf):
+    text = "\n".join(buf)
+    out = {}
+    for part in re.split(r"(?m)^/\\ ", text):
+        part = part.strip()
+        if not part:
+            continue
+        name, _, val = part.partition(" = ")
+        out[name.strip()] = Parser(val).value()
+    return out
+
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit(__doc__ if __doc__ else "usage: tools/tla/trace-steps <TLC log> [--all-vars]")
+    path = sys.argv[1]
+    allv = "--all-vars" in sys.argv[2:]
+    lines = open(path, errors="replace").read().splitlines()
+    violation = next((m.group(0)[len("Error: "):] for l in lines if (m := VIOLATION.match(l))), None)
+    steps, prev = [], None
+    for m, buf in states(lines):
+        label = m.group(2)
+        a = ACTION.match(label)
+        try:
+            env = assignment(buf)
+        except (ValueError, AttributeError, IndexError) as e:
+            sys.exit(f"{path}: state {m.group(1)}: {e}")
+        changed = []
+        if prev is not None:
+            for v in env:
+                diff(v, prev.get(v), env[v], changed)
+        actors = sorted({c["path"].split(".")[1] for c in changed if c["path"].startswith("pc.")})
+        keys = sorted({k for c in changed for k in re.split(r"[.\[\]]", c["path"])[1:] if k})
+        step = {
+            "n": int(m.group(1)),
+            "action": a.group(1) if a else label,
+            "line": int(a.group(3)) if a else None,
+            "module": a.group(5) if a else None,
+            "actors": actors,
+            "keys": keys,
+            "changed": changed,
+        }
+        if label.startswith("Back to state"):
+            step["action"] = label
+        if allv:
+            step["state"] = {k: show(v) for k, v in env.items()}
+        steps.append(step)
+        prev = env
+    if not steps:
+        sys.exit(f"{path}: no counterexample (no 'State N:' lines)")
+    loop = next((l for l in lines if l.startswith(("Back to state", "State ") ) and "Stuttering" in l), None)
+    json.dump({"log": path, "violation": violation, "stuttering": bool(loop), "steps": steps}, sys.stdout, ensure_ascii=False, indent=1)
+    print()
+
+
+if __name__ == "__main__":
+    main()
