@@ -58,6 +58,8 @@ __attribute__((hot)) / ((cold))  /* code-placement hints */
 
 > **Unconditional-per-row-call check:** an out-of-line function called every iteration of a hot loop is a cost in itself (5–25 cycles + an optimization barrier). If the function body "does nothing in most cases," hoist the condition to the call site or specialize so it's called only when needed. Watch especially for resource-cleanup/init utilities called unconditionally even for fixed-width types.
 
+> **libcubrid helpers are not inlined by default:** In libcubrid (`-fPIC`, default visibility) GCC treats a member or extern function as interposable and does not inline it even into a caller in the same TU (`always_inline` alone fails with "function body can be overwritten at link time"); a helper split out of a per-row or per-key loop is defined `inline __attribute__ ((ALWAYS_INLINE))`, and its symbol's absence from `nm` of the built library proves the inline. (P11)
+
 ## CC-06 — Never rely on signed integer overflow
 
 It is UB, and the compiler may remove the overflow check itself. If wrapping is needed, use unsigned or `__builtin_add_overflow`.

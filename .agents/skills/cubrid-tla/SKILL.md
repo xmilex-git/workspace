@@ -63,7 +63,7 @@ Each cfg's first line is its expectation (`\* expect: pass | violation <Name> | 
 
 ### 1. Claims
 
-Write MAP.md's `## Claim and sources` table first: one row per claim, each a sentence a reader can falsify, each with its source (JIRA body or `design.md` clause, PR description, code comment, manual, POSIX). Collect from every place the behavior is specified — for a feature spread over tickets, every linked ticket and its comments (`/jira`), the latest statement winning and the superseded one named. Every claim is a safety (never X), a liveness (eventually Y) or an equivalence (same answer as Z). A claim you cannot source is a question for the user, not an assumption. Done when every behavior the change or design promises is a row.
+Write MAP.md's `## Claim and sources` table first: one row per claim, each a sentence a reader can falsify, each with its source (JIRA body or `design.md` clause, PR description, code comment, manual, POSIX). Collect from every place the behavior is specified — for a feature spread over tickets, every linked ticket and its comments (`/jira`), the latest statement winning and the superseded one named. Every claim is a safety (never X), a liveness (eventually Y) or an equivalence (same answer as Z). A claim about work the change saves or must not redo (each key evaluated once, no window for a scan without a heap lookup) is a ghost counter or flag in the model with a mutant that redoes the work: claims over results, order, errors and counters hold when the code does the same work twice, so TLC cannot reject a cost regression they leave out. (P83) A claim you cannot source is a question for the user, not an assumption. Done when every behavior the change or design promises is a row.
 
 ### 2. Refinement map
 

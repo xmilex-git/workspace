@@ -332,6 +332,11 @@ line under "Folded" at the end.
 - Applies at: TRACE.md §3
 - Case: see P81 (the same run).
 
+### P83 — a cost claim is a ghost counter with a mutant
+- Rule: A claim about work the change saves or must not redo (each key evaluated once, no window for a scan without a heap lookup) is a ghost counter or flag in the model with a mutant that redoes the work: claims over results, order, errors and counters hold when the code does the same work twice, so TLC cannot reject a cost regression they leave out.
+- Applies at: SKILL.md step 1
+- Case (2026-11-12, CBRD-28031 D10/D11): after P81 the user asked why TLA had not caught the re-evaluation; the model had no claim on how often a key is evaluated. `KeyReadAhead` gained `evals` (C12 `EvalOnce`), `rej` (C13 `NoRejectedEntry`) and `cov`/`windowed` (C14 `NoWindowWithoutLookup`); `mutant-no-stop-mark`, the code before the fix, now fails C12 in 17,249 states, and the worker trace counts every evaluation (`WKey` with the keys it read) so the trace spec checks them too.
+
 ## Step 10 — report
 
 ### P45 — verified means run, not written
