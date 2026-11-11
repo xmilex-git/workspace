@@ -1,0 +1,278 @@
+TLATRACE seq=1 a=Open p=t4208 nsect=10 rowbits=1362 workers=3
+TLATRACE seq=2 a=Sector p=t4208 sect=v2s499 pages=fffffffffffffffe
+TLATRACE seq=3 a=Sector p=t4208 sect=v2s500 pages=ffffffffffffffff
+TLATRACE seq=4 a=Sector p=t4208 sect=v2s502 pages=ffffffffffffffff
+TLATRACE seq=5 a=Sector p=t4208 sect=v2s503 pages=ffffffffffffffff
+TLATRACE seq=6 a=Sector p=t4208 sect=v2s504 pages=ffffffffffffffff
+TLATRACE seq=7 a=Sector p=t4208 sect=v2s511 pages=ffffffffffffffff
+TLATRACE seq=8 a=Sector p=t4208 sect=v3s1 pages=ffffffffffffffff
+TLATRACE seq=9 a=Sector p=t4208 sect=v3s2 pages=ffffffffffffffff
+TLATRACE seq=10 a=Sector p=t4208 sect=v3s3 pages=ffffffffffffffff
+TLATRACE seq=11 a=Sector p=t4208 sect=v3s4 pages=7ffffff
+TLATRACE seq=12 a=Mark p=t4228 oid=v2p32037s1 kind=row
+TLATRACE seq=13 a=Mark p=t4228 oid=v2p32036s1 kind=row
+TLATRACE seq=14 a=Mark p=t4228 oid=v2p32039s1 kind=row
+TLATRACE seq=15 a=Mark p=t4228 oid=v2p32042s1 kind=row
+TLATRACE seq=16 a=Mark p=t4228 oid=v2p32041s1 kind=row
+TLATRACE seq=17 a=Mark p=t4228 oid=v2p32040s1 kind=row
+TLATRACE seq=18 a=Mark p=t4228 oid=v2p32043s1 kind=row
+TLATRACE seq=19 a=Mark p=t4228 oid=v2p32044s1 kind=row
+TLATRACE seq=20 a=Mark p=t4228 oid=v2p32046s1 kind=row
+TLATRACE seq=21 a=Mark p=t4228 oid=v2p32045s1 kind=row
+TLATRACE seq=22 a=Mark p=t4228 oid=v2p32047s1 kind=row
+TLATRACE seq=23 a=Mark p=t4228 oid=v2p32049s1 kind=row
+TLATRACE seq=24 a=Mark p=t4228 oid=v2p32050s1 kind=row
+TLATRACE seq=25 a=Mark p=t4228 oid=v2p32048s1 kind=row
+TLATRACE seq=26 a=Mark p=t4228 oid=v2p32051s1 kind=row
+TLATRACE seq=27 a=Mark p=t4228 oid=v2p32054s1 kind=row
+TLATRACE seq=28 a=Mark p=t4228 oid=v2p32053s1 kind=row
+TLATRACE seq=29 a=Mark p=t4228 oid=v2p32052s1 kind=row
+TLATRACE seq=30 a=Mark p=t4228 oid=v2p32055s1 kind=row
+TLATRACE seq=31 a=Mark p=t4228 oid=v2p32057s1 kind=row
+TLATRACE seq=32 a=Mark p=t4228 oid=v2p32058s1 kind=row
+TLATRACE seq=33 a=Mark p=t4228 oid=v2p32056s1 kind=row
+TLATRACE seq=34 a=Mark p=t4228 oid=v2p32059s1 kind=row
+TLATRACE seq=35 a=Mark p=t4228 oid=v2p32062s1 kind=row
+TLATRACE seq=36 a=Mark p=t4228 oid=v2p32061s1 kind=row
+TLATRACE seq=37 a=Mark p=t4228 oid=v2p32060s1 kind=row
+TLATRACE seq=38 a=Mark p=t4228 oid=v2p32063s1 kind=row
+TLATRACE seq=39 a=Mark p=t4228 oid=v2p32128s1 kind=row
+TLATRACE seq=40 a=Mark p=t4228 oid=v2p32129s1 kind=row
+TLATRACE seq=41 a=Mark p=t4228 oid=v2p32130s1 kind=row
+TLATRACE seq=42 a=Mark p=t4228 oid=v2p32131s1 kind=row
+TLATRACE seq=43 a=Mark p=t4228 oid=v2p32133s1 kind=row
+TLATRACE seq=44 a=Mark p=t4228 oid=v2p32134s1 kind=row
+TLATRACE seq=45 a=Mark p=t4228 oid=v2p32132s1 kind=row
+TLATRACE seq=46 a=Mark p=t4228 oid=v2p32135s1 kind=row
+TLATRACE seq=47 a=Mark p=t4228 oid=v2p32136s1 kind=row
+TLATRACE seq=48 a=Mark p=t4228 oid=v2p32138s1 kind=row
+TLATRACE seq=49 a=Mark p=t4228 oid=v2p32137s1 kind=row
+TLATRACE seq=50 a=Mark p=t4228 oid=v2p32139s1 kind=row
+TLATRACE seq=51 a=Mark p=t4228 oid=v2p32140s1 kind=row
+TLATRACE seq=52 a=Mark p=t4228 oid=v2p32141s1 kind=row
+TLATRACE seq=53 a=Mark p=t4228 oid=v2p32142s1 kind=row
+TLATRACE seq=54 a=Mark p=t4228 oid=v2p32143s1 kind=row
+TLATRACE seq=55 a=Mark p=t4228 oid=v2p32146s1 kind=row
+TLATRACE seq=56 a=Mark p=t4228 oid=v2p32144s1 kind=row
+TLATRACE seq=57 a=Mark p=t4228 oid=v2p32145s1 kind=row
+TLATRACE seq=58 a=Mark p=t4228 oid=v2p32147s1 kind=row
+TLATRACE seq=59 a=Mark p=t4228 oid=v2p32150s1 kind=row
+TLATRACE seq=60 a=Mark p=t4228 oid=v2p32149s1 kind=row
+TLATRACE seq=61 a=Mark p=t4228 oid=v2p32148s1 kind=row
+TLATRACE seq=62 a=Mark p=t4228 oid=v2p32151s1 kind=row
+TLATRACE seq=63 a=Mark p=t4228 oid=v2p32154s1 kind=row
+TLATRACE seq=64 a=Mark p=t4228 oid=v2p32153s1 kind=row
+TLATRACE seq=65 a=Mark p=t4228 oid=v2p32312s1 kind=row
+TLATRACE seq=66 a=Mark p=t4228 oid=v2p32313s1 kind=row
+TLATRACE seq=67 a=Mark p=t4228 oid=v2p32314s1 kind=row
+TLATRACE seq=68 a=Mark p=t4228 oid=v2p32315s1 kind=row
+TLATRACE seq=69 a=Mark p=t4228 oid=v2p32317s1 kind=row
+TLATRACE seq=70 a=Mark p=t4228 oid=v2p32318s1 kind=row
+TLATRACE seq=71 a=Mark p=t4228 oid=v2p32316s1 kind=row
+TLATRACE seq=72 a=Mark p=t4228 oid=v2p32319s1 kind=row
+TLATRACE seq=73 a=IdxFinish p=t4228
+TLATRACE seq=74 a=IdxFinish p=t4132
+TLATRACE seq=75 a=IdxFinish p=t4125
+TLATRACE seq=224 a=Vacuum p=t4220 oid=v2p32056s1
+TLATRACE seq=242 a=FreePage p=t4220 page=v2p32056
+TLATRACE seq=250 a=Vacuum p=t4220 oid=v2p32058s1
+TLATRACE seq=265 a=FreePage p=t4220 page=v2p32058
+TLATRACE seq=274 a=Vacuum p=t4220 oid=v2p32059s1
+TLATRACE seq=291 a=FreePage p=t4220 page=v2p32059
+TLATRACE seq=296 a=Vacuum p=t4220 oid=v2p32060s1
+TLATRACE seq=327 a=FreePage p=t4220 page=v2p32060
+TLATRACE seq=335 a=Vacuum p=t4220 oid=v2p32061s1
+TLATRACE seq=357 a=FreePage p=t4220 page=v2p32061
+TLATRACE seq=364 a=Vacuum p=t4220 oid=v2p32062s1
+TLATRACE seq=379 a=FreePage p=t4220 page=v2p32062
+TLATRACE seq=395 a=Vacuum p=t4220 oid=v2p32063s1
+TLATRACE seq=401 a=FreePage p=t4220 page=v2p32063
+TLATRACE seq=411 a=Vacuum p=t4220 oid=v2p32128s1
+TLATRACE seq=438 a=FreePage p=t4220 page=v2p32128
+TLATRACE seq=450 a=Vacuum p=t4220 oid=v2p32129s1
+TLATRACE seq=459 a=FreePage p=t4220 page=v2p32129
+TLATRACE seq=466 a=Vacuum p=t4220 oid=v2p32130s1
+TLATRACE seq=477 a=FreePage p=t4220 page=v2p32130
+TLATRACE seq=480 a=Vacuum p=t4220 oid=v2p32131s1
+TLATRACE seq=489 a=FreePage p=t4220 page=v2p32131
+TLATRACE seq=496 a=Vacuum p=t4220 oid=v2p32132s1
+TLATRACE seq=507 a=FreePage p=t4220 page=v2p32132
+TLATRACE seq=510 a=Vacuum p=t4220 oid=v2p32133s1
+TLATRACE seq=520 a=FreePage p=t4220 page=v2p32133
+TLATRACE seq=523 a=Vacuum p=t4220 oid=v2p32134s1
+TLATRACE seq=533 a=FreePage p=t4220 page=v2p32134
+TLATRACE seq=536 a=Vacuum p=t4220 oid=v2p32135s1
+TLATRACE seq=546 a=FreePage p=t4220 page=v2p32135
+TLATRACE seq=558 a=Vacuum p=t4220 oid=v2p32136s1
+TLATRACE seq=562 a=FreePage p=t4220 page=v2p32136
+TLATRACE seq=564 a=Vacuum p=t4220 oid=v2p32137s1
+TLATRACE seq=571 a=FreePage p=t4220 page=v2p32137
+TLATRACE seq=575 a=Vacuum p=t4220 oid=v2p32138s1
+TLATRACE seq=594 a=FreePage p=t4220 page=v2p32138
+TLATRACE seq=604 a=Vacuum p=t4220 oid=v2p32139s1
+TLATRACE seq=610 a=FreePage p=t4220 page=v2p32139
+TLATRACE seq=614 a=Vacuum p=t4220 oid=v2p32140s1
+TLATRACE seq=636 a=FreePage p=t4220 page=v2p32140
+TLATRACE seq=20193 a=TakeSector p=t4125 sect=v2s502
+TLATRACE seq=20194 a=TakeSector p=t4132 sect=v2s500
+TLATRACE seq=20192 a=TakeSector p=t4228 sect=v2s499
+TLATRACE seq=20195 a=EndSector p=t4228
+TLATRACE seq=20196 a=TakeSector p=t4228 sect=v2s503
+TLATRACE seq=20197 a=EndSector p=t4228
+TLATRACE seq=20198 a=TakeSector p=t4228 sect=v2s504
+TLATRACE seq=20199 a=PageGone p=t4125 page=v2p32128
+TLATRACE seq=20201 a=FixPage p=t4228 page=v2p32312
+TLATRACE seq=20202 a=PageGone p=t4125 page=v2p32129
+TLATRACE seq=20200 a=FixPage p=t4132 page=v2p32036
+TLATRACE seq=20203 a=PageGone p=t4125 page=v2p32130
+TLATRACE seq=20204 a=PageGone p=t4125 page=v2p32131
+TLATRACE seq=20205 a=PageGone p=t4125 page=v2p32132
+TLATRACE seq=20206 a=PageGone p=t4125 page=v2p32133
+TLATRACE seq=20207 a=Lookup p=t4228 oid=v2p32312s1 res=out
+TLATRACE seq=20208 a=PageGone p=t4125 page=v2p32134
+TLATRACE seq=20209 a=PageGone p=t4125 page=v2p32135
+TLATRACE seq=20210 a=PageGone p=t4125 page=v2p32136
+TLATRACE seq=20211 a=PageGone p=t4125 page=v2p32137
+TLATRACE seq=20212 a=PageGone p=t4125 page=v2p32138
+TLATRACE seq=20213 a=Lookup p=t4132 oid=v2p32036s1 res=out
+TLATRACE seq=20214 a=PageGone p=t4125 page=v2p32139
+TLATRACE seq=20215 a=PageGone p=t4125 page=v2p32140
+TLATRACE seq=20216 a=FixPage p=t4125 page=v2p32141
+TLATRACE seq=20217 a=ReleasePage p=t4228 page=v2p32312
+TLATRACE seq=20218 a=Lookup p=t4125 oid=v2p32141s1 res=out
+TLATRACE seq=20219 a=ReleasePage p=t4132 page=v2p32036
+TLATRACE seq=20220 a=FixPage p=t4228 page=v2p32313
+TLATRACE seq=20221 a=Lookup p=t4228 oid=v2p32313s1 res=out
+TLATRACE seq=20222 a=FixPage p=t4132 page=v2p32037
+TLATRACE seq=20223 a=ReleasePage p=t4228 page=v2p32313
+TLATRACE seq=20224 a=FixPage p=t4228 page=v2p32314
+TLATRACE seq=20226 a=Lookup p=t4228 oid=v2p32314s1 res=out
+TLATRACE seq=20225 a=Lookup p=t4132 oid=v2p32037s1 res=out
+TLATRACE seq=20228 a=ReleasePage p=t4132 page=v2p32037
+TLATRACE seq=20227 a=ReleasePage p=t4125 page=v2p32141
+TLATRACE seq=20229 a=ReleasePage p=t4228 page=v2p32314
+TLATRACE seq=20230 a=FixPage p=t4132 page=v2p32039
+TLATRACE seq=20232 a=FixPage p=t4228 page=v2p32315
+TLATRACE seq=20231 a=FixPage p=t4125 page=v2p32142
+TLATRACE seq=20233 a=Lookup p=t4228 oid=v2p32315s1 res=out
+TLATRACE seq=20234 a=Lookup p=t4132 oid=v2p32039s1 res=out
+TLATRACE seq=20236 a=ReleasePage p=t4132 page=v2p32039
+TLATRACE seq=20237 a=ReleasePage p=t4228 page=v2p32315
+TLATRACE seq=20235 a=Lookup p=t4125 oid=v2p32142s1 res=out
+TLATRACE seq=20238 a=FixPage p=t4228 page=v2p32316
+TLATRACE seq=20239 a=ReleasePage p=t4125 page=v2p32142
+TLATRACE seq=20240 a=FixPage p=t4132 page=v2p32040
+TLATRACE seq=20241 a=FixPage p=t4125 page=v2p32143
+TLATRACE seq=20242 a=Lookup p=t4228 oid=v2p32316s1 res=out
+TLATRACE seq=20243 a=ReleasePage p=t4228 page=v2p32316
+TLATRACE seq=20244 a=Lookup p=t4125 oid=v2p32143s1 res=out
+TLATRACE seq=20245 a=FixPage p=t4228 page=v2p32317
+TLATRACE seq=20246 a=ReleasePage p=t4125 page=v2p32143
+TLATRACE seq=20248 a=Lookup p=t4132 oid=v2p32040s1 res=out
+TLATRACE seq=20249 a=ReleasePage p=t4132 page=v2p32040
+TLATRACE seq=20247 a=Lookup p=t4228 oid=v2p32317s1 res=out
+TLATRACE seq=20250 a=FixPage p=t4125 page=v2p32144
+TLATRACE seq=20251 a=ReleasePage p=t4228 page=v2p32317
+TLATRACE seq=20252 a=FixPage p=t4132 page=v2p32041
+TLATRACE seq=20254 a=Lookup p=t4132 oid=v2p32041s1 res=out
+TLATRACE seq=20255 a=ReleasePage p=t4132 page=v2p32041
+TLATRACE seq=20256 a=FixPage p=t4228 page=v2p32318
+TLATRACE seq=20253 a=Lookup p=t4125 oid=v2p32144s1 res=out
+TLATRACE seq=20258 a=Lookup p=t4228 oid=v2p32318s1 res=out
+TLATRACE seq=20259 a=ReleasePage p=t4125 page=v2p32144
+TLATRACE seq=20257 a=FixPage p=t4132 page=v2p32042
+TLATRACE seq=20261 a=FixPage p=t4125 page=v2p32145
+TLATRACE seq=20260 a=ReleasePage p=t4228 page=v2p32318
+TLATRACE seq=20262 a=Lookup p=t4125 oid=v2p32145s1 res=out
+TLATRACE seq=20263 a=ReleasePage p=t4125 page=v2p32145
+TLATRACE seq=20264 a=Lookup p=t4132 oid=v2p32042s1 res=out
+TLATRACE seq=20265 a=FixPage p=t4228 page=v2p32319
+TLATRACE seq=20266 a=ReleasePage p=t4132 page=v2p32042
+TLATRACE seq=20267 a=FixPage p=t4125 page=v2p32146
+TLATRACE seq=20268 a=Lookup p=t4228 oid=v2p32319s1 res=out
+TLATRACE seq=20269 a=ReleasePage p=t4228 page=v2p32319
+TLATRACE seq=20270 a=Lookup p=t4125 oid=v2p32146s1 res=out
+TLATRACE seq=20271 a=ReleasePage p=t4125 page=v2p32146
+TLATRACE seq=20273 a=FixPage p=t4132 page=v2p32043
+TLATRACE seq=20274 a=Lookup p=t4132 oid=v2p32043s1 res=out
+TLATRACE seq=20275 a=ReleasePage p=t4132 page=v2p32043
+TLATRACE seq=20272 a=EndSector p=t4228
+TLATRACE seq=20276 a=FixPage p=t4125 page=v2p32147
+TLATRACE seq=20277 a=TakeSector p=t4228 sect=v2s511
+TLATRACE seq=20278 a=Lookup p=t4125 oid=v2p32147s1 res=out
+TLATRACE seq=20279 a=ReleasePage p=t4125 page=v2p32147
+TLATRACE seq=20280 a=FixPage p=t4132 page=v2p32044
+TLATRACE seq=20281 a=FixPage p=t4125 page=v2p32148
+TLATRACE seq=20283 a=Lookup p=t4132 oid=v2p32044s1 res=out
+TLATRACE seq=20284 a=ReleasePage p=t4132 page=v2p32044
+TLATRACE seq=20282 a=EndSector p=t4228
+TLATRACE seq=20286 a=FixPage p=t4132 page=v2p32045
+TLATRACE seq=20287 a=Lookup p=t4132 oid=v2p32045s1 res=out
+TLATRACE seq=20288 a=ReleasePage p=t4132 page=v2p32045
+TLATRACE seq=20289 a=FixPage p=t4132 page=v2p32046
+TLATRACE seq=20285 a=Lookup p=t4125 oid=v2p32148s1 res=out
+TLATRACE seq=20291 a=ReleasePage p=t4125 page=v2p32148
+TLATRACE seq=20290 a=Lookup p=t4132 oid=v2p32046s1 res=out
+TLATRACE seq=20293 a=ReleasePage p=t4132 page=v2p32046
+TLATRACE seq=20292 a=TakeSector p=t4228 sect=v3s1
+TLATRACE seq=20295 a=EndSector p=t4228
+TLATRACE seq=20296 a=TakeSector p=t4228 sect=v3s2
+TLATRACE seq=20297 a=EndSector p=t4228
+TLATRACE seq=20298 a=TakeSector p=t4228 sect=v3s3
+TLATRACE seq=20299 a=EndSector p=t4228
+TLATRACE seq=20300 a=TakeSector p=t4228 sect=v3s4
+TLATRACE seq=20294 a=FixPage p=t4125 page=v2p32149
+TLATRACE seq=20302 a=EndSector p=t4228
+TLATRACE seq=20301 a=FixPage p=t4132 page=v2p32047
+TLATRACE seq=20303 a=Lookup p=t4125 oid=v2p32149s1 res=out
+TLATRACE seq=20305 a=ReleasePage p=t4125 page=v2p32149
+TLATRACE seq=20304 a=Lookup p=t4132 oid=v2p32047s1 res=out
+TLATRACE seq=20306 a=ReleasePage p=t4132 page=v2p32047
+TLATRACE seq=20307 a=FixPage p=t4125 page=v2p32150
+TLATRACE seq=20308 a=FixPage p=t4132 page=v2p32048
+TLATRACE seq=20309 a=Lookup p=t4132 oid=v2p32048s1 res=out
+TLATRACE seq=20310 a=ReleasePage p=t4132 page=v2p32048
+TLATRACE seq=20311 a=Lookup p=t4125 oid=v2p32150s1 res=out
+TLATRACE seq=20312 a=FixPage p=t4132 page=v2p32049
+TLATRACE seq=20313 a=ReleasePage p=t4125 page=v2p32150
+TLATRACE seq=20314 a=FixPage p=t4125 page=v2p32151
+TLATRACE seq=20315 a=Lookup p=t4132 oid=v2p32049s1 res=out
+TLATRACE seq=20316 a=ReleasePage p=t4132 page=v2p32049
+TLATRACE seq=20317 a=Lookup p=t4125 oid=v2p32151s1 res=out
+TLATRACE seq=20318 a=FixPage p=t4132 page=v2p32050
+TLATRACE seq=20319 a=ReleasePage p=t4125 page=v2p32151
+TLATRACE seq=20320 a=Lookup p=t4132 oid=v2p32050s1 res=out
+TLATRACE seq=20321 a=ReleasePage p=t4132 page=v2p32050
+TLATRACE seq=20322 a=FixPage p=t4125 page=v2p32153
+TLATRACE seq=20323 a=FixPage p=t4132 page=v2p32051
+TLATRACE seq=20325 a=Lookup p=t4132 oid=v2p32051s1 res=out
+TLATRACE seq=20326 a=ReleasePage p=t4132 page=v2p32051
+TLATRACE seq=20324 a=Lookup p=t4125 oid=v2p32153s1 res=out
+TLATRACE seq=20328 a=ReleasePage p=t4125 page=v2p32153
+TLATRACE seq=20327 a=FixPage p=t4132 page=v2p32052
+TLATRACE seq=20329 a=FixPage p=t4125 page=v2p32154
+TLATRACE seq=20330 a=Lookup p=t4132 oid=v2p32052s1 res=out
+TLATRACE seq=20331 a=Lookup p=t4125 oid=v2p32154s1 res=out
+TLATRACE seq=20332 a=ReleasePage p=t4132 page=v2p32052
+TLATRACE seq=20333 a=ReleasePage p=t4125 page=v2p32154
+TLATRACE seq=20334 a=EndSector p=t4125
+TLATRACE seq=20335 a=FixPage p=t4132 page=v2p32053
+TLATRACE seq=20336 a=Lookup p=t4132 oid=v2p32053s1 res=out
+TLATRACE seq=20337 a=ReleasePage p=t4132 page=v2p32053
+TLATRACE seq=20338 a=FixPage p=t4132 page=v2p32054
+TLATRACE seq=20339 a=Lookup p=t4132 oid=v2p32054s1 res=out
+TLATRACE seq=20340 a=ReleasePage p=t4132 page=v2p32054
+TLATRACE seq=20341 a=FixPage p=t4132 page=v2p32055
+TLATRACE seq=20342 a=Lookup p=t4132 oid=v2p32055s1 res=out
+TLATRACE seq=20343 a=ReleasePage p=t4132 page=v2p32055
+TLATRACE seq=20344 a=PageGone p=t4132 page=v2p32056
+TLATRACE seq=20345 a=FixPage p=t4132 page=v2p32057
+TLATRACE seq=20346 a=Lookup p=t4132 oid=v2p32057s1 res=out
+TLATRACE seq=20347 a=ReleasePage p=t4132 page=v2p32057
+TLATRACE seq=20348 a=PageGone p=t4132 page=v2p32058
+TLATRACE seq=20349 a=PageGone p=t4132 page=v2p32059
+TLATRACE seq=20350 a=PageGone p=t4132 page=v2p32060
+TLATRACE seq=20351 a=PageGone p=t4132 page=v2p32061
+TLATRACE seq=20352 a=PageGone p=t4132 page=v2p32062
+TLATRACE seq=20353 a=PageGone p=t4132 page=v2p32063
+TLATRACE seq=20354 a=EndSector p=t4132

@@ -1,0 +1,22 @@
+TLATRACE seq=1 a=Arm p=t4210 x=0x7f7748004428
+TLATRACE seq=2 a=Hold p=t4210 x=0x7f7748004428 o=1 kind=read oids=3
+TLATRACE seq=3 a=Hold p=t4210 x=0x7f7748004428 o=2 kind=read oids=1
+TLATRACE seq=4 a=Hold p=t4210 x=0x7f7748004428 o=3 kind=read oids=3
+TLATRACE seq=5 a=Hold p=t4210 x=0x7f7748004428 o=4 kind=read oids=0
+TLATRACE seq=6 a=Hold p=t4210 x=0x7f7748004428 o=5 kind=read oids=1
+TLATRACE seq=7 a=Close p=t4210 x=0x7f7748004428 rows=5 oids=8 flush=0
+TLATRACE seq=8 a=Open p=t4210 x=0x7f7748004428 o=1 slice=3 s=0x7f7748004ca8
+TLATRACE seq=9 a=TakeSlice p=t4210 i=0x7f7748004cf8 n=3
+TLATRACE seq=10 a=Emit p=t4210 x=0x7f7748004428 o=1
+TLATRACE seq=11 a=MemoClear p=t4210 x=0x7f7748004428
+TLATRACE seq=12 a=Arm p=t4210 x=0x7f7748004428
+TLATRACE seq=13 a=Hold p=t4210 x=0x7f7748004428 o=1 kind=read oids=3
+TLATRACE seq=14 a=Hold p=t4210 x=0x7f7748004428 o=2 kind=read oids=1
+TLATRACE seq=15 a=Hold p=t4210 x=0x7f7748004428 o=3 kind=read oids=3
+TLATRACE seq=16 a=Hold p=t4210 x=0x7f7748004428 o=4 kind=read oids=0
+TLATRACE seq=17 a=Hold p=t4210 x=0x7f7748004428 o=5 kind=read oids=1
+TLATRACE seq=18 a=Close p=t4210 x=0x7f7748004428 rows=5 oids=8 flush=0
+TLATRACE seq=19 a=Open p=t4210 x=0x7f7748004428 o=1 slice=3 s=0x7f7748004ca8
+TLATRACE seq=20 a=TakeSlice p=t4210 i=0x7f7748004cf8 n=3
+TLATRACE seq=21 a=Emit p=t4210 x=0x7f7748004428 o=1
+TLATRACE seq=22 a=MemoClear p=t4210 x=0x7f7748004428

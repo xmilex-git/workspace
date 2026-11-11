@@ -1,0 +1,1284 @@
+diff --git a/3rdparty/CMakeLists.txt b/3rdparty/CMakeLists.txt
+index a433ec860..1033e79c8 100644
+--- a/3rdparty/CMakeLists.txt
++++ b/3rdparty/CMakeLists.txt
+@@ -28,6 +28,7 @@ set(WITH_LIBUNIXODBC_URL "https://github.com/CUBRID/3rdparty/raw/develop/unixODB
+ set(WITH_LIBTBB_URL "https://github.com/CUBRID/3rdparty/raw/develop/tbb/v2021.11.0.tar.gz")                   # intel oneTBB library sources URL
+ set(WITH_RE2_URL "https://github.com/CUBRID/3rdparty/raw/develop/re2/2023-03-01.tar.gz")                      # RE2
+ set(WITH_LZ4_URL "https://github.com/CUBRID/3rdparty/raw/develop/lz4/lz4-1.10.0.tar.gz")                          # LZ4
++set(WITH_LIBURING_URL "https://github.com/axboe/liburing/archive/refs/tags/liburing-2.14.tar.gz")                 # liburing (Linux only)
+ set(WIN_FLEX_BISON_URL "https://github.com/CUBRID/3rdparty/raw/develop/win_flex_bison/win_flex_bison-2.5.22.zip") # Windows
+ 
+ # URL_HASH is a hash value used to verify the integrity of a file downloaded from a specified URL.
+@@ -53,6 +54,7 @@ set(WITH_LIBUNIXODBC_URL_HASH "SHA256=4e2814de3e01fc30b0b9f75e83bb5aba91ab0384ee
+ set(WITH_LIBTBB_URL_HASH "SHA256=782ce0cab62df9ea125cdea253a50534862b563f1d85d4cda7ad4e77550ac363")             # intel oneTBB library 
+ set(WITH_RE2_URL_HASH "SHA256=7a9a4824958586980926a300b4717202485c4b4115ac031822e29aa4ef207e48")		# RE2
+ set(WITH_LZ4_URL_HASH "SHA256=537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b")		# LZ4
++set(WITH_LIBURING_URL_HASH "SHA256=5f80964108981c6ad979c735f0b4877d5f49914c2a062f8e88282f26bf61de0c")	# liburing
+ 
+ include (3rdparty_util)
+ 
+@@ -75,6 +77,7 @@ use_download_cache(WITH_LIBUNIXODBC_URL ${WITH_LIBUNIXODBC_URL_HASH})
+ use_download_cache(WITH_LIBTBB_URL ${WITH_LIBTBB_URL_HASH})
+ use_download_cache(WITH_RE2_URL ${WITH_RE2_URL_HASH})
+ use_download_cache(WITH_LZ4_URL ${WITH_LZ4_URL_HASH})
++use_download_cache(WITH_LIBURING_URL ${WITH_LIBURING_URL_HASH})
+ 
+ # options for external libraries (BUNDLED, EXTERAL or SYSTEM)
+ set(WITH_EXTERNAL_PREFIX "EXTERNAL" CACHE STRING "External library prefix (default: EXTERNAL)")
+@@ -371,6 +374,30 @@ list(APPEND EP_TARGETS ${LZ4_TARGET})
+ list(APPEND EP_LIBS ${LZ4_LIBS})
+ list(APPEND EP_INCLUDES ${LZ4_INCLUDES})
+ 
++# liburing (Linux only): data pages read ahead through io_uring (io_method=io_uring)
++if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
++  set(LIBURING_TARGET liburing)
++  set(LIBURING_INCLUDES ${3RDPARTY_LIBS_DIR}/Source/liburing/src/include)
++  set(LIBURING_LIBS ${3RDPARTY_LIBS_DIR}/Source/liburing/src/liburing.a)
++  ADD_BY_PRODUCTS_VARIABLE ("LIBURING" ${LIBURING_LIBS})
++  externalproject_add(${LIBURING_TARGET}
++    URL                  ${WITH_LIBURING_URL}
++    URL_HASH             ${WITH_LIBURING_URL_HASH}
++    TIMEOUT              600
++    LOG_BUILD            TRUE
++    DOWNLOAD_NO_PROGRESS 1
++    BUILD_IN_SOURCE       true                # configure writes compat.h into the source tree
++    CONFIGURE_COMMAND     ./configure
++    # only the static archive; -fPIC because it is linked into libcubrid.so
++    BUILD_COMMAND         make -C src "CFLAGS=-O2 ${3RDPARTY_COMMON_FLAGS}" liburing.a
++    INSTALL_COMMAND       ""                  # suppress install
++    "${LIBURING_BYPRODUCTS}"
++  )
++  list(APPEND EP_TARGETS ${LIBURING_TARGET})
++  list(APPEND EP_LIBS ${LIBURING_LIBS})
++  list(APPEND EP_INCLUDES ${LIBURING_INCLUDES})
++endif()
++
+ # WITH_LOBOPENSSL can have multiple values with different meanings
+ # on Linux:
+ # * "EXTERNAL" - (default) builds openssl library from URL stored in ${WITH_LIBOPENSSL_URL} uses the library created by the build
+@@ -600,6 +627,9 @@ endif(UNIX)
+ 
+ expose_3rdparty_variable(LIBEXPAT)
+ expose_3rdparty_variable(LZ4)
++if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
++expose_3rdparty_variable(LIBURING)
++endif()
+ expose_3rdparty_variable(LIBOPENSSL)
+ expose_3rdparty_variable(LIBUNIXODBC)
+ expose_3rdparty_variable(RAPIDJSON)
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 1bd461444..65258578c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -613,6 +613,7 @@ endif(MULTI_CONN_TO_A_SERVER)
+ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+   # Definitions for system
+   add_definitions(-DGCC -DLINUX -D_GNU_SOURCE -DI386 -DX86)
++  add_definitions(-DHAVE_LIBURING)
+   if(SUPPORT_XA)
+     add_definitions(-DCCI_XA)
+   endif(SUPPORT_XA)
+diff --git a/src/base/system_parameter.c b/src/base/system_parameter.c
+index caa7b7b4b..4db36f480 100644
+--- a/src/base/system_parameter.c
++++ b/src/base/system_parameter.c
+@@ -830,6 +830,7 @@ static const char sysprm_ha_conf_file_name[] = "cubrid_ha.conf";
+ #define PRM_NAME_COST_HEAP_FETCH_PER_OID "cost_heap_fetch_per_oid"
+ #define PRM_NAME_PLAN_CACHE_BIND_VARIANTS "plan_cache_bind_variants"
+ #define PRM_NAME_ROW_SNAPSHOT_MAX_ROWS "row_snapshot_max_rows"
++#define PRM_NAME_IO_METHOD "io_method"
+ 
+ #define PRM_NAME_HASH_JOIN_RUNTIME_FILTER "hash_join_runtime_filter"
+ 
+@@ -5748,6 +5749,17 @@ SYSPRM_PARAM prm_Def[] = {
+    (char *) NULL,
+    (DUP_PRM_FUNC) NULL,
+    (DUP_PRM_FUNC) NULL},
++  {PRM_ID_IO_METHOD,
++   PRM_NAME_IO_METHOD,
++   (PRM_FOR_SERVER),
++   PRM_KEYWORD,
++   PRM_CLEAR_DYNAMIC_FLAG,
++   {false, {.i = IO_METHOD_SYNC}},
++   {false, {.i = IO_METHOD_SYNC}},
++   {false, {.i = IO_METHOD_IO_URING}}, {false, {.i = IO_METHOD_SYNC}},
++   (char *) NULL,
++   (DUP_PRM_FUNC) NULL,
++   (DUP_PRM_FUNC) NULL},
+ };
+ 
+ /* The PL server (cub_pl) is a separate Java process that hard-codes the ordinals of the
+@@ -5898,6 +5910,11 @@ static const KEYVAL null_words[] = {
+   {"0", 0}
+ };
+ 
++static const KEYVAL io_method_words[] = {
++  {"sync", IO_METHOD_SYNC},
++  {"io_uring", IO_METHOD_IO_URING}
++};
++
+ static const KEYVAL index_sort_method_words[] = {
+   {"auto", INDEX_SORT_METHOD_AUTO},
+   {"radix", INDEX_SORT_METHOD_RADIX},
+@@ -7970,6 +7987,9 @@ prm_get_keyval (const SYSPRM_PARAM * prm, int value, const char *name)
+     case PRM_ID_INDEX_SORT_METHOD:
+       return prm_keyword (value, name, index_sort_method_words, DIM (index_sort_method_words));
+ 
++    case PRM_ID_IO_METHOD:
++      return prm_keyword (value, name, io_method_words, DIM (io_method_words));
++
+     case PRM_ID_CHECK_PEER_ALIVE:
+       return prm_keyword (value, name, check_peer_alive_words, DIM (check_peer_alive_words));
+ 
+diff --git a/src/base/system_parameter.h b/src/base/system_parameter.h
+index 9a54c76e4..82b437ff8 100644
+--- a/src/base/system_parameter.h
++++ b/src/base/system_parameter.h
+@@ -101,6 +101,14 @@ enum index_sort_method
+ };
+ typedef enum index_sort_method INDEX_SORT_METHOD;
+ 
++/* io_method: how data pages are read ahead of the thread that will fix them (CBRD-28005) */
++enum io_method
++{
++  IO_METHOD_SYNC = 0,		/* no read-ahead: every page is read by the thread that fixes it */
++  IO_METHOD_IO_URING		/* reads issued ahead through a per-thread io_uring */
++};
++typedef enum io_method IO_METHOD;
++
+ /* NOTE:
+  * System parameter ids must respect the order in prm_Def array
+  * When adding a new system paramter, insert it before PRM_LAST_ID and change PRM_LAST_ID to it
+@@ -579,9 +587,10 @@ enum param_id
+   /* hash join: the runtime filter one input's keys make for the other input's outermost scan */
+   PRM_ID_HASH_JOIN_RUNTIME_FILTER,
+   PRM_ID_ROW_SNAPSHOT_MAX_ROWS,
++  PRM_ID_IO_METHOD,
+ 
+   /* change PRM_LAST_ID when adding new system parameters */
+-  PRM_LAST_ID = PRM_ID_ROW_SNAPSHOT_MAX_ROWS
++  PRM_LAST_ID = PRM_ID_IO_METHOD
+ };
+ typedef enum param_id PARAM_ID;
+ 
+diff --git a/src/communication/network_sr.c b/src/communication/network_sr.c
+index acffe2b93..3d62ecbcd 100644
+--- a/src/communication/network_sr.c
++++ b/src/communication/network_sr.c
+@@ -943,6 +943,8 @@ net_server_request (THREAD_ENTRY * thread_p, unsigned int rid, int request, int
+ 
+       /* defence code: let other threads continue. */
+       pgbuf_unfix_all (thread_p);
++      pgbuf_aio_drain (thread_p);
++      pgbuf_tla_finish (thread_p);
+     }
+ 
+   /* check the defined action attribute */
+diff --git a/src/query/parallel/px_scan/px_scan_input_handler_heap.cpp b/src/query/parallel/px_scan/px_scan_input_handler_heap.cpp
+index feb8e6f43..8ab7cedbd 100644
+--- a/src/query/parallel/px_scan/px_scan_input_handler_heap.cpp
++++ b/src/query/parallel/px_scan/px_scan_input_handler_heap.cpp
+@@ -113,6 +113,23 @@ namespace parallel_scan
+ 		m_tl_pgoffset++;
+ 		m_tl_vpid.pageid++;
+ 	      }
++	    if (fileio_aio_is_available ())
++	      {
++		/* ask for the sector's pages at once: the later ones arrive while the first ones are scanned */
++		VPID ahead_vpids[DISK_SECTOR_NPAGES];
++		int ahead_count = 0;
++
++		for (size_t offset = m_tl_pgoffset; offset < DISK_SECTOR_NPAGES; offset++)
++		  {
++		    if (bit64_is_set (m_tl_ftab.page_bitmap, (int) offset))
++		      {
++			ahead_vpids[ahead_count].volid = m_tl_vpid.volid;
++			ahead_vpids[ahead_count].pageid = SECTOR_FIRST_PAGEID (m_tl_ftab.vsid.sectid) + (PAGEID) offset;
++			ahead_count++;
++		      }
++		  }
++		pgbuf_read_ahead (thread_p, ahead_vpids, ahead_count);
++	      }
+ 	  }
+ 
+ 	for (; m_tl_pgoffset < DISK_SECTOR_NPAGES; m_tl_pgoffset++, m_tl_vpid.pageid++)
+diff --git a/src/storage/file_io.c b/src/storage/file_io.c
+index 1afa9abbb..480348918 100644
+--- a/src/storage/file_io.c
++++ b/src/storage/file_io.c
+@@ -4454,6 +4454,346 @@ fileio_fsync_pending (void)
+   return true;
+ }
+ 
++#if defined (SERVER_MODE)
++#if defined (HAVE_LIBURING)
++#include <liburing.h>
++
++#define FILEIO_AIO_REAP_BATCH 32
++
++typedef struct fileio_aio_ring FILEIO_AIO_RING;
++struct fileio_aio_ring
++{
++  struct io_uring ring;
++  pthread_mutex_t cq_mutex;	/* one thread at a time takes completions off this ring */
++  std::atomic<bool> is_inited;	/* set once by the owner thread before its first read is visible to others */
++  int staged;			/* prepared and not yet submitted; owner thread only */
++  std::atomic<int> inflight;	/* submitted and not yet reaped */
++};
++
++static FILEIO_AIO_RING *fileio_Aio_rings = NULL;
++static int fileio_Aio_num_rings = 0;
++static pthread_once_t fileio_Aio_once = PTHREAD_ONCE_INIT;
++
++static void fileio_aio_initialize_once (void);
++static FILEIO_AIO_RING *fileio_aio_get_my_ring (THREAD_ENTRY * thread_p);
++static int fileio_aio_drain_locked (THREAD_ENTRY * thread_p, FILEIO_AIO_RING * aio_ring, FILEIO_AIO_DONE_FUNC done);
++
++/*
++ * fileio_aio_initialize_once () - io_method=io_uring: check once that this kernel takes it
++ *
++ * Note: A thread waiting for another thread's read waits in the kernel on that thread's ring while the owner
++ *       keeps submitting; that is safe only when the wait does not go through the submission queue
++ *       (IORING_FEAT_EXT_ARG). Without it, or when the ring cannot be created, pages are read synchronously.
++ */
++static void
++fileio_aio_initialize_once (void)
++{
++  struct io_uring probe_ring;
++  int rc;
++  char msg[128];
++
++  if (prm_get_integer_value (PRM_ID_IO_METHOD) != IO_METHOD_IO_URING)
++    {
++      return;
++    }
++
++  rc = io_uring_queue_init (FILEIO_AIO_RING_ENTRIES, &probe_ring, 0);
++  if (rc == 0 && (probe_ring.features & IORING_FEAT_EXT_ARG) == 0)
++    {
++      io_uring_queue_exit (&probe_ring);
++      rc = -ENOSYS;
++    }
++  else if (rc == 0)
++    {
++      io_uring_queue_exit (&probe_ring);
++    }
++  if (rc != 0)
++    {
++      snprintf (msg, sizeof (msg), "io_method=io_uring is not usable on this system (io_uring_queue_init: %d); "
++		"pages are read synchronously", rc);
++      er_set (ER_NOTIFICATION_SEVERITY, ARG_FILE_LINE, ER_GENERIC_ERROR, 1, msg);
++      return;
++    }
++
++  fileio_Aio_num_rings = (int) thread_num_total_threads ();
++  fileio_Aio_rings = new FILEIO_AIO_RING[fileio_Aio_num_rings];
++  for (int i = 0; i < fileio_Aio_num_rings; i++)
++    {
++      fileio_Aio_rings[i].is_inited = false;
++      fileio_Aio_rings[i].staged = 0;
++      fileio_Aio_rings[i].inflight = 0;
++      pthread_mutex_init (&fileio_Aio_rings[i].cq_mutex, NULL);
++    }
++}
++
++/*
++ * fileio_aio_is_available () - true when pages can be read ahead through io_uring
++ */
++bool
++fileio_aio_is_available (void)
++{
++  pthread_once (&fileio_Aio_once, fileio_aio_initialize_once);
++  return fileio_Aio_rings != NULL;
++}
++
++/*
++ * fileio_aio_finalize () - close every ring at server shutdown
++ *
++ * Note: Every thread has drained its ring before it went back to its pool, so no request is in flight here.
++ */
++void
++fileio_aio_finalize (void)
++{
++  if (fileio_Aio_rings == NULL)
++    {
++      return;
++    }
++  for (int i = 0; i < fileio_Aio_num_rings; i++)
++    {
++      if (fileio_Aio_rings[i].is_inited)
++	{
++	  assert (fileio_Aio_rings[i].staged == 0 && fileio_Aio_rings[i].inflight == 0);
++	  io_uring_queue_exit (&fileio_Aio_rings[i].ring);
++	}
++      pthread_mutex_destroy (&fileio_Aio_rings[i].cq_mutex);
++    }
++  delete[]fileio_Aio_rings;
++  fileio_Aio_rings = NULL;
++  fileio_Aio_num_rings = 0;
++}
++
++/*
++ * fileio_aio_get_my_ring () - the calling thread's ring, created at its first use
++ */
++static FILEIO_AIO_RING *
++fileio_aio_get_my_ring (THREAD_ENTRY * thread_p)
++{
++  FILEIO_AIO_RING *aio_ring;
++
++  assert (thread_p != NULL && thread_p->index >= 0 && thread_p->index < fileio_Aio_num_rings);
++  aio_ring = &fileio_Aio_rings[thread_p->index];
++  if (!aio_ring->is_inited)
++    {
++      if (io_uring_queue_init (FILEIO_AIO_RING_ENTRIES, &aio_ring->ring, 0) != 0)
++	{
++	  return NULL;
++	}
++      aio_ring->is_inited = true;
++    }
++  return aio_ring;
++}
++
++/*
++ * fileio_aio_prepare_read () - stage the read of one page on the calling thread's ring
++ *   return: NO_ERROR, or ER_FAILED when the ring cannot take one more request now
++ *   cookie(in): handed back to the completion function with the read's result
++ *
++ * Note: Nothing reaches the kernel until fileio_aio_submit (). The caller submits before it returns to code
++ *       that may sleep: a staged request is invisible to the device and to every thread waiting for the page.
++ */
++int
++fileio_aio_prepare_read (THREAD_ENTRY * thread_p, int vol_fd, void *io_page_p, PAGEID page_id, size_t page_size,
++			 void *cookie)
++{
++  FILEIO_AIO_RING *aio_ring;
++  struct io_uring_sqe *sqe;
++
++  aio_ring = fileio_aio_get_my_ring (thread_p);
++  if (aio_ring == NULL || aio_ring->staged + aio_ring->inflight >= FILEIO_AIO_RING_ENTRIES)
++    {
++      return ER_FAILED;
++    }
++  sqe = io_uring_get_sqe (&aio_ring->ring);
++  if (sqe == NULL)
++    {
++      return ER_FAILED;
++    }
++  io_uring_prep_read (sqe, vol_fd, io_page_p, (unsigned) page_size, FILEIO_GET_FILE_SIZE (page_size, page_id));
++  /* a buffered read copies from the page cache: let a kernel worker do the copy, not this thread */
++  io_uring_sqe_set_flags (sqe, IOSQE_ASYNC);
++  io_uring_sqe_set_data (sqe, cookie);
++  aio_ring->staged++;
++  return NO_ERROR;
++}
++
++/*
++ * fileio_aio_submit () - hand every staged request of the calling thread to the kernel
++ *   return: number of requests submitted
++ *   done(in): completion function, used when the ring must be emptied before it takes the requests
++ */
++int
++fileio_aio_submit (THREAD_ENTRY * thread_p, FILEIO_AIO_DONE_FUNC done)
++{
++  FILEIO_AIO_RING *aio_ring;
++  int n, total = 0;
++
++  if (fileio_Aio_rings == NULL)
++    {
++      return 0;
++    }
++  aio_ring = &fileio_Aio_rings[thread_p->index];
++  while (aio_ring->staged > 0)
++    {
++      n = io_uring_submit (&aio_ring->ring);
++      if (n > 0)
++	{
++	  aio_ring->inflight += n;
++	  aio_ring->staged -= n;
++	  total += n;
++	}
++      else if (n == -EINTR || n == -EAGAIN)
++	{
++	  continue;
++	}
++      else
++	{
++	  /* -EBUSY: completions must be taken first. Anything else is not expected from a read request. */
++	  assert (n == -EBUSY);
++	  (void) fileio_aio_reap (thread_p, thread_p->index, 1, done);
++	}
++    }
++  assert (aio_ring->staged == 0);
++  return total;
++}
++
++/*
++ * fileio_aio_drain_locked () - call the completion function for every completion the ring holds
++ *   return: number of completions processed
++ *
++ * Note: The caller holds the ring's cq_mutex.
++ */
++static int
++fileio_aio_drain_locked (THREAD_ENTRY * thread_p, FILEIO_AIO_RING * aio_ring, FILEIO_AIO_DONE_FUNC done)
++{
++  struct io_uring_cqe *cqes[FILEIO_AIO_REAP_BATCH];
++  void *cookies[FILEIO_AIO_REAP_BATCH];
++  int results[FILEIO_AIO_REAP_BATCH];
++  unsigned n, i;
++  int total = 0;
++
++  while ((n = io_uring_peek_batch_cqe (&aio_ring->ring, cqes, FILEIO_AIO_REAP_BATCH)) > 0)
++    {
++      for (i = 0; i < n; i++)
++	{
++	  cookies[i] = io_uring_cqe_get_data (cqes[i]);
++	  results[i] = cqes[i]->res;
++	}
++      io_uring_cq_advance (&aio_ring->ring, n);
++      for (i = 0; i < n; i++)
++	{
++	  done (thread_p, cookies[i], results[i]);
++	}
++      /* after the completion functions: the owner's drain sees its ring empty only when they have finished */
++      aio_ring->inflight -= (int) n;
++      total += (int) n;
++    }
++  return total;
++}
++
++/*
++ * fileio_aio_reap () - process the completions of a thread's ring, the caller's own or another thread's
++ *   return: number of completions processed
++ *   owner_index(in): thread entry index of the ring's owner
++ *   wait_msecs(in): 0 = only what has completed, and nothing when another thread is processing the ring now;
++ *                   > 0 = wait up to this long for one completion
++ *
++ * Note: Any thread may call this for any ring. The thread whose read sits in a ring may be asleep on a latch
++ *       or a lock, so a thread that needs the page completes the read itself.
++ */
++int
++fileio_aio_reap (THREAD_ENTRY * thread_p, int owner_index, int wait_msecs, FILEIO_AIO_DONE_FUNC done)
++{
++  FILEIO_AIO_RING *aio_ring;
++  struct io_uring_cqe *cqe;
++  struct __kernel_timespec ts;
++  int total;
++
++  if (fileio_Aio_rings == NULL || owner_index < 0 || owner_index >= fileio_Aio_num_rings)
++    {
++      return 0;
++    }
++  aio_ring = &fileio_Aio_rings[owner_index];
++  if (!aio_ring->is_inited)
++    {
++      return 0;
++    }
++
++  if (wait_msecs == 0)
++    {
++      /* a thread waiting for one of the ring's pages may sit in the kernel with the mutex: it takes the
++       * completions, so the caller that must not wait leaves them to it */
++      if (pthread_mutex_trylock (&aio_ring->cq_mutex) != 0)
++	{
++	  return 0;
++	}
++    }
++  else
++    {
++      pthread_mutex_lock (&aio_ring->cq_mutex);
++    }
++  total = fileio_aio_drain_locked (thread_p, aio_ring, done);
++  if (total == 0 && wait_msecs > 0 && aio_ring->inflight > 0)
++    {
++      ts.tv_sec = wait_msecs / 1000;
++      ts.tv_nsec = (long long) (wait_msecs % 1000) * 1000000LL;
++      (void) io_uring_wait_cqe_timeout (&aio_ring->ring, &cqe, &ts);
++      total = fileio_aio_drain_locked (thread_p, aio_ring, done);
++    }
++  pthread_mutex_unlock (&aio_ring->cq_mutex);
++  return total;
++}
++
++/*
++ * fileio_aio_pending () - requests of a thread's ring that are staged or not yet reaped
++ */
++int
++fileio_aio_pending (int owner_index)
++{
++  if (fileio_Aio_rings == NULL || owner_index < 0 || owner_index >= fileio_Aio_num_rings)
++    {
++      return 0;
++    }
++  return fileio_Aio_rings[owner_index].staged + fileio_Aio_rings[owner_index].inflight;
++}
++#else /* !HAVE_LIBURING */
++bool
++fileio_aio_is_available (void)
++{
++  return false;
++}
++
++void
++fileio_aio_finalize (void)
++{
++}
++
++int
++fileio_aio_prepare_read (THREAD_ENTRY * thread_p, int vol_fd, void *io_page_p, PAGEID page_id, size_t page_size,
++			 void *cookie)
++{
++  return ER_FAILED;
++}
++
++int
++fileio_aio_submit (THREAD_ENTRY * thread_p, FILEIO_AIO_DONE_FUNC done)
++{
++  return 0;
++}
++
++int
++fileio_aio_reap (THREAD_ENTRY * thread_p, int owner_index, int wait_msecs, FILEIO_AIO_DONE_FUNC done)
++{
++  return 0;
++}
++
++int
++fileio_aio_pending (int owner_index)
++{
++  return 0;
++}
++#endif /* !HAVE_LIBURING */
++#endif /* SERVER_MODE */
++
+ /*
+  * fileio_synchronize () - Synchronize a database volume's state with that on disk
+  *   return: vdes or NULL_VOLDES
+diff --git a/src/storage/file_io.h b/src/storage/file_io.h
+index e8195f72c..fc2a2eff1 100644
+--- a/src/storage/file_io.h
++++ b/src/storage/file_io.h
+@@ -493,6 +493,21 @@ extern bool fileio_fsync_pending (void);
+ extern int fileio_synchronize_directory (THREAD_ENTRY * thread_p, const char *label);
+ extern int fileio_synchronize (THREAD_ENTRY * thread_p, int vdes, const char *vlabel, bool ensure_metadata);
+ extern int fileio_synchronize_all (THREAD_ENTRY * thread_p);
++
++#if defined (SERVER_MODE)
++/* data pages read ahead through a per-thread io_uring (io_method=io_uring) */
++/* one request reads one page; a thread keeps at most this many unsubmitted or unreaped */
++#define FILEIO_AIO_RING_ENTRIES 256
++
++typedef void (*FILEIO_AIO_DONE_FUNC) (THREAD_ENTRY * thread_p, void *cookie, int io_result);
++extern bool fileio_aio_is_available (void);
++extern void fileio_aio_finalize (void);
++extern int fileio_aio_prepare_read (THREAD_ENTRY * thread_p, int vol_fd, void *io_page_p, PAGEID page_id,
++				    size_t page_size, void *cookie);
++extern int fileio_aio_submit (THREAD_ENTRY * thread_p, FILEIO_AIO_DONE_FUNC done);
++extern int fileio_aio_reap (THREAD_ENTRY * thread_p, int owner_index, int wait_msecs, FILEIO_AIO_DONE_FUNC done);
++extern int fileio_aio_pending (int owner_index);
++#endif /* SERVER_MODE */
+ #if defined (ENABLE_UNUSED_FUNCTION)
+ extern void *fileio_read_user_area (THREAD_ENTRY * thread_p, int vdes, PAGEID pageid, off_t start_offset, size_t nbytes,
+ 				    void *area);
+diff --git a/src/storage/page_buffer.c b/src/storage/page_buffer.c
+index d1f9cf7e2..4c38ce910 100644
+--- a/src/storage/page_buffer.c
++++ b/src/storage/page_buffer.c
+@@ -29,6 +29,7 @@
+ #include <string.h>
+ #include <assert.h>
+ #include <atomic>
++#include <thread>
+ 
+ #include "page_buffer.h"
+ 
+@@ -553,9 +554,129 @@ struct pgbuf_buffer_lock
+   PGBUF_BUFFER_LOCK *lock_next;	/* next buffer lock record */
+ #if defined(SERVER_MODE)
+   THREAD_ENTRY *next_wait_thrd;	/* buffer-lock waiting queue */
++  int aio_owner;		/* thread entry index whose ring reads the page ahead; -1 when a thread reads it itself */
+ #endif				/* SERVER_MODE */
+ };
+ 
++#if defined(SERVER_MODE)
++/* a page being read ahead: in the page's buffer lock chain from the request until its completion is processed */
++typedef struct pgbuf_aio_read PGBUF_AIO_READ;
++struct pgbuf_aio_read
++{
++  PGBUF_BUFFER_LOCK buffer_lock;
++  PGBUF_BCB *bufptr;		/* frame the page is read into: in no list and under no mutex until the completion */
++  // *INDENT-OFF*
++  std::atomic<bool> in_use;	/* set by the owner thread, cleared by the thread that processes the completion */
++  // *INDENT-ON*
++};
++
++#define PGBUF_AIO_WAIT_MSECS 10
++
++/* ---- TLATRACE instrumentation: evidence build only, never committed ---- */
++// *INDENT-OFF*
++static std::atomic<unsigned long long> pgbuf_Tla_seq { 0 };
++static std::atomic<int> pgbuf_Tla_fail_left { 0 };
++static std::atomic<int> pgbuf_Tla_prepfail_left { 0 };
++static thread_local bool pgbuf_Tla_dirty = false;
++static thread_local bool pgbuf_Tla_inline = false;
++// *INDENT-ON*
++static FILE *pgbuf_Tla_fp = NULL;
++#define PGBUF_TLA_MAX_RANGES 4
++static int pgbuf_Tla_volid[PGBUF_TLA_MAX_RANGES], pgbuf_Tla_first[PGBUF_TLA_MAX_RANGES], pgbuf_Tla_last[PGBUF_TLA_MAX_RANGES];
++static int pgbuf_Tla_num_ranges = 0;
++static int pgbuf_Tla_fail_pageid = -1, pgbuf_Tla_prepfail_pageid = -1;
++static pthread_once_t pgbuf_Tla_once = PTHREAD_ONCE_INIT;
++
++static void
++pgbuf_tla_init (void)
++{
++  const char *file = getenv ("CUBRID_TLA_TRACE_FILE");
++  const char *pages = getenv ("CUBRID_TLA_TRACE_PAGES");	/* <volid>:<first pageid>-<last pageid>[,...] */
++  const char *fail = getenv ("CUBRID_TLA_FAIL_PAGE");	/* one read-ahead completion of this pageid fails */
++  const char *prepfail = getenv ("CUBRID_TLA_PREPFAIL_PAGE");	/* one read-ahead request of this pageid is not staged */
++
++  if (file == NULL || pages == NULL)
++    {
++      return;
++    }
++  while (pgbuf_Tla_num_ranges < PGBUF_TLA_MAX_RANGES
++	 && sscanf (pages, "%d:%d-%d", &pgbuf_Tla_volid[pgbuf_Tla_num_ranges], &pgbuf_Tla_first[pgbuf_Tla_num_ranges],
++		    &pgbuf_Tla_last[pgbuf_Tla_num_ranges]) == 3)
++    {
++      pgbuf_Tla_num_ranges++;
++      pages = strchr (pages, ',');
++      if (pages == NULL)
++	{
++	  break;
++	}
++      pages++;
++    }
++  if (pgbuf_Tla_num_ranges == 0)
++    {
++      return;
++    }
++  if (fail != NULL)
++    {
++      pgbuf_Tla_fail_pageid = atoi (fail);
++      pgbuf_Tla_fail_left = 1;
++    }
++  if (prepfail != NULL)
++    {
++      pgbuf_Tla_prepfail_pageid = atoi (prepfail);
++      pgbuf_Tla_prepfail_left = 1;
++    }
++  pgbuf_Tla_fp = fopen (file, "a");
++}
++
++static bool
++pgbuf_tla_is_traced (const VPID * vpid)
++{
++  pthread_once (&pgbuf_Tla_once, pgbuf_tla_init);
++  if (pgbuf_Tla_fp == NULL)
++    {
++      return false;
++    }
++  for (int r = 0; r < pgbuf_Tla_num_ranges; r++)
++    {
++      if (vpid->volid == pgbuf_Tla_volid[r] && vpid->pageid >= pgbuf_Tla_first[r] && vpid->pageid <= pgbuf_Tla_last[r])
++	{
++	  return true;
++	}
++    }
++  return false;
++}
++
++/* the caller is inside the step the event records (under the mutex that makes it one step) */
++static void
++pgbuf_tla_event (THREAD_ENTRY * thread_p, const char *action, const VPID * vpid, const char *extra)
++{
++  unsigned long long seq = ++pgbuf_Tla_seq;
++  char page[48] = "";
++
++  if (thread_p == NULL)
++    {
++      thread_p = thread_get_thread_entry_info ();
++    }
++  if (vpid != NULL)
++    {
++      snprintf (page, sizeof (page), " page=v%dp%d", vpid->volid, vpid->pageid);
++    }
++  fprintf (pgbuf_Tla_fp, "TLATRACE seq=%llu a=%s p=t%d%s%s\n", seq, action, thread_p->index, page, extra);
++  fflush (pgbuf_Tla_fp);
++  pgbuf_Tla_dirty = true;
++}
++
++void
++pgbuf_tla_finish (THREAD_ENTRY * thread_p)
++{
++  if (pgbuf_Tla_dirty)
++    {
++      pgbuf_tla_event (thread_p, "Finish", NULL, "");
++      pgbuf_Tla_dirty = false;
++    }
++}
++#endif /* SERVER_MODE */
++
+ /* buffer hash entry structure
+  *
+  * buffer hash table is the array of buffer hash entries.
+@@ -790,6 +911,11 @@ struct pgbuf_buffer_pool
+   PGBUF_BCB *BCB_table;		/* BCB table */
+   PGBUF_BUFFER_HASH *buf_hash_table;	/* buffer hash table */
+   PGBUF_BUFFER_LOCK *buf_lock_table;	/* buffer lock table */
++#if defined(SERVER_MODE)
++  PGBUF_AIO_READ **aio_reads;	/* per thread entry index: FILEIO_AIO_RING_ENTRIES entries, allocated at the thread's
++				 * first read-ahead; NULL unless io_method=io_uring is usable */
++  size_t num_aio_reads;		/* size of aio_reads */
++#endif				/* SERVER_MODE */
+   PGBUF_IOPAGE_BUFFER *iopage_table;	/* IO page table */
+   int num_LRU_list;		/* number of shared LRU lists */
+   float ratio_lru1;		/* ratio for lru 1 zone */
+@@ -1165,7 +1291,11 @@ STATIC_INLINE int pgbuf_delete_from_hash_chain (THREAD_ENTRY * thread_p, PGBUF_B
+ static int pgbuf_lock_page (THREAD_ENTRY * thread_p, PGBUF_BUFFER_HASH * hash_anchor, const VPID * vpid);
+ static int pgbuf_unlock_page (THREAD_ENTRY * thread_p, PGBUF_BUFFER_HASH * hash_anchor, const VPID * vpid,
+ 			      int need_hash_mutex);
+-static PGBUF_BCB *pgbuf_allocate_bcb (THREAD_ENTRY * thread_p, const VPID * src_vpid);
++static PGBUF_BCB *pgbuf_allocate_bcb (THREAD_ENTRY * thread_p, const VPID * src_vpid, bool can_wait);
++#if defined(SERVER_MODE)
++static void pgbuf_aio_read_done (THREAD_ENTRY * thread_p, void *cookie, int io_result);
++static bool pgbuf_is_page_in_buffer_or_being_read (const PGBUF_BUFFER_HASH * hash_anchor, const VPID * vpid);
++#endif /* SERVER_MODE */
+ static PGBUF_BCB *pgbuf_claim_bcb_for_fix (THREAD_ENTRY * thread_p, const VPID * vpid, PAGE_FETCH_MODE fetch_mode,
+ 					   PGBUF_BUFFER_HASH * hash_anchor, PGBUF_FIX_PERF * perf, bool * try_again,
+ 					   bool already_locked);
+@@ -1654,6 +1784,9 @@ pgbuf_initialize (void)
+   pgbuf_Pool.BCB_table = NULL;
+   pgbuf_Pool.buf_hash_table = NULL;
+   pgbuf_Pool.buf_lock_table = NULL;
++#if defined(SERVER_MODE)
++  pgbuf_Pool.aio_reads = NULL;
++#endif /* SERVER_MODE */
+   pgbuf_Pool.iopage_table = NULL;
+   pgbuf_Pool.num_LRU_list = 0;
+   pgbuf_Pool.ratio_lru1 = 0.0f;
+@@ -1953,6 +2086,17 @@ pgbuf_finalize (void)
+     {
+       free_and_init (pgbuf_Pool.buf_lock_table);
+     }
++#if defined(SERVER_MODE)
++  if (pgbuf_Pool.aio_reads != NULL)
++    {
++      for (size_t aio_idx = 0; aio_idx < pgbuf_Pool.num_aio_reads; aio_idx++)
++	{
++	  delete[]pgbuf_Pool.aio_reads[aio_idx];
++	}
++      delete[]pgbuf_Pool.aio_reads;
++      pgbuf_Pool.aio_reads = NULL;
++    }
++#endif /* SERVER_MODE */
+ 
+   /* final task for BCB table */
+   if (pgbuf_Pool.BCB_table != NULL)
+@@ -2547,6 +2691,13 @@ try_again:
+ 
+   CAST_BFPTR_TO_PGPTR (pgptr, bufptr);
+ fast_path:
++#if defined(SERVER_MODE)
++  if (pgbuf_tla_is_traced (vpid))
++    {
++      /* the page is fixed: it is in the hash chain and cannot be replaced before this thread unfixes it */
++      pgbuf_tla_event (thread_p, "FixValid", vpid, "");
++    }
++#endif /* SERVER_MODE */
+ #if !defined (NDEBUG)
+   assert (pgptr != NULL);
+ 
+@@ -6372,9 +6523,22 @@ pgbuf_initialize_lock_table (void)
+       pgbuf_Pool.buf_lock_table[i].lock_next = NULL;
+ #if defined(SERVER_MODE)
+       pgbuf_Pool.buf_lock_table[i].next_wait_thrd = NULL;
++      pgbuf_Pool.buf_lock_table[i].aio_owner = -1;
+ #endif /* SERVER_MODE */
+     }
+ 
++#if defined(SERVER_MODE)
++  if (fileio_aio_is_available ())
++    {
++      pgbuf_Pool.aio_reads = new PGBUF_AIO_READ *[thrd_num_total];
++      pgbuf_Pool.num_aio_reads = thrd_num_total;
++      for (i = 0; i < thrd_num_total; i++)
++	{
++	  pgbuf_Pool.aio_reads[i] = NULL;
++	}
++    }
++#endif /* SERVER_MODE */
++
+   return NO_ERROR;
+ }
+ 
+@@ -8622,6 +8786,12 @@ pgbuf_delete_from_hash_chain (THREAD_ENTRY * thread_p, PGBUF_BCB * bufptr)
+ 	}
+ 
+       curr_bufptr->hash_next = NULL;
++#if defined(SERVER_MODE)
++      if (pgbuf_tla_is_traced (&bufptr->vpid))
++	{
++	  pgbuf_tla_event (thread_p, "Victimize", &bufptr->vpid, "");
++	}
++#endif /* SERVER_MODE */
+       pthread_mutex_unlock (&hash_anchor->hash_mutex);
+       VPID_SET_NULL (&(bufptr->vpid));
+       pgbuf_bcb_check_and_reset_fix_and_avoid_dealloc (bufptr, ARG_FILE_LINE);
+@@ -8667,6 +8837,28 @@ pgbuf_lock_page (THREAD_ENTRY * thread_p, PGBUF_BUFFER_HASH * hash_anchor, const
+       if (VPID_EQ (&(cur_buffer_lock->vpid), vpid))
+ 	{
+ 	  /* found */
++	  if (cur_buffer_lock->aio_owner >= 0)
++	    {
++	      /* the page is being read ahead and the thread that asked for it may be asleep on a latch or a lock:
++	       * process the completions of its ring here instead of sleeping, then look the page up again */
++	      int aio_owner = cur_buffer_lock->aio_owner;
++
++	      if (aio_owner != thread_p->index && pgbuf_tla_is_traced (vpid))
++		{
++		  char extra[32];
++
++		  snprintf (extra, sizeof (extra), " o=t%d", aio_owner);
++		  pgbuf_tla_event (thread_p, "SleepOnPage", vpid, extra);
++		}
++	      pthread_mutex_unlock (&hash_anchor->hash_mutex);
++	      if (fileio_aio_reap (thread_p, aio_owner, PGBUF_AIO_WAIT_MSECS, pgbuf_aio_read_done) == 0)
++		{
++		  /* requested, not yet handed to the kernel: the owner submits before it leaves pgbuf_read_ahead () */
++		  std::this_thread::yield ();
++		}
++	      perfmon_inc_stat (thread_p, PSTAT_LK_NUM_WAITED_ON_PAGES);	/* monitoring */
++	      return PGBUF_LOCK_WAITER;
++	    }
+ 	  cur_thrd_entry->next_wait_thrd = cur_buffer_lock->next_wait_thrd;
+ 	  cur_buffer_lock->next_wait_thrd = cur_thrd_entry;
+ 	  pgbuf_sleep (cur_thrd_entry, &hash_anchor->hash_mutex);
+@@ -8733,6 +8925,10 @@ pgbuf_lock_page (THREAD_ENTRY * thread_p, PGBUF_BUFFER_HASH * hash_anchor, const
+   cur_buffer_lock->next_wait_thrd = NULL;
+   cur_buffer_lock->lock_next = hash_anchor->lock_next;
+   hash_anchor->lock_next = cur_buffer_lock;
++  if (pgbuf_tla_is_traced (vpid))
++    {
++      pgbuf_tla_event (thread_p, "IssueRead", vpid, "");
++    }
+   pthread_mutex_unlock (&hash_anchor->hash_mutex);
+ #endif /* SERVER_MODE */
+ 
+@@ -8812,6 +9008,23 @@ pgbuf_unlock_page (THREAD_ENTRY * thread_p, PGBUF_BUFFER_HASH * hash_anchor, con
+ 	}
+ 
+       cur_buffer_lock->lock_next = NULL;
++      if (pgbuf_tla_is_traced (vpid))
++	{
++	  char extra[48];
++
++	  if (pgbuf_Tla_inline)
++	    {
++	      snprintf (extra, sizeof (extra), " err=%d", need_hash_mutex ? 1 : 0);
++	      pgbuf_tla_event (thread_p, "InlineComplete", vpid, extra);
++	    }
++	  else
++	    {
++	      snprintf (extra, sizeof (extra), " o=t%d err=%d",
++			cur_buffer_lock->aio_owner >= 0 ? cur_buffer_lock->aio_owner : thread_p->index,
++			need_hash_mutex ? 1 : 0);
++	      pgbuf_tla_event (thread_p, "Reap", vpid, extra);
++	    }
++	}
+       pthread_mutex_unlock (&hash_anchor->hash_mutex);
+ 
+       while ((cur_thrd_entry = cur_buffer_lock->next_wait_thrd) != NULL)
+@@ -8839,7 +9052,7 @@ pgbuf_unlock_page (THREAD_ENTRY * thread_p, PGBUF_BUFFER_HASH * hash_anchor, con
+  *       It is invoked only when a page is not in buffer.
+  */
+ static PGBUF_BCB *
+-pgbuf_allocate_bcb (THREAD_ENTRY * thread_p, const VPID * src_vpid)
++pgbuf_allocate_bcb (THREAD_ENTRY * thread_p, const VPID * src_vpid, bool can_wait)
+ {
+   PGBUF_BCB *bufptr;
+   PERF_UTIME_TRACKER time_tracker_alloc_bcb = PERF_UTIME_TRACKER_INITIALIZER;
+@@ -8897,6 +9110,23 @@ pgbuf_allocate_bcb (THREAD_ENTRY * thread_p, const VPID * src_vpid)
+     }
+ 
+ #if defined (SERVER_MODE)
++  if (!can_wait)
++    {
++      /* read-ahead is a hint: it never sleeps for a frame */
++      PERF_UTIME_TRACKER_TIME (thread_p, &time_tracker_alloc_bcb, PSTAT_PB_ALLOC_BCB);
++      return NULL;
++    }
++  if (pgbuf_Pool.aio_reads != NULL && fileio_aio_pending (thread_p->index) > 0)
++    {
++      /* the frames this thread reads ahead become victims only when their completions are processed, and nobody
++       * else processes them unless it needs one of those pages: empty the ring before sleeping for a victim */
++      pgbuf_aio_drain (thread_p);
++      bufptr = pgbuf_get_victim (thread_p);
++      if (bufptr != NULL)
++	{
++	  goto end;
++	}
++    }
+   if (pgbuf_is_page_flush_daemon_available ())
+     {
+     retry:
+@@ -9115,7 +9345,7 @@ pgbuf_claim_bcb_for_fix (THREAD_ENTRY * thread_p, const VPID * vpid, PAGE_FETCH_
+ 	}
+     }
+   /* Now, the caller is not holding any mutex. */
+-  bufptr = pgbuf_allocate_bcb (thread_p, vpid);
++  bufptr = pgbuf_allocate_bcb (thread_p, vpid, true);
+   if (bufptr == NULL)
+     {
+       ASSERT_ERROR ();
+@@ -9276,6 +9506,285 @@ pgbuf_claim_bcb_for_fix (THREAD_ENTRY * thread_p, const VPID * vpid, PAGE_FETCH_
+   return bufptr;
+ }
+ 
++#if defined(SERVER_MODE)
++/*
++ * pgbuf_aio_read_done () - process the completion of one page read ahead
++ *   cookie(in): the page's PGBUF_AIO_READ
++ *   io_result(in): bytes read, or a negative errno
++ *
++ * Note: Called by the thread that asked for the page or by any thread that waits for it. It touches only the
++ *       frame and the buffer lock chain: a page that was read joins the hash chain and an LRU list as an unfixed
++ *       page; after a failed read the frame goes back to the invalid list and the next fix reads the page itself.
++ */
++static void
++pgbuf_aio_read_done (THREAD_ENTRY * thread_p, void *cookie, int io_result)
++{
++  PGBUF_AIO_READ *aio_read = (PGBUF_AIO_READ *) cookie;
++  PGBUF_BCB *bufptr = aio_read->bufptr;
++  VPID vpid = aio_read->buffer_lock.vpid;
++  PGBUF_BUFFER_HASH *hash_anchor = &pgbuf_Pool.buf_hash_table[PGBUF_HASH_VALUE (&vpid)];
++  PGBUF_ATOMIC_LATCH_IMPL impl;
++  PAGE_PTR pgptr;
++  TDE_ALGORITHM tde_algo;
++  bool is_read = (io_result == IO_PAGESIZE);
++
++  if (is_read && pgbuf_tla_is_traced (&vpid) && vpid.pageid == pgbuf_Tla_fail_pageid && pgbuf_Tla_fail_left.fetch_sub (1) == 1)
++    {
++      is_read = false;
++    }
++  PGBUF_BCB_LOCK (bufptr);
++  if (is_read)
++    {
++      CAST_IOPGPTR_TO_PGPTR (pgptr, &bufptr->iopage_buffer->iopage);
++      tde_algo = pgbuf_get_tde_algorithm (pgptr);
++      if (tde_algo != TDE_ALGORITHM_NONE
++	  && tde_decrypt_data_page (&bufptr->iopage_buffer->iopage, tde_algo, false,
++				    &bufptr->iopage_buffer->iopage) != NO_ERROR)
++	{
++	  /* the thread that fixes the page reads it again and reports the error */
++	  er_clear ();
++	  is_read = false;
++	}
++    }
++  if (is_read)
++    {
++      bufptr->vpid = vpid;
++      impl = get_impl (&bufptr->atomic_latch);
++      impl.impl.latch_mode = PGBUF_NO_LATCH;
++      impl.impl.waiter_exists = false;
++      impl.impl.fcnt = 0;
++      bufptr->atomic_latch.store (impl.raw);
++      pgbuf_set_bcb_page_vpid (bufptr);
++      is_read = pgbuf_check_bcb_page_vpid (bufptr, true);
++    }
++
++  if (is_read)
++    {
++      pgbuf_insert_into_hash_chain (thread_p, hash_anchor, bufptr);
++      /* hash_anchor->hash_mutex is held and is released by the following function */
++      (void) pgbuf_unlock_page (thread_p, hash_anchor, &vpid, false);
++      if (pgbuf_Pool.buf_AOUT_list.max_count > 0)
++	{
++	  (void) pgbuf_remove_vpid_from_aout_list (thread_p, &bufptr->vpid);
++	}
++      pgbuf_lru_add_new_bcb_to_middle (thread_p, bufptr, pgbuf_get_shared_lru_index_for_add ());
++      PGBUF_BCB_UNLOCK (bufptr);
++    }
++  else
++    {
++      /* bufptr->mutex is released by the following function */
++      pgbuf_put_bcb_into_invalid_list (thread_p, bufptr);
++      (void) pgbuf_unlock_page (thread_p, hash_anchor, &vpid, true);
++    }
++  aio_read->in_use = false;
++}
++#endif /* SERVER_MODE */
++
++#if defined(SERVER_MODE)
++/*
++ * pgbuf_is_page_in_buffer_or_being_read () - true when the page has a frame in the hash chain or a thread reads it
++ *
++ * Note: The caller holds hash_anchor->hash_mutex.
++ */
++static bool
++pgbuf_is_page_in_buffer_or_being_read (const PGBUF_BUFFER_HASH * hash_anchor, const VPID * vpid)
++{
++  const PGBUF_BCB *bufptr;
++  const PGBUF_BUFFER_LOCK *buffer_lock;
++
++  for (bufptr = hash_anchor->hash_next; bufptr != NULL; bufptr = bufptr->hash_next)
++    {
++      if (VPID_EQ (&bufptr->vpid, vpid))
++	{
++	  return true;
++	}
++    }
++  for (buffer_lock = hash_anchor->lock_next; buffer_lock != NULL; buffer_lock = buffer_lock->lock_next)
++    {
++      if (VPID_EQ (&buffer_lock->vpid, vpid))
++	{
++	  return true;
++	}
++    }
++  return false;
++}
++#endif /* SERVER_MODE */
++
++/*
++ * pgbuf_read_ahead () - ask for pages the caller is going to fix soon, without waiting for them
++ *   vpids(in): pages of permanent volumes
++ *   count(in): number of pages
++ *
++ * Note: A hint. A page already in the buffer or being read is skipped; when no frame is free at once or the
++ *       thread's ring is full, the rest is dropped. Every request made here is handed to the kernel before the
++ *       function returns: a thread never sleeps with a request the kernel has not seen. The pages are not fixed;
++ *       the caller fixes each one as usual, and a fix that finds its page still being read processes the
++ *       completions of the reading thread's ring until the page arrives.
++ */
++void
++pgbuf_read_ahead (THREAD_ENTRY * thread_p, const VPID * vpids, int count)
++{
++#if defined(SERVER_MODE)
++  PGBUF_AIO_READ *my_reads, *aio_read;
++  PGBUF_BUFFER_HASH *hash_anchor;
++  PGBUF_BCB *bufptr;
++  const VPID *vpid;
++  bool is_present, success;
++  bool tla_traced_call = false;
++  int vol_fd;
++  int i, j;
++
++  if (pgbuf_Pool.aio_reads == NULL)
++    {
++      return;
++    }
++  if (thread_p == NULL)
++    {
++      thread_p = thread_get_thread_entry_info ();
++    }
++  my_reads = pgbuf_Pool.aio_reads[thread_p->index];
++  if (my_reads == NULL)
++    {
++      /* only this thread reads and writes its slot */
++      my_reads = new PGBUF_AIO_READ[FILEIO_AIO_RING_ENTRIES];
++      for (j = 0; j < FILEIO_AIO_RING_ENTRIES; j++)
++	{
++	  my_reads[j].in_use = false;
++	}
++      pgbuf_Pool.aio_reads[thread_p->index] = my_reads;
++    }
++
++  /* what has completed frees its entries */
++  (void) fileio_aio_reap (thread_p, thread_p->index, 0, pgbuf_aio_read_done);
++
++  for (i = 0; i < count; i++)
++    {
++      vpid = &vpids[i];
++      if (pgbuf_is_temporary_volume (vpid->volid))
++	{
++	  continue;
++	}
++      vol_fd = fileio_get_volume_descriptor (vpid->volid);
++      if (vol_fd == NULL_VOLDES)
++	{
++	  continue;
++	}
++
++      hash_anchor = &pgbuf_Pool.buf_hash_table[PGBUF_HASH_VALUE (vpid)];
++      pthread_mutex_lock (&hash_anchor->hash_mutex);
++      is_present = pgbuf_is_page_in_buffer_or_being_read (hash_anchor, vpid);
++      pthread_mutex_unlock (&hash_anchor->hash_mutex);
++      if (is_present)
++	{
++	  continue;
++	}
++      for (j = 0; j < FILEIO_AIO_RING_ENTRIES && my_reads[j].in_use; j++)
++	{
++	  ;
++	}
++      if (j == FILEIO_AIO_RING_ENTRIES)
++	{
++	  break;
++	}
++      aio_read = &my_reads[j];
++
++      bufptr = pgbuf_allocate_bcb (thread_p, vpid, false);
++      if (bufptr == NULL)
++	{
++	  break;
++	}
++      /* bufptr->mutex is held. Until the completion the frame keeps a null VPID and stays out of every list, so
++       * no other thread reaches it once the mutex is released. */
++      VPID_SET_NULL (&bufptr->vpid);
++      pgbuf_bcb_update_flags (thread_p, bufptr, 0, PGBUF_BCB_ASYNC_FLUSH_REQ);
++      pgbuf_bcb_check_and_reset_fix_and_avoid_dealloc (bufptr, ARG_FILE_LINE);
++      LSA_SET_NULL (&bufptr->oldest_unflush_lsa);
++
++      /* the page is marked as being read only with its frame in hand: from here to the completion nothing waits */
++      pthread_mutex_lock (&hash_anchor->hash_mutex);
++      if (pgbuf_is_page_in_buffer_or_being_read (hash_anchor, vpid))
++	{
++	  /* another thread got to the page while the frame was claimed */
++	  pthread_mutex_unlock (&hash_anchor->hash_mutex);
++	  pgbuf_put_bcb_into_invalid_list (thread_p, bufptr);
++	  continue;
++	}
++      aio_read->in_use = true;
++      aio_read->bufptr = bufptr;
++      aio_read->buffer_lock.vpid = *vpid;
++      aio_read->buffer_lock.next_wait_thrd = NULL;
++      aio_read->buffer_lock.aio_owner = thread_p->index;
++      aio_read->buffer_lock.lock_next = hash_anchor->lock_next;
++      hash_anchor->lock_next = &aio_read->buffer_lock;
++      if (pgbuf_tla_is_traced (vpid))
++	{
++	  pgbuf_tla_event (thread_p, "ReadAhead", vpid, "");
++	  tla_traced_call = true;
++	}
++      pthread_mutex_unlock (&hash_anchor->hash_mutex);
++      perfmon_inc_stat_for_trace (thread_p, PSTAT_PB_NUM_IOREADS);
++
++      if (dwb_read_page (thread_p, vpid, &bufptr->iopage_buffer->iopage, &success) != NO_ERROR)
++	{
++	  assert (false);
++	  success = false;
++	}
++      PGBUF_BCB_UNLOCK (bufptr);
++
++      if (success)
++	{
++	  /* copied from the double write buffer */
++	  pgbuf_Tla_inline = true;
++	  pgbuf_aio_read_done (thread_p, aio_read, IO_PAGESIZE);
++	  pgbuf_Tla_inline = false;
++	}
++      else if ((pgbuf_tla_is_traced (vpid) && vpid->pageid == pgbuf_Tla_prepfail_pageid
++		&& pgbuf_Tla_prepfail_left.fetch_sub (1) == 1)
++	       || fileio_aio_prepare_read (thread_p, vol_fd, &bufptr->iopage_buffer->iopage, vpid->pageid,
++					   IO_PAGESIZE, aio_read) != NO_ERROR)
++	{
++	  pgbuf_Tla_inline = true;
++	  pgbuf_aio_read_done (thread_p, aio_read, -1);
++	  pgbuf_Tla_inline = false;
++	  break;
++	}
++    }
++
++  if (tla_traced_call)
++    {
++      /* before the syscall: a completion another thread reaps must not be logged ahead of the submit */
++      pgbuf_tla_event (thread_p, "SubmitNow", NULL, "");
++    }
++  (void) fileio_aio_submit (thread_p, pgbuf_aio_read_done);
++  PGBUF_BCB_CHECK_MUTEX_LEAKS ();
++#endif /* SERVER_MODE */
++}
++
++/*
++ * pgbuf_aio_drain () - process every read-ahead request of the calling thread until its ring is empty
++ *
++ * Note: Called before a thread goes back to its pool (request end, interrupt and error included) and before it
++ *       sleeps for a victim frame. Afterwards no frame is left in a read that only this thread would complete.
++ */
++void
++pgbuf_aio_drain (THREAD_ENTRY * thread_p)
++{
++#if defined(SERVER_MODE)
++  if (pgbuf_Pool.aio_reads == NULL)
++    {
++      return;
++    }
++  if (thread_p == NULL)
++    {
++      thread_p = thread_get_thread_entry_info ();
++    }
++  while (fileio_aio_pending (thread_p->index) > 0)
++    {
++      (void) fileio_aio_reap (thread_p, thread_p->index, PGBUF_AIO_WAIT_MSECS, pgbuf_aio_read_done);
++    }
++#endif /* SERVER_MODE */
++}
++
+ /*
+  * pgbuf_victimize_bcb () - Victimize given buffer page
+  *   return: NO_ERROR, or ER_code
+diff --git a/src/storage/page_buffer.h b/src/storage/page_buffer.h
+index d0fd814dd..2f8c2eb3a 100644
+--- a/src/storage/page_buffer.h
++++ b/src/storage/page_buffer.h
+@@ -427,6 +427,11 @@ extern void pgbuf_force_to_check_for_interrupts (void);
+ extern bool pgbuf_is_log_check_for_interrupts (THREAD_ENTRY * thread_p);
+ extern int pgbuf_force_latch_wait (THREAD_ENTRY * thread_p);
+ extern void pgbuf_unfix_all (THREAD_ENTRY * thread_p);
++extern void pgbuf_read_ahead (THREAD_ENTRY * thread_p, const VPID * vpids, int count);
++extern void pgbuf_aio_drain (THREAD_ENTRY * thread_p);
++#if defined (SERVER_MODE)
++extern void pgbuf_tla_finish (THREAD_ENTRY * thread_p);
++#endif
+ extern void pgbuf_set_lsa_as_temporary (THREAD_ENTRY * thread_p, PAGE_PTR pgptr);
+ extern void pgbuf_set_page_ptype (THREAD_ENTRY * thread_p, PAGE_PTR pgptr, PAGE_TYPE ptype);
+ extern bool pgbuf_is_lsa_temporary (PAGE_PTR pgptr);
+diff --git a/src/thread/thread_entry_task.cpp b/src/thread/thread_entry_task.cpp
+index 259648833..1d18491e1 100644
+--- a/src/thread/thread_entry_task.cpp
++++ b/src/thread/thread_entry_task.cpp
+@@ -24,6 +24,7 @@
+ 
+ #include "error_manager.h"
+ #include "log_impl.h"
++#include "page_buffer.h"
+ #include "perf_monitor.h"	/* pstat_Metadata, PSTAT_...*/
+ #include "porting.h"
+ #include "thread_entry.hpp"
+@@ -61,6 +62,10 @@ namespace cubthread
+   void
+   entry_manager::retire_context (entry &context)
+   {
++#if defined (SERVER_MODE)
++    pgbuf_aio_drain (&context);
++    pgbuf_tla_finish (&context);
++#endif // SERVER_MODE
+     on_retire (context);
+ 
+     // clear error messages
+@@ -89,6 +94,11 @@ namespace cubthread
+   void
+   entry_manager::recycle_context (entry &context)
+   {
++#if defined (SERVER_MODE)
++    // a thread goes back to its pool with no read-ahead request left that only it would complete
++    pgbuf_aio_drain (&context);
++    pgbuf_tla_finish (&context);
++#endif // SERVER_MODE
+     er_clear ();    // clear errors
+     context.end_resource_tracks ();
+     std::memset (&context.event_stats, 0, sizeof (context.event_stats));  // clear even stats
+diff --git a/src/transaction/boot_sr.c b/src/transaction/boot_sr.c
+index e26f48ec6..3ccebc09a 100644
+--- a/src/transaction/boot_sr.c
++++ b/src/transaction/boot_sr.c
+@@ -3922,6 +3922,9 @@ boot_server_all_finalize (THREAD_ENTRY * thread_p, ER_FINAL_CODE is_er_final,
+   catalog_finalize ();
+   qmgr_finalize (thread_p);
+   (void) heap_manager_finalize ();
++#if defined (SERVER_MODE)
++  fileio_aio_finalize ();
++#endif /* SERVER_MODE */
+   fileio_dismount_all (thread_p);
+   disk_manager_final ();
+   boot_server_status (BOOT_SERVER_DOWN);

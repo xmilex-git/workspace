@@ -1,0 +1,37 @@
+TLATRACE seq=1 a=Arm p=t4212 x=0x7ff310008ac0
+TLATRACE seq=2 a=Hold p=t4212 x=0x7ff310008ac0 o=1 kind=read oids=3
+TLATRACE seq=3 a=Close p=t4212 x=0x7ff310008ac0 rows=1 oids=3 flush=0
+TLATRACE seq=4 a=Open p=t4212 x=0x7ff310008ac0 o=1 slice=3 s=0x7ff31000a218
+TLATRACE seq=5 a=TakeSlice p=t4212 i=0x7ff31000a268 n=3
+TLATRACE seq=6 a=Emit p=t4212 x=0x7ff310008ac0 o=1
+TLATRACE seq=7 a=Emit p=t4212 x=0x7ff310008ac0 o=1
+TLATRACE seq=8 a=Emit p=t4212 x=0x7ff310008ac0 o=1
+TLATRACE seq=9 a=RowDone p=t4212 x=0x7ff310008ac0 o=1
+TLATRACE seq=10 a=EndBatch p=t4212 x=0x7ff310008ac0
+TLATRACE seq=11 a=Hold p=t4212 x=0x7ff310008ac0 o=2 kind=read oids=1
+TLATRACE seq=12 a=Hold p=t4212 x=0x7ff310008ac0 o=3 kind=defer oids=-1
+TLATRACE seq=13 a=Hold p=t4212 x=0x7ff310008ac0 o=4 kind=read oids=0
+TLATRACE seq=14 a=Close p=t4212 x=0x7ff310008ac0 rows=3 oids=1 flush=0
+TLATRACE seq=15 a=Open p=t4212 x=0x7ff310008ac0 o=2 slice=1 s=0x7ff31000a218
+TLATRACE seq=16 a=TakeSlice p=t4212 i=0x7ff31000a268 n=1
+TLATRACE seq=17 a=Emit p=t4212 x=0x7ff310008ac0 o=2
+TLATRACE seq=18 a=RowDone p=t4212 x=0x7ff310008ac0 o=2
+TLATRACE seq=19 a=Open p=t4212 x=0x7ff310008ac0 o=3 slice=-1 s=0x7ff31000a218
+TLATRACE seq=20 a=MemoHit p=t4212 x=0x7ff310008ac0
+TLATRACE seq=21 a=Emit p=t4212 x=0x7ff310008ac0 o=3
+TLATRACE seq=22 a=Emit p=t4212 x=0x7ff310008ac0 o=3
+TLATRACE seq=23 a=Emit p=t4212 x=0x7ff310008ac0 o=3
+TLATRACE seq=24 a=RowDone p=t4212 x=0x7ff310008ac0 o=3
+TLATRACE seq=25 a=Open p=t4212 x=0x7ff310008ac0 o=4 slice=0 s=0x7ff31000a218
+TLATRACE seq=26 a=TakeSlice p=t4212 i=0x7ff31000a268 n=0
+TLATRACE seq=27 a=Emit p=t4212 x=0x7ff310008ac0 o=4
+TLATRACE seq=28 a=RowDone p=t4212 x=0x7ff310008ac0 o=4
+TLATRACE seq=29 a=EndBatch p=t4212 x=0x7ff310008ac0
+TLATRACE seq=30 a=Hold p=t4212 x=0x7ff310008ac0 o=5 kind=defer oids=-1
+TLATRACE seq=31 a=Close p=t4212 x=0x7ff310008ac0 rows=1 oids=0 flush=1
+TLATRACE seq=32 a=Open p=t4212 x=0x7ff310008ac0 o=5 slice=-1 s=0x7ff31000a218
+TLATRACE seq=33 a=MemoHit p=t4212 x=0x7ff310008ac0
+TLATRACE seq=34 a=Emit p=t4212 x=0x7ff310008ac0 o=5
+TLATRACE seq=35 a=RowDone p=t4212 x=0x7ff310008ac0 o=5
+TLATRACE seq=36 a=EndBatch p=t4212 x=0x7ff310008ac0
+TLATRACE seq=37 a=MemoClear p=t4212 x=0x7ff310008ac0

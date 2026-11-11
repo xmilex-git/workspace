@@ -1,0 +1,7 @@
+TLATRACE seq=1 a=Arm p=t4212 x=0x7f1ea8008ac0
+TLATRACE seq=2 a=Hold p=t4212 x=0x7f1ea8008ac0 o=1 kind=read oids=3
+TLATRACE seq=3 a=Close p=t4212 x=0x7f1ea8008ac0 rows=1 oids=3 flush=0
+TLATRACE seq=4 a=Open p=t4212 x=0x7f1ea8008ac0 o=1 slice=3 s=0x7f1ea800a968
+TLATRACE seq=5 a=TakeSlice p=t4212 i=0x7f1ea800a9b8 n=3
+TLATRACE seq=6 a=Error p=t4212 x=0x7f1ea8008ac0 o=1
+TLATRACE seq=7 a=MemoClear p=t4212 x=0x7f1ea8008ac0
