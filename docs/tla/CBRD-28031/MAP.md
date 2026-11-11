@@ -53,8 +53,9 @@ Dead expressions: the `Mutant = "late_trigger"`, `"no_count_bound"` and `"cursor
 | Model | Code (`CBRD-28031` `fb576da0b`) | One step because |
 |---|---|---|
 | `EvalAhead` | `px_scan_index_leaf_slot_walker.cpp:leaf_slot_walker::evaluate_ahead` -> `evaluate_slot (ahead = true)`: record of `m_page` at `m_ahead_slot`, `check_key_in_range`, key filter, `btree_record_process_objects` with the snapshot; the qualified key is pushed on `m_ahead` with its `read_keys` | the leaf is held (S latch, the producer keeps it through the leaf-OID drain) and the walker's state is private; the key is copied (`COPY`), the OIDs copied |
-| `EvalAhead` error branch (`ErrAt = "defer"`) | `stop_at_error (ahead = true)`: `er_clear`, no `signal_chain_ended`; `evaluate_ahead` restores `m_current_range_idx` and returns false; the slot stays after `m_ahead_slot` and `scan_next_slot` reads it again | private |
+| `EvalAhead` error branch (`ErrAt = "defer"`) | `stop_at_error (ahead = true)`: `er_clear`, no `signal_chain_ended`; `evaluate_ahead` restores `m_current_range_idx` to its value before that slot, records the slot as `m_ahead_slot` and returns false; `scan_next_slot` resumes there and reads it again | private |
 | `EvalStop` / range end | `evaluate_slot` returns `END` ahead without signaling; consumption reads the slot again and signals (`scan_next_slot` -> `evaluate_slot (ahead = false)`) | private; the signal is the only shared write and happens at consumption (C11) |
+| `WindowDone` at the barrier (`ev` stays); `Fresh` with `ev >= ck` (no second evaluation) | `evaluate_ahead` returning false (leaf end, range end, error, or only skipped keys left) sets `m_ahead_end`, `m_ahead_slot` (the stop slot: the erroring or past-range slot, or past the leaf) and `m_ahead_skipped_keys`; `read_ahead` then returns at once; when the queue is empty `scan_next_slot` resumes at `m_ahead_slot`, adds the skipped slots' `read_keys` and clears the flag, so only the stop slot is read again (it raises the error or signals the end, C9/C11). The model's `ev` never moves back and the lookups do not evaluate a key `<= ev`; `fb576da0b` evaluated the skipped slots again once per lookup and once more in `scan_next_slot` (PR #8490 review; cubrid-tla P81) | private |
 | `Check` | `leaf_slot_walker::read_ahead`, called from `process_oid`'s non-covering path: positions from the OID being looked up through the drain's buffer (`overflow_drain_fsm::buffer`, `buffer_next`) and, when `next_is_next_key`, the queued keys' OIDs, up to `SCAN_INDEX_READ_AHEAD_DISTANCE`; `m_ahead_hinted` is the frontier | private; the residency check is `ReadAhead`'s |
 | `Look` | `process_oid` (non-covering): `heap_get_visible_version` | as `ReadAhead.Look` |
 | `NextKey` | `scan_next_slot`: pops `m_ahead` (`m_current_slot = next_slot`), adds the key's counters (`read_keys`, `qualified_keys`, `key_qualified_rows`, `read_rows`), sets `m_slot_key`, `begin_key_record`, `begin_leaf_drain` | private |
@@ -153,6 +154,8 @@ instrumented optdebug build above, libcubrid sha256 `46bfffb7fd18b10fbf6d5b66292
 | `KeyReadAheadTrace.reject-{pos-off,drop-eval}` | refused | 31 / 30 | — |
 
 Dead expressions: `KeyReadAhead.tla:169`, `:170`, `:172`, `:173` only, explained above. TLAPS 요청 없음.
+
+After this run the engine moved to `998b18c63` (PR #8490 review: the worker's look-ahead re-evaluated skipped slots once per lookup). The model is unchanged (its `ev` already never moves back; the refinement rows `WindowDone` at the barrier and the `EvalAhead` error branch now name `m_ahead_end` / `m_ahead_slot` / `m_ahead_skipped_keys`). The recorded traces above are of the build before that fix; the trace spec took the repeated `WEvalStop` as a stutter (cubrid-tla P82), so they do not show the fix.
 
 Spec sha256 (as checked; `MAP.md`'s line is the file before this section):
 
