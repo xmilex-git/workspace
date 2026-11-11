@@ -4,7 +4,7 @@
 
 - 작업 트리: `~/dev/cubrid-worktree/CBRD-28005`, 브랜치 `CBRD-28005-aio`(origin/develop `2dd94e32a`). push는 fork로만 하고, 사용자가 말할 때 한다.
 - 새 소스 파일을 만들지 않는다.
-- 새 경로는 파라미터로 켠다. 기본값에서는 지금 경로를 그대로 탄다.
+- 새 경로는 파라미터로 켠다. 기본값에서는 지금 경로를 그대로 탄다. (2026-11-11에 바뀜: 읽기 힌트와 bitmap heap scan에는 켜고 끄는 파라미터를 두지 않는다. 아래 "세 이슈로 나눔" 참고)
 - 단계마다: optdebug와 release 빌드, 해당 CTP, 모델이 있는 단계는 계측 빌드의 실행 기록으로 trace validation.
 
 ## 읽기 형태별로 무엇이 I/O를 한꺼번에 내게 하나
@@ -95,3 +95,25 @@
 - develop 결함 하나를 찾았다: 인덱스 스캔이 한 키의 overflow OID 중간에서 되감기면 다음 탐색이 리프 레코드의 OID를 건너뛰어 세미 조인이 행을 잃는다(develop `e30370dc0` release와 optdebug에서 재현, workspace #638). 이 작업 트리에는 `BTREE_RESET_SCAN`의 한 줄 수정이 들어 있다.
 - 하지 않은 것: 2단계(힙 풀 스캔의 페이지 목록 순서), 전체 범위 묶음을 계획 생성에서 고르는 일(D26)과 힙 풀 스캔과의 비용 비교, `ReadStream`과 `OidBatch` 모델 재작성, 필터·함수·prefix 인덱스에서의 전체 범위 묶음, 힌트를 켰을 때의 핫 비용을 instructions 수로 확인하는 일, 스캔 도중 스냅샷이 바뀌는 실행(행마다 SQL을 실행하는 저장 프로시저)의 기록, 페이지 단위 표시 경로(`heap_next_1page`)가 행마다 페이지를 fix하는 것을 줄이는 일, PR.
 - io_uring 1단계는 구현, 두 빌드, CTP, trace validation까지 마친 뒤 대안으로 돌렸다. 패치는 `docs/tla/CBRD-28005/io_uring-alternative/`에 있다.
+
+## 세 이슈로 나눔 (2026-11-11 저녁, MAP D40~D43)
+
+팀 결정으로 구현을 세 이슈로 나눴다. CBRD-28005는 조사 이슈로 남는다. 이슈마다 다른 세션이 이어서 한다. 브랜치는 이슈별로 나누지 않았다.
+
+| 이슈 | 내용 | 버전 | 끝난 것 | 남은 것 |
+|---|---|---|---|---|
+| CBRD-28031 | 읽기 힌트 (ADR 0055) | 11.5 예상 | 구현, 파라미터 삭제(항상 동작), JIRA 본문과 design.md, test.md | 힌트만 든 브랜치의 빌드와 게이트, 페이지가 버퍼에 다 있을 때의 비용 확인, PR |
+| CBRD-28032 | bitmap heap scan (ADR 0056) | 다음 버전 예상 | 병렬 실행, trace 2단계, 모델 `BitmapScan`과 trace validation | 옵티마이저의 선택, 한 스레드 실행, 접근 명세 분리, SQL 힌트 둘, 플랜 출력, `bitmap_heap_scan` 파라미터 삭제, 기준 값 실측 |
+| CBRD-28033 | 배치 조인 (ADR 0057) | 다음 버전 예상, 도입 검토 중 | 조인 한 단계, 병렬 워커의 첫 조인 단계, 모델 `BatchJoin`과 trace validation(워커 확장은 기록 없음) | 도입 결정, 깊은 단계 연결(`docs/tla/CBRD-28033/BatchChain`), 상관 부질의 조회, semi와 anti 조인, 파라미터 삭제 |
+
+코드의 출발점:
+
+- fork와 로컬 `CBRD-28005-aio` = `5eb88d442` (develop `e30370dc0` 위, 세 가지가 모두 들어 있음, 게이트함).
+- 로컬 `CBRD-28005-aio-rebased` = `b53467cc3` (같은 내용을 develop `38c931e7d` 위로 올림, 빌드와 게이트 안 함).
+- 로컬 `CBRD-28031` = `6d7bb2748` (develop `38c931e7d` + 힌트만, 8개 파일 +222/-1, 빌드와 게이트 안 함).
+- 분할 패치: `.git_ignored_dir/scratch/aio-bench/split/` 의 `H.patch`(힌트), `HB.patch`(힌트 + bitmap), `HJ.patch`(힌트 + 배치 조인), `HBJ.patch`(전부). develop `38c931e7d` 기준 zero-context 패치이고 `git apply --unidiff-zero`로 적용한다. `HBJ`는 `b53467cc3`을 그대로 재현한다. `HJ`에는 bitmap 참조 두 줄이 남아 있어 손으로 빼야 하고, `HB`와 `HJ`는 컴파일해 보지 않았다.
+
+`5eb88d442`의 게이트(optdebug, 컨테이너 CTP): 기본 lane sql 17,760 OK + 3 NOK(develop과 결과가 같은 3건), medium 975. bitmap과 배치 조인을 켠 lane sql 17,725 OK + 38 NOK(그 3건 + trace만 다른 35건), medium 975. core 없음.
+
+이 디렉터리 전체의 `tla-check` 기록 실행과 MAP `## Result` 항목은 아직 하지 않았다(부분 실행 결과만 있다).
+

@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-11-10
-issue: CBRD-28005 (`docs/tla/CBRD-28005/`, 모델 `BitmapScan`, claim C6)
+issue: CBRD-28005 (조사, `docs/tla/CBRD-28005/`, 모델 `BitmapScan`, claim C6), 구현은 CBRD-28032
 ---
 
 # 전체 범위 묶음은 공유 섹터 비트맵 하나에 atomic OR로 표시하고, 상한을 넘으면 페이지 단위로 표시한다
@@ -59,3 +59,17 @@ fork 브랜치 `CBRD-28005-aio`(커밋 `4c4e04f7b`)의 release 빌드, TPC-H SF1
 `docs/tla/CBRD-28005/BitmapScan.tla`. claim C6(반환해야 할 행은 정확히 한 번, 그 밖의 행은 반환하지 않음)을 행 단위와 페이지 단위 두 형태 모두에서 TLC로 검사했고, 귀납 불변식은 Apalache로 검사했다. 구현한 뒤 모델에 페이지 fix(`FixPage`, `ReleasePage`)와 vacuum의 페이지 반납(`FreePage`, `SkipFreedPage`)을 더했다. 디렉터리 전체 실행은 `RESULT: OK`다(128개 구성, 실행 디렉터리 `.git_ignored_dir/scratch/tla/CBRD-28005-20261111-035728-2947084`).
 
 실행 기록 대조(`BitmapScanTrace.tla`, `traces/bitmap/`): 계측한 optdebug 빌드가 기록한 실행 9개를 명세가 받아들이고 변조한 기록 6개를 거부한다. 섹터 목록 밖 OID 버림, 표시한 뒤 보이지 않는 행, vacuum이 지운 행, 스캔 도중 반납된 페이지(행 단위와 페이지 단위)가 기록에 들어 있다. 이 넷은 리프의 가시성 확인을 끄는 주입으로 만들었다. 스캔 도중 스냅샷이 실제로 바뀌는 실행(저장 프로시저)은 기록하지 않았다. 구성별 결과와 실행 목록은 `docs/tla/CBRD-28005/MAP.md`에 있다.
+
+## 2026-11-11 결정: 누가 고르고 어떻게 보이나 (MAP D42, D43; CBRD-28032)
+
+밖에서 쓰는 이름은 bitmap heap scan이다(JIRA, trace, 플랜 출력). 이 문서의 "전체 범위 묶음"과 같은 것이다.
+
+- **옵티마이저가 고른다.** 실행 계획을 만들 때 정하고(D26: non-covering, 인덱스 순서를 쓰지 않음, LIMIT 등으로 일찍 끝나지 않음, 예상 행 수가 기준 이상), 실행 중에는 바꾸지 않는다. 켜고 끄는 시스템 파라미터는 없다(`bitmap_heap_scan`은 없앤다). 지금 구현은 서버가 스캔을 열 때, 서버가 병렬 인덱스 스캔으로 올린 스캔 안에서 정한다(`input_handler_index::bitmap_init_on_main`). 이것을 계획 시점으로 옮긴다.
+- **워커가 없어도 실행한다.** 옵티마이저는 병렬 여부를 모른다(서버가 실행 때 정한다). 그래서 한 스레드가 두 단계를 그대로 실행하는 경로가 있어야 한다. 기존 인덱스 스캔으로 되돌아가는 길은 만들지 않는다. 이 경로는 아직 없다.
+- **기준 값은 실측으로 정한다.** 한 스레드 경로를 만든 뒤 작은 행 수(0.01%, 0.1%, 1%)에서 양쪽을 잰다. 지금은 60만 행 이상만 재 봤다.
+- **접근 명세를 나눈다.** 힙 명세가 인덱스 명세를 자식으로 갖는다(PostgreSQL의 Bitmap Heap Scan 아래 Bitmap Index Scan). `spec_list`의 형제로 두지 않는다. 형제는 "차례로 각각 스캔한다"(상속 클래스)는 뜻이다. 자식은 지금 하나다.
+- **SQL 힌트 두 개**(강제, 금지)를 둔다. 파라미터가 없으면 작은 테이블의 TC가 이 경로를 탈 방법이 없기 때문이다. 이름은 정하지 않았다.
+- **trace는 두 스캔으로 찍는다**(구현됨, fork `CBRD-28005-aio` `5eb88d442`): 인덱스 스캔 줄 아래에 `SCAN (bitmap heap: <클래스>)` 줄. 인덱스 줄의 시간과 fetch는 힙 단계를 뺀 값이고 lookup 묶음이 없다. JSON은 `"bitmap heap"` 객체다. 예전의 `bitmap: N` 토큰은 없다.
+- **플랜 출력**에는 `INDEX SCAN` 줄 위에 `BITMAP HEAP SCAN (클래스)` 줄을 추가한다.
+- 메모리 상한 `index_scan_oid_bitmap_size`는 그대로 둔다.
+
