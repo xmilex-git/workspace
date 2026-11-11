@@ -200,6 +200,7 @@ for arg in "${dirs[@]}"; do
     [ -n "$expect" ] || { fail "$name: first line must be '\\* expect: pass|violation <Name>|deadlock|liveness|refinement'"; continue; }
     [ -f "$dir/$module.tla" ] || { fail "$name: module $module.tla not found"; continue; }
     tmo="$(sed -n 's/^\\\* timeout: *\([0-9]*\).*/\1/p' "$c" | head -1)"
+    read -r -a topts <<< "$(sed -n 's/^\\\* tlc: *//p' "$c" | head -1)"
     if /usr/bin/grep -q '^ *SYMMETRY' "$c" && /usr/bin/grep -qE '^ *PROPERT(Y|IES)' "$c"; then
       fail "$name: SYMMETRY together with PROPERTY (TLC liveness is unsound under symmetry)"; continue
     fi
@@ -208,7 +209,7 @@ for arg in "${dirs[@]}"; do
     fi
     start=$(date +%s)
     (cd "$dir" && timeout "${tmo:-1800}" "${jrun[@]}" tlc2.TLC -config "$c" -metadir "$run/meta-$name" -cleanup \
-      -noGenerateSpecTE -coverage 60 -workers "$workers" "$module.tla") > "$log" 2>&1
+      -noGenerateSpecTE -coverage 60 -workers "$workers" "${topts[@]}" "$module.tla") > "$log" 2>&1
     rc=$?
     secs=$(( $(date +%s) - start ))
     states="$(sed -n 's/^\([0-9,]*\) states generated, \([0-9,]*\) distinct states found.*/\1\/\2/p' "$log" | tail -1)"

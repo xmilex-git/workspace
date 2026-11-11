@@ -317,6 +317,11 @@ line under "Folded" at the end.
 - Applies at: TRACE.md §1
 - Case (2026-11-10, PR 8198 review): to stop the trace calls assigning an MVCCID, `sed s/logtb_get_current_mvccid/logtb_find_current_mvccid/` ran over `locator_sr.c` and also rewrote two engine lines (`mvccid = logtb_get_current_mvccid (thread_p);` in the index delete path); the instrumented server asserted in `btree_mvcc_delete` (`BTREE_MVCC_INFO_IS_DELID_VALID`) on the next DROP TABLE and the master revived it twice, so three scenarios ran against a dead server. Restored the two lines, checked the diff held additions only, rebuilt, re-recorded every run.
 
+### P80 — a witness-trace cfg prints only the changed variables
+- Rule: A witness-trace cfg carries `\* tlc: -difftrace` (tla-check passes that line's options to TLC) and a `\* timeout:` sized to the run: TLC prints the accepted run as its counterexample, every state in full unless told to print only the changed variables.
+- Applies at: TRACE.md §3; tools/tla/tla-check
+- Case (2026-11-11, CBRD-28031 `ReadAheadTrace.witness-trace-ser1`): the spec consumed all 2,417 events of the serial run, then TLC spent 19 minutes printing the 2,418-state counterexample with the whole state each step and the cfg hit the 1200 s limit with no verdict. `tla-check` had no way to pass a TLC option, so it now reads a `\* tlc:` line; with `-difftrace` and `\* timeout: 3600` every trace cfg of the directory finished (ser1 2728 s on the record run, at window 256).
+
 ## Step 10 — report
 
 ### P45 — verified means run, not written
