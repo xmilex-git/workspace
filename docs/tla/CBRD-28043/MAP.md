@@ -156,8 +156,8 @@ Environment assumptions:
 
 2026-11-12, `tools/tla/tla-check --workers 12 docs/tla/CBRD-28043`: **RESULT: OK** (24 cfgs, all PASS). Run dir
 `.git_ignored_dir/scratch/tla/CBRD-28043-20261112-003513-3789990`, log `.git_ignored_dir/scratch/cbrd28043-impl/tla-record-v2.log`.
-Engine refined: `f7493acdf` (develop `4255a337d` + 1), optdebug libcubrid sha256
-`2ac4c04ba4f97e51a25b2625c812b59d6a019cb53944a0c0081be6130c16f66c`. No trace validation (trace-exempt above).
+Engine refined: `03de9026c` (develop `956e1c19f` + 1; same diff as the checked `f7493acdf`), optdebug libcubrid sha256
+`a7e8b0e711976b1d29fd7e3dfac844055a1928780f1df195ca53e628caf6f61b`. No trace validation (trace-exempt above).
 The D1..D8 model's earlier record run was `CBRD-28043-20261111-184348-2659175` (superseded by D9..D13).
 
 | cfg | Result | States / distinct | Depth |
