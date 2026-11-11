@@ -47,6 +47,7 @@ tools/tla/trace2tla <Module>TraceData OkTrace=<run1.log> [Run2=<run2.log> ...] >
 - `TraceNotDone == i < Len(TraceLog)`.
 - A trace spec builds the values an event leaves open from the event's own fields, never by filtering the spec's whole input set per event: under `-coverage` such a filter advances about one event a minute. (P51)
 - Every trace cfg runs with `CHECK_DEADLOCK FALSE` (`deadlock-off: trace`): a branch of the unlogged nondeterminism that dead-ends is not a deadlock while another branch consumes the run, and the first unconsumed event is read from TLC's depth line. (P53)
+- A trace event the trace spec takes as a stuttering step (`UNCHANGED vars`) is counted against how often the model can take that step, and every outcome of a logged evaluation (skipped too) has its own event: a stutter accepts any number of repeats, so work the code redoes per lookup passes as one step. (P82)
 - A witness-trace cfg carries `\* tlc: -difftrace` (tla-check passes that line's options to TLC) and a `\* timeout:` sized to the run: TLC prints the accepted run as its counterexample, every state in full unless told to print only the changed variables. (P80)
 
 | cfg | Expectation | Meaning |

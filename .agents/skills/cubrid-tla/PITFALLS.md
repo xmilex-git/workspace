@@ -322,6 +322,16 @@ line under "Folded" at the end.
 - Applies at: TRACE.md §3; tools/tla/tla-check
 - Case (2026-11-11, CBRD-28031 `ReadAheadTrace.witness-trace-ser1`): the spec consumed all 2,417 events of the serial run, then TLC spent 19 minutes printing the 2,418-state counterexample with the whole state each step and the cfg hit the 1200 s limit with no verdict. `tla-check` had no way to pass a TLC option, so it now reads a `\* tlc:` line; with `-difftrace` and `\* timeout: 3600` every trace cfg of the directory finished (ser1 2728 s on the record run, at window 256).
 
+### P81 — a forward-only model cursor needs a code field kept on every return
+- Rule: A model variable that only moves forward (a cursor, `ev`) maps to a code field that keeps that position on every return path, the failed search included; a search that leaves no mark when it finds nothing runs again on the next call, which the model never shows.
+- Applies at: SKILL.md step 2
+- Case (2026-11-11, CBRD-28031 PR #8490, found by the Greptile review): `KeyReadAhead`'s `EvalAhead` evaluates key `ev + 1` and `ev` never moves back; keys with no visible OID are evaluated once like any other. The code's `evaluate_ahead` keeps only `m_ahead_slot`, the slot after the last queued key, so when it found no key to queue (only skipped keys before the leaf's or range's end) it left no mark and every later `read_ahead` evaluated those slots again, once per OID looked up. Every claim still held (results, order, errors, counters), so TLC had nothing to reject, and the hot measurement had no parallel key-filter query: T4 cost 1.13G instructions on develop, 3.34G on the PR. The trace showed it: par2 has 8,837 `WEvalStop` events for 8,837 `WLook`, one stop per lookup where the model stops once per leaf, but the trace spec took `WEvalStop` as `UNCHANGED vars`, and a re-evaluated skipped slot logged no event at all (`WEval` only for a queued key). Fix: `m_ahead_end`.
+
+### P82 — count stutter events, log every evaluation outcome
+- Rule: A trace event the trace spec takes as a stuttering step (`UNCHANGED vars`) is counted against how often the model can take that step, and every outcome of a logged evaluation (skipped too) has its own event: a stutter accepts any number of repeats, so work the code redoes per lookup passes as one step.
+- Applies at: TRACE.md §3
+- Case: see P81 (the same run).
+
 ## Step 10 — report
 
 ### P45 — verified means run, not written
