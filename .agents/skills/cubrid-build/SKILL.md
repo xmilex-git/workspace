@@ -94,6 +94,7 @@ The completion marker of a build is the log's last line `installed <mode> (<ws>)
 - [ ] optdebug and release builds green, each in its own `INSTALL_PREFIX` (P1, P2)
 - [ ] fail-before-fix captured on the pre-fix build, then PASS by the same method on the fix build
 - [ ] live run on a CS-mode optdebug server: no assert, no crash, no resource-tracker leak (SA `csql -S` cannot see leaks)
+- [ ] memory check: the smoke rerun on optdebug with `use_system_malloc=yes` (install copy's conf) and `MALLOC_CHECK_=3 MALLOC_PERTURB_=165`, no new crash, abort or result diff (`cubrid-diagnose` P19)
 - [ ] orphan-zero: no temp files left after normal exit, abnormal exit and `kill -9`
 - [ ] containerized CTP per the `ctp-run` skill (sql + medium locally on optdebug; shell on upstream CI)
 - [ ] tree restored (submodules and untracked result dirs untouched), daemons stopped, fingerprint recorded in the proof (P3)
