@@ -13,7 +13,11 @@
 (* deallocated", skips a page that is no longer a heap page of this table, *)
 (* and otherwise returns the rows of the page its snapshot sees.  The scan *)
 (* ends when every worker has ended (the manager's join).  A rewind walks  *)
-(* the same bitmap again with the same decision (D5, D13).                 *)
+(* the same bitmap again with the same decision (D5, D13).  A scan closed  *)
+(* and opened again in the same statement (a correlated subquery) reads    *)
+(* the bitmap the statement kept, and decides again; when a nested         *)
+(* statement has rebuilt the snapshot since, it collects a new bitmap      *)
+(* (D14).                                                                  *)
 (*                                                                         *)
 (* Meanwhile other transactions insert rows (into a page with room or into *)
 (* a newly allocated page: the lowest free page, as file_perm_alloc takes  *)
@@ -31,12 +35,13 @@ EXTENDS Integers, FiniteSets
 CONSTANTS N,          \* pages of the file, in file order 1..N; page 1 is the file header (a file table page)
           MaxRow,     \* row ids 1..MaxRow; rows 1..3 exist at the start
           Cap,        \* rows a heap page holds
-          MaxRewind,  \* rewinds of the scan (inner of a nested loop)
+          MaxRewind,  \* rewinds (inner of a nested loop) and reopens (correlated subquery) of the scan
           MaxErrors,  \* errors or interrupts in a run
           Mutant      \* "none" or one wrong variant below
 
 \* Mutant: "late_snapshot" | "revisit" | "no_release" | "fix_freed" | "assert_heap"
 \*         | "no_visibility" | "rewind_keep_cur" | "no_dedup_assert_heap" | "no_shared_cursor"
+\*         | "reopen_stale_list"
 
 \* apalache-type: N Int
 \* apalache-type: MaxRow Int
@@ -68,6 +73,8 @@ CONSTANTS N,          \* pages of the file, in file order 1..N; page 1 is the fi
 \* apalache-type: skippedForeign Bool
 \* apalache-type: reusedRead Bool
 \* apalache-type: readBy Set(Int)
+\* apalache-type: reusedList Bool
+\* apalache-type: recollected Bool
 
 CInit ==
   /\ N = 5
@@ -100,12 +107,15 @@ VARIABLES ptype,     \* page -> "heap" | "ftab" | "free"
           skippedFreed,   \* ghost: a worker skipped a freed page
           skippedForeign, \* ghost: a worker skipped a page reused as a file table page
           reusedRead,     \* ghost: a worker read a page freed and reallocated after the bitmap
-          readBy          \* ghost: workers that read a page in this run
+          readBy,         \* ghost: workers that read a page in this run
+          reusedList,     \* ghost: a reopen read the bitmap the statement kept
+          recollected     \* ghost: a reopen collected a new bitmap after a rebuilt snapshot
 
 vars == <<ptype, rows, live, nextRow, grown, snapVis, list, ftabSnap, phase, mode, taken, wpc, cur, held, out,
-          aborted, errs, rew, badFix, wasFreed, skippedFreed, skippedForeign, reusedRead, readBy>>
+          aborted, errs, rew, badFix, wasFreed, skippedFreed, skippedForeign, reusedRead, readBy, reusedList,
+          recollected>>
 scanVars == <<snapVis, list, ftabSnap, phase, mode, taken, wpc, cur, held, out, aborted, errs, rew, badFix,
-              wasFreed, skippedFreed, skippedForeign, reusedRead, readBy>>
+              wasFreed, skippedFreed, skippedForeign, reusedRead, readBy, reusedList, recollected>>
 envVars == <<ptype, rows, live, nextRow, grown>>
 
 Pages == 1..N
@@ -150,6 +160,8 @@ Init ==
   /\ skippedForeign = FALSE
   /\ reusedRead = FALSE
   /\ readBy = {}
+  /\ reusedList = FALSE
+  /\ recollected = FALSE
 
 IsLowestFree(p) == ptype[p] = "free" /\ \A q \in Pages : ptype[q] = "free" => p <= q
 
@@ -198,7 +210,7 @@ FreePage(p) ==
   /\ wasFreed' = IF phase \in {"open", "snapped"} THEN wasFreed ELSE wasFreed \cup {p}
   /\ UNCHANGED <<rows, live, nextRow, grown>>
   /\ UNCHANGED <<snapVis, list, ftabSnap, phase, mode, taken, wpc, cur, held, out, aborted, errs, rew, badFix,
-                 skippedFreed, skippedForeign, reusedRead, readBy>>
+                 skippedFreed, skippedForeign, reusedRead, readBy, reusedList, recollected>>
 
 \* the file table grows by one page, taken from the first partial sector (file_manager.c:5025, :6468)
 GrowFtab(p) ==
@@ -222,6 +234,7 @@ TakeSnapshot ==
   /\ snapVis' = live
   /\ UNCHANGED <<list, ftabSnap, mode, taken, wpc, cur, held, out, aborted, errs, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead, readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* file_get_all_data_sectors: the header read latch blocks every alloc and dealloc, so one step
@@ -233,6 +246,7 @@ CollectList ==
   /\ phase' = "dedup"
   /\ UNCHANGED <<snapVis, mode, taken, wpc, cur, held, out, aborted, errs, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead, readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* the file table pages leave the bitmap after the header latch is released (D4)
@@ -242,6 +256,7 @@ Dedup ==
   /\ phase' = IF Mutant = "late_snapshot" THEN "snaplate" ELSE "decide"
   /\ UNCHANGED <<snapVis, ftabSnap, mode, taken, wpc, cur, held, out, aborted, errs, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead, readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* parallel or serial, decided once from the bitmap's page count (any outcome: the count is not modeled)
@@ -253,6 +268,7 @@ Decide ==
   /\ phase' = "walk"
   /\ UNCHANGED <<snapVis, list, ftabSnap, taken, cur, held, out, aborted, errs, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead, readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 (****************************** the walk **********************************)
@@ -276,6 +292,7 @@ Pick(w) ==
                     /\ wpc' = [wpc EXCEPT ![w] = "release"]
   /\ UNCHANGED <<snapVis, list, ftabSnap, phase, mode, held, out, aborted, errs, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead, readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* the held page goes before the next one is fixed (holding a page while waiting deadlocks with vacuum)
@@ -285,6 +302,7 @@ Release(w) ==
   /\ wpc' = [wpc EXCEPT ![w] = "fix"]
   /\ UNCHANGED <<snapVis, list, ftabSnap, phase, mode, taken, cur, out, aborted, errs, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead, readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* pgbuf_ordered_fix (OLD_PAGE_MAYBE_DEALLOCATED): a freed page and a page allocated again as another type
@@ -309,6 +327,7 @@ Fix(w) ==
             /\ UNCHANGED skippedFreed
   /\ UNCHANGED <<snapVis, list, ftabSnap, phase, mode, taken, cur, out, aborted, errs, rew, wasFreed, reusedRead,
                  readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* the rows of the held page the snapshot sees, page latch held: one step
@@ -322,6 +341,7 @@ Read(w) ==
   /\ wpc' = [wpc EXCEPT ![w] = "pick"]
   /\ UNCHANGED <<snapVis, list, ftabSnap, phase, mode, taken, cur, held, aborted, errs, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* the worker ends (the bitmap is done or the scan is stopping): its page goes
@@ -331,6 +351,7 @@ Finish(w) ==
   /\ wpc' = [wpc EXCEPT ![w] = "done"]
   /\ UNCHANGED <<snapVis, list, ftabSnap, phase, mode, taken, cur, out, aborted, errs, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead, readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* an error or an interrupt in a worker; the others stop at their next pick (the parallel interrupt)
@@ -342,6 +363,7 @@ Abort(w) ==
   /\ wpc' = [wpc EXCEPT ![w] = "end"]
   /\ UNCHANGED <<snapVis, list, ftabSnap, phase, mode, taken, cur, held, out, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead, readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* the scan ends when every worker has ended (the manager joins its workers)
@@ -351,6 +373,7 @@ Join ==
   /\ phase' = "done"
   /\ UNCHANGED <<snapVis, list, ftabSnap, mode, taken, wpc, cur, held, out, aborted, errs, rew, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead, readBy>>
+  /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
 \* the scan opened again with the same snapshot walks the same bitmap with the same decision (D5, D13)
@@ -365,6 +388,32 @@ Rewind ==
   /\ phase' = "walk"
   /\ UNCHANGED <<snapVis, list, ftabSnap, mode, held, aborted, errs, badFix, wasFreed,
                  skippedFreed, skippedForeign, reusedRead>>
+  /\ UNCHANGED <<reusedList, recollected>>
+  /\ UNCHANGED envVars
+
+\* the scan closed and opened again in the same statement (a correlated subquery, once per outer row): with the
+\* snapshot it was collected under, the bitmap the statement kept is read again and only the decision is made
+\* anew; when a nested statement rebuilt the snapshot since the bitmap (READ COMMITTED), the open collects a new
+\* one (D14).  The rebuild and the open are one step here: until its bitmap the scan does nothing in between.
+Reopen(rebuilt) ==
+  /\ phase = "done" /\ ~aborted /\ rew < MaxRewind
+  /\ rew' = rew + 1
+  /\ snapVis' = IF rebuilt THEN live ELSE snapVis
+  /\ IF rebuilt /\ Mutant # "reopen_stale_list"
+     THEN /\ phase' = "snapped"
+          /\ list' = {} /\ ftabSnap' = {} /\ wasFreed' = {}
+          /\ recollected' = TRUE
+          /\ UNCHANGED reusedList
+     ELSE /\ phase' = "decide"
+          /\ reusedList' = TRUE
+          /\ UNCHANGED <<list, ftabSnap, wasFreed, recollected>>
+  /\ mode' = "none"
+  /\ taken' = 0
+  /\ cur' = [w \in W |-> 0]
+  /\ wpc' = [w \in W |-> "idle"]
+  /\ out' = [r \in Rows |-> 0]
+  /\ readBy' = {}
+  /\ UNCHANGED <<held, aborted, errs, badFix, skippedFreed, skippedForeign, reusedRead>>
   /\ UNCHANGED envVars
 
 ScanStep ==
@@ -374,7 +423,7 @@ ScanStep ==
 \* nothing left to do (the environment's budget is spent): stutter instead of a false deadlock
 Idle == phase = "done" /\ UNCHANGED vars
 
-Next == Env \/ ScanStep \/ (\E w \in W : Abort(w)) \/ Rewind \/ Idle
+Next == Env \/ ScanStep \/ (\E w \in W : Abort(w)) \/ Rewind \/ (\E b \in BOOLEAN : Reopen(b)) \/ Idle
 
 Spec == Init /\ [][Next]_vars /\ WF_vars(ScanStep)
 
@@ -407,6 +456,8 @@ TypeOK ==
   /\ skippedForeign \in BOOLEAN
   /\ reusedRead \in BOOLEAN
   /\ readBy \in SUBSET W
+  /\ reusedList \in BOOLEAN
+  /\ recollected \in BOOLEAN
 
 \* C1: nothing the snapshot does not see is returned ...
 NoExtraRow == \A r \in Rows : out[r] > 0 => r \in snapVis
@@ -434,6 +485,9 @@ NotDeletedAfterSnapReturned == ~(\E r \in snapVis : r \notin live /\ out[r] = 1 
 \* a row inserted before the snapshot into a page allocated before the bitmap is returned
 NotNewPageRowReturned == ~(\E r \in snapVis : r >= 4 /\ out[r] = 1 /\ ~(r \in rows[2] \/ r \in rows[5]))
 NotAborted == ~(phase = "done" /\ aborted)
+\* a reopened scan that read the kept bitmap ends; one that collected a new bitmap ends
+NotReopenReusedFinished == ~(phase = "done" /\ ~aborted /\ reusedList /\ ~recollected)
+NotRecollectedFinished == ~(phase = "done" /\ ~aborted /\ recollected)
 
 (************************** inductive invariant ***************************)
 
@@ -451,10 +505,11 @@ RowsWellFormed ==
 \* the open's phases and what each allows
 OpenShape ==
   /\ phase \in {"open", "snapped", "dedup", "decide"} =>
-       (/\ mode = "none" /\ taken = 0 /\ ~aborted /\ errs = 0 /\ rew = 0 /\ readBy = {}
+       (/\ mode = "none" /\ taken = 0 /\ ~aborted /\ errs = 0 /\ readBy = {}
         /\ \A w \in W : wpc[w] = "idle" /\ cur[w] = 0 /\ held[w] = 0)
   /\ phase \in {"open", "snapped"} => (list = {} /\ ftabSnap = {} /\ wasFreed = {})
-  /\ phase = "open" => snapVis = {}
+  /\ phase = "open" => (snapVis = {} /\ rew = 0)
+  /\ (reusedList \/ recollected) => rew >= 1
   /\ phase = "dedup" => (1 \in ftabSnap /\ ftabSnap \subseteq list)
   /\ phase = "snaplate" => FALSE
   /\ phase \in {"decide", "walk", "done"} => (list \cap ftabSnap = {} /\ 1 \in ftabSnap)
@@ -462,7 +517,7 @@ OpenShape ==
   /\ ftabSnap \subseteq {p \in Pages : ptype[p] = "ftab"}
   /\ \A r \in Rows : out[r] > 0 => phase \in {"walk", "done"}
   /\ ~badFix
-  /\ aborted => errs >= 1
+  /\ aborted <=> errs >= 1
 
 \* the workers
 WalkShape ==
