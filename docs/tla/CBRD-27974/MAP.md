@@ -9,7 +9,7 @@ SA, `use_system_malloc=yes` + `MALLOC_PERTURB_=165`: 2,000 keys OK, 2,001 keys S
 `qexec_gby_merge_partials` `query_executor.c:6692` (`s->value->accumulators`); default conf on the same
 build returns the right answer (`.git_ignored_dir/scratch/cbrd27974/run.sh`, `gdb.out`).
 
-trace-exempt: design spec before the fix is written; the fix is checked by the runtime repro (fail before, pass after, same method), and its implementation spec, if one is written, refines this one (cubrid-tla step 9).
+trace-exempt: this directory is the abstract spec of the fix direction (grilled 2026-11-12). The implementation, PR #8477 commit `132273ae6`, is checked by the runtime repro of the same method (sysmalloc + `MALLOC_PERTURB_=165`, 2,001 keys: SIGSEGV before, right answer after); no implementation spec is written: the loop runs on one thread, so a recorded run has no interleaving for the trace to tell apart (user decision, 2026-11-12).
 
 ## Claim and sources
 
@@ -17,6 +17,15 @@ trace-exempt: design spec before the fix is written; the fix is checked by the r
 |---|---|---|
 | C1 | The partial-entry fold never reads a group through a slot of a slot array the merge table has already freed. | CBRD-27974 Actual Result (`p *s` = 0xa5 fill, `s - t->slots` out of range); C (a read after `free` is undefined) |
 | C2 | A finished fold of a partition holds one group per key of its rows and partial entries, each aggregating every row and every partial entry of that key once. | CBRD-27974 Expected Result (2,001 rows, `COUNT(*)` 1 each); `qexec_gby_merge_partials` comment ("an entry whose key has no group yet makes one"); CBRD-27802 / ADR 0034 |
+
+## Decisions (grill-with-tla, 2026-11-12)
+
+| # | Decision | Settled in the spec | Struck options |
+|---|---|---|---|
+| D1 | After an add, the fold reads the group through the value `qexec_gby_mtable_add` returns (`added`, carved from the table's arena, never moved by a grow); an existing group is read through `s->value`. Same as `qexec_gby_merge_rows`. | `Fix = "added"` in `MergePartials.cfg` (PASS); `mutant-develop` violates `NoStaleSlotRead` | refind (`qexec_gby_mtable_find` again after the add): passes C1 and C2 (`fix-refind`, comparison cfg), not chosen: a second probe and a shape the row path does not use |
+| D2 | No cost claim (one probe per partial entry) is added: the ticket promises no cost, and the choice of D1 rests on matching the row path; serial L1 measured instructions:u ratio 1.0001. | no claim row | C3 "one probe per entry" (would have struck refind by TLC) |
+| D3 | The fix stays in the caller; `qexec_gby_mtable_add`'s contract (the slot `s` it takes is invalid once it returns) is unchanged and gets no new comment. Both callers (`qexec_gby_merge_rows`, `qexec_gby_merge_partials`) read only the returned value after an add; `qexec_gby_mtable_grow` has the one caller `qexec_gby_mtable_add`; the other loops over `t->slots` add no group. | refinement map, Callers paragraph | an API that takes no slot pointer; a contract comment on the function |
+| D4 | Trace validation is not done; the directory stays the abstract spec (trace-exempt line above). | trace-exempt line | an instrumented build of `132273ae6` with recorded runs |
 
 ## Refinement map (model -> code)
 
@@ -103,3 +112,4 @@ Main N = 3 entries, NK = 2 keys; scale N = 4, NK = 3. Apalache checks IndInv ind
 - TLAPS 요청 없음. Trace validation: trace-exempt (above).
 - spec sha256 `38ff532d3cb6539c6da18450103ac65eccc6672a8d0110343bed7538ae12d4cb  MergePartials.tla`.
 - Runtime: develop optdebug `37182deba` SA, sysmalloc + `MALLOC_PERTURB_=165`: 2,001 keys SIGSEGV at `query_executor.c:6692`, 2,000 keys OK; default conf OK on both.
+- 2026-11-12, after the grill (decisions D1–D4 recorded, spec unchanged): `tools/tla/tla-check docs/tla/CBRD-27974` → `RESULT: OK`, run dir `.git_ignored_dir/scratch/tla/CBRD-27974-20261112-114218-908929`; same states, depths and sha256 as above.
