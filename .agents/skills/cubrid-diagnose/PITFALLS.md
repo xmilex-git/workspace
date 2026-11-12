@@ -150,6 +150,18 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-11-09, lazy-snapshot H2): 47699 deleted rows spread at 59 rows per page (compressed `CHAR(1200)`) left 0 pages deallocated though vacuum removed the rows; with string compression off and one 3000-byte row per page, deleting one row per sector deallocated all 187 pages. A 40 s delay after `scan_open_parallel_heap_scan` held nothing: the worker `Fix` events came right after `Collect`; the delay at the worker's first `get_next_vpid_with_fix` held them.
 - Source: session 2026-11-09 (lazy-snapshot)
 
+### P23 — find who clears another thread's structure with an owner field
+- Rule: A crash in which one thread's list, page or value is destroyed while another thread still uses it is located with an instrumented build of the same sha, not from the core alone: give the structure a debug field naming the thread that uses it (set on entry, restored on exit), abort with `er_print_callstack` where a different thread clears it, and read the clearing thread's stack from that core; before writing the fix, read `git log origin/develop` for the function, since a fix may have merged while you diagnosed.
+- Applies at: Instrumenting
+- Case (2026-11-12, CBRD-28044): one UNION ALL with two correlated subqueries per arm crashed three ways (main-thread `mspace_free` at the end, a worker's tuple-layout assert, a temp file freed twice). The cores showed the worker's dptr `list_id` already emptied while it wrote a tuple, but not by whom; a walk of the XASL tree from the root found no shared node. An instrumented build (`XASL_NODE::dbg_exec_thread` set in `qexec_execute_mainblock`, an abort in `qexec_clear_xasl_head` for another thread) aborted on every 50-statement run at the main thread's `qexec_intprt_fnc → qexec_clear_all_lists`, which followed the job block's `next` into the sibling arm. The same fix had merged to develop that afternoon as CBRD-27959 (`bb3ccce3f`), found only at the pre-commit fetch.
+- Source: session 2026-11-12 (CBRD-28044)
+
+### P24 — fault injection into an inlined release function
+- Rule: A release-build gdb fault injection cannot `return` from an inlined function, and a `commands` block ignores everything after `finish`: set a convenience flag at the inlined function's breakpoint and make its first out-of-line callee fail (`break pgbuf_fix_release if $flag == 1` with `return (PAGE_PTR) 0`), then trace the frees that follow with a conditional breakpoint on `db_private_free_release`.
+- Applies at: Instrumenting
+- Case (2026-11-12, CBRD-28044): forcing `file_tracker_unregister` to fail inside `file_destroy` on a release `csql -S` DROP TABLE: `return (int) -1` failed with "Can not force return from an inlined function", `finish` + `set var error_code` never ran, and a line breakpoint on the check after the call never hit; a flag at the inline breakpoint plus `return (PAGE_PTR) 0` from `pgbuf_fix_release` worked, and the `db_private_free_release` trace showed the exit freeing the transaction's `LOG_TDES` (`0x55555579fa38`, read later by `logtb_clear_tdes`).
+- Source: session 2026-11-12 (CBRD-28044)
+
 ## Reporting a triage
 
 ### P16 — the triage report
