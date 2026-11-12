@@ -7,7 +7,7 @@
    run; the window's decision (Check) and the move to the next key (NextKey) are not logged and deterministic. *)
 EXTENDS KeyReadAhead, KeyReadAheadTraceData, Sequences
 
-CONSTANTS TraceLog, TraceNOid, TraceBase, TraceRej, TraceErrKey, TraceCov
+CONSTANTS TraceLog, TraceNOid, TraceBase, TraceRej, TraceErrKey, TraceCov, TraceDist0
 VARIABLE i
 TVars == <<vars, i>>
 
@@ -40,6 +40,10 @@ TInit ==
   /\ errOk = TRUE
   /\ endOk = TRUE
   /\ lastPos = -1
+  \* the distance the worker's scan reached on the leaves before this one (WLeaf); their lookups are not in the
+  \* segment: any number that allows the distance
+  /\ dist = TraceDist0
+  /\ look0 = 2 * D
   /\ i = 0
 
 Ev == TraceLog[i + 1]
@@ -66,7 +70,7 @@ Logged ==
            ELSE aend' /\ errAhead' = (Ev.res = "ERR")
      \/ /\ Ev.a = "WWin"
         /\ WindowDone
-        /\ Ev.pos = Min(EvalEnd, Pos(ck, co) + D) - Pos(ck, co)
+        /\ Ev.pos = Min(EvalEnd, Pos(ck, co) + ND) - Pos(ck, co)
      \/ Ev.a = "WEnded" /\ phase = "look" /\ aend /\ UNCHANGED vars
      \/ Ev.a = "WNoWin" /\ phase = "look" /\ ~aend /\ ~cov /\ UNCHANGED vars
      \/ Ev.a = "WLook" /\ Look

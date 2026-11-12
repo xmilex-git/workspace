@@ -3,7 +3,7 @@
 #        convert.py worker <log> <Name> <k> <need> [corrupt]  the k-th smallest worker segment (one walker on one leaf, no
 #                                                          overflow page) with <need>: pop | resume | err | cov
 # corrupt: swap-look | drop-check | flip-fired | foreign-hint | pos-off (worker) | drop-eval (worker) | skip-off (worker)
-# Writes a TLA+ data module: serial -> TraceLog, Pg (pages of each buffer); worker -> TraceLog, NOid, Base, Rej, ErrKey, Cov.
+# Writes a TLA+ data module: serial -> TraceLog, Pg (pages of each buffer); worker -> TraceLog, NOid, Base, Rej, ErrKey, Cov, Cap, Dist0.
 import re, sys
 
 def events(path):
@@ -95,6 +95,8 @@ def worker(ev, k, corrupt, need):
     good.sort(key=lambda g: len(segs[g]))
     seg = [dict(e) for e in segs[good[k]]]
     cov = int(seg[0]["cov"])
+    cap = int(seg[0].get("cap", "1000000"))
+    dist0 = int(seg[0].get("dist", "0"))
     seg = seg[1:]
     if corrupt == "pos-off":
         j = [x for x, e in enumerate(seg) if e["a"] == "WWin"][0]
@@ -132,7 +134,7 @@ def worker(ev, k, corrupt, need):
         log.append("[a |-> \"%s\", ahead |-> %s, res |-> \"%s\", rk |-> %s, n |-> %s, pos |-> %s, sk |-> %s]"
                    % (e["a"], e.get("ahead", "0"), e.get("res", ""), e.get("rk", "0"), e.get("n", "0"),
                       e.get("pos", "0"), e.get("skipped", "0")))
-    return log, noid, rej, err, cov, len(good)
+    return log, noid, rej, err, cov, cap, dist0, len(good)
 
 # usage (operators, appended to stdout): convert.py serial <log> <Name> [corrupt] | worker <log> <Name> <k> <need> [corrupt]
 mode, path, name = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -146,12 +148,12 @@ if mode == "serial":
     w("%sNB == %d\n%sMaxN == %d\n%sNP == %d\n" % (name, len(pg), name, maxn, name, maxp))
     sys.stderr.write("%s events=%d buffers=%d maxn=%d maxpage=%d\n" % (name, len(log), len(pg), maxn, maxp))
 else:
-    log, noid, rej, err, cov, ngood = worker(ev, int(sys.argv[4]), sys.argv[6] if len(sys.argv) > 6 else "", sys.argv[5])
+    log, noid, rej, err, cov, cap, dist0, ngood = worker(ev, int(sys.argv[4]), sys.argv[6] if len(sys.argv) > 6 else "", sys.argv[5])
     w("%sLog == <<\n  " % name + ",\n  ".join(log) + "\n>>\n")
     base = [0]
     for n in noid:
         base.append(base[-1] + n)
     w("%sNOid == <<" % name + ", ".join(map(str, noid)) + ">>\n%sNK == %d\n%sMaxO == %d\n" % (name, len(noid), name, max(noid) if noid else 0))
     w("%sBase == <<" % name + ", ".join(map(str, base)) + ">>\n")
-    w("%sRej == {" % name + ", ".join(map(str, rej)) + "}\n%sErrKey == %d\n%sCov == %s\n" % (name, err, name, "TRUE" if cov else "FALSE"))
+    w("%sRej == {" % name + ", ".join(map(str, rej)) + "}\n%sErrKey == %d\n%sCov == %s\n%sCap == %d\n%sDist0 == %d\n" % (name, err, name, "TRUE" if cov else "FALSE", name, cap, name, dist0))
     sys.stderr.write("%s events=%d keys=%d rejected=%d errkey=%d cov=%d maxo=%d segments=%d\n" % (name, len(log), len(noid), len(rej), err, cov, max(noid) if noid else 0, ngood))

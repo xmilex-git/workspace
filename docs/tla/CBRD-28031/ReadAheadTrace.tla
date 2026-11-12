@@ -21,12 +21,14 @@ TInit ==
   /\ lookedIn = [k \in 1..NB |-> 0]
   /\ orderOk = TRUE
   /\ boundsOk = TRUE
+  /\ dist = 0
+  /\ toldEnd = [k \in 1..NB |-> 0]
   /\ i = 0
 
 Ev == TraceLog[i + 1]
 
 WinStart == Max(next, curr)
-WinStop == Min(N, curr + D)
+WinStop == Min(N, curr + NextDist)
 WinPages == {page[b][j] : j \in {x \in Pos : WinStart <= x /\ x < WinStop}}
 
 Logged ==
@@ -53,7 +55,10 @@ Logged ==
         /\ page[b][curr] = Ev.pg
         /\ Look
 
-TSpec == TInit /\ [][Logged]_TVars
+\* not logged: the scan stopping before a buffer's end (the next event is the next buffer's Fill)
+Hidden == StopEarly /\ UNCHANGED i
+
+TSpec == TInit /\ [][Logged \/ Hidden]_TVars
 
 TraceNotDone == i < Len(TraceLog)
 =============================================================================
