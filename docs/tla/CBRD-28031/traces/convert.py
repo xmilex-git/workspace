@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # usage: convert.py serial <log> <out.tla> [corrupt]      one serial index scan (the class with the most Fill events)
-#        convert.py worker <log> <out.tla> <k> [corrupt]  the k-th worker segment (one walker on one leaf) that looked ahead,
-#                                                          with no overflow page and no error
-# corrupt: swap-look | drop-check | flip-fired | foreign-hint | pos-off (worker) | drop-eval (worker)
-# Writes a TLA+ data module: serial -> TraceLog, Pg (pages of each buffer); worker -> TraceLog, NOid, ErrKey.
+#        convert.py worker <log> <Name> <k> <need> [corrupt]  the k-th smallest worker segment (one walker on one leaf, no
+#                                                          overflow page) with <need>: pop | resume | err | cov
+# corrupt: swap-look | drop-check | flip-fired | foreign-hint | pos-off (worker) | drop-eval (worker) | skip-off (worker)
+# Writes a TLA+ data module: serial -> TraceLog, Pg (pages of each buffer); worker -> TraceLog, NOid, Base, Rej, ErrKey, Cov.
 import re, sys
 
 def events(path):
@@ -59,7 +59,8 @@ def serial(ev, corrupt):
     maxp = max(max(x) for x in pg)
     return log, pg, maxn, maxp
 
-def worker(ev, k, corrupt):
+def worker(ev, k, corrupt, need):
+    # segments: one walker on one leaf, from WLeaf to its next WClear
     segs = {}
     order = []
     cur = {}
@@ -69,35 +70,71 @@ def worker(ev, k, corrupt):
         w = e["w"]
         if e["a"] == "WLeaf":
             cur[w] = (w, e["seq"])
-            segs[cur[w]] = []
+            segs[cur[w]] = [e]
             order.append(cur[w])
             continue
         if w in cur:
             segs[cur[w]].append(e)
-            if e["a"] in ("WClear", "WStop"):
+            if e["a"] == "WClear":
                 del cur[w]
-    good = [s for s in order if any(e["a"] == "WEval" and e["ahead"] == "1" for e in segs[s])
-            and not any(e["a"] in ("WOvf", "WStop") and e.get("why") != "end" or e.get("ovfl") == "1" or e.get("why") == "error" for e in segs[s])
-            and segs[s] and segs[s][-1]["a"] in ("WClear", "WStop")
-            and any(e["a"] == "WPop" for e in segs[s])]
+    def ok(s):
+        g = segs[s]
+        if g[-1]["a"] != "WClear" or any(e["a"] == "WOvf" or e.get("ovfl") == "1" for e in g):
+            return False
+        has = lambda a, **kv: any(e["a"] == a and all(e.get(x) == y for x, y in kv.items()) for e in g)
+        if need == "pop":
+            return has("WPop") and g[0]["cov"] == "0"
+        if need == "resume":
+            return any(e["a"] == "WResume" and e["skipped"] != "0" for e in g) and has("WPop")
+        if need == "err":
+            return has("WKey", ahead="1", res="ERR") and has("WKey", ahead="0", res="ERR")
+        if need == "cov":
+            return g[0]["cov"] == "1" and has("WLook")
+        return True
+    good = [s for s in order if ok(s)]
     good.sort(key=lambda g: len(segs[g]))
-    seg = segs[good[k]]
+    seg = [dict(e) for e in segs[good[k]]]
+    cov = int(seg[0]["cov"])
+    seg = seg[1:]
     if corrupt == "pos-off":
         j = [x for x, e in enumerate(seg) if e["a"] == "WWin"][0]
-        seg[j] = dict(seg[j], pos=str(int(seg[j]["pos"]) + 1))
+        seg[j]["pos"] = str(int(seg[j]["pos"]) + 1)
     elif corrupt == "drop-eval":
-        j = [x for x, e in enumerate(seg) if e["a"] == "WEval" and e["ahead"] == "1"][0]
+        j = [x for x, e in enumerate(seg) if e["a"] == "WKey" and e["ahead"] == "1" and e["res"] == "Q"][0]
         del seg[j]
-    noid = [int(e["n"]) for e in seg if e["a"] == "WEval"]
-    if corrupt == "drop-eval":
-        pass
+    elif corrupt == "skip-off":
+        j = [x for x, e in enumerate(seg) if e["a"] == "WResume" and e["skipped"] != "0"][0]
+        seg[j]["skipped"] = str(int(seg[j]["skipped"]) - 1)
+    # the leaf's keys in key order: every key a next_key call read (rk counts them), rejected ones with no OID;
+    # the key an ahead call stopped at (range end, error) is read again by the next lookup call
+    noid, rej, err, pending = [], [], 0, None
+    for e in seg:
+        if e["a"] != "WKey":
+            continue
+        rk, res = int(e["rk"]), e["res"]
+        if e["ahead"] == "0" and pending is not None:
+            assert res == pending, (res, pending)
+            pending = None
+            continue
+        nrej = rk - 1 if res == "Q" or (e["ahead"] == "0" and res in ("ERR", "END")) else rk
+        for _ in range(nrej):
+            noid.append(0)
+            rej.append(len(noid))
+        if res == "Q":
+            noid.append(int(e["n"]))
+        elif res == "ERR":
+            noid.append(0)
+            err = len(noid)
+        if e["ahead"] == "1" and res != "Q":
+            pending = res
     log = []
     for e in seg:
-        a = e["a"]
-        log.append("[a |-> \"%s\", ahead |-> %s, n |-> %s, pos |-> %s, why |-> \"%s\"]" % (a, e.get("ahead", "0"), e.get("n", "0"), e.get("pos", "0"), e.get("why", "")))
-    return log, noid, len(good)
+        log.append("[a |-> \"%s\", ahead |-> %s, res |-> \"%s\", rk |-> %s, n |-> %s, pos |-> %s, sk |-> %s]"
+                   % (e["a"], e.get("ahead", "0"), e.get("res", ""), e.get("rk", "0"), e.get("n", "0"),
+                      e.get("pos", "0"), e.get("skipped", "0")))
+    return log, noid, rej, err, cov, len(good)
 
-# usage (operators, appended to stdout): convert.py serial <log> <Name> [corrupt] | worker <log> <Name> <k> [corrupt]
+# usage (operators, appended to stdout): convert.py serial <log> <Name> [corrupt] | worker <log> <Name> <k> <need> [corrupt]
 mode, path, name = sys.argv[1], sys.argv[2], sys.argv[3]
 ev = events(path)
 w = sys.stdout.write
@@ -109,11 +146,12 @@ if mode == "serial":
     w("%sNB == %d\n%sMaxN == %d\n%sNP == %d\n" % (name, len(pg), name, maxn, name, maxp))
     sys.stderr.write("%s events=%d buffers=%d maxn=%d maxpage=%d\n" % (name, len(log), len(pg), maxn, maxp))
 else:
-    log, noid, ngood = worker(ev, int(sys.argv[4]), sys.argv[5] if len(sys.argv) > 5 else "")
+    log, noid, rej, err, cov, ngood = worker(ev, int(sys.argv[4]), sys.argv[6] if len(sys.argv) > 6 else "", sys.argv[5])
     w("%sLog == <<\n  " % name + ",\n  ".join(log) + "\n>>\n")
     base = [0]
     for n in noid:
         base.append(base[-1] + n)
     w("%sNOid == <<" % name + ", ".join(map(str, noid)) + ">>\n%sNK == %d\n%sMaxO == %d\n" % (name, len(noid), name, max(noid) if noid else 0))
     w("%sBase == <<" % name + ", ".join(map(str, base)) + ">>\n")
-    sys.stderr.write("%s events=%d keys=%d maxo=%d segments=%d\n" % (name, len(log), len(noid), max(noid) if noid else 0, ngood))
+    w("%sRej == {" % name + ", ".join(map(str, rej)) + "}\n%sErrKey == %d\n%sCov == %s\n" % (name, err, name, "TRUE" if cov else "FALSE"))
+    sys.stderr.write("%s events=%d keys=%d rejected=%d errkey=%d cov=%d maxo=%d segments=%d\n" % (name, len(log), len(noid), len(rej), err, cov, max(noid) if noid else 0, ngood))
