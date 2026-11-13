@@ -1,0 +1,7 @@
+nodesc rc=12 Invariant SameAnswer is violated
+unsigned rc=12 Invariant SameAnswer is violated
+offset_noclass rc=12 Invariant SameAnswer is violated
+offset_nodel rc=12 Invariant SameAnswer is violated
+nonleaf_pnt rc=12 Invariant SameAnswer is violated
+pagebounds_image rc=12 Invariant SameAnswer is violated
+guard_conv rc=12 Invariant ImageNeverWithConv is violated

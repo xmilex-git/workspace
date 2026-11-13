@@ -1,0 +1,380 @@
+diff --git a/src/query/parallel/px_scan/px_scan_result_handler.cpp b/src/query/parallel/px_scan/px_scan_result_handler.cpp
+index 43d61f815..8d8efb5e6 100644
+--- a/src/query/parallel/px_scan/px_scan_result_handler.cpp
++++ b/src/query/parallel/px_scan/px_scan_result_handler.cpp
+@@ -46,6 +46,14 @@
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
+ #include "memory_wrapper.hpp"
+ 
++/* TLA+ trace instrumentation (scratch worktree for the PR 8398 review, never committed) */
++extern void tla_trace (const char *a, const void *node, const char *fmt, ...);
++extern thread_local const void *tla_cur_node;
++extern thread_local int tla_spare;
++extern thread_local const void *tla_first_addr;
++extern thread_local const char *tla_first_t;
++extern thread_local bool tla_grew;
++
+ namespace parallel_scan
+ {
+   template <RESULT_TYPE result_type>
+@@ -1340,6 +1348,8 @@ namespace parallel_scan
+ 	      {
+ 		return S_ERROR;
+ 	      }
++	    tla_trace (dir == agg_rehome_dir::BORROW ? "StartPar" : dir == agg_rehome_dir::RESTORE ? "Restore" : "Discard",
++		       orig_agg_p, "addr=%p", db_get_string (orig_agg_p->accumulator.value));
+ 	    return S_SUCCESS;
+ 	  }
+ 	else if constexpr (F == PT_COUNT)
+@@ -1624,6 +1634,7 @@ namespace parallel_scan
+ 		return true;
+ 	      }
+ 	    agg_node->accumulator.curr_cnt = 0;
++	    tla_trace ("WRun", agg_node, "addr=%p", db_get_string (agg_node->accumulator.value));
+ 	    return true;
+ 	  }
+ 	else if constexpr (F == PT_CUME_DIST || F == PT_PERCENT_RANK)
+@@ -1641,6 +1652,10 @@ namespace parallel_scan
+ 	  {
+ 	    /* Non-DISTINCT: curr_cnt init; value/value2 set on first write() row via curr_cnt < 1. */
+ 	    agg_node->accumulator.curr_cnt = 0;
++	    if (F == PT_GROUP_CONCAT)
++	      {
++		tla_trace ("_role", agg_node, "role=w");
++	      }
+ 	    return true;
+ 	  }
+       }
+@@ -2541,11 +2556,16 @@ namespace parallel_scan
+ 	    return;
+ 	  }
+ 	/* GROUP_CONCAT (no ORDER BY): merge partial strings from worker into main */
++	if (cur_agg_p->accumulator.curr_cnt == 0)
++	  {
++	    tla_trace ("WMerge", cur_agg_p, "k=empty addr=%p", db_get_string (orig_agg_p->accumulator.value));
++	  }
+ 	if (cur_agg_p->accumulator.curr_cnt > 0)
+ 	  {
+ 	    HL_HEAPID prev_heap_id = db_change_private_heap (thread_p, 0);
+ 	    if (orig_agg_p->accumulator.curr_cnt > 0)
+ 	      {
++		tla_trace ("WMerge", cur_agg_p, "k=append addr=%p", db_get_string (orig_agg_p->accumulator.value));
+ 		if (qdata_group_concat_value (thread_p, tl_vd, orig_agg_p,
+ 					      cur_agg_p->accumulator.value) != NO_ERROR)
+ 		  {
+@@ -2565,7 +2585,12 @@ namespace parallel_scan
+ 		    m_interrupt_p->set_code (parallel_query::interrupt::interrupt_code::ERROR_INTERRUPTED_FROM_WORKER_THREAD);
+ 		    return;
+ 		  }
++		tla_trace ("WMerge", cur_agg_p, "k=clone addr=%p", db_get_string (orig_agg_p->accumulator.value));
++		orig_agg_p->accumulator.curr_cnt += cur_agg_p->accumulator.curr_cnt;
++		db_change_private_heap (thread_p, prev_heap_id);
++		return;
+ 	      }
++	    tla_trace ("MergeDone", orig_agg_p, "");
+ 	    orig_agg_p->accumulator.curr_cnt += cur_agg_p->accumulator.curr_cnt;
+ 	    db_change_private_heap (thread_p, prev_heap_id);
+ 	  }
+diff --git a/src/query/query_aggregate.cpp b/src/query/query_aggregate.cpp
+index db50552df..9ab45b7ef 100644
+--- a/src/query/query_aggregate.cpp
++++ b/src/query/query_aggregate.cpp
+@@ -53,6 +53,14 @@
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
+ #include "memory_wrapper.hpp"
+ 
++/* TLA+ trace instrumentation (scratch worktree for the PR 8398 review, never committed) */
++extern void tla_trace (const char *a, const void *node, const char *fmt, ...);
++extern thread_local const void *tla_cur_node;
++extern thread_local int tla_spare;
++extern thread_local const void *tla_first_addr;
++extern thread_local const char *tla_first_t;
++extern thread_local bool tla_grew;
++
+ using namespace cubquery;
+ 
+ /* Maximum number of operands an aggregate carries in qdata_evaluate_aggregate_list ().
+@@ -253,6 +261,7 @@ qdata_initialize_aggregate_list (cubthread::entry *thread_p, cubxasl::aggregate_
+       if (agg_p->function == PT_GROUP_CONCAT)
+ 	{
+ 	  agg_p->info.group_concat.capacity = 0;
++	  tla_trace ("OInit", agg_p, "addr=%p", db_get_string (agg_p->accumulator.value));
+ 	}
+       if (db_value_domain_init (agg_p->accumulator.value, DB_VALUE_DOMAIN_TYPE (agg_p->accumulator.value),
+ 				DB_DEFAULT_PRECISION, DB_DEFAULT_SCALE) != NO_ERROR)
+@@ -4176,6 +4185,9 @@ qdata_group_concat_first_value (THREAD_ENTRY *thread_p, const VAL_DESCR *vd, AGG
+     }
+   /* a new group starts a new buffer: a freed buffer's address may come back */
+   agg_p->info.group_concat.capacity = 0;
++  tla_cur_node = agg_p;
++  tla_first_addr = db_get_string (agg_p->accumulator.value);
++  tla_first_t = (agg_type == DB_TYPE_VARCHAR || agg_type == DB_TYPE_VARBIT) ? "var" : "char";
+ 
+   /* concat the first value: CBRD-27583: a value that is not a string casts into the function's domain, which
+    * its accumulator keeps (qdata_concatenate_dbval) */
+@@ -4233,6 +4245,7 @@ qdata_group_concat_value (THREAD_ENTRY *thread_p, const VAL_DESCR *vd, AGGREGATE
+     }
+ 
+   /* add separator if specified (it may be the case for bit string) */
++  tla_cur_node = agg_p;
+   if (!DB_IS_NULL (agg_p->accumulator.value2))
+     {
+       /* the separator is a string, which casts nothing */
+diff --git a/src/query/query_executor.c b/src/query/query_executor.c
+index 735420860..9aea25c79 100644
+--- a/src/query/query_executor.c
++++ b/src/query/query_executor.c
+@@ -109,6 +109,14 @@
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
+ #include "memory_wrapper.hpp"
+ 
++/* TLA+ trace instrumentation (scratch worktree for the PR 8398 review, never committed) */
++extern void tla_trace (const char *a, const void *node, const char *fmt, ...);
++extern thread_local const void *tla_cur_node;
++extern thread_local int tla_spare;
++extern thread_local const void *tla_first_addr;
++extern thread_local const char *tla_first_t;
++extern thread_local bool tla_grew;
++
+ #define GOTO_EXIT_ON_ERROR \
+   do \
+     { \
+@@ -154,6 +162,9 @@
+ 	{ \
+ 	  if (agg_ptr->function == PT_GROUPBY_NUM) \
+ 	    continue; \
++	  if (agg_ptr->function == PT_GROUP_CONCAT && db_get_string (agg_ptr->accumulator.value) != NULL \
++	      && agg_ptr->accumulator.value->need_clear) \
++	    tla_trace ("Clear", agg_ptr, "addr=%p", db_get_string (agg_ptr->accumulator.value)); \
+ 	  pr_clear_value (agg_ptr->accumulator.value); \
+ 	} \
+     } \
+@@ -2466,6 +2477,9 @@ qexec_clear_agg_list (THREAD_ENTRY * thread_p, XASL_NODE * xasl_p, AGGREGATE_TYP
+ 	  if (p->accumulator.clear_value_at_clone_decache)
+ 	    {
+ 	      /* clear the value since we decache the XASL clone. */
++	      if (p->function == PT_GROUP_CONCAT && db_get_string (p->accumulator.value) != NULL
++		  && p->accumulator.value->need_clear)
++		tla_trace ("Clear", p, "addr=%p", db_get_string (p->accumulator.value));
+ 	      pr_clear_value (p->accumulator.value);
+ 	    }
+ 
+@@ -2479,6 +2493,9 @@ qexec_clear_agg_list (THREAD_ENTRY * thread_p, XASL_NODE * xasl_p, AGGREGATE_TYP
+ 	{
+ 	  if (!p->accumulator.clear_value_at_clone_decache)
+ 	    {
++	      if (p->function == PT_GROUP_CONCAT && db_get_string (p->accumulator.value) != NULL
++		  && p->accumulator.value->need_clear)
++		tla_trace ("Clear", p, "addr=%p", db_get_string (p->accumulator.value));
+ 	      pr_clear_value (p->accumulator.value);
+ 	    }
+ 
+@@ -27071,6 +27088,13 @@ qexec_gby_finalize_group (THREAD_ENTRY * thread_p, GROUPBY_STATE * gbstate, int
+ 	    {
+ 	      if (d_aggp->accumulator.value != NULL && g_outp->accumulator.value != NULL)
+ 		{
++		  if (g_outp->function == PT_GROUP_CONCAT)
++		    {
++		      tla_trace ("_role", g_outp, "role=gout");
++		      if (db_get_string (g_outp->accumulator.value) != NULL && g_outp->accumulator.value->need_clear)
++			tla_trace ("Clear", g_outp, "addr=%p", db_get_string (g_outp->accumulator.value));
++		      tla_trace ("OEnd", d_aggp, "k=moveout addr=%p", db_get_string (d_aggp->accumulator.value));
++		    }
+ 		  pr_clear_value (g_outp->accumulator.value);
+ 		  *g_outp->accumulator.value = *d_aggp->accumulator.value;
+ 		  /* Don't use db_make_null here to preserve the type information. */
+diff --git a/src/query/query_opfunc.c b/src/query/query_opfunc.c
+index f349db1db..223c1af1e 100644
+--- a/src/query/query_opfunc.c
++++ b/src/query/query_opfunc.c
+@@ -68,6 +68,14 @@
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
+ #include "memory_wrapper.hpp"
+ 
++/* TLA+ trace instrumentation (scratch worktree for the PR 8398 review, never committed) */
++extern void tla_trace (const char *a, const void *node, const char *fmt, ...);
++extern thread_local const void *tla_cur_node;
++extern thread_local int tla_spare;
++extern thread_local const void *tla_first_addr;
++extern thread_local const char *tla_first_t;
++extern thread_local bool tla_grew;
++
+ #define NOT_NULL_VALUE(a, b)	((a) ? (a) : (b))
+ #define INITIAL_OID_STACK_SIZE  1
+ 
+@@ -2786,9 +2794,16 @@ qdata_concatenate_dbval (THREAD_ENTRY * thread_p, DB_VALUE * dbval1_p, DB_VALUE
+       assert (!(TP_IS_CHAR_TYPE (type1) && TP_IS_CHAR_TYPE (type2))
+ 	      || db_get_string_collation (dbval1_p) == db_get_string_collation (dbval2_p));
+       val_size = db_get_string_size (dbval2_p);
++      tla_trace ("RowStart", tla_cur_node, "v=%d first=%d addr=%p t=%s", val_size, tla_first_addr != NULL,
++		 tla_first_addr, tla_first_t != NULL ? tla_first_t : "var");
++      tla_first_addr = NULL;
++      tla_first_t = NULL;
++      tla_spare = 0;
+       if (res_size >= max_allowed_size)
+ 	{
+ 	  assert (warning_size_exceeded == false);
++	  tla_trace ("AppendCall", tla_cur_node, "r=none addr=%p cap=%d size=%d sp=0", db_get_string (dbval1_p),
++		     *capacity_p, res_size);
+ 	  break;
+ 	}
+       else if (res_size + val_size > max_allowed_size)
+@@ -2800,6 +2815,7 @@ qdata_concatenate_dbval (THREAD_ENTRY * thread_p, DB_VALUE * dbval1_p, DB_VALUE
+ 	      break;
+ 	    }
+ 
++	  tla_spare = spare_bytes;
+ 	  error = qdata_append_chars_to_dbval (dbval1_p, &db_temp, spare_bytes, capacity_p, max_allowed_size);
+ 	}
+       else
+@@ -2833,10 +2849,17 @@ qdata_concatenate_dbval (THREAD_ENTRY * thread_p, DB_VALUE * dbval1_p, DB_VALUE
+ 	if (err_dom == DOMAIN_COMPATIBLE)
+ 	  {
+ 	    val_size = db_get_string_size (&arg_val);
++	    tla_trace ("RowStart", tla_cur_node, "v=%d first=%d addr=%p t=%s", val_size, tla_first_addr != NULL,
++		       tla_first_addr, tla_first_t != NULL ? tla_first_t : "var");
++	    tla_first_addr = NULL;
++	    tla_first_t = NULL;
++	    tla_spare = 0;
+ 
+ 	    if (res_size >= max_allowed_size)
+ 	      {
+ 		assert (warning_size_exceeded == false);
++		tla_trace ("AppendCall", tla_cur_node, "r=none addr=%p cap=%d size=%d sp=0", db_get_string (dbval1_p),
++			   *capacity_p, res_size);
+ 		break;
+ 	      }
+ 	    else if (res_size + val_size > max_allowed_size)
+@@ -2847,6 +2870,7 @@ qdata_concatenate_dbval (THREAD_ENTRY * thread_p, DB_VALUE * dbval1_p, DB_VALUE
+ 		  {
+ 		    break;
+ 		  }
++		tla_spare = spare_bytes;
+ 
+ 		error = qdata_append_chars_to_dbval (dbval1_p, &db_temp, spare_bytes, capacity_p, max_allowed_size);
+ 	      }
+diff --git a/src/query/string_opfunc.c b/src/query/string_opfunc.c
+index 843b42c95..17b00b707 100644
+--- a/src/query/string_opfunc.c
++++ b/src/query/string_opfunc.c
+@@ -150,6 +150,46 @@
+ // XXX: SHOULD BE THE LAST INCLUDE HEADER
+ #include "memory_wrapper.hpp"
+ 
++/* TLA+ trace instrumentation (scratch worktree for the PR 8398 review, never committed) */
++#include <atomic>
++#include <cstdarg>
++#include <pthread.h>
++static std::atomic<unsigned long long> tla_seq (0);
++static FILE *tla_fp = NULL;
++static bool tla_init_done = false;
++static pthread_mutex_t tla_mtx = PTHREAD_MUTEX_INITIALIZER;
++thread_local const void *tla_cur_node = NULL;
++thread_local int tla_spare = 0;
++thread_local const void *tla_first_addr = NULL;
++thread_local const char *tla_first_t = NULL;
++thread_local bool tla_grew = false;
++
++void
++tla_trace (const char *a, const void *node, const char *fmt, ...)
++{
++  va_list ap;
++  pthread_mutex_lock (&tla_mtx);
++  if (!tla_init_done)
++    {
++      const char *path = getenv ("CUBRID_TLATRACE_FILE");
++      tla_init_done = true;
++      if (path != NULL)
++	{
++	  tla_fp = fopen (path, "a");
++	}
++    }
++  if (tla_fp != NULL)
++    {
++      fprintf (tla_fp, "TLATRACE seq=%llu a=%s p=%p ", (unsigned long long) ++tla_seq, a, node);
++      va_start (ap, fmt);
++      vfprintf (tla_fp, fmt, ap);
++      va_end (ap);
++      fputc ('\n', tla_fp);
++      fflush (tla_fp);
++    }
++  pthread_mutex_unlock (&tla_mtx);
++}
++
+ #if defined (SUPPRESS_STRLEN_WARNING)
+ #define strlen(s1)  ((int) strlen(s1))
+ #endif /* defined (SUPPRESS_STRLEN_WARNING) */
+@@ -1337,6 +1377,7 @@ qstr_reserve (DB_VALUE * value, int *capacity, int needed, size_t limit)
+     }
+ 
+   (void) pr_clear_value (value);
++  tla_grew = true;
+   qstr_make_typed_string (type, value, precision, buf, size_unit, codeset, collation);
+   value->data.ch.medium.length = length;
+   /* oracle_style_empty_string makes an empty string NULL; the accumulator is not */
+@@ -1369,10 +1410,13 @@ db_string_append (DB_VALUE * string1, const DB_VALUE * string2, int *capacity, i
+   int size;
+ 
+   assert (!DB_IS_NULL (string1));
++  tla_grew = false;
+ 
+   if (DB_IS_NULL (string2))
+     {
+       /* oracle_style_empty_string makes an empty string NULL, which db_string_concatenate adds as nothing */
++      tla_trace ("AppendCall", tla_cur_node, "r=nullv addr=%p cap=%d size=%d sp=%d", db_get_string (string1),
++		 *capacity, db_get_string_size (string1), tla_spare);
+       return NO_ERROR;
+     }
+ 
+@@ -1393,6 +1437,8 @@ db_string_append (DB_VALUE * string1, const DB_VALUE * string2, int *capacity, i
+       pr_clear_value (string1);
+       *string1 = result;
+       *capacity = 0;
++      tla_trace ("AppendCall", tla_cur_node, "r=replace addr=%p cap=%d size=%d sp=%d", db_get_string (string1),
++		 *capacity, db_get_string_size (string1), tla_spare);
+       return NO_ERROR;
+     }
+ 
+@@ -1432,6 +1478,8 @@ db_string_append (DB_VALUE * string1, const DB_VALUE * string2, int *capacity, i
+       string1->domain.char_info.length =
+ 	(precision1 == TP_FLOATING_PRECISION_VALUE || precision2 == TP_FLOATING_PRECISION_VALUE)
+ 	? TP_FLOATING_PRECISION_VALUE : MIN (DB_MAX_BIT_LENGTH, precision1 + precision2);
++      tla_trace ("AppendCall", tla_cur_node, "r=%s addr=%p cap=%d size=%d sp=%d", tla_grew ? "grow" : "inplace",
++		 db_get_string (string1), *capacity, db_get_string_size (string1), tla_spare);
+       return NO_ERROR;
+     }
+   else
+@@ -1477,6 +1525,7 @@ db_string_append (DB_VALUE * string1, const DB_VALUE * string2, int *capacity, i
+ 	      db_make_null (&temp);
+ 	      *capacity = 0;
+ 	      precision1 = DB_VALUE_PRECISION (string1);
++	      tla_trace ("Coerce", tla_cur_node, "addr=%p", db_get_string (string1));
+ 	    }
+ 	  else
+ 	    {
+@@ -1540,6 +1589,8 @@ db_string_append (DB_VALUE * string1, const DB_VALUE * string2, int *capacity, i
+ 	(precision1 == TP_FLOATING_PRECISION_VALUE || precision2 == TP_FLOATING_PRECISION_VALUE)
+ 	? TP_FLOATING_PRECISION_VALUE : MIN (DB_MAX_VARCHAR_PRECISION, precision1 + precision2);
+       db_string_put_cs_and_collation (string1, codeset, common_coll);
++      tla_trace ("AppendCall", tla_cur_node, "r=%s addr=%p cap=%d size=%d sp=%d", tla_grew ? "grow" : "inplace",
++		 db_get_string (string1), *capacity, db_get_string_size (string1), tla_spare);
+       return NO_ERROR;
+     }
+ 
+@@ -1564,6 +1615,7 @@ db_string_append_zero_bytes (DB_VALUE * string, int bytes, int *capacity, int ma
+ 
+   assert (DB_VALUE_DOMAIN_TYPE (string) == DB_TYPE_VARCHAR && bytes > 0);
+ 
++  tla_grew = false;
+   error_status = qstr_reserve (string, capacity, size + bytes + 1, (size_t) max_size + 1);
+   if (error_status != NO_ERROR)
+     {
+@@ -1572,6 +1624,8 @@ db_string_append_zero_bytes (DB_VALUE * string, int bytes, int *capacity, int ma
+   memset ((char *) db_get_string (string) + size, 0, bytes + 1);
+   string->data.ch.medium.size = size + bytes;
+   string->data.ch.medium.length = -1;
++  tla_trace ("ZeroAppend", tla_cur_node, "r=%s addr=%p cap=%d size=%d", tla_grew ? "grow" : "inplace",
++	     db_get_string (string), *capacity, db_get_string_size (string));
+ 
+   return NO_ERROR;
+ }

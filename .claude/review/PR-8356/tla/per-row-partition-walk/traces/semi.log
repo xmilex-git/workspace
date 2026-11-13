@@ -1,0 +1,17 @@
+TLATRACE seq=0 a=Open p=e cur=1
+TLATRACE seq=1 a=Reset p=e
+TLATRACE seq=2 a=Reset p=e
+TLATRACE seq=3 a=Enter p=e hit=0
+TLATRACE seq=4 a=OpenRow p=e first=1
+TLATRACE seq=5 a=Loop p=e end=1 nxt=2
+TLATRACE seq=6 a=Loop p=e end=1 nxt=3
+TLATRACE seq=7 a=Loop p=e res=3
+TLATRACE seq=8 a=Loop p=e end=1 reent=1
+TLATRACE seq=9 a=Reset p=e
+TLATRACE seq=10 a=Enter p=e hit=0
+TLATRACE seq=11 a=OpenRow p=e first=1
+TLATRACE seq=12 a=Loop p=e end=1 nxt=2
+TLATRACE seq=13 a=Loop p=e end=1 nxt=3
+TLATRACE seq=14 a=Loop p=e end=1 last=1
+TLATRACE seq=15 a=Reset p=e
+TLATRACE seq=16 a=Enter p=e hit=1

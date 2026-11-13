@@ -1,0 +1,19 @@
+TLATRACE seq=0 a=WInsHeap p=w1 s=2
+TLATRACE seq=1 a=WInsEntry p=w1 s=2
+TLATRACE seq=2 a=WChkPass p=w1 s=2
+TLATRACE seq=3 a=DMark p=d
+TLATRACE seq=4 a=DCollect p=d coll=3 insr=2 cc=0
+TLATRACE seq=5 a=DP2 p=d s=1 w=none o=0
+TLATRACE seq=6 a=DP2 p=d s=2 w=w1 o=0
+TLATRACE seq=7 a=WInsHeap p=w2 s=3
+TLATRACE seq=8 a=WInsEntry p=w2 s=3
+TLATRACE seq=9 a=WAbort p=w1
+TLATRACE seq=10 a=DP2Wait p=d
+TLATRACE seq=11 a=DP2 p=d s=2 w=none o=0
+TLATRACE seq=12 a=DP3 p=d s=1 skip=0
+TLATRACE seq=13 a=DP3Read p=d s=1 kept=1
+TLATRACE seq=14 a=DP3 p=d s=2 skip=1
+TLATRACE seq=15 a=DAct p=d
+TLATRACE seq=16 a=DCommit p=d
+TLATRACE seq=17 a=WChkPass p=w2 s=3
+TLATRACE seq=18 a=WCommit p=w2

@@ -1,0 +1,4 @@
+TLATRACE seq=0 a=Gen p=q cls=dba.t func=1 cover=1 icover=1 kf=1 fic=1 rsel=1 loose=0
+TLATRACE seq=1 a=KfRead p=q
+TLATRACE seq=2 a=KeyRead p=q
+TLATRACE seq=3 a=KfRead p=q

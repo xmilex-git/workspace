@@ -1,0 +1,137 @@
+------------------------------ MODULE GcBuf_proofs ------------------------------
+(* TLAPS proof that IndInv is an inductive invariant of GcBuf's correct variant and implies
+   the safety claims C1-C5, for every value of the constants Assm admits (any worker set,
+   any address count, any doubling chain): the premises of INV1 and its conclusion. The
+   per-action steps live in GcBufStep*_proofs, the capacity arithmetic in GcBufCap_proofs. *)
+EXTENDS GcBufStepA_proofs, GcBufStepB_proofs, GcBufStepC_proofs, GcBufStepD_proofs
+
+THEOREM InitInv == Init => IndInv
+<1> SUFFICES ASSUME Init PROVE IndInv
+  OBVIOUS
+<1> USE Assm, Correct
+<1>0. "o" \in Nodes /\ \A w \in Workers : w \in Nodes
+  BY DEF Nodes
+<1>1. TypeOK
+  BY DEF Init, TypeOK, Nodes, Addr, Bools, Phases, WPhases, Heaps, SeenTags
+<1>2. NoOverflow /\ NoUseAfterFree /\ NoBadFree /\ RightHeap /\ NoLeak /\ NoSlowGrowth
+  BY DEF Init, NoOverflow, NoUseAfterFree, NoBadFree, RightHeap, NoLeak, NoSlowGrowth
+<1>3. NoOrphan /\ Intact /\ MemBound /\ Clamped
+  BY DEF Init, NoOrphan, AOrphan, Owned, Intact, NIntact, MemBound, NMem, Clamped, AClamp, Addr, Nodes
+<1>4. R_live /\ R_disj /\ R_ext /\ R_free /\ R_grown
+  BY DEF Init, R_live, NLive, R_disj, NDisj, R_ext, AExt, R_free, AFree, R_grown, AGrown, Addr, Nodes
+<1>5. R_cap1 /\ R_cap2 /\ R_cap3 /\ R_cap4 /\ R_cap5 /\ R_cap6 /\ R_cap7 /\ R_cap8
+  BY DEF Init, R_cap1, NCap1, R_cap2, NCap2, R_cap3, NCap3, R_cap4, NCap4, R_cap5, NCap5,
+         R_cap6, NCap6, R_cap7, NCap7, R_cap8, NCap8, Nodes
+<1>6. R_ph1 /\ R_ph2 /\ R_ph3 /\ R_ph4 /\ R_ph5 /\ R_ph6
+  BY DEF Init, R_ph1, R_ph2, R_ph3, R_ph4, R_ph5, WPh5, R_ph6, WPh6, Nodes
+<1>. QED
+  BY <1>1, <1>2, <1>3, <1>4, <1>5, <1>6 DEF IndInv
+
+THEOREM StepInv == IndInv /\ [Next]_vars => IndInv'
+<1> SUFFICES ASSUME IndInv, [Next]_vars PROVE IndInv'
+  OBVIOUS
+<1> USE Assm, Correct
+<1>1. CASE OInit
+  BY <1>1, S_OInit
+<1>2. ASSUME NEW n \in Nodes, NEW v \in 1 .. V, RowStart(n, v) PROVE IndInv'
+  <2>1. CASE cnt[n] = 0
+    <3>1. PICK a \in Addr, t \in {"var", "char"} : FirstAt(n, a, t)
+      BY <1>2, <2>1 DEF RowStart
+    <3>. QED  BY <1>2, <2>1, <3>1, S_RowFirst
+  <2>2. CASE cnt[n] # 0
+    BY <1>2, <2>2, S_RowNext
+  <2>. QED  BY <2>1, <2>2
+<1>3. ASSUME NEW n \in Nodes, AppendCall(n) PROVE IndInv'
+  <2>0. Active(n) /\ ~err /\ pv[n] > 0 /\ ACommon
+    BY <1>3 DEF AppendCall
+  <2>1. CASE AFull(n)
+    BY <2>0, <2>1, S_AFull
+  <2>2. CASE ~AFull(n)
+    <3>1. PICK sp \in 0 .. MinOf(SpareMax, Room(n)) :
+            APre(n, sp) /\ (AChar(n, sp) \/ AIn(n, sp) \/ AGrow(n, sp) \/ AFail(n, sp))
+      BY <1>3, <2>2 DEF AppendCall
+    <3>2. CASE AChar(n, sp)
+      <4>1. PICK a \in Addr : ACharAt(n, sp, a)
+        BY <3>2 DEF AChar
+      <4>. QED  BY <2>0, <3>1, <4>1, S_AChar
+    <3>3. CASE AIn(n, sp)
+      BY <2>0, <3>1, <3>3, S_AIn
+    <3>4. CASE AGrow(n, sp)
+      <4>1. PICK a \in Addr, c \in CapCands : AGrowAt(n, sp, a, c)
+        BY <3>4 DEF AGrow
+      <4>. QED  BY <2>0, <3>1, <4>1, S_AGrow
+    <3>5. CASE AFail(n, sp)
+      BY <2>0, <3>1, <3>5, S_AFail
+    <3>. QED  BY <3>1, <3>2, <3>3, <3>4, <3>5
+  <2>. QED  BY <2>1, <2>2
+<1>4. ASSUME NEW n \in Nodes, ZeroAppend(n) PROVE IndInv'
+  <2>0. Active(n) /\ ~err /\ ps[n] > 0 /\ ps' = [ps EXCEPT ![n] = 0] /\ ZCommon
+    BY <1>4 DEF ZeroAppend
+  <2>1. CASE ZIn(n)
+    BY <2>0, <2>1, S_ZIn
+  <2>2. CASE ZGrow(n)
+    <3>1. PICK a \in Addr, c \in CapCands : ZGrowAt(n, a, c)
+      BY <2>2 DEF ZGrow
+    <3>. QED  BY <2>0, <3>1, S_ZGrow
+  <2>3. CASE ZFail(n)
+    BY <2>0, <2>3, S_ZFail
+  <2>. QED  BY <1>4, <2>1, <2>2, <2>3 DEF ZeroAppend
+<1>5. ASSUME NEW n \in Nodes, Coerce(n) PROVE IndInv'
+  <2>1. PICK a \in Addr : CopyTo(n, a, Ctx(n), Ctx(n))
+    BY <1>5 DEF Coerce
+  <2>. QED  BY <1>5, <2>1, S_Coerce
+<1>6. CASE StartPar
+  <2>1. CASE str["o"] = 0
+    BY <1>6, <2>1, S_StartPar0
+  <2>2. CASE str["o"] # 0
+    <3>1. PICK a \in Addr : CopyTo("o", a, "h0", "coord")
+      BY <1>6, <2>2 DEF StartPar, Rehome
+    <3>. QED  BY <1>6, <2>2, <3>1, S_StartParA
+  <2>. QED  BY <2>1, <2>2
+<1>7. ASSUME NEW w \in Workers, WMerge(w) PROVE IndInv'
+  <2>1. CASE cnt[w] = 0 \/ size[w] = 0
+    BY <1>7, <2>1, S_WMergeNone
+  <2>2. CASE ~(cnt[w] = 0 \/ size[w] = 0) /\ cnt["o"] > 0
+    BY <1>7, <2>2, S_WMergeApp
+  <2>3. CASE ~(cnt[w] = 0 \/ size[w] = 0) /\ ~(cnt["o"] > 0)
+    <3>1. PICK a \in Addr : CloneAt(w, a)
+      BY <1>7, <2>3 DEF WMerge
+    <3>. QED  BY <1>7, <2>3, <3>1, S_WMergeClone
+  <2>. QED  BY <2>1, <2>2, <2>3
+<1>8. ASSUME NEW w \in Workers, WClear(w) \/ WRun(w) PROVE IndInv'
+  BY <1>8, S_WClear, S_WRun
+<1>9. CASE MergeDone
+  BY <1>9, S_MergeDone
+<1>10. CASE Restore
+  <2>1. CASE str["o"] = 0
+    BY <1>10, <2>1, S_Restore0
+  <2>2. CASE str["o"] # 0
+    <3>1. PICK a \in Addr : CopyTo("o", a, "coord", "h0")
+      BY <1>10, <2>2 DEF Restore, Rehome
+    <3>. QED  BY <1>10, <2>2, <3>1, S_RestoreA
+  <2>. QED  BY <2>1, <2>2
+<1>11. CASE OEnd
+  BY <1>11, S_OEnd
+<1>12. CASE ExtFree
+  <2>1. PICK a \in ext : ExtFreeA(a)
+    BY <1>12 DEF ExtFree
+  <2>2. a \in Addr
+    BY DEF IndInv, TypeOK
+  <2>. QED  BY <2>1, <2>2, S_ExtFree
+<1>13. CASE ErrEnd
+  BY <1>13, S_ErrEnd
+<1>14. CASE Terminating
+  BY <1>14, S_Term
+<1>15. CASE UNCHANGED vars
+  BY <1>15, S_Stutter
+<1>. QED
+  BY <1>1, <1>2, <1>3, <1>4, <1>5, <1>6, <1>7, <1>8, <1>9, <1>10, <1>11, <1>12, <1>13, <1>14, <1>15
+     DEF Next
+
+THEOREM InvSafe == IndInv => /\ NoOverflow /\ NoUseAfterFree /\ NoBadFree /\ RightHeap /\ NoLeak
+                             /\ NoOrphan /\ Intact /\ NoSlowGrowth /\ MemBound /\ Clamped
+  BY DEF IndInv
+
+THEOREM Safe == Spec => []IndInv
+  BY InitInv, StepInv, PTL DEF Spec
+=============================================================================

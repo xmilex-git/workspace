@@ -1,0 +1,48 @@
+TLATRACE seq=1 a=OInit p=o addr=0
+TLATRACE seq=2 a=RowStart p=o v=20 first=1 addr=1 t=var
+TLATRACE seq=3 a=AppendCall p=o r=grow addr=2 cap=64 size=20 sp=0
+TLATRACE seq=4 a=RowStart p=o v=1 first=0 addr=0 t=var
+TLATRACE seq=5 a=AppendCall p=o r=inplace addr=2 cap=64 size=21 sp=0
+TLATRACE seq=6 a=RowStart p=o v=20 first=0 addr=0 t=var
+TLATRACE seq=7 a=AppendCall p=o r=inplace addr=2 cap=64 size=41 sp=0
+TLATRACE seq=8 a=RowStart p=o v=1 first=0 addr=0 t=var
+TLATRACE seq=9 a=AppendCall p=o r=inplace addr=2 cap=64 size=42 sp=0
+TLATRACE seq=10 a=RowStart p=o v=20 first=0 addr=0 t=var
+TLATRACE seq=11 a=AppendCall p=o r=inplace addr=2 cap=64 size=62 sp=0
+TLATRACE seq=12 a=RowStart p=o v=1 first=0 addr=0 t=var
+TLATRACE seq=13 a=AppendCall p=o r=inplace addr=2 cap=64 size=63 sp=0
+TLATRACE seq=14 a=RowStart p=o v=20 first=0 addr=0 t=var
+TLATRACE seq=15 a=AppendCall p=o r=grow addr=3 cap=80 size=83 sp=0
+TLATRACE seq=16 a=RowStart p=o v=1 first=0 addr=0 t=var
+TLATRACE seq=17 a=AppendCall p=o r=inplace addr=3 cap=101 size=84 sp=0
+TLATRACE seq=18 a=RowStart p=o v=24 first=0 addr=0 t=var
+TLATRACE seq=19 a=AppendCall p=o r=inplace addr=3 cap=101 size=99 sp=1
+TLATRACE seq=20 a=ZeroAppend p=o r=inplace addr=3 cap=101 size=100
+TLATRACE seq=21 a=RowStart p=o v=1 first=0 addr=0 t=var
+TLATRACE seq=22 a=AppendCall p=o r=none addr=3 cap=101 size=100 sp=0
+TLATRACE seq=23 a=RowStart p=o v=2 first=0 addr=0 t=var
+TLATRACE seq=24 a=AppendCall p=o r=none addr=3 cap=101 size=100 sp=0
+TLATRACE seq=26 a=OEnd p=o k=moveout addr=3
+TLATRACE seq=27 a=OInit p=o addr=0
+TLATRACE seq=28 a=RowStart p=o v=1 first=1 addr=1 t=var
+TLATRACE seq=29 a=AppendCall p=o r=grow addr=2 cap=64 size=1 sp=0
+TLATRACE seq=30 a=RowStart p=o v=1 first=0 addr=0 t=var
+TLATRACE seq=31 a=AppendCall p=o r=inplace addr=2 cap=64 size=2 sp=0
+TLATRACE seq=32 a=RowStart p=o v=2 first=0 addr=0 t=var
+TLATRACE seq=33 a=AppendCall p=o r=inplace addr=2 cap=64 size=4 sp=0
+TLATRACE seq=35 a=ExtFree p=ext addr=3
+TLATRACE seq=36 a=OEnd p=o k=moveout addr=2
+TLATRACE seq=37 a=OInit p=o addr=0
+TLATRACE seq=38 a=RowStart p=o v=61 first=1 addr=4 t=var
+TLATRACE seq=39 a=AppendCall p=o r=grow addr=5 cap=64 size=61 sp=0
+TLATRACE seq=40 a=RowStart p=o v=1 first=0 addr=0 t=var
+TLATRACE seq=41 a=AppendCall p=o r=inplace addr=5 cap=64 size=62 sp=0
+TLATRACE seq=42 a=RowStart p=o v=2 first=0 addr=0 t=var
+TLATRACE seq=43 a=AppendCall p=o r=grow addr=6 cap=101 size=64 sp=0
+TLATRACE seq=44 a=RowStart p=o v=1 first=0 addr=0 t=var
+TLATRACE seq=45 a=AppendCall p=o r=inplace addr=6 cap=101 size=65 sp=0
+TLATRACE seq=46 a=RowStart p=o v=40 first=0 addr=0 t=var
+TLATRACE seq=47 a=AppendCall p=o r=inplace addr=6 cap=101 size=100 sp=0
+TLATRACE seq=49 a=ExtFree p=ext addr=2
+TLATRACE seq=50 a=OEnd p=o k=moveout addr=6
+TLATRACE seq=51 a=OInit p=o addr=0

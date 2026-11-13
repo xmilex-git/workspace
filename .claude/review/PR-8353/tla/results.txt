@@ -1,0 +1,7 @@
+full.out:Finished computing initial states: 1623600 states generated, with 1207800 of them distinct at 2026-11-05 18:29:54.
+full.out:Model checking completed. No error has been found.
+full.out:9300696 states generated, 7677096 distinct states found, 0 states left on queue.
+live.out:Finished computing initial states: 356400 states generated, with 257400 of them distinct at 2026-11-05 18:34:42.
+live.out:Progress(7) at 2026-11-05 18:54:57: 1,847,064 states generated, 1,490,664 distinct states found, 0 states left on queue.
+live.out:Model checking completed. No error has been found.
+live.out:1847064 states generated, 1490664 distinct states found, 0 states left on queue.

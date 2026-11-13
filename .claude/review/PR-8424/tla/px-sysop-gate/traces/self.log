@@ -1,0 +1,6 @@
+TLATRACE seq=0 a=Acq p=0 how=first cnt=1
+TLATRACE seq=1 a=Inc p=0 depth=1
+TLATRACE seq=2 a=D1 p=0 under=1
+TLATRACE seq=3 a=D2 p=0 reason=self dec=serial
+TLATRACE seq=4 a=Dec p=0 depth=0
+TLATRACE seq=5 a=Rel p=0 cnt=0

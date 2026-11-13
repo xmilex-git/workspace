@@ -1,0 +1,8 @@
+TLATRACE seq=0 a=Acq p=0 how=first cnt=1
+TLATRACE seq=1 a=Inc p=0 depth=1
+TLATRACE seq=2 a=SpCall p=0
+TLATRACE seq=3 a=D1 p=1 under=1
+TLATRACE seq=4 a=D2 p=1 reason=pl dec=serial
+TLATRACE seq=5 a=SpRet p=0
+TLATRACE seq=6 a=Dec p=0 depth=0
+TLATRACE seq=7 a=Rel p=0 cnt=0

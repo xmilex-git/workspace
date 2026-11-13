@@ -1,0 +1,232 @@
+TLATRACE seq=0 a=D1 p=0 under=0
+TLATRACE seq=1 a=Spawn p=0 c=2
+TLATRACE seq=2 a=D1 p=0 under=0
+TLATRACE seq=3 a=Spawn p=0 c=3
+TLATRACE seq=4 a=Spawn p=0 c=4
+TLATRACE seq=5 a=Spawn p=0 c=5
+TLATRACE seq=6 a=Spawn p=0 c=6
+TLATRACE seq=7 a=Acq p=4 how=first cnt=1
+TLATRACE seq=8 a=Inc p=4 depth=1
+TLATRACE seq=9 a=Acq p=4 how=self cnt=2
+TLATRACE seq=10 a=Inc p=4 depth=2
+TLATRACE seq=11 a=D1 p=2 under=1
+TLATRACE seq=12 a=D2 p=2 reason=other dec=par
+TLATRACE seq=13 a=Spawn p=2 c=7
+TLATRACE seq=14 a=Spawn p=2 c=8
+TLATRACE seq=15 a=Spawn p=2 c=9
+TLATRACE seq=16 a=Spawn p=2 c=10
+TLATRACE seq=17 a=Dec p=4 depth=1
+TLATRACE seq=18 a=Rel p=4 cnt=1
+TLATRACE seq=19 a=Dec p=4 depth=0
+TLATRACE seq=20 a=Rel p=4 cnt=0
+TLATRACE seq=21 a=Acq p=5 how=first cnt=1
+TLATRACE seq=22 a=Inc p=5 depth=1
+TLATRACE seq=23 a=Dec p=5 depth=0
+TLATRACE seq=24 a=Rel p=5 cnt=0
+TLATRACE seq=25 a=Acq p=6 how=first cnt=1
+TLATRACE seq=26 a=Inc p=6 depth=1
+TLATRACE seq=27 a=Dec p=6 depth=0
+TLATRACE seq=28 a=Rel p=6 cnt=0
+TLATRACE seq=29 a=Acq p=8 how=first cnt=1
+TLATRACE seq=30 a=Inc p=8 depth=1
+TLATRACE seq=31 a=Dec p=8 depth=0
+TLATRACE seq=32 a=Rel p=8 cnt=0
+TLATRACE seq=33 a=Acq p=7 how=first cnt=1
+TLATRACE seq=34 a=Inc p=7 depth=1
+TLATRACE seq=35 a=Dec p=7 depth=0
+TLATRACE seq=36 a=Rel p=7 cnt=0
+TLATRACE seq=37 a=Acq p=9 how=first cnt=1
+TLATRACE seq=38 a=Inc p=9 depth=1
+TLATRACE seq=39 a=Dec p=9 depth=0
+TLATRACE seq=40 a=Rel p=9 cnt=0
+TLATRACE seq=41 a=Acq p=3 how=first cnt=1
+TLATRACE seq=42 a=Inc p=3 depth=1
+TLATRACE seq=43 a=Dec p=3 depth=0
+TLATRACE seq=44 a=Rel p=3 cnt=0
+TLATRACE seq=45 a=Acq p=4 how=first cnt=1
+TLATRACE seq=46 a=Inc p=4 depth=1
+TLATRACE seq=47 a=Dec p=4 depth=0
+TLATRACE seq=48 a=Rel p=4 cnt=0
+TLATRACE seq=49 a=Acq p=10 how=first cnt=1
+TLATRACE seq=50 a=Inc p=10 depth=1
+TLATRACE seq=51 a=Dec p=10 depth=0
+TLATRACE seq=52 a=Rel p=10 cnt=0
+TLATRACE seq=53 a=Acq p=5 how=first cnt=1
+TLATRACE seq=54 a=Inc p=5 depth=1
+TLATRACE seq=55 a=Dec p=5 depth=0
+TLATRACE seq=56 a=Rel p=5 cnt=0
+TLATRACE seq=57 a=Acq p=8 how=first cnt=1
+TLATRACE seq=58 a=Inc p=8 depth=1
+TLATRACE seq=59 a=Dec p=8 depth=0
+TLATRACE seq=60 a=Rel p=8 cnt=0
+TLATRACE seq=61 a=Acq p=4 how=first cnt=1
+TLATRACE seq=62 a=Inc p=4 depth=1
+TLATRACE seq=63 a=Dec p=4 depth=0
+TLATRACE seq=64 a=Rel p=4 cnt=0
+TLATRACE seq=65 a=Acq p=7 how=first cnt=1
+TLATRACE seq=66 a=Inc p=7 depth=1
+TLATRACE seq=67 a=Dec p=7 depth=0
+TLATRACE seq=68 a=Rel p=7 cnt=0
+TLATRACE seq=69 a=Acq p=6 how=first cnt=1
+TLATRACE seq=70 a=Inc p=6 depth=1
+TLATRACE seq=71 a=Dec p=6 depth=0
+TLATRACE seq=72 a=Rel p=6 cnt=0
+TLATRACE seq=73 a=Acq p=10 how=first cnt=1
+TLATRACE seq=74 a=Inc p=10 depth=1
+TLATRACE seq=75 a=Dec p=10 depth=0
+TLATRACE seq=76 a=Rel p=10 cnt=0
+TLATRACE seq=77 a=Acq p=8 how=first cnt=1
+TLATRACE seq=78 a=Inc p=8 depth=1
+TLATRACE seq=79 a=Dec p=8 depth=0
+TLATRACE seq=80 a=Rel p=8 cnt=0
+TLATRACE seq=81 a=Acq p=9 how=first cnt=1
+TLATRACE seq=82 a=Inc p=9 depth=1
+TLATRACE seq=83 a=Dec p=9 depth=0
+TLATRACE seq=84 a=Rel p=9 cnt=0
+TLATRACE seq=85 a=Acq p=3 how=first cnt=1
+TLATRACE seq=86 a=Inc p=3 depth=1
+TLATRACE seq=87 a=Dec p=3 depth=0
+TLATRACE seq=88 a=Rel p=3 cnt=0
+TLATRACE seq=89 a=Acq p=7 how=first cnt=1
+TLATRACE seq=90 a=Inc p=7 depth=1
+TLATRACE seq=91 a=Dec p=7 depth=0
+TLATRACE seq=92 a=Rel p=7 cnt=0
+TLATRACE seq=93 a=Acq p=10 how=first cnt=1
+TLATRACE seq=94 a=Inc p=10 depth=1
+TLATRACE seq=95 a=Dec p=10 depth=0
+TLATRACE seq=96 a=Rel p=10 cnt=0
+TLATRACE seq=97 a=Acq p=5 how=first cnt=1
+TLATRACE seq=98 a=Inc p=5 depth=1
+TLATRACE seq=99 a=Dec p=5 depth=0
+TLATRACE seq=100 a=Rel p=5 cnt=0
+TLATRACE seq=101 a=Acq p=4 how=first cnt=1
+TLATRACE seq=102 a=Inc p=4 depth=1
+TLATRACE seq=103 a=Dec p=4 depth=0
+TLATRACE seq=104 a=Rel p=4 cnt=0
+TLATRACE seq=105 a=Acq p=9 how=first cnt=1
+TLATRACE seq=106 a=Inc p=9 depth=1
+TLATRACE seq=107 a=Dec p=9 depth=0
+TLATRACE seq=108 a=Rel p=9 cnt=0
+TLATRACE seq=109 a=Acq p=6 how=first cnt=1
+TLATRACE seq=110 a=Inc p=6 depth=1
+TLATRACE seq=111 a=Dec p=6 depth=0
+TLATRACE seq=112 a=Rel p=6 cnt=0
+TLATRACE seq=113 a=Acq p=10 how=first cnt=1
+TLATRACE seq=114 a=Inc p=10 depth=1
+TLATRACE seq=115 a=Dec p=10 depth=0
+TLATRACE seq=116 a=Rel p=10 cnt=0
+TLATRACE seq=117 a=Acq p=4 how=first cnt=1
+TLATRACE seq=118 a=Inc p=4 depth=1
+TLATRACE seq=119 a=Dec p=4 depth=0
+TLATRACE seq=120 a=Rel p=4 cnt=0
+TLATRACE seq=121 a=Acq p=7 how=first cnt=1
+TLATRACE seq=122 a=Inc p=7 depth=1
+TLATRACE seq=123 a=Dec p=7 depth=0
+TLATRACE seq=124 a=Rel p=7 cnt=0
+TLATRACE seq=125 a=Acq p=5 how=first cnt=1
+TLATRACE seq=126 a=Inc p=5 depth=1
+TLATRACE seq=127 a=Dec p=5 depth=0
+TLATRACE seq=128 a=Rel p=5 cnt=0
+TLATRACE seq=129 a=Acq p=4 how=first cnt=1
+TLATRACE seq=130 a=Inc p=4 depth=1
+TLATRACE seq=131 a=Dec p=4 depth=0
+TLATRACE seq=132 a=Rel p=4 cnt=0
+TLATRACE seq=133 a=Acq p=9 how=first cnt=1
+TLATRACE seq=134 a=Inc p=9 depth=1
+TLATRACE seq=135 a=Dec p=9 depth=0
+TLATRACE seq=136 a=Rel p=9 cnt=0
+TLATRACE seq=137 a=Acq p=3 how=first cnt=1
+TLATRACE seq=138 a=Inc p=3 depth=1
+TLATRACE seq=139 a=Dec p=3 depth=0
+TLATRACE seq=140 a=Rel p=3 cnt=0
+TLATRACE seq=141 a=Acq p=6 how=first cnt=1
+TLATRACE seq=142 a=Inc p=6 depth=1
+TLATRACE seq=143 a=Dec p=6 depth=0
+TLATRACE seq=144 a=Rel p=6 cnt=0
+TLATRACE seq=145 a=End p=4
+TLATRACE seq=146 a=Acq p=10 how=first cnt=1
+TLATRACE seq=147 a=Inc p=10 depth=1
+TLATRACE seq=148 a=Dec p=10 depth=0
+TLATRACE seq=149 a=Rel p=10 cnt=0
+TLATRACE seq=150 a=Acq p=8 how=first cnt=1
+TLATRACE seq=151 a=Inc p=8 depth=1
+TLATRACE seq=152 a=Dec p=8 depth=0
+TLATRACE seq=153 a=Rel p=8 cnt=0
+TLATRACE seq=154 a=Acq p=5 how=first cnt=1
+TLATRACE seq=155 a=Inc p=5 depth=1
+TLATRACE seq=156 a=Dec p=5 depth=0
+TLATRACE seq=157 a=Rel p=5 cnt=0
+TLATRACE seq=158 a=Acq p=7 how=first cnt=1
+TLATRACE seq=159 a=Inc p=7 depth=1
+TLATRACE seq=160 a=Dec p=7 depth=0
+TLATRACE seq=161 a=Rel p=7 cnt=0
+TLATRACE seq=162 a=Acq p=9 how=first cnt=1
+TLATRACE seq=163 a=Inc p=9 depth=1
+TLATRACE seq=164 a=Dec p=9 depth=0
+TLATRACE seq=165 a=Rel p=9 cnt=0
+TLATRACE seq=166 a=Acq p=8 how=first cnt=1
+TLATRACE seq=167 a=Inc p=8 depth=1
+TLATRACE seq=168 a=Dec p=8 depth=0
+TLATRACE seq=169 a=Rel p=8 cnt=0
+TLATRACE seq=170 a=Acq p=6 how=first cnt=1
+TLATRACE seq=171 a=Inc p=6 depth=1
+TLATRACE seq=172 a=Dec p=6 depth=0
+TLATRACE seq=173 a=Rel p=6 cnt=0
+TLATRACE seq=174 a=Acq p=5 how=first cnt=1
+TLATRACE seq=175 a=Inc p=5 depth=1
+TLATRACE seq=176 a=Dec p=5 depth=0
+TLATRACE seq=177 a=Rel p=5 cnt=0
+TLATRACE seq=178 a=End p=5
+TLATRACE seq=179 a=Acq p=3 how=first cnt=1
+TLATRACE seq=180 a=Inc p=3 depth=1
+TLATRACE seq=181 a=Dec p=3 depth=0
+TLATRACE seq=182 a=Rel p=3 cnt=0
+TLATRACE seq=183 a=Acq p=8 how=first cnt=1
+TLATRACE seq=184 a=Inc p=8 depth=1
+TLATRACE seq=185 a=Dec p=8 depth=0
+TLATRACE seq=186 a=Rel p=8 cnt=0
+TLATRACE seq=187 a=Acq p=9 how=first cnt=1
+TLATRACE seq=188 a=Inc p=9 depth=1
+TLATRACE seq=189 a=Dec p=9 depth=0
+TLATRACE seq=190 a=Rel p=9 cnt=0
+TLATRACE seq=191 a=Acq p=10 how=first cnt=1
+TLATRACE seq=192 a=Inc p=10 depth=1
+TLATRACE seq=193 a=Dec p=10 depth=0
+TLATRACE seq=194 a=Rel p=10 cnt=0
+TLATRACE seq=195 a=Acq p=8 how=first cnt=1
+TLATRACE seq=196 a=Inc p=8 depth=1
+TLATRACE seq=197 a=Dec p=8 depth=0
+TLATRACE seq=198 a=Rel p=8 cnt=0
+TLATRACE seq=199 a=Acq p=7 how=first cnt=1
+TLATRACE seq=200 a=Inc p=7 depth=1
+TLATRACE seq=201 a=Dec p=7 depth=0
+TLATRACE seq=202 a=Rel p=7 cnt=0
+TLATRACE seq=203 a=End p=8
+TLATRACE seq=204 a=Acq p=9 how=first cnt=1
+TLATRACE seq=205 a=Inc p=9 depth=1
+TLATRACE seq=206 a=Dec p=9 depth=0
+TLATRACE seq=207 a=Rel p=9 cnt=0
+TLATRACE seq=208 a=Acq p=3 how=first cnt=1
+TLATRACE seq=209 a=Inc p=3 depth=1
+TLATRACE seq=210 a=Dec p=3 depth=0
+TLATRACE seq=211 a=Rel p=3 cnt=0
+TLATRACE seq=212 a=End p=9
+TLATRACE seq=213 a=Acq p=6 how=first cnt=1
+TLATRACE seq=214 a=Inc p=6 depth=1
+TLATRACE seq=215 a=Dec p=6 depth=0
+TLATRACE seq=216 a=Rel p=6 cnt=0
+TLATRACE seq=217 a=End p=6
+TLATRACE seq=218 a=End p=10
+TLATRACE seq=219 a=Acq p=7 how=first cnt=1
+TLATRACE seq=220 a=Inc p=7 depth=1
+TLATRACE seq=221 a=Dec p=7 depth=0
+TLATRACE seq=222 a=Rel p=7 cnt=0
+TLATRACE seq=223 a=Acq p=3 how=first cnt=1
+TLATRACE seq=224 a=Inc p=3 depth=1
+TLATRACE seq=225 a=Dec p=3 depth=0
+TLATRACE seq=226 a=Rel p=3 cnt=0
+TLATRACE seq=227 a=End p=3
+TLATRACE seq=228 a=Join p=0 own=0
+TLATRACE seq=229 a=End p=7
+TLATRACE seq=230 a=Join p=2 own=0
+TLATRACE seq=231 a=End p=2

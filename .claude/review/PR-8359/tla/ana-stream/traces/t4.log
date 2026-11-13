@@ -1,0 +1,33 @@
+TLATRACE seq=155 a=Begin p=e waits=0 rvc=2 amax=32768 skipflag=0 defer=0
+TLATRACE seq=156 a=Key p=e ended=0 first=1
+TLATRACE seq=157 a=Add p=e mode=put rv=1 inum=-1 ok=1
+TLATRACE seq=158 a=Key p=e ended=0 first=0
+TLATRACE seq=159 a=Add p=e mode=put rv=1 inum=-1 ok=1
+TLATRACE seq=160 a=Key p=e ended=0 first=0
+TLATRACE seq=161 a=Add p=e mode=put rv=2 inum=-1 ok=1
+TLATRACE seq=162 a=Key p=e ended=0 first=0
+TLATRACE seq=163 a=Add p=e mode=put rv=2 inum=-1 ok=1
+TLATRACE seq=164 a=Key p=e ended=0 first=0
+TLATRACE seq=165 a=Add p=e mode=put rv=2 inum=-1 ok=1
+TLATRACE seq=166 a=Key p=e ended=0 first=0
+TLATRACE seq=167 a=Add p=e mode=put rv=3 inum=-1 ok=1
+TLATRACE seq=168 a=Key p=e ended=0 first=0
+TLATRACE seq=169 a=Add p=e mode=put rv=3 inum=-1 ok=1
+TLATRACE seq=170 a=Key p=e ended=0 first=0
+TLATRACE seq=171 a=Add p=e mode=put rv=4 inum=-1 ok=1
+TLATRACE seq=172 a=Key p=e ended=0 first=0
+TLATRACE seq=173 a=Add p=e mode=put rv=4 inum=-1 ok=1
+TLATRACE seq=174 a=Key p=e ended=0 first=0
+TLATRACE seq=175 a=Add p=e mode=put rv=4 inum=-1 ok=1
+TLATRACE seq=176 a=Key p=e ended=0 first=0
+TLATRACE seq=177 a=Add p=e mode=put rv=5 inum=-1 ok=1
+TLATRACE seq=178 a=Key p=e ended=0 first=0
+TLATRACE seq=179 a=Add p=e mode=put rv=5 inum=-1 ok=1
+TLATRACE seq=180 a=Key p=e ended=0 first=0
+TLATRACE seq=181 a=Add p=e mode=put rv=1 inum=-1 ok=1
+TLATRACE seq=182 a=Key p=e ended=0 first=0
+TLATRACE seq=183 a=Add p=e mode=put rv=1 inum=-1 ok=1
+TLATRACE seq=184 a=Key p=e ended=0 first=0
+TLATRACE seq=185 a=Add p=e mode=put rv=2 inum=-1 ok=1
+TLATRACE seq=186 a=End p=e
+TLATRACE seq=187 a=Clear p=e spill=0

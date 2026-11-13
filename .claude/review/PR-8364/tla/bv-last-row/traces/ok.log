@@ -1,0 +1,8 @@
+TLATRACE a=Gen p=q f=1 ao=0
+TLATRACE a=Path p=q path=serial
+TLATRACE a=Keep p=q row=1 ok=1
+TLATRACE a=Keep p=q row=2 ok=1
+TLATRACE a=Close p=q
+TLATRACE a=Restore p=q kept=1
+TLATRACE a=Output p=q null=0
+TLATRACE a=Free p=q

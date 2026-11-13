@@ -1,0 +1,4 @@
+TLATRACE seq=534 a=Start p=r root=705
+TLATRACE seq=535 a=Begin p=u root=705 mid=21 new=400
+TLATRACE seq=536 a=Abort p=u
+TLATRACE seq=537 a=Vis p=r root=705 key=300 vis=1

@@ -1,0 +1,6 @@
+TLATRACE seq=0 a=Parse p=c dim=2 first=1 len=35
+TLATRACE seq=1 a=Restore p=c pre=1
+TLATRACE seq=2 a=Parse p=c dim=2 first=0 len=80
+TLATRACE seq=3 a=Fold p=c same=0 nothing=0 ulen=80 nlen=35
+TLATRACE seq=4 a=NewTop p=c by=compile ok=1
+TLATRACE seq=5 a=Restore p=c pre=1

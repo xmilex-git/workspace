@@ -1,0 +1,6 @@
+TLATRACE seq=0 a=Start p=r root=705
+TLATRACE seq=1 a=Begin p=u root=705 mid=8 new=300
+TLATRACE seq=2 a=Commit p=u
+TLATRACE seq=3 a=Vis p=r root=705 key=200 vis=1
+TLATRACE seq=4 a=Vis p=r root=705 key=300 vis=0
+TLATRACE seq=269 a=Vacuum p=v root=705 del=8

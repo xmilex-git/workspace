@@ -1,0 +1,168 @@
+diff --git a/src/storage/heap_file.c b/src/storage/heap_file.c
+index 09509a9d0..a4df8b3a6 100644
+--- a/src/storage/heap_file.c
++++ b/src/storage/heap_file.c
+@@ -12929,6 +12929,114 @@ heap_attrinfo_can_share_string (const DB_VALUE * value, const TP_DOMAIN * domain
+   return db_get_string_length (value) <= precision;
+ }
+ 
++
++/* TLATRACE (PR 8378 review instrumentation, never committed) */
++static FILE *heap_tla_fp = NULL;
++static pthread_once_t heap_tla_once = PTHREAD_ONCE_INIT;
++static unsigned long long heap_tla_seq = 0;
++static __thread int heap_tla_pending = 0;
++
++static void
++heap_tla_open (void)
++{
++  const char *path = getenv ("CUBRID_TLATRACE_FILE");
++  if (path != NULL && *path != '\0')
++    {
++      heap_tla_fp = fopen (path, "a");
++      if (heap_tla_fp != NULL)
++	{
++	  setvbuf (heap_tla_fp, NULL, _IOLBF, 0);
++	}
++    }
++}
++
++static FILE *
++heap_tla_file (void)
++{
++  pthread_once (&heap_tla_once, heap_tla_open);
++  return heap_tla_fp;
++}
++
++static const char *
++heap_tla_type (DB_TYPE t)
++{
++  switch (t)
++    {
++    case DB_TYPE_CHAR: return "C";
++    case DB_TYPE_VARCHAR: return "V";
++    case DB_TYPE_BIT: return "B";
++    case DB_TYPE_VARBIT: return "VB";
++    default: return NULL;
++    }
++}
++
++static int
++heap_tla_max (DB_TYPE t)
++{
++  switch (t)
++    {
++    case DB_TYPE_CHAR: return DB_MAX_CHAR_PRECISION;
++    case DB_TYPE_VARCHAR: return DB_MAX_VARCHAR_PRECISION;
++    case DB_TYPE_BIT: return DB_MAX_BIT_PRECISION;
++    default: return DB_MAX_VARBIT_PRECISION;
++    }
++}
++
++static const char *
++heap_tla_cs (int cs)
++{
++  switch (cs)
++    {
++    case INTL_CODESET_UTF8: return "u";
++    case INTL_CODESET_ISO88591: return "i";
++    case INTL_CODESET_KSC5601_EUC: return "e";
++    case INTL_CODESET_RAW_BYTES: return "b";
++    default: return "x";
++    }
++}
++
++static void
++heap_tla_trace_assign (const DB_VALUE * v, const TP_DOMAIN * catalog, DB_TYPE value_type, bool shared, int ret)
++{
++  FILE *fp = heap_tla_file ();
++  if (fp == NULL || DB_IS_NULL (v))
++    {
++      return;
++    }
++  const DB_TYPE vt = DB_VALUE_DOMAIN_TYPE (v), ct = TP_DOMAIN_TYPE (catalog);
++  const char *vs = heap_tla_type (vt), *cs = heap_tla_type (ct), *ps = heap_tla_type (value_type);
++  if (vs == NULL || cs == NULL || ps == NULL || TP_IS_CHAR_TYPE (vt) != TP_IS_CHAR_TYPE (ct)
++      || TP_IS_CHAR_TYPE (value_type) != TP_IS_CHAR_TYPE (ct))
++    {
++      return;
++    }
++  const bool is_char = TP_IS_CHAR_TYPE (ct);
++  const int p = db_value_precision (v), cp = catalog->precision, len = db_get_string_length (v);
++  const int size = db_get_string_size (v);
++  const unsigned long long seq = __atomic_add_fetch (&heap_tla_seq, 1, __ATOMIC_SEQ_CST);
++  fprintf (fp, "TLATRACE seq=%llu a=Assign p=t vt=%s pt=%s ct=%s vcs=%s ccs=%s co=%d nc=%d un=%d pe=%d po=%d cm=%d "
++	   "ln=%s sz=%d sh=%d er=%d\n", seq, vs, ps, cs, is_char ? heap_tla_cs (db_get_string_codeset (v)) : "n",
++	   is_char ? heap_tla_cs (TP_DOMAIN_CODESET (catalog)) : "n",
++	   is_char ? (db_get_string_collation (v) == TP_DOMAIN_COLLATION (catalog)) : 1, DB_NEED_CLEAR (v) ? 1 : 0,
++	   (p == 0 || p == TP_FLOATING_PRECISION_VALUE) ? 1 : 0, p == cp ? 1 : 0, p > heap_tla_max (vt) ? 1 : 0,
++	   cp == heap_tla_max (ct) ? 1 : 0, len < cp ? "lt" : (len == cp ? "eq" : "gt"),
++	   (is_char && size <= cp) ? 1 : 0, shared ? 1 : 0, ret != NO_ERROR ? 1 : 0);
++  heap_tla_pending = (ret != NO_ERROR) ? 0 : heap_tla_pending + 1;
++}
++
++void
++heap_tla_trace_build (void)
++{
++  FILE *fp = heap_tla_file ();
++  if (fp == NULL || heap_tla_pending == 0)
++    {
++      return;
++    }
++  heap_tla_pending = 0;
++  const unsigned long long seq = __atomic_add_fetch (&heap_tla_seq, 1, __ATOMIC_SEQ_CST);
++  fprintf (fp, "TLATRACE seq=%llu a=Build p=t\n", seq);
++}
++
+ /*
+  * heap_attrinfo_set_converted () - CBRD-27583: set the value an INSERT, UPDATE or MERGE assigns to an
+  *   attribute with the converter its plan chose at unpack for the value's type into the attribute's type, as
+@@ -12956,6 +13064,7 @@ heap_attrinfo_set_converted (const OID * inst_oid, ATTR_ID attrid, DB_VALUE * at
+     {
+       return ret;
+     }
++  bool heap_tla_shared = false;
+   const TP_DOMAIN *catalog = value->last_attrepr->domain;
+   assert (TP_DOMAIN_TYPE (catalog) == TP_DOMAIN_TYPE (domain));
+   const bool collection = TP_IS_SET_TYPE (pr_type->id) && !DB_IS_NULL (attr_val);
+@@ -12974,6 +13083,7 @@ heap_attrinfo_set_converted (const OID * inst_oid, ATTR_ID attrid, DB_VALUE * at
+       /* the plan's value of the attribute's own type that the cast would only copy: a fixed-size type (no precision,
+        * codeset or zone) is cloned; a string's buffer is shared, so the value's holder keeps it until the record is
+        * written - a list tuple, a record or a plan constant does, for the row */
++      heap_tla_shared = true;
+       ret = pr_type->setval (&value->dbvalue, attr_val, false);
+     }
+   else
+@@ -12990,6 +13100,7 @@ heap_attrinfo_set_converted (const OID * inst_oid, ATTR_ID attrid, DB_VALUE * at
+ 	  db_make_null (&value->dbvalue);
+ 	}
+     }
++  heap_tla_trace_assign (attr_val, catalog, value_type, heap_tla_shared, ret);
+   if (ret != NO_ERROR)
+     {
+       return ret;
+diff --git a/src/storage/heap_file.h b/src/storage/heap_file.h
+index 7a6288caf..7a787dd74 100644
+--- a/src/storage/heap_file.h
++++ b/src/storage/heap_file.h
+@@ -512,6 +512,7 @@ extern int heap_attrinfo_delete_lob (THREAD_ENTRY * thread_p, RECDES * recdes, H
+ extern DB_VALUE *heap_attrinfo_access (ATTR_ID attrid, HEAP_CACHE_ATTRINFO * attr_info);
+ extern int heap_attrinfo_set (const OID * inst_oid, ATTR_ID attrid, DB_VALUE * attr_val,
+ 			      HEAP_CACHE_ATTRINFO * attr_info);
++extern void heap_tla_trace_build (void);
+ extern int heap_attrinfo_set_converted (const OID * inst_oid, ATTR_ID attrid, DB_VALUE * attr_val,
+ 					HEAP_CACHE_ATTRINFO * attr_info, const TP_DOMAIN * domain, DB_TYPE value_type,
+ 					TP_VALUE_CONVERTER conv);
+diff --git a/src/transaction/locator_sr.c b/src/transaction/locator_sr.c
+index ffbd2c686..ff4dac128 100644
+--- a/src/transaction/locator_sr.c
++++ b/src/transaction/locator_sr.c
+@@ -7997,6 +7997,8 @@ locator_allocate_copy_area_by_attr_info (THREAD_ENTRY * thread_p, HEAP_CACHE_ATT
+   record_descriptor build_record (cubmem::CSTYLE_BLOCK_ALLOCATOR);
+   // *INDENT-ON*
+ 
++  heap_tla_trace_build ();
++
+   new_recdes->data = NULL;
+   new_recdes->area_size = 0;
+ 

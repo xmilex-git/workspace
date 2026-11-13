@@ -1,0 +1,67 @@
+TLATRACE seq=0 a=SubRow arm=1 p=e
+TLATRACE seq=1 a=SubRow arm=2 p=e
+TLATRACE seq=2 a=SubRow arm=1 p=e
+TLATRACE seq=3 a=SubRow arm=2 p=e
+TLATRACE seq=4 a=TruncFree arm=2 p=e
+TLATRACE seq=5 a=TruncFree arm=1 p=e
+TLATRACE seq=6 a=SubRow arm=2 p=e
+TLATRACE seq=7 a=SubRow arm=2 p=e
+TLATRACE seq=8 a=SubRow arm=1 p=e
+TLATRACE seq=9 a=SubRow arm=1 p=e
+TLATRACE seq=10 a=TruncFree arm=2 p=e
+TLATRACE seq=11 a=SubRow arm=2 p=e
+TLATRACE seq=12 a=SubRow arm=2 p=e
+TLATRACE seq=13 a=TruncFree arm=1 p=e
+TLATRACE seq=14 a=SubRow arm=1 p=e
+TLATRACE seq=15 a=SubRow arm=1 p=e
+TLATRACE seq=16 a=RowEnd arm=2 p=e
+TLATRACE seq=17 a=RowFree arm=2 win=2 p=e
+TLATRACE seq=18 a=RowDone arm=2 p=e
+TLATRACE seq=19 a=RowEnd arm=1 p=e
+TLATRACE seq=20 a=RowFree arm=1 win=1 p=e
+TLATRACE seq=21 a=RowDone arm=1 p=e
+TLATRACE seq=22 a=SubRow arm=2 p=e
+TLATRACE seq=23 a=SubRow arm=2 p=e
+TLATRACE seq=24 a=SubRow arm=1 p=e
+TLATRACE seq=25 a=TruncFree arm=2 p=e
+TLATRACE seq=26 a=SubRow arm=1 p=e
+TLATRACE seq=27 a=SubRow arm=2 p=e
+TLATRACE seq=28 a=SubRow arm=2 p=e
+TLATRACE seq=29 a=TruncFree arm=1 p=e
+TLATRACE seq=30 a=TruncFree arm=2 p=e
+TLATRACE seq=31 a=SubRow arm=1 p=e
+TLATRACE seq=32 a=SubRow arm=1 p=e
+TLATRACE seq=33 a=SubRow arm=2 p=e
+TLATRACE seq=34 a=SubRow arm=2 p=e
+TLATRACE seq=35 a=TruncFree arm=1 p=e
+TLATRACE seq=36 a=SubRow arm=1 p=e
+TLATRACE seq=37 a=RowEnd arm=2 p=e
+TLATRACE seq=38 a=RowFree arm=2 win=2 p=e
+TLATRACE seq=39 a=RowDone arm=2 p=e
+TLATRACE seq=40 a=SubRow arm=1 p=e
+TLATRACE seq=41 a=SubRow arm=2 p=e
+TLATRACE seq=42 a=SubRow arm=2 p=e
+TLATRACE seq=43 a=RowEnd arm=1 p=e
+TLATRACE seq=44 a=RowFree arm=1 win=1 p=e
+TLATRACE seq=45 a=RowDone arm=1 p=e
+TLATRACE seq=46 a=TruncFree arm=2 p=e
+TLATRACE seq=47 a=SubRow arm=2 p=e
+TLATRACE seq=48 a=SubRow arm=2 p=e
+TLATRACE seq=49 a=SubRow arm=1 p=e
+TLATRACE seq=50 a=SubRow arm=1 p=e
+TLATRACE seq=51 a=TruncFree arm=2 p=e
+TLATRACE seq=52 a=TruncFree arm=1 p=e
+TLATRACE seq=53 a=SubRow arm=1 p=e
+TLATRACE seq=54 a=SubRow arm=1 p=e
+TLATRACE seq=55 a=SubRow arm=2 p=e
+TLATRACE seq=56 a=SubRow arm=2 p=e
+TLATRACE seq=57 a=TruncFree arm=1 p=e
+TLATRACE seq=58 a=SubRow arm=1 p=e
+TLATRACE seq=59 a=SubRow arm=1 p=e
+TLATRACE seq=60 a=RowEnd arm=2 p=e
+TLATRACE seq=61 a=RowFree arm=2 win=2 p=e
+TLATRACE seq=62 a=RowDone arm=2 p=e
+TLATRACE seq=63 a=RowEnd arm=1 p=e
+TLATRACE seq=64 a=RowFree arm=1 win=1 p=e
+TLATRACE seq=65 a=RowDone arm=1 p=e
+TLATRACE seq=66 a=FinalFree arm=2 p=e

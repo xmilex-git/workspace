@@ -1,0 +1,38 @@
+TLATRACE seq=188 a=Begin p=e waits=1 rvc=1 amax=32768 skipflag=0 defer=0
+TLATRACE seq=189 a=Key p=e ended=0 first=1
+TLATRACE seq=190 a=Add p=e mode=area rv=1 reclen=4040
+TLATRACE seq=191 a=Key p=e ended=0 first=0
+TLATRACE seq=192 a=Add p=e mode=area rv=2 reclen=4040
+TLATRACE seq=193 a=Key p=e ended=0 first=0
+TLATRACE seq=194 a=Add p=e mode=area rv=3 reclen=4024
+TLATRACE seq=195 a=Key p=e ended=0 first=0
+TLATRACE seq=196 a=Add p=e mode=area rv=4 reclen=4040
+TLATRACE seq=197 a=Key p=e ended=0 first=0
+TLATRACE seq=198 a=Add p=e mode=area rv=5 reclen=4040
+TLATRACE seq=199 a=Key p=e ended=0 first=0
+TLATRACE seq=200 a=Add p=e mode=area rv=6 reclen=4040
+TLATRACE seq=201 a=Key p=e ended=0 first=0
+TLATRACE seq=202 a=Add p=e mode=area rv=7 reclen=4040
+TLATRACE seq=203 a=Key p=e ended=0 first=0
+TLATRACE seq=204 a=Add p=e mode=area rv=8 reclen=4040
+TLATRACE seq=205 a=Key p=e ended=0 first=0
+TLATRACE seq=206 a=Add p=e mode=spill rv=9 reclen=4040
+TLATRACE seq=207 a=Key p=e ended=0 first=0
+TLATRACE seq=208 a=Add p=e mode=spill rv=10 reclen=4040
+TLATRACE seq=209 a=Key p=e ended=0 first=0
+TLATRACE seq=210 a=Add p=e mode=spill rv=11 reclen=4040
+TLATRACE seq=211 a=Key p=e ended=0 first=0
+TLATRACE seq=212 a=Add p=e mode=spill rv=12 reclen=4040
+TLATRACE seq=213 a=Key p=e ended=1 first=0
+TLATRACE seq=214 a=Put p=e row=0 rows=12 rv=1 inum=-1 ok=1
+TLATRACE seq=215 a=Put p=e row=1 rows=12 rv=2 inum=-1 ok=1
+TLATRACE seq=216 a=Put p=e row=2 rows=12 rv=3 inum=-1 ok=1
+TLATRACE seq=217 a=Put p=e row=3 rows=12 rv=4 inum=-1 ok=1
+TLATRACE seq=218 a=Put p=e row=4 rows=12 rv=5 inum=-1 ok=1
+TLATRACE seq=219 a=Put p=e row=5 rows=12 rv=6 inum=-1 ok=1
+TLATRACE seq=220 a=Put p=e row=6 rows=12 rv=7 inum=-1 ok=1
+TLATRACE seq=221 a=Put p=e row=7 rows=12 rv=8 inum=-1 ok=1
+TLATRACE seq=222 a=Put p=e row=8 rows=12 rv=9 inum=-1 ok=1
+TLATRACE seq=223 a=Put p=e row=9 rows=12 rv=10 inum=-1 ok=0
+TLATRACE seq=224 a=FlushEnd p=e err=1
+TLATRACE seq=225 a=Clear p=e spill=0

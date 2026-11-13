@@ -1,0 +1,62 @@
+TLATRACE seq=0 a=Parse p=c dim=1 first=1 len=106
+TLATRACE seq=1 a=Fold p=c same=0 nothing=0 ulen=106 nlen=0
+TLATRACE seq=2 a=NewTop p=c by=compile ok=1
+TLATRACE seq=3 a=Restore p=c pre=1
+TLATRACE seq=4 a=Recompile p=c dim=1 ok=1
+TLATRACE seq=5 a=Parse p=c dim=1 first=1 len=106
+TLATRACE seq=6 a=Fold p=c same=0 nothing=0 ulen=106 nlen=0
+TLATRACE seq=7 a=NewTop p=c by=compile ok=1
+TLATRACE seq=8 a=Restore p=c pre=1
+TLATRACE seq=9 a=Parse p=c dim=1 first=1 len=103
+TLATRACE seq=10 a=Fold p=c same=0 nothing=0 ulen=103 nlen=0
+TLATRACE seq=11 a=NewTop p=c by=compile ok=1
+TLATRACE seq=12 a=Restore p=c pre=1
+TLATRACE seq=13 a=Recompile p=c dim=1 ok=1
+TLATRACE seq=14 a=Parse p=c dim=1 first=1 len=103
+TLATRACE seq=15 a=Fold p=c same=0 nothing=0 ulen=103 nlen=0
+TLATRACE seq=16 a=NewTop p=c by=compile ok=1
+TLATRACE seq=17 a=Restore p=c pre=1
+TLATRACE seq=18 a=Parse p=c dim=1 first=1 len=129
+TLATRACE seq=19 a=Fold p=c same=1 nothing=0 ulen=129 nlen=129
+TLATRACE seq=20 a=NewTop p=c by=compile ok=1
+TLATRACE seq=21 a=NewTop p=c by=translate ok=1
+TLATRACE seq=22 a=Restore p=c pre=1
+TLATRACE seq=23 a=Recompile p=c dim=1 ok=1
+TLATRACE seq=24 a=Parse p=c dim=1 first=1 len=129
+TLATRACE seq=25 a=Fold p=c same=1 nothing=0 ulen=129 nlen=129
+TLATRACE seq=26 a=NewTop p=c by=compile ok=1
+TLATRACE seq=27 a=NewTop p=c by=translate ok=1
+TLATRACE seq=28 a=Restore p=c pre=1
+TLATRACE seq=29 a=Parse p=c dim=1 first=1 len=103
+TLATRACE seq=30 a=Fold p=c same=0 nothing=0 ulen=103 nlen=0
+TLATRACE seq=31 a=NewTop p=c by=compile ok=1
+TLATRACE seq=32 a=Restore p=c pre=1
+TLATRACE seq=33 a=Recompile p=c dim=1 ok=1
+TLATRACE seq=34 a=Parse p=c dim=1 first=1 len=103
+TLATRACE seq=35 a=Fold p=c same=0 nothing=0 ulen=103 nlen=0
+TLATRACE seq=36 a=NewTop p=c by=compile ok=1
+TLATRACE seq=37 a=Restore p=c pre=1
+TLATRACE seq=38 a=Parse p=c dim=1 first=1 len=106
+TLATRACE seq=39 a=Restore p=c pre=1
+TLATRACE seq=40 a=Recompile p=c dim=1 ok=1
+TLATRACE seq=41 a=Parse p=c dim=1 first=1 len=106
+TLATRACE seq=42 a=Restore p=c pre=1
+TLATRACE seq=43 a=Parse p=c dim=1 first=1 len=141
+TLATRACE seq=44 a=Fold p=c same=1 nothing=0 ulen=0 nlen=0
+TLATRACE seq=45 a=Restore p=c pre=1
+TLATRACE seq=46 a=Recompile p=c dim=1 ok=1
+TLATRACE seq=47 a=Parse p=c dim=1 first=1 len=141
+TLATRACE seq=48 a=Fold p=c same=1 nothing=0 ulen=0 nlen=0
+TLATRACE seq=49 a=Restore p=c pre=1
+TLATRACE seq=50 a=Parse p=c dim=1 first=1 len=47
+TLATRACE seq=51 a=NewTop p=c by=translate ok=1
+TLATRACE seq=52 a=Restore p=c pre=1
+TLATRACE seq=53 a=Recompile p=c dim=1 ok=1
+TLATRACE seq=54 a=Parse p=c dim=1 first=1 len=47
+TLATRACE seq=55 a=NewTop p=c by=translate ok=1
+TLATRACE seq=56 a=Restore p=c pre=1
+TLATRACE seq=57 a=Parse p=c dim=1 first=1 len=46
+TLATRACE seq=58 a=Restore p=c pre=1
+TLATRACE seq=59 a=Recompile p=c dim=1 ok=1
+TLATRACE seq=60 a=Parse p=c dim=1 first=1 len=46
+TLATRACE seq=61 a=Restore p=c pre=1
