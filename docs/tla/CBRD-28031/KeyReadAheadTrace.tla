@@ -44,6 +44,11 @@ TInit ==
   \* segment: any number that allows the distance
   /\ dist = TraceDist0
   /\ look0 = 2 * D
+  /\ cancel = FALSE
+  /\ intrKey = 0
+  /\ intrPending = FALSE
+  /\ raisedIntr = FALSE
+  /\ lost = FALSE
   /\ i = 0
 
 Ev == TraceLog[i + 1]
@@ -66,20 +71,25 @@ Logged ==
      \/ Ev.a = "WResume" /\ phase = "fresh" /\ aend /\ Ev.sk = ev - ck + 1 /\ UNCHANGED vars
      \/ /\ Ev.a = "WKey" /\ Ev.ahead = 1 /\ EvalAhead
         /\ Ev.rk = ev' - ev
-        /\ IF Ev.res = "Q" THEN ~aend' /\ nOid[ev'] = Ev.n
-           ELSE aend' /\ errAhead' = (Ev.res = "ERR")
+        /\ IF Ev.intr = 1 THEN intrKey' > 0
+           ELSE /\ intrKey' = 0
+                /\ IF Ev.res = "Q" THEN ~aend' /\ nOid[ev'] = Ev.n
+                   ELSE aend' /\ errAhead' = (Ev.res = "ERR")
      \/ /\ Ev.a = "WWin"
         /\ WindowDone
         /\ Ev.pos = Min(EvalEnd, Pos(ck, co) + ND) - Pos(ck, co)
      \/ Ev.a = "WEnded" /\ phase = "look" /\ aend /\ UNCHANGED vars
      \/ Ev.a = "WNoWin" /\ phase = "look" /\ ~aend /\ ~cov /\ UNCHANGED vars
      \/ Ev.a = "WLook" /\ Look
+     \* process_oid returned the cancel the look-ahead took, after the window was sent
+     \/ Ev.a = "WIntr" /\ phase = "error" /\ raisedIntr /\ intrKey > 0 /\ UNCHANGED vars
      \* logged when scan_next_slot's own loop moves on after a key's OIDs were drained
      \/ Ev.a = "WNext" /\ phase = "fresh" /\ UNCHANGED vars
      \/ Ev.a = "WClear" /\ (Stop \/ (phase = "done" /\ UNCHANGED vars))
 
-\* not logged: the window decision before a lookup, and the move to the next key after the last OID of one
-Hidden == (Check \/ NextKey) /\ UNCHANGED i
+\* not logged: the window decision before a lookup, the move to the next key after the last OID of one, and the
+\* user's cancel (set by another thread)
+Hidden == (Check \/ NextKey \/ Cancel) /\ UNCHANGED i
 
 TSpec == TInit /\ [][Logged \/ Hidden]_TVars
 

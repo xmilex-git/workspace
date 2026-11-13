@@ -8,7 +8,8 @@ EXTENDS Integers, FiniteSets
 
 CONSTANTS NB, MaxN, NP, D, W0, Carry, Single, INF, OnePage, Probe, Mutant
 \* NB buffers of 1..MaxN OIDs, NP heap pages, window: the first one of a buffer holds W0 OIDs and every next one
-\* twice the one before, up to D (SCAN_INDEX_READ_AHEAD_DISTANCE); the next window is checked when half of the
+\* twice the one before, up to D (the scan's ahead_limit: SCAN_INDEX_READ_AHEAD_DISTANCE for a serial scan, a share
+\* of it for a parallel index scan worker, D18; W0 <= D); the next window is checked when half of the
 \* current one was looked up (D13). Carry: "reset" (every OID buffer starts at W0) or "keep" (a buffer starts
 \* from the distance the buffer before it reached; not taken), Single: the scan is the inner scan of a NL semi/anti
 \* join (QPROC_SINGLE_INNER), which stops at its first match: its first OID's page is read at once and its windows
@@ -61,6 +62,8 @@ Pos == 0..(MaxN - 1)
 Pages == 1..NP
 Min(x, y) == IF x < y THEN x ELSE y
 Max(x, y) == IF x > y THEN x ELSE y
+
+ASSUME W0 <= D
 
 VARIABLES size, page, b, curr, phase, next, resident, served, hinted, lookedIn, orderOk, boundsOk, dist, toldEnd
 
@@ -132,7 +135,9 @@ Check(racyAbsent) ==
   /\ phase' = "look"
   /\ IF (IF Mutant = "late_trigger" THEN curr >= next ELSE curr + H >= next)
        THEN LET start == Max(next, curr)
-                stop == IF Mutant = "no_count_bound" THEN curr + NextDist ELSE Min(N, curr + NextDist)
+                stop == IF Mutant = "no_count_bound" THEN curr + NextDist
+                        ELSE IF Mutant = "eager_frontier" THEN Min(N, start + NextDist)
+                        ELSE Min(N, curr + NextDist)
                 win == {x \in Pos : start <= x /\ x < stop}
                 wp == {page[b][i] : i \in win}
                 own == {i \in win : page[b][i] = page[b][curr]}
@@ -204,6 +209,10 @@ Lead ==
 First == IF Single THEN 1 ELSE W0
 StopWaste == \A k \in 1..NB : toldEnd[k] <= 3 * lookedIn[k] + First
 
+\* C17: the OIDs of a buffer the scan told the OS about and has not looked up yet are at most D (the window is
+\* measured from the OID being looked up, not from the frontier)
+Outstanding == \A k \in 1..NB : toldEnd[k] - lookedIn[k] <= D
+
 \* witness: the windows run more than twice the lookups ahead (the bound of C16 is 3k + W0, not 2k + W0)
 NotOver2k == \A k \in 1..NB : toldEnd[k] <= 2 * lookedIn[k] + First
 
@@ -224,6 +233,7 @@ FrontierWf ==
   /\ phase \in {"check", "look"} /\ N = 1 => next = INF
   /\ phase \in {"check", "look"} /\ next # INF => next >= curr /\ next <= N
   /\ phase = "look" /\ N > 1 => (next = INF \/ next > curr + H)
+  /\ phase \in {"check", "look"} /\ next # INF => next <= curr + dist
 
 \* every OID from the cursor to the frontier is in a checked window
 ServedPrefix ==
@@ -259,5 +269,6 @@ IndInv ==
   /\ WindowBound
   /\ Lead
   /\ StopWaste
+  /\ Outstanding
 
 =============================================================================

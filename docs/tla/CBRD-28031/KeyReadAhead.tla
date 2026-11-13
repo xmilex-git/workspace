@@ -11,21 +11,28 @@
    `ReadAhead` buffer). *)
 EXTENDS Integers
 
-CONSTANTS NK, MaxO, D, W0, Cap, ErrAt, CountAt, Mutant
+CONSTANTS NK, MaxO, D, W0, Cap, ErrAt, CountAt, Mutant, NW, Budget
 \* NK keys on the leaf page, 0..MaxO visible OIDs a key, the window: W0 OIDs at first (SCAN_INDEX_READ_AHEAD_INITIAL),
 \* every next whole one twice the one before, up to D (SCAN_INDEX_READ_AHEAD_DISTANCE); the distance is the
 \* worker scan's and is kept from leaf to leaf (D13, D16),
 \* ErrAt: "defer" (a key whose key filter raises an error stops the look-ahead and is evaluated again when the
 \* lookups reach it) or "early" (raised at the look-ahead), CountAt: "eval" or "consume" (when the key's trace
-\* counters are added)
+\* counters are added), NW: the workers of the parallel index scan, Budget: the OIDs a query may have told the OS
+\* about and not looked up yet (SCAN_INDEX_READ_AHEAD_DISTANCE); a worker's window bound D is its share of it,
+\* never under the first window (D18)
 
 VARIABLES nOid, base, rej, cov, errKey, phase, ev, ck, co, hf, aend, errAhead, windowed, evals, rk, slotKey,
           alloc, freed, counted, consumedKeys, raised, ended, orderOk, pairOk, leadOk, errOk, endOk, lastPos,
-          dist, look0
+          dist, look0, cancel, intrKey, intrPending, raisedIntr, lost
 
 vars == <<nOid, base, rej, cov, errKey, phase, ev, ck, co, hf, aend, errAhead, windowed, evals, rk, slotKey,
           alloc, freed, counted, consumedKeys, raised, ended, orderOk, pairOk, leadOk, errOk, endOk, lastPos,
-          dist, look0>>
+          dist, look0, cancel, intrKey, intrPending, raisedIntr, lost>>
+
+\* the query cancel: cancel (tdes->interrupt is set), intrKey (the key whose evaluation ahead of the lookups took
+\* the cancel; 0: none), intrPending (m_ahead_interrupted), raisedIntr (the worker returned ER_INTERRUPTED),
+\* lost (ghost: a lookup after this worker took the cancel)
+ivars == <<cancel, intrKey, intrPending, raisedIntr, lost>>
 
 \* apalache-type: NK Int
 \* apalache-type: MaxO Int
@@ -35,6 +42,8 @@ vars == <<nOid, base, rej, cov, errKey, phase, ev, ck, co, hf, aend, errAhead, w
 \* apalache-type: ErrAt Str
 \* apalache-type: CountAt Str
 \* apalache-type: Mutant Str
+\* apalache-type: NW Int
+\* apalache-type: Budget Int
 \* apalache-type: nOid Int -> Int
 \* apalache-type: base Int -> Int
 \* apalache-type: rej Set(Int)
@@ -65,6 +74,11 @@ vars == <<nOid, base, rej, cov, errKey, phase, ev, ck, co, hf, aend, errAhead, w
 \* apalache-type: lastPos Int
 \* apalache-type: dist Int
 \* apalache-type: look0 Int
+\* apalache-type: cancel Bool
+\* apalache-type: intrKey Int
+\* apalache-type: intrPending Bool
+\* apalache-type: raisedIntr Bool
+\* apalache-type: lost Bool
 
 \* Apalache: the bounds of the main cfg
 CInit ==
@@ -76,6 +90,8 @@ CInit ==
   /\ ErrAt = "defer"
   /\ CountAt = "consume"
   /\ Mutant = "none"
+  /\ NW = 1
+  /\ Budget = 4
 
 \* the lead of the current window: the next one is told when this many OIDs of it are left
 H == dist \div 2
@@ -89,6 +105,8 @@ Win == IF Mutant = "no_cap" THEN ND ELSE Min(ND, Cap)
 Lead == Min(H, Cap - 1)
 Keys == 1..NK
 Max(x, y) == IF x > y THEN x ELSE y
+\* a worker's window bound is its share of the query's budget, the first window at least (px_scan_task: ahead_limit)
+ASSUME Mutant = "unsplit" \/ D = Max(W0, Budget \div NW)
 
 \* position of OID j (1-based) of key k; base[k] is the number of OIDs of the keys before k
 Pos(k, j) == base[k] + j - 1
@@ -140,6 +158,11 @@ TypeOK ==
   /\ lastPos \in -1..(NK * MaxO)
   /\ dist \in 0..D
   /\ look0 \in 0..(2 * D)
+  /\ cancel \in BOOLEAN
+  /\ intrKey \in 0..NK
+  /\ intrPending \in BOOLEAN
+  /\ raisedIntr \in BOOLEAN
+  /\ lost \in BOOLEAN
 
 Init ==
   /\ nOid \in [Keys -> 0..MaxO]
@@ -176,6 +199,11 @@ Init ==
   /\ dist \in 0..D
   /\ look0 \in 0..(2 * D)
   /\ 3 * dist <= 2 * look0 + W0
+  /\ cancel = FALSE
+  /\ intrKey = 0
+  /\ intrPending = FALSE
+  /\ raisedIntr = FALSE
+  /\ lost = FALSE
 
 \* next_key returned key k qualified (its value copied, pr_clear_value owed), to the look-ahead or to the lookups
 Evaluated(k) ==
@@ -224,6 +252,7 @@ Fresh ==
                          /\ UNCHANGED raised
   /\ UNCHANGED <<look0, dist, nOid, base, rej, cov, errKey, co, errAhead, windowed, freed, orderOk, pairOk, leadOk, errOk,
                  lastPos>>
+  /\ UNCHANGED ivars
 
 \* before the lookup of OID co of key ck: a covering scan looks nothing up (process_oid's covering path: no
 \* read_ahead); read_ahead returns at once after the look-ahead stopped (m_ahead_end); otherwise the window fires
@@ -238,16 +267,31 @@ Check ==
                 ELSE "look"
   /\ UNCHANGED <<look0, dist, nOid, base, rej, cov, errKey, ev, ck, co, hf, aend, errAhead, windowed, evals, rk, slotKey, alloc,
                  freed, counted, consumedKeys, raised, ended, orderOk, pairOk, leadOk, errOk, endOk, lastPos>>
+  /\ UNCHANGED ivars
 
 \* evaluate_ahead -> next_key (ahead = true), while the window is short of D OIDs from the current one: the keys
 \* the key range or the key filter rejects are passed (cleared at once, no queue entry) up to the next key that
 \* qualifies, which is queued; when none is left before the leaf's end or an erroring key (cleared, read again
 \* by the lookups), the look-ahead stops there (m_ahead_end, m_ahead_slot, m_ahead_skipped_keys) and the window
-\* goes to the OS
-EvalAhead ==
-  /\ phase = "eval"
-  /\ ~aend
-  /\ EvalEnd < Pos(ck, co) + Win
+\* goes to the OS. An evaluation that finds the query cancel (pgbuf_fix of an overflow key's page, db_sleep in the
+\* key filter: both clear tdes->interrupt when they raise ER_INTERRUPTED) stops the look-ahead at its key and keeps
+\* the error (stop_at_error: m_ahead_interrupted); dropping it like a key filter error is the mutant
+EvalAheadIntr ==
+  /\ cancel
+  /\ \E j \in Keys :
+       /\ j > ev
+       /\ j <= Barrier
+       /\ \A x \in Keys : ev < x /\ x < j => x \in rej
+       /\ ev' = j - 1
+       /\ evals' = Bump(evals, ev + 1, j - 1)
+       /\ intrKey' = j
+  /\ cancel' = FALSE
+  /\ intrPending' = (Mutant # "drop_interrupt")
+  /\ aend' = TRUE
+  /\ windowed' = TRUE
+  /\ UNCHANGED <<phase, hf, alloc, counted, slotKey, ended, endOk, raised, errOk, errAhead, raisedIntr, lost>>
+
+EvalAheadKey ==
   /\ \E n \in 1..(NK + 1) :
        /\ FirstKept(n, ev + 1)
        /\ IF ErrAt = "early" /\ n = errKey
@@ -277,6 +321,13 @@ EvalAhead ==
                          /\ aend' = TRUE
                /\ windowed' = TRUE
                /\ UNCHANGED <<phase, hf, alloc, counted, slotKey, ended, endOk, raised, errOk>>
+
+EvalAhead ==
+  /\ phase = "eval"
+  /\ ~aend
+  /\ EvalEnd < Pos(ck, co) + Win
+  /\ \/ EvalAheadKey /\ UNCHANGED ivars
+     \/ EvalAheadIntr
   /\ UNCHANGED <<look0, dist, nOid, base, rej, cov, errKey, ck, co, rk, freed, consumedKeys, orderOk, pairOk, leadOk, lastPos>>
 
 \* the window is complete (ND OIDs, or the look-ahead stopped, or the OID buffer is full): its pages go to the OS
@@ -284,12 +335,16 @@ EvalAhead ==
 WindowDone ==
   /\ phase = "eval"
   /\ aend \/ EvalEnd >= Pos(ck, co) + Win
-  /\ phase' = "look"
+  \* process_oid returns the cancel the look-ahead took (S_ERROR) instead of looking the OID up
+  /\ phase' = IF intrPending THEN "error" ELSE "look"
+  /\ raisedIntr' = intrPending
+  /\ aend' = IF intrPending THEN FALSE ELSE aend
+  /\ UNCHANGED <<cancel, intrKey, intrPending, lost>>
   /\ hf' = Max(hf, Min(EvalEnd, Pos(ck, co) + ND))
   \* a window cut short (the leaf's end, the OID buffer's bound) does not make the next one larger
   /\ dist' = IF EvalEnd >= Pos(ck, co) + ND THEN ND ELSE dist
   /\ windowed' = TRUE
-  /\ UNCHANGED <<look0, nOid, base, rej, cov, errKey, ev, ck, co, aend, errAhead, evals, rk, slotKey, alloc, freed, counted,
+  /\ UNCHANGED <<look0, nOid, base, rej, cov, errKey, ev, ck, co, errAhead, evals, rk, slotKey, alloc, freed, counted,
                  consumedKeys, raised, ended, orderOk, pairOk, leadOk, errOk, endOk, lastPos>>
 
 \* process_oid for OID co of key ck; the key it reads (covering, GROUP BY skip) is ck's
@@ -302,6 +357,8 @@ Look ==
   /\ pairOk' = (pairOk /\ (IF Mutant = "slot_key_latest" THEN slotKey ELSE ck) = ck)
   /\ co' = co + 1
   /\ phase' = "check"
+  /\ lost' = (lost \/ intrKey > 0)
+  /\ UNCHANGED <<cancel, intrKey, intrPending, raisedIntr>>
   /\ UNCHANGED <<look0, dist, nOid, base, rej, cov, errKey, ev, ck, hf, aend, errAhead, windowed, evals, rk, slotKey, alloc, freed,
                  counted, consumedKeys, raised, ended, errOk, endOk>>
 
@@ -317,6 +374,7 @@ NextKey ==
   /\ ended' = IF ck = NK THEN TRUE ELSE ended
   /\ UNCHANGED <<look0, dist, nOid, base, rej, cov, errKey, ev, hf, aend, errAhead, windowed, evals, rk, slotKey, alloc, raised,
                  orderOk, pairOk, leadOk, errOk, endOk, lastPos>>
+  /\ UNCHANGED ivars
 
 \* LIMIT reached, interrupt, an error elsewhere, or this worker's error: the walker is reset (cleanup_on_reset,
 \* set_overflow_page, set_page) and every queued key value is cleared
@@ -326,10 +384,34 @@ Stop ==
   /\ freed' = IF Mutant = "leak_queue" THEN freed \cup ({ck} \cap alloc) ELSE alloc
   /\ UNCHANGED <<look0, dist, nOid, base, rej, cov, errKey, ev, ck, co, hf, aend, errAhead, windowed, evals, rk, slotKey, alloc,
                  counted, consumedKeys, raised, ended, orderOk, pairOk, leadOk, errOk, endOk, lastPos>>
+  /\ UNCHANGED ivars
+
+\* the user cancels the query (logtb_set_tran_index_interrupt), once
+Cancel ==
+  /\ phase \in {"fresh", "check", "eval", "look", "next"}
+  /\ ~cancel /\ intrKey = 0 /\ ~raisedIntr
+  /\ cancel' = TRUE
+  /\ UNCHANGED <<nOid, base, rej, cov, errKey, phase, ev, ck, co, hf, aend, errAhead, windowed, evals, rk, slotKey,
+                 alloc, freed, counted, consumedKeys, raised, ended, orderOk, pairOk, leadOk, errOk, endOk, lastPos,
+                 dist, look0, intrKey, intrPending, raisedIntr, lost>>
+
+\* the lookups find the cancel themselves: the lookup's page fix (process_oid), or the key they read when the queue
+\* is empty (next_key, ahead = false): ER_INTERRUPTED is raised as without the look-ahead
+LookupIntr ==
+  /\ cancel
+  /\ phase = "look" \/ (phase = "fresh" /\ ck = ev + 1 /\ ck <= NK)
+  /\ cancel' = FALSE
+  /\ raisedIntr' = TRUE
+  /\ phase' = "error"
+  /\ rk' = IF phase = "fresh" THEN Bump(rk, ck, ck) ELSE rk
+  /\ aend' = FALSE
+  /\ UNCHANGED <<nOid, base, rej, cov, errKey, ev, ck, co, hf, errAhead, windowed, evals, slotKey,
+                 alloc, freed, counted, consumedKeys, raised, ended, orderOk, pairOk, leadOk, errOk, endOk, lastPos,
+                 dist, look0, intrKey, intrPending, lost>>
 
 Done == phase \in {"stopped", "done"} /\ UNCHANGED vars
 
-Next == Fresh \/ Check \/ EvalAhead \/ WindowDone \/ Look \/ NextKey \/ Stop \/ Done
+Next == Fresh \/ Check \/ EvalAhead \/ WindowDone \/ Look \/ NextKey \/ Stop \/ Cancel \/ LookupIntr \/ Done
 
 Spec == Init /\ [][Next]_vars
 
@@ -368,6 +450,15 @@ StopWaste == hf <= 2 * look0 + 3 * (lastPos + 1) + W0
 \* C15: the OIDs evaluated ahead of the lookup stay within the OID buffer's bound (the key that crosses it included)
 BufferBound == phase \in {"check", "eval", "look", "next"} => EvalEnd <= Max(base[ck + 1], Pos(ck, co) + CapWin + MaxO - 1)
 
+\* C17: the OIDs of the leaf the worker told the OS about and has not looked up yet are at most its window bound,
+\* and NW workers under the same rule stay within the query's budget (or NW first windows, when those are more)
+Outstanding == hf - (lastPos + 1) <= D
+QueryBudget == NW * (hf - (lastPos + 1)) <= Max(Budget, NW * W0)
+\* C18: a query cancel the worker took is not lost: no lookup follows it
+CancelKept == ~lost
+
+\* witness: the cancel taken by the look-ahead ends the worker's scan
+NotCancelAhead == ~(raisedIntr /\ intrKey > 0)
 \* witness: a key is evaluated ahead while an earlier key is still being looked up
 NotQueued == ~(phase = "look" /\ ev > ck)
 \* witness: the look-ahead passed a rejected key and stopped at the leaf's end, before the lookups reached it
@@ -388,13 +479,13 @@ CursorWf ==
   /\ phase = "next" => co = nOid[ck] + 1
   /\ ErrAt = "defer" /\ errKey > 0 => ev < errKey /\ ck <= errKey
   /\ phase = "done" => ck = NK + 1 /\ ev = NK
-  /\ phase = "error" => ck <= NK /\ ck = errKey /\ ev = ck - 1
+  /\ phase = "error" => ck <= NK /\ (raisedIntr \/ (ck = errKey /\ ev = ck - 1))
 
 \* the stop of the look-ahead: it reached the leaf's end or an erroring key, every OID up to there hinted
 StopWf ==
   /\ phase = "eval" => ~cov
   /\ phase = "eval" /\ aend => EvalEnd < Pos(ck, co) + ND
-  /\ aend => ~cov /\ windowed /\ ev = Barrier - 1 /\ phase \notin {"error", "done"}
+  /\ aend => ~cov /\ windowed /\ ev = (IF intrKey > 0 THEN intrKey ELSE Barrier) - 1 /\ phase \notin {"error", "done"}
   /\ aend /\ phase \notin {"eval", "stopped"} => hf = EvalEnd
   /\ errAhead => errKey > 0 /\ ~cov /\ ev = errKey - 1 /\ (aend \/ phase \in {"error", "stopped"})
   /\ cov => ~windowed /\ ~aend /\ ~errAhead /\ ev <= ck
@@ -437,6 +528,15 @@ AllocWf ==
   /\ Mutant = "none" => slotKey = 0 /\ ended = (ck > NK)
   /\ raised => errKey > 0 /\ phase \in {"error", "stopped"} /\ ck = errKey
 
+\* the cancel: taken once; a worker whose look-ahead took it sends its window and returns the error
+IntrWf ==
+  /\ cancel => intrKey = 0 /\ ~raisedIntr
+  /\ intrPending = (intrKey > 0)
+  /\ intrKey > 0 => phase \in {"eval", "error", "stopped"} /\ ~cov
+  /\ intrKey > 0 /\ phase = "eval" => aend /\ ~raisedIntr
+  /\ intrKey > 0 /\ phase = "error" => raisedIntr
+  /\ raisedIntr => phase \in {"error", "stopped"}
+
 IndInv ==
   /\ TypeOK
   /\ BaseWf
@@ -458,6 +558,10 @@ IndInv ==
   /\ CountsConsumed
   /\ EvalOnce
   /\ NoRejectedEntry
+  /\ IntrWf
+  /\ Outstanding
+  /\ QueryBudget
+  /\ CancelKept
   /\ NoWindowWithoutLookup
   /\ BufferBound
   /\ FreshWf

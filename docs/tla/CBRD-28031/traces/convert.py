@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # usage: convert.py serial <log> <out.tla> [corrupt]      one serial index scan (the class with the most Fill events)
 #        convert.py worker <log> <Name> <k> <need> [corrupt]  the k-th smallest worker segment (one walker on one leaf, no
-#                                                          overflow page) with <need>: pop | resume | err | cov
+#                                                          overflow page) with <need>: pop | resume | err | cov | intr
 # corrupt: swap-look | drop-check | flip-fired | foreign-hint | pos-off (worker) | drop-eval (worker) | skip-off (worker)
+#          | intr-look (worker: the error return after a cancel taken by the look-ahead turned into a lookup)
 # Writes a TLA+ data module: serial -> TraceLog, Pg (pages of each buffer); worker -> TraceLog, NOid, Base, Rej, ErrKey, Cov, Cap, Dist0.
 import re, sys
 
@@ -88,6 +89,8 @@ def worker(ev, k, corrupt, need):
             return any(e["a"] == "WResume" and e["skipped"] != "0" for e in g) and has("WPop")
         if need == "err":
             return has("WKey", ahead="1", res="ERR") and has("WKey", ahead="0", res="ERR")
+        if need == "intr":
+            return has("WKey", ahead="1", intr="1") and has("WIntr") and has("WPop")
         if need == "cov":
             return g[0]["cov"] == "1" and has("WLook")
         return True
@@ -104,6 +107,9 @@ def worker(ev, k, corrupt, need):
     elif corrupt == "drop-eval":
         j = [x for x, e in enumerate(seg) if e["a"] == "WKey" and e["ahead"] == "1" and e["res"] == "Q"][0]
         del seg[j]
+    elif corrupt == "intr-look":
+        j = [x for x, e in enumerate(seg) if e["a"] == "WIntr"][0]
+        seg[j] = dict(seg[j], a="WLook")
     elif corrupt == "skip-off":
         j = [x for x, e in enumerate(seg) if e["a"] == "WResume" and e["skipped"] != "0"][0]
         seg[j]["skipped"] = str(int(seg[j]["skipped"]) - 1)
@@ -124,6 +130,10 @@ def worker(ev, k, corrupt, need):
             rej.append(len(noid))
         if res == "Q":
             noid.append(int(e["n"]))
+        elif e.get("intr") == "1":
+            # the key whose evaluation took the query cancel: never evaluated to its end, the leaf's last known key
+            noid.append(0)
+            continue
         elif res == "ERR":
             noid.append(0)
             err = len(noid)
@@ -131,9 +141,9 @@ def worker(ev, k, corrupt, need):
             pending = res
     log = []
     for e in seg:
-        log.append("[a |-> \"%s\", ahead |-> %s, res |-> \"%s\", rk |-> %s, n |-> %s, pos |-> %s, sk |-> %s]"
+        log.append("[a |-> \"%s\", ahead |-> %s, res |-> \"%s\", rk |-> %s, n |-> %s, pos |-> %s, sk |-> %s, intr |-> %s]"
                    % (e["a"], e.get("ahead", "0"), e.get("res", ""), e.get("rk", "0"), e.get("n", "0"),
-                      e.get("pos", "0"), e.get("skipped", "0")))
+                      e.get("pos", "0"), e.get("skipped", "0"), e.get("intr", "0")))
     return log, noid, rej, err, cov, cap, dist0, len(good)
 
 # usage (operators, appended to stdout): convert.py serial <log> <Name> [corrupt] | worker <log> <Name> <k> <need> [corrupt]

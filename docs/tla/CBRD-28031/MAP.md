@@ -1,6 +1,6 @@
 # CBRD-28031 — read-ahead hint for the heap lookups of an index scan: `ReadAhead` (the serial index scan's read-ahead window) and `KeyReadAhead` (the parallel index scan worker's look-ahead)
 
-Engine: branch `CBRD-28031` `35a151f37` (develop `4255a337d` + 7; the model of D1..D9 was first checked on `fb576da0b`), worktree `~/dev/cubrid-worktree/CBRD-28031`; fork `xmilex-git/cubrid` branch `CBRD-28031`.
+Engine: branch `CBRD-28031` `1a0875eba` (develop `4255a337d` + 8; D13..D17 on `35a151f37`; the model of D1..D9 was first checked on `fb576da0b`), worktree `~/dev/cubrid-worktree/CBRD-28031`; fork `xmilex-git/cubrid` branch `CBRD-28031`.
 Parent survey: CBRD-28005 (`docs/tla/CBRD-28005/`, D34: the hint is `posix_fadvise (WILLNEED)`, reads stay synchronous; ADR 0055).
 
 ## Design tree (grilling ledger)
@@ -24,17 +24,24 @@ Parent survey: CBRD-28005 (`docs/tla/CBRD-28005/`, D34: the hint is `posix_fadvi
 | D16 | A parallel index scan worker keeps its distance from leaf to leaf and from key to key; it starts at the first window when the worker's scan is opened (a reset opens it again). A window cut short (the leaf's end, the OID buffer's bound) does not make the next one larger. A worker's scan stops once (LIMIT, interrupt), so C16 counts the lookups of the whole worker scan. | settled 2026-11-12 (Q6: "ㅇㅇ") | `KeyReadAhead`: `dist`, `look0`; C16 `StopWaste` |
 | D17 | The inner scan of a NL semi/anti join (`QPROC_SINGLE_INNER`) looks its first OID up without a window and starts its windows at the second lookup, with 2 OIDs (then 4, 8, ... 256): C16's bound for it is 3k + 1. With the first window of 8 the scan that stops at its first match told the OS about 7 pages it never read, for every outer row and again at every execution, because those pages never enter the buffer: the semi join of D15 run again right after its cold run took 0.36..0.37 s against develop's 0.17..0.18 s (fixed 256 window 0.93 s; first window 1: 0.18 s; perf-node0 run `20261112-134122-248`). Measured on `35a151f37` (release, libcubrid `5df76ab07268…`, perf-node0 run `20261112-155325-248`, cold / run again, seconds): semi join with a data filter 5.88 / 0.18 (develop 4.90..5.50 / 0.17..0.18), anti join reading 30 rows a key 9.47 (develop 33.5, first window 8: 6.63..6.76), Q20 49.5 (develop 118.2, 119.2), Q9 54.9 (develop 82.3), lineitem range 1.64 (develop 7.27). `posix_fadvise` calls of the development host's cases (develop 0): semi join matching at the first row 16 (fixed window 25,413; first window 8: 613), matching at the 7th row on average 2,307 (249,191; 6,339), `limit 1` with a data filter 20 (256). Replaces D15's "like any other scan" for the first window only. | settled 2026-11-12 (Q7: "그렇게 하자.") | `Single`, `First`; mutant `single-as-other`; trace ser3 |
 | D9 | The read-ahead distance is 256 OIDs (`SCAN_INDEX_READ_AHEAD_DISTANCE`, serial scan and worker alike), checked half a window (128 OIDs) ahead. Measured cold (TPC-H SF10, release, interleaved; perf-node0 HDD RAID, run 20261111-160118-248, two rounds; this host's NVMe one round): Q20 none 130.3/130.0 s, 32: 53.3/54.7, 64: 52.7/54.6, 256: 49.2/49.5, 512: 48.4/48.7 (perf-node0); Q9 none 101.2/87.5, 32..512: 54..63; on NVMe 32..512 within noise. | settled 2026-11-11 (the user: "그럼 256으로 해야겟네") | `D` (the models check D = 4 and 6; the bound is not a claim) |
+| D18 | A query's read-ahead is bounded as a whole: the OIDs it told the OS about and has not looked up yet stay under a budget (C17), because the device queue is shared with every other session. Found by review (PR #8490, HyunukLee 4560426934, soheejung-cs 4561664773; hgryoo's table had the same row) and measured on `35a151f37` (release, perf-node0 runs `20261113-155029-248` and `20261113-183145-248`, 12,000,000 rows, a cold scan of 100,000 keys on 100,000 heap pages beside four sessions of single-row autocommit INSERTs; the bound switched by `RA_CAP` in a measurement build, libcubrid `314d27435d3f…`): INSERT p50 during the scan 0.63..0.71 ms on develop, 11.5..12.0 ms with `PARALLEL(4)` and 5.5..5.7 ms serial at 256 OIDs a scan thread; at 64 OIDs in all (serial 64, four workers of 16) 0.95..1.26 ms with the scan at 2.89..3.16 s (2.67..2.84 s at 256, develop 9.2..9.3 s parallel and 36.7 s serial). TPC-H SF10 cold (Q20, Q9, semi and anti join) shows no difference from 16 to 256; the lineitem range scan 1.93 s at 16, 1.55..1.82 s from 32 up. With the change (release libcubrid `f26e31d2f92e…`, run `20261113-203825-248`, develop back to back): INSERT p50 during the `PARALLEL(4)` scan 1.22..1.23 ms (scan 2.83..2.88 s), during the serial scan 0.93..0.95 ms (3.00..3.05 s); two sessions' index lookups of 2 rows during the `PARALLEL(4)` scan p50 2.25..2.31 ms, p99 3.98..4.02 ms (develop 1.01, 1.82..1.83; no scan 1.14..1.16, 1.48..1.49); TPC-H SF10 cold, develop / change, two rounds: Q20 174.5, 167.9 / 68.8, 64.4; Q9 122.4, 110.6 / 86.1, 97.6 (64.0, 76.9, 78.2 in other passes); lineitem range 10.97, 10.70 / 1.83, 1.75; anti join 48.98, 55.89 / 12.71, 12.37; semi join 7.67, 7.45 / 7.36, 7.17 (the node ran slower than on 11-12 and its first pass, 20:55..20:58, was disturbed and is not used). | settled 2026-11-13 (Q1: "a"; Q4: 64 OIDs a query, a serial scan's `ahead_limit`; a worker's is `MAX (8, 64 / workers)`, no shared counter) | `D` (the scan thread's bound), `NW`, `Budget`; C17 `Outstanding`, `QueryBudget`; mutants `eager-frontier`, `unsplit` |
+| D19 | A worker sends its hint while it holds the leaf's S latch, as it holds it across the heap lookups: a session inserting into the same leaves waited at most 53..60 ms during the scan (develop 171..192 ms; more than 100 ms: 0 against 138..148). | settled 2026-11-13 (Q2: "그래") | not modeled (no state) |
+| D20 | A query cancel the look-ahead takes is kept: `stop_at_error (ahead)` clears every error of a key evaluated ahead except `ER_INTERRUPTED` (`m_ahead_interrupted`), and `process_oid` returns it after `read_ahead` instead of looking the OID up. The cancel is a one-shot error (`pgbuf_fix` of an overflow key's page and `db_sleep` in a key filter clear `tdes->interrupt` when they raise it), so the rule "the lookups raise it when they reach the key" (D7, C9) cannot hold for it; stopping before the earlier keys' rows are returned is what a cancel asks for. Found by review (PR #8490, soheejung-cs 4561664186) and reproduced on `35a151f37` (release, CS mode, csql in a pty, Ctrl-C 2 s into `select /*+ parallel(4) */ count(*), sum(cast(v as bigint)) from ra_t where k between 100 and 2000 and sleep(0.02 + k * 0) = 0 using index i_ra_k(+)`): develop `4255a337d` "Has been interrupted" 5 of 5, `35a151f37` the result after 13.7 s 4 of 5; with the fix 5 of 5 (release) and 3 of 3 (optdebug, memory check). | settled 2026-11-13 (Q5: the recommendation) | `cancel`, `intrKey`, `intrPending`, `EvalAheadIntr`, `LookupIntr`; C18 `CancelKept`; mutant `drop-interrupt` |
+| D21 | The scan of an EXISTS subquery that was not rewritten into a semi join (`XASL_NEED_SINGLE_TUPLE_SCAN`) starts its windows at its second lookup, like the inner scan of a NL semi/anti join (D17): `qexec_open_scan` and `qexec_init_next_partition` set `ahead_single` from the scan's own XASL. The scans of that XASL's `scan_ptr` blocks (a join inside the subquery) keep the first window (`shortcut:` comment in `qexec_open_scan`). Found by review (soheejung-cs 4561664422) and counted (release, warm buffer, `... from rv_c c where c.id < 1000 and (c.pad = 'zzz' or exists (select 1 from rv_o o where o.cid = c.id and o.status = 'CLOSED'))`): `posix_fadvise` calls an execution 5,964 on `35a151f37`, 137 with the change, 0 on develop. | settled 2026-11-13 (Q6: the recommendation) | `Single` (`ReadAhead`); trace ser4 |
+| D22 | The hint keeps no parameter (D1). The pages handed to the OS are counted in `Num_data_page_read_ahead` (`PSTAT_PB_NUM_READ_AHEAD`) only while somebody watches the statistics (`perfmon_add_stat` returns at once otherwise), one call a `pgbuf_read_ahead`. Checked on release: a cold range scan of 2,001 keys under `cubrid statdump -i 1` counts 2,001 (its `posix_fadvise` calls by `strace`: 2,001); the same scan with nobody watching leaves 0. | settled 2026-11-13 (Q7: "statdump 켜져있을때만 세") | not modeled (no state the scan reads) |
+| D23 | `scan_index_read_ahead` is declared for every build mode (SA calls it from `scan_next_index_scan`); `scan_index_alloc_oid_buffer`, which only a worker calls, is `SERVER_MODE` in declaration and definition. The PR body says a key list or range list scan (IN) refills its OID buffer per key, so its windows stay inside one key's OIDs (cold: a unique `IN` of 2,000 keys 0 `posix_fadvise` calls, the range of 2,001 keys 2,001, a non-unique `IN` of 500 keys with 4 rows each 1,713). | settled 2026-11-13 (Q8: the recommendation) | not modeled |
+| D24 | A worker keeps evaluating keys ahead (D6..D12): hinting the next records' OIDs without evaluating their keys would tell the OS about the pages of the keys the key filter rejects (against D10). Cold, the worker path alone (run `20261113-203825-248`, `PARALLEL(4)`, 100,000 keys of one OID each on 100,000 heap pages, data filter `v >= 0`, three interleaved runs, seconds): develop 8.91, 9.31, 9.33; the look-ahead switched off (`RA_NO_EVAL`, windows inside one key only) 9.02, 9.21, 9.61; this change 2.73, 2.78, 2.79. | settled 2026-11-13 (Q9: the recommendation) | — |
 
 ## Claim and sources
 
 | # | Claim | Kind | Source |
 |---|---|---|---|
 | C1 | The lookups take the OIDs of every OID buffer once, in buffer order (all of them unless the scan stops: `StopEarly`): the hint changes neither the rows nor their order. | equivalence | JIRA body, Specification Changes ("질의 결과와 행 순서도 지금과 같습니다") |
-| C2 | A window lies inside the OID buffer, starts at or after the OID being looked up and holds at most 256 OIDs (`vpids[SCAN_INDEX_READ_AHEAD_DISTANCE]`; `SCAN_INDEX_READ_AHEAD_NEXT` never exceeds it). | safety | `scan_manager.c` `scan_index_read_ahead` (array bound) |
-| C3 | (serial; for a worker: `WorkerLead`, the same over its OIDs in lookup order up to the leaf's end or an erroring key, and up to `max_oid_cnt - 1` ahead when its OID buffer holds fewer than 129 OIDs, C15) Every OID from the one being looked up to half of the current window ahead (the window: 8 OIDs at first, twice the one before at every whole window, up to 256, so 128 ahead once it is 256; D13) has been in a window whose pages were checked against the buffer before its lookup (the pages the check found absent handed to the OS; the check may be wrong when another thread loads or evicts the page meanwhile) or is on the page being looked up. | safety | JIRA body (re-drafted 2026-11-11), Implementation ("조회할 OID부터 256개 ... 절반(128개)을 조회했을 때 다음 창을 알립니다"); design.md "직렬 인덱스 스캔" |
+| C2 | A window lies inside the OID buffer, starts at or after the OID being looked up and holds at most `ahead_limit` OIDs (64 for a serial scan, `vpids[SCAN_INDEX_READ_AHEAD_DISTANCE]`; `SCAN_INDEX_READ_AHEAD_NEXT` never exceeds the scan's `ahead_limit`; 256 until D18). | safety | `scan_manager.c` `scan_index_read_ahead` (array bound) |
+| C3 | (serial; for a worker: `WorkerLead`, the same over its OIDs in lookup order up to the leaf's end or an erroring key, and up to `max_oid_cnt - 1` ahead when its OID buffer holds fewer than 129 OIDs, C15) Every OID from the one being looked up to half of the current window ahead (the window: 8 OIDs at first, twice the one before at every whole window, up to the scan's `ahead_limit`: 64 for a serial scan, so 32 ahead once it is 64; D13, D18) has been in a window whose pages were checked against the buffer before its lookup (the pages the check found absent handed to the OS; the check may be wrong when another thread loads or evicts the page meanwhile) or is on the page being looked up. | safety | JIRA body (re-drafted 2026-11-11), Implementation ("조회할 OID부터 256개 ... 절반(128개)을 조회했을 때 다음 창을 알립니다"); design.md "직렬 인덱스 스캔" |
 | C7 | A worker's lookup reads the key value of the OID's own key, never a key evaluated ahead (`m_slot_key`: covering reads, GROUP BY skip). | safety | D8 (Q8) |
 | C8 | When a worker stops or ends (end of leaf, LIMIT, interrupt, error, reset), every key value the look-ahead copied is cleared, once. | safety | D8 (Q8); `pr_clear_value` ownership of `COPY` keys |
-| C9 | A key filter error is raised only when the lookups reach its key, as without the look-ahead. | equivalence | D7 (Q7) |
+| C9 | A key filter error is raised only when the lookups reach its key, as without the look-ahead (the query cancel is not such an error: C18). | equivalence | D7 (Q7) |
 | C10 | The trace counters count the keys whose OIDs were looked up (`qualified_keys`), and every key read once (`read_keys`), as without the look-ahead. | equivalence | D7 (Q7); `read_keys` once: PR #8490 review (Greptile), D10 |
 | C11 | The leaf's range end (`signal_chain_ended`) is signaled only after the last queued key was drained. | safety | D8 (Q8) |
 | C12 | A worker evaluates every key of its leaf (read, key range, key filter) once, as without the look-ahead; only the key the look-ahead stopped at (an error; the key past the range's end takes the same path) is evaluated once more, by the lookups. | safety (cost) | PR #8490 review (Greptile P2), D10 |
@@ -42,7 +49,8 @@ Parent survey: CBRD-28005 (`docs/tla/CBRD-28005/`, D34: the hint is `posix_fadvi
 | C14 | A worker whose scan has no heap lookup (covering index) never evaluates a key ahead and never checks a window. | safety | D11 |
 | C15 | The OIDs a worker evaluates ahead of its lookups fit the scan's OID buffer (`index_scan_oid_buffer_size`): the look-ahead stops when the buffer is full from the OID being looked up, the key that crosses the bound included (its OIDs fit: the buffer holds at least two pages, a leaf record's OIDs). | safety | D12 |
 | C16 | A scan that stops after looking up k OIDs of an OID buffer has told the OS about at most 3k + 8 OIDs of it (`W0`; 3k + 1 for the inner scan of a NL semi/anti join, D17; a worker: over the lookups of its whole scan, D16). The fixed window told 256 for k = 1. | safety (cost) | PR #8490 review (hgryoo), D13 (Q1, Q3), D17 (Q7) |
-
+| C17 | The OIDs a scan thread told the OS about and has not looked up yet are at most its `ahead_limit` (a window is measured from the OID being looked up); a serial scan's is 64, a parallel index scan worker's `MAX (8, 64 / workers)`, so the threads of one index scan keep at most `MAX (64, 8 x workers)` OIDs ahead. Not covered: the serial inner index scans the workers of a parallel outer scan run (64 each). | safety (cost) | PR #8490 review (HyunukLee, soheejung-cs), D18 (Q1, Q4) |
+| C18 | A query cancel a worker took, in a key evaluated ahead or in a lookup, ends that worker's scan with `ER_INTERRUPTED`: no lookup follows it. | safety | PR #8490 review (soheejung-cs), D20 (Q5); develop's behavior |
 
 ## Refinement map — `ReadAhead` (serial index scan)
 
@@ -55,16 +63,18 @@ Parent survey: CBRD-28005 (`docs/tla/CBRD-28005/`, D34: the hint is `posix_fadvi
 | `Env` | other threads' `pgbuf_fix` (claim and read of a BCB) and victimization (`pgbuf_victimize_bcb`) | changes `resident` at any point between steps |
 | `racyHinted` (Probe = "racy") | `page_buffer.c:pgbuf_read_ahead`: chain walk with relaxed loads, no `hash_mutex`, at most `PGBUF_READ_AHEAD_MAX_CHAIN_STEPS` BCBs | the answer may be wrong either way (D5) |
 | `posix_fadvise` | `file_io.c:fileio_read_ahead_hint` | no state the scan reads afterwards: not a model variable beyond `served` |
+| `D` | `isid.ahead_limit`: `SCAN_INDEX_READ_AHEAD_DISTANCE` (64) at `scan_open_index_scan`; a worker's task lowers it to `MAX (SCAN_INDEX_READ_AHEAD_INITIAL, SCAN_INDEX_READ_AHEAD_DISTANCE / parallelism)` after it opens its scan (`px_scan_task.cpp`, `input_handler_index::get_parallelism`) | constant per scan |
+| `Single` | `scan_id->single_fetch == QPROC_SINGLE_INNER` (D17) or `isid.ahead_single` (D21: `XASL_NEED_SINGLE_TUPLE_SCAN` of the scan's XASL, set by `qexec_open_scan` and `qexec_init_next_partition` after `scan_open_index_scan`) | constant per scan open |
 
 Exit paths of the serial scan (P11): end of the OID buffer -> `Fill`; end of scan (`S_END` from `call_get_next_index_oidset`) -> `phase = "end"`; `scan_reset_scan_block`, `scan_start_scan` (`curr_oidno = -1`, position `S_BEFORE`) -> the next `Fill`, which resets `ahead_next`; grouped scans (`scan_id->grouped`), multi-range optimization, count-only and covering scans never set `ahead_next` (stays `INT_MAX`), so `Check` never fires; a scan that stops before its buffer's end (the first match of a semi/anti join's inner scan, LIMIT, an error or interrupt from the lookup) -> `StopEarly`, then the next rescan's `Fill` or the end; `ReadAheadTrace` takes `StopEarly` as its one hidden step (the next event is the next buffer's `Fill`).
 
 Guard whose removal violates nothing: `MAX (ahead_next, curr_oidno)` (mutant `start_at_next` not kept): `ahead_next` never falls below `curr_oidno` because `curr_oidno` moves by one per lookup (`scan_manager.c` non-grouped branch `curr_oidno++`) and every `Check` that fires moves `ahead_next` past `curr_oidno + 128` (or to `INT_MAX`); the guard is defensive.
 
-Dead expressions: the `Mutant = "late_trigger"`, `"no_count_bound"` and `"cursor"` arms of `Check` (mutant-only). `ReadAhead.tla:73` — `NextDist`'s `"fixed"` and `"no_distance_cap"` arms (mutant-only). `ReadAhead.tla:119`, `ReadAhead.tla:120`, `ReadAhead.tla:121`, `ReadAhead.tla:122` — `Fill`'s `Single` arm (the inner scan of a NL semi/anti join, `QPROC_SINGLE_INNER`: `ahead_next = 1`, `ahead_distance = 1`); dead in every cfg with `Single = FALSE`, evaluated in `ReadAhead.single` (`Single = TRUE`); removing the arm is the mutant `ReadAhead.mutant-single-as-other`.
+Dead expressions: the `Mutant = "late_trigger"`, `"no_count_bound"`, `"eager_frontier"` and `"cursor"` arms of `Check` (mutant-only). `ReadAhead.tla:76` — `NextDist`'s `"fixed"` and `"no_distance_cap"` arms (mutant-only). `ReadAhead.tla:122`, `ReadAhead.tla:123`, `ReadAhead.tla:124`, `ReadAhead.tla:125` — `Fill`'s `Single` arm (the inner scan of a NL semi/anti join, `QPROC_SINGLE_INNER`: `ahead_next = 1`, `ahead_distance = 1`); dead in every cfg with `Single = FALSE`, evaluated in `ReadAhead.single` (`Single = TRUE`); removing the arm is the mutant `ReadAhead.mutant-single-as-other`.
 
 ## Refinement map — `KeyReadAhead` (parallel index scan worker, D6/D7/D10/D11/D12)
 
-| Model | Code (`CBRD-28031` `35a151f37`) | One step because |
+| Model | Code (`CBRD-28031` `1a0875eba`) | One step because |
 |---|---|---|
 | `rej`, `FirstKept` | `px_scan_index_leaf_slot_walker.cpp:leaf_slot_walker::next_key`: the loop over the slots of `m_page` from `*slot`; a key outside the range (not past it), a NULL first index term, or a key filter `V_FALSE`/`V_UNKNOWN` is cleared (`pr_clear_value`) and the loop goes on (`continue`); fence and unreadable slots are not keys (not counted in `read_keys`) | the leaf is held (S latch) and the walker's state is private |
 | `EvalAhead`, a key qualifies | `leaf_slot_walker::evaluate_ahead` -> `next_key (ahead = true)`: the rejected keys, then the qualifying key; its visible OIDs (`btree_record_process_objects` with the snapshot, `leaf_collect_helper`) are appended to the scan's OID buffer (`isid.oid_list`, `oid_cnt`) and `{end offset, next slot, read_keys}` is pushed on `m_ahead`; its value is cleared, or kept in `m_ahead_last` when it has an overflow chain (the walk goes no further); `m_ahead_slot` after it | private; the key is copied (`COPY`) and freed, as before the look-ahead |
@@ -78,6 +88,11 @@ Dead expressions: the `Mutant = "late_trigger"`, `"no_count_bound"` and `"cursor
 | `dist`, `look0` | `isid.ahead_distance` of the worker's scan: 0 at `scan_open_index_scan` (the worker's task opens its scan once; a reset opens it again), kept by `set_page`, `clear_ahead` and the key-to-key restarts (`ahead_next = 0`), D16; `look0`: the lookups of the leaves before this one (not a code variable) | private |
 | `Cap` | `isid.oid_list->max_oid_cnt` (`ISCAN_OID_BUFFER_COUNT`, from `index_scan_oid_buffer_size`): `scan_index_alloc_oid_buffer` at the worker's `scan_open_index_scan` (`px_scan_task.cpp`); the collect helpers check the capacity (`assert_release` and `ER_GENERIC_ERROR`, unreachable while C15 holds) | constant per scan |
 | `Stop` | `clear_ahead` (empties `m_ahead`, clears `m_ahead_last`'s value, `m_ahead_end`) and `overflow_drain_fsm::cleanup_on_reset` (`oid_cnt = 0`): `slot_iterator_index::finalize` and `set_page` (reset, LIMIT, next leaf; `set_page` asserts the queue is empty), `overflow_drain_fsm::set_overflow_page` (helper session) | private |
+| `Cancel` | another thread's `logtb_set_tran_index_interrupt` (`tdes->interrupt = true`) | one store; the worker reads it only through the two rows below |
+| `EvalAheadIntr` | `next_key (ahead = true)`: `btree_read_record` (`pgbuf_fix` of an overflow key's page) or the key filter (`db_sleep`) finds `tdes->interrupt`, clears it (`logtb_is_interrupted (clear = true)`) and sets `ER_INTERRUPTED`; `stop_at_error (ahead)` keeps the error and sets `m_ahead_interrupted`; `evaluate_ahead` ends the look-ahead (`m_ahead_end`). The keys rejected before it in the same call were evaluated; the key itself is not counted (its evaluation was cut) | the flag is cleared by the thread that reads it (one test-and-clear under the caller's check); the rest is private |
+| `WindowDone`, `intrPending` | `read_ahead` sends the window of the OIDs already in the buffer (`scan_index_read_ahead`), then `process_oid` returns `S_ERROR` (`m_ahead_interrupted`) before `heap_get_visible_version`; the task takes `ER_INTERRUPTED` from the error stack (`USER_INTERRUPTED_FROM_WORKER_THREAD`) | private |
+| `LookupIntr` | the lookup's own `pgbuf_fix` (`heap_get_visible_version`) or `next_key (ahead = false)` finds the cancel: `S_ERROR` with `ER_INTERRUPTED`, code this change does not touch | as `EvalAheadIntr` |
+| `NW`, `Budget` | the scan's workers (`m_parallelism` of `px_scan::manager`, handed to `input_handler_index::init_on_main`) and `SCAN_INDEX_READ_AHEAD_DISTANCE` | constants per scan |
 | (not modeled: overflow pages) | `overflow_drain_fsm::process_one_overflow_page` replaces the buffer's contents with the page's OIDs (`oid_cnt = 0`, then `ovf_collect_helper` appends) (it asserts no key is queued: none is evaluated past a key with an overflow chain) and calls `restart_read_ahead`: each overflow page's OIDs are a sequence of their own (a `ReadAhead` buffer) | |
 
 The model's keys are the keys `next_key` reads; a rejected key has no OID (`KeysWf`), and the range's end is the leaf's end of the model (`n = NK + 1`): the key past it is read twice like an erroring key, by the same `stop` lambda, but is not a model key. `ev` (the last key evaluated) never moves back (cubrid-tla P81): in the code it is `m_ahead_slot`, kept on every return of `evaluate_ahead`.
@@ -89,7 +104,7 @@ Shared state the look-ahead could touch, and why it does not change a lookup's i
 | Fault | Where it can fire | In the models |
 |---|---|---|
 | error return | `pgbuf_read_ahead` and `fileio_read_ahead_hint` return nothing (a failed `posix_fadvise` is ignored); the worker's key evaluation ahead (`btree_read_record`, `check_key_in_range`, key filter `V_ERROR`, `btree_record_process_objects`) | serial: not applicable (the hint has no error path); worker: `errKey` with `ErrAt` (D7: cleared ahead, raised when the lookups reach the key) |
-| interrupt / query cancel, LIMIT | the worker is reset (`cleanup_on_reset`) between any two steps | `Stop` from every live phase (C8) |
+| interrupt / query cancel, LIMIT | the worker is reset (`cleanup_on_reset`) between any two steps; the cancel itself is taken by whichever check reads `tdes->interrupt` first: the worker loop (`px_scan_task.cpp`, between leaves), a lookup's page fix, a key evaluation (overflow key page, `db_sleep`), ahead of the lookups or not | `Stop` from every live phase (C8); `Cancel`, `EvalAheadIntr`, `LookupIntr` (C18); a cancel another thread took reaches this worker as `Stop` |
 | lock timeout, deadlock victim | no lock is requested by the hint or the look-ahead | not applicable |
 | conditional latch failure | none: the hint fixes no page; the look-ahead reads the leaf the worker already holds | not applicable |
 | OOM | `scan_index_alloc_oid_buffer` (the OID buffer, once per worker scan, from the pool `scan_Iscan_oid_buf_list`); `std::vector::push_back` of `m_ahead` (end offsets, capacity kept across leaves) | not modeled: the buffer's failure fails the worker's scan open with an error, as the serial scan's; `m_ahead`'s `std::bad_alloc` is the class of the walker's other containers |
@@ -127,21 +142,26 @@ Environment assumptions: none for liveness (no liveness claim); `Env` has no fai
 | `KeyReadAhead.mutant-covering-window` | D11: the covering path calls `read_ahead` | C14 `NoWindowWithoutLookup` |
 | `KeyReadAhead.mutant-fixed-window` | D13: a worker's every window holds 256 OIDs | C16 `StopWaste` |
 | `KeyReadAhead.mutant-no-cap` | D12: the look-ahead's `oid_cnt - curr_oidno < max_oid_cnt` bound (`Cap = 2`) | C15 `BufferBound` |
+| `ReadAhead.mutant-eager-frontier` | D18: the window's end measured from the frontier (`ahead_next + distance`) instead of the OID being looked up (`D = 2`) | C17 `Outstanding` |
+| `KeyReadAhead.mutant-unsplit` | D18: every worker keeps the whole budget (the code of `35a151f37`: 256 OIDs a worker; `NW = 2`, `Budget = 4`, `D = 4`) | C17 `QueryBudget` |
+| `KeyReadAhead.mutant-drop-interrupt` | D20: the cancel taken by the look-ahead is cleared like a key filter error (the code of `35a151f37`) | C18 `CancelKept` |
 | `ReadAhead.witness-hinted` | a page is hinted | reachable |
 | `ReadAhead.witness-over-2k` | the windows run more than 2k + `W0` OIDs ahead of k lookups (C16's bound is 3k + `W0`: the next window is told when half of the current one is left) | reachable |
 | `KeyReadAhead.witness-queued` | a key evaluated ahead while an earlier key is looked up | reachable |
 | `KeyReadAhead.witness-skipped-stop` | the look-ahead passed a rejected key and stopped at the leaf's end before the lookups reached it | reachable |
 | `KeyReadAhead.witness-error-twice` | the key the look-ahead stopped at on an error is raised by the lookups | reachable |
 | `KeyReadAhead.witness-covered-done` | a covering scan drains a leaf with OIDs | reachable |
+| `KeyReadAhead.witness-cancel-ahead` | the cancel taken by the look-ahead ends the worker's scan with the error | reachable |
+| `KeyReadAhead.workers-2` | (`NW = 2`, `Budget = 4`, `D = 2`) two workers share the budget | passes |
 | `ReadAhead.option-locked` | (D5 not taken) the residency check under the bucket mutex | passes too: the claims do not depend on the check's answer |
 
-Dead expressions: `KeyReadAhead.tla:254`, `KeyReadAhead.tla:255`, `KeyReadAhead.tla:257`, `KeyReadAhead.tla:258`, `KeyReadAhead.tla:259` — `EvalAhead`'s `ErrAt = "early"` branch (mutant-only: `mutant-error-early`); `KeyReadAhead.tla:275` — the `no_stop_mark` arm of the stop (mutant-only: `mutant-no-stop-mark`); `ReadAhead.tla` none in the main cfg.
+Dead expressions: `KeyReadAhead.tla:298`, `KeyReadAhead.tla:299`, `KeyReadAhead.tla:301`, `KeyReadAhead.tla:302`, `KeyReadAhead.tla:303` — `EvalAhead`'s `ErrAt = "early"` branch (mutant-only: `mutant-error-early`); `KeyReadAhead.tla:319` — the `no_stop_mark` arm of the stop (mutant-only: `mutant-no-stop-mark`); `ReadAhead.tla` none in the main cfg.
 
 ## Trace validation
 
 Serial (`ReadAhead`): the instrumented build below (the serial call site of `scan_index_read_ahead` logs too); events `Fill` (the buffer's pages), `Check` (fired, start, stop, skipped, the pages hinted, from a thread-local list in `pgbuf_read_ahead`), `Look`.
 
-Worker (`KeyReadAhead`): instrumented build of 2026-11-12, scratch worktree `CBRD-28031-instr` = the tree of `35a151f37` plus `TLATRACE` lines only (`next_key`'s result kept in a variable to log it), optdebug install `~/optdebug/CUBRID-CBRD-28031-instr`, libcubrid sha256 `bec36f124b31a836…`; recorded with `index_scan_oid_buffer_size=1K` (`max_oid_cnt` 143, logged in `WLeaf` as `cap`: the trace's `Cap`; `WLeaf` also logs `ahead_distance`, the trace's `Dist0`: 128 for n1, 64 for n2, 0 for n3, n4, n5). Events: `WLeaf` (cov), `WKey` (every `next_key` call: ahead or not, result `Q`/`LEAF`/`END`/`ERR`, the keys it read, the OIDs), `WPop` (the key's `read_keys`), `WResume` (`m_ahead_skipped_keys`), `WWin` (the window's end relative to the OID being looked up), `WEnded` (`read_ahead` returning at once after the stop), `WNoWin`, `WLook` (covering and non-covering), `WNext`, `WClear`, `WOvf`. `traces/convert.py worker <log> <Name> <k> <need>` cuts one walker's segment on one leaf (from `WLeaf` to its next `WClear`, no overflow page), the k-th smallest that has `<need>` (`pop`, `resume`: a resume past rejected keys, `err`: an error found ahead and raised by the lookups, `cov`), and rebuilds the leaf's keys from the `WKey` lines (rejected keys, OID counts, the erroring key). Logs `traces/raw/n*.log.xz` (`xz -dk` first).
+Worker (`KeyReadAhead`): instrumented build of 2026-11-13, scratch worktree `CBRD-28031-instr` = the tree of `1a0875eba` (recorded on its diff before it was committed, sha256 `0c3ef28db0eb0347…` over `35a151f37`) plus `TLATRACE` lines only (`next_key`'s result kept in a variable to log it), optdebug install `~/optdebug/CUBRID-CBRD-28031-instr`, libcubrid sha256 `14de18dea7a114a2…`; recorded with `index_scan_oid_buffer_size=1K` (`max_oid_cnt` 143, logged in `WLeaf` as `cap`: the trace's `Cap`; `WLeaf` also logs `ahead_distance`, the trace's `Dist0`: 16 for n1 and n2, 0 for n3..n6, and `ahead_limit`: 16 in every worker trace, the cfgs' `D` with `NW = 4`, `Budget = 64`; the serial `Fill` logs `ahead_limit` 64 and whether the scan starts late). Events: `WLeaf` (cov), `WKey` (every `next_key` call: ahead or not, result `Q`/`LEAF`/`END`/`ERR`, the keys it read, the OIDs), `WPop` (the key's `read_keys`), `WResume` (`m_ahead_skipped_keys`), `WWin` (the window's end relative to the OID being looked up), `WEnded` (`read_ahead` returning at once after the stop), `WNoWin`, `WLook` (covering and non-covering), `WNext`, `WClear`, `WOvf`, `WIntr` (`process_oid` returning the cancel the look-ahead took; the `WKey` that took it carries `intr=1`). `traces/convert.py worker <log> <Name> <k> <need>` cuts one walker's segment on one leaf (from `WLeaf` to its next `WClear`, no overflow page), the k-th smallest that has `<need>` (`pop`, `resume`: a resume past rejected keys, `err`: an error found ahead and raised by the lookups, `cov`, `intr`: a cancel taken by the look-ahead), and rebuilds the leaf's keys from the `WKey` lines (rejected keys, OID counts, the erroring key). Logs `traces/raw/n*.log.xz` (`xz -dk` first).
 
 | Trace | Query (DB `ra28031`, 400,000 rows; `index_scan_oid_buffer_size` 1K, `parallel(4)`) | Segment | Cfg | Expect |
 |---|---|---|---|---|
@@ -153,96 +173,118 @@ Worker (`KeyReadAhead`): instrumented build of 2026-11-12, scratch worktree `CBR
 | n4 | `k between 100 and 20000` on `i_ra_k` | 286 keys of 4 OIDs, 2,863 events | `KeyReadAheadTrace.witness-trace-n4` | accepted |
 | n5 | `count(*), sum(k)` with `s like '1%'` on `i_ra_ks` (covering) | 271 keys, 243 rejected, 58 events | `KeyReadAheadTrace.witness-trace-n5` | accepted |
 | ser3 | `... from rv_c c where c.id < 6 and exists (select 1 from rv_o o where o.cid = c.id and o.status = 'OPEN')` (serial, the inner scan of a NL semi join: 6 buffers of 400 OIDs, each left at its first match) | 60 events | `ReadAheadTrace.witness-trace-ser3` (`Single = TRUE`) | accepted |
+| ser4 | `... from rv_c c where c.id < 6 and (c.pad = 'zzz' or exists (select 1 from rv_o o where o.cid = c.id and o.status = 'OPEN'))` (serial; the EXISTS is not rewritten into a semi join: `XASL_NEED_SINGLE_TUPLE_SCAN`, D21) | 60 events | `ReadAheadTrace.witness-trace-ser4` (`Single = TRUE`) | accepted |
+| n6 | `k between 100 and 2000 and sleep(0.02 + k * 0) = 0` on `i_ra_k`, typed into an interactive csql and cancelled with Ctrl-C after 2 s (three workers took `ER_INTERRUPTED` in a key evaluated ahead, each returned it: `Has been interrupted`) | 98 keys, the last one's evaluation cancelled, 956 events | `KeyReadAheadTrace.witness-trace-n6` | accepted |
 | ser1, corrupted | two lookups swapped / one fired check dropped / a check's `fired` flipped / a page never in the window hinted | — | `ReadAheadTrace.reject-{swap-look,drop-check,flip-fired,foreign-hint}` | rejected (`TraceNotDone` holds) |
 | n1, n2 corrupted | a window's position off by one (n1) / one key evaluated ahead dropped (n1) / the resume's skipped keys one short (n2) | — | `KeyReadAheadTrace.reject-{pos-off,drop-eval,skip-off}` | rejected |
+| n6 corrupted | the error return after the cancel turned into a lookup (the lost cancel) | — | `KeyReadAheadTrace.reject-intr-look` | rejected |
 
-`Check` and `NextKey` are hidden steps of `KeyReadAheadTrace`; `WResume`, `WEnded`, `WNoWin`, `WNext` are markers that check the state they find (`WResume`: the keys `ck..ev` the look-ahead passed equal `m_ahead_skipped_keys`). In the whole n2 log (all workers, all leaves), 8,837 lookups saw 141 windows, 224 returns before the next window (`WNoWin`) and 8,472 returns after the stop (`WEnded`), and the keys the `WKey` lines read add up to the counted `read_keys` (79,605 = 2,649 read by the lookups' `WKey` + 76,956 read ahead, counted by `WPop` 74,271 + `WResume` 2,685): no key was evaluated twice except the one key past the range's end the look-ahead stopped at (its ahead read is rewound out of `read_keys`). Before `67a924189` the same query re-evaluated the passed keys once per lookup (8,837 `WEvalStop`).
+`Check`, `NextKey` and `Cancel` (another thread's store) are hidden steps of `KeyReadAheadTrace`; `LookupIntr` (the lookup's own page fix or key read finding the cancel: code this change does not touch) is not in a recorded run; `WResume`, `WEnded`, `WNoWin`, `WNext` are markers that check the state they find (`WResume`: the keys `ck..ev` the look-ahead passed equal `m_ahead_skipped_keys`). In the whole n2 log (all workers, all leaves), 8,837 lookups saw 1,051 windows (141 when a worker's bound was 256), 6,466 returns before the next window (`WNoWin`) and 1,320 returns after the stop (`WEnded`), and the keys the `WKey` lines read add up to 79,606 = 2,650 read by the lookups' `WKey` + 76,956 read ahead, counted by `WPop` 74,271 + `WResume` 2,685: no key was evaluated twice except the one key past the range's end the look-ahead stopped at (its ahead read is rewound out of `read_keys`). Before `67a924189` the same query re-evaluated the passed keys once per lookup (8,837 `WEvalStop`).
 
 ## Result
 
-2026-11-12, engine `35a151f37` (develop `4255a337d` + 7): all 52 cfgs PASS, 0 FAIL — in one whole-directory run that was
-stopped by hand plus `--only` reruns of the serial model. No single run printed `RESULT: OK`; each rerun printed
-`RESULT: PARTIAL (...; 0 failed)`.
+2026-11-14, engine `1a0875eba` (develop `4255a337d` + 8): `RESULT: OK` — all 60 cfgs PASS, 0 FAIL, in one whole-directory
+run, `tools/tla/tla-check docs/tla/CBRD-28031`, started 2026-11-13 21:12 and ended 2026-11-14 01:28 (the host's load
+average was above 90 when read at 00:54; the seven large `ReadAhead` cfgs took 17–24 minutes each, `KeyReadAheadTrace.witness-trace-n4` 44,
+`ReadAheadTrace.witness-trace-ser1` 33). Run dir `.git_ignored_dir/scratch/tla/CBRD-28031-20261113-211242-3631260`, log `.git_ignored_dir/scratch/cbrd28031/cap/tla-record-r3.log`.
+The record of 2026-11-12 on `35a151f37` (52 cfgs, no single `RESULT: OK` run) is superseded by this one.
 
-- Whole-directory run `.git_ignored_dir/scratch/tla/CBRD-28031-20261112-155856-2490832` (log
-  `.git_ignored_dir/scratch/cbrd28031/tla-record4.log`), stopped after 37 cfgs: the 27 TLC cfgs of `KeyReadAhead` and
-  `KeyReadAheadTrace` PASS there and were not run again (their `.tla`, data module and cfgs are unchanged since 15:30,
-  before the run). It reported `ReadAhead`, `ReadAhead.option-locked` and `ReadAhead.scale-d6` as FAIL with `got=[pass]`:
-  the dead expressions `ReadAhead.tla:119`..`122` had no line in this file.
-- After that line and `NextDist`'s `no_distance_cap` arm (`ReadAhead.tla:73`, cfgs `ReadAhead.cap-d2` and
-  `ReadAhead.mutant-no-distance-cap`) were added, every `ReadAhead` and `ReadAheadTrace` cfg and both Apalache cfgs ran by
-  `--only`: run dirs `CBRD-28031-20261112-190630-2938275` (`ReadAhead`), `-192421-2944996` (`ReadAhead.*`),
-  `-190631-2938694` (ser1), `-194434-2950549` (ser2), `-210716-2972618` (`KeyReadAhead.apalache-indinv`),
-  `-210733-2973126` (reject traces), `-210810-2974030` (ser3); logs `.git_ignored_dir/scratch/cbrd28031/tla-part7a.log`,
-  `tla-part7b.log`. The `.tla` and `.cfg` sha256 in each of those runs' `summary.txt` equal the files as they are now.
+The traces were recorded on the instrumented optdebug build `14de18dea7a114a2…` (`1a0875eba` plus the `TLATRACE` lines;
+`~/dev/cubrid-worktree/CBRD-28031-instr`). TLAPS 요청 없음.
 
-Engine gate of `35a151f37`: optdebug `c0447b8c30833f29…` / release `5df76ab072686028…`; smoke equal to develop (0
-differing lines) on optdebug, release and the memory check. Local CTP sql was not completed on this head: one run ended
-on a core of CBRD-28058 (checkpoint, a develop defect), one on the hang watchdog in `_36_guava/cbrd_27802` Case 12 while
-the host's load average was 119–188, the third was stopped at the user's request. Upstream CI `gha-ci` run 43171338682 on
-`35a151f37`: sql, medium and shell 0 failed; sql_by_cci 36 failed, the same list as run 43039550926 (the list five other
-PRs showed on 2026-11-12). YCSB on perf-node0 (run `20261112-193954-248`, the team's four workloads, 5,000,000 records,
-64 threads, 300 s, once each; develop `4255a337d` / this head, ops/s): workloada 26,734 / 26,542, workloadb 29,281 /
-29,786, update 25,997 / 25,865, mix 17,276 / 17,957.
+Engine gate of `1a0875eba`: release `f26e31d2f92e8481…` / optdebug `cc085942aac991c6…`; smoke equal to develop (0
+differing lines) on release, optdebug and the memory check; the lost-cancel reproduction (develop 5 of 5 interrupted,
+`35a151f37` 4 of 5 lost) gives 5 of 5 interrupted on release and 3 of 3 on the memory check. No CTP ran on this host
+(the user's instruction: CTP runs through the PR's CI). Upstream CI `gha-ci` run 43429130881 on `1a0875eba`: sql and
+medium 0 failed; sql_by_cci 19 failed, every one inside the 36 of run 43171338682; shell 5 failed
+(`cbrd_20145_1`, `cbrd_20145_2`, `cbrd_20615`, `bug_bts_5398`, `bug_cubridsus2018`), each on the new statdump line
+`Num_data_page_read_ahead` (D22). Their answers and line counts were changed in private-ex commit `30a9365be` on
+`tc/pr-8490` (TC PR #4849) and `/run rerun 43429130881` was posted; that rerun (run 43461759549) had not finished when
+this section was written. Wall-time measurements of this head: perf-node0 run `20261113-203825-248` (Design tree D18,
+D19, D24). YCSB was measured on `35a151f37` only (run `20261112-193954-248`) and not again on this head.
 
 | cfg | Result | States / distinct | Depth |
 |---|---|---|---|
-| `ReadAhead` (`W0 = 1`, `D = 4`, no mutex, no backoff) | pass | 131,685,264 / 31,609,296 | 29 |
+| `KeyReadAhead.cap-2` (`Cap = 2`: the OID buffer's bound limits the look-ahead) | pass | 4,830,169 / 2,704,852 | 43 |
+| `KeyReadAhead` (worker look-ahead, `NW = 1`, `D = 4`, `Budget = 4`) | pass | 4,916,967 / 2,757,970 | 40 |
+| `KeyReadAhead.mutant-count-at-eval` | `CountsConsumed` violated (killed) | 254,022 / 253,960 | 3 |
+| `KeyReadAhead.mutant-covering-window` | `NoWindowWithoutLookup` violated (killed) | 698,091 / 571,091 | 4 |
+| `KeyReadAhead.mutant-drop-interrupt` | `CancelKept` violated (killed) | 1,878,373 / 1,196,285 | 7 |
+| `KeyReadAhead.mutant-end-at-eval` | `EndAfterDrain` violated (killed) | 70,746 / 70,746 | 2 |
+| `KeyReadAhead.mutant-error-early` | `ErrorInOrder` violated (killed) | 718,268 / 581,173 | 4 |
+| `KeyReadAhead.mutant-fixed-window` | `StopWaste` violated (killed) | 1,183,481 / 805,566 | 5 |
+| `KeyReadAhead.mutant-late-window` | `WorkerLead` violated (killed) | 1,904,617 / 1,209,411 | 7 |
+| `KeyReadAhead.mutant-leak-queue` | `NoKeyLeak` violated (killed) | 1,152,974 / 793,519 | 5 |
+| `KeyReadAhead.mutant-no-cap` | `BufferBound` violated (killed) | 760,897 / 602,469 | 4 |
+| `KeyReadAhead.mutant-no-stop-mark` | `EvalOnce` violated (killed) | 1,156,104 / 794,675 | 5 |
+| `KeyReadAhead.mutant-queue-rejected` | `NoRejectedEntry` violated (killed) | 769,516 / 606,778 | 4 |
+| `KeyReadAhead.mutant-skip-count-lost` | `CountsConsumed` violated (killed) | 2,579,575 / 1,560,710 | 9 |
+| `KeyReadAhead.mutant-slot-key-latest` | `KeyPairing` violated (killed) | 1,543,974 / 975,884 | 6 |
+| `KeyReadAhead.mutant-unsplit` | `QueryBudget` violated (killed) | 1,188,757 / 807,711 | 5 |
+| `KeyReadAhead.scale-5keys` | pass | 27,529,228 / 15,422,866 | 49 |
+| `KeyReadAhead.witness-cancel-ahead` | reached | 1,537,139 / 970,953 | 6 |
+| `KeyReadAhead.witness-covered-done` | reached | 1,864,339 / 1,189,317 | 7 |
+| `KeyReadAhead.witness-error-twice` | reached | 2,578,092 / 1,559,831 | 9 |
+| `KeyReadAhead.witness-queued` | reached | 1,156,072 / 794,735 | 5 |
+| `KeyReadAhead.witness-skipped-stop` | reached | 721,607 / 582,844 | 4 |
+| `KeyReadAhead.workers-2` (`NW = 2`, `D = 2`: the budget of 4 split between two workers, C17) | pass | 1,665,712 / 933,932 | 43 |
+| `KeyReadAheadTrace.reject-drop-eval` | refused | 50 / 34 | 18 |
+| `KeyReadAheadTrace.reject-intr-look` | refused | 4,573 / 3,050 | 1527 |
+| `KeyReadAheadTrace.reject-pos-off` | refused | 53 / 36 | 19 |
+| `KeyReadAheadTrace.reject-skip-off` | refused | 592 / 394 | 198 |
+| `KeyReadAheadTrace.witness-trace-n1` | accepted | 3,583 / 2,388 | 1195 |
+| `KeyReadAheadTrace.witness-trace-n2` | accepted | 601 / 400 | 201 |
+| `KeyReadAheadTrace.witness-trace-n3` | accepted | 2,655 / 1,772 | 887 |
+| `KeyReadAheadTrace.witness-trace-n4` | accepted | 13,741 / 9,160 | 4581 |
+| `KeyReadAheadTrace.witness-trace-n5` | accepted | 428 / 286 | 144 |
+| `KeyReadAheadTrace.witness-trace-n6` | accepted | 4,575 / 3,052 | 1529 |
 | `ReadAhead.cap-d2` (`D = 2`: the distance bound limits a window) | pass | 127,275,664 / 30,598,736 | 29 |
+| `ReadAhead` (`W0 = 1`, `D = 4`, no mutex, no backoff) | pass | 131,685,264 / 31,609,296 | 29 |
+| `ReadAhead.mutant-carry-distance` | `StopWaste` violated (killed) | 3,302,656 / 913,972 | 7 |
+| `ReadAhead.mutant-cursor` | `LookupOrder` violated (killed) | 2,140,160 / 626,262 | 6 |
+| `ReadAhead.mutant-eager-frontier` | `Outstanding` violated (killed) | 3,615,297 / 1,011,269 | 7 |
+| `ReadAhead.mutant-fixed-window` | `StopWaste` violated (killed) | 325,588 / 129,028 | 3 |
+| `ReadAhead.mutant-late-trigger` | `Lead` violated (killed) | 3,426,147 / 952,174 | 7 |
+| `ReadAhead.mutant-no-count-bound` | `WindowBound` violated (killed) | 1,343,700 / 352,308 | 5 |
+| `ReadAhead.mutant-no-distance-cap` | `WindowBound` violated (killed) | 3,993,760 / 1,132,522 | 7 |
+| `ReadAhead.mutant-one-page-skip` | `Lead` violated (killed) | 3,426,146 / 952,174 | 7 |
+| `ReadAhead.mutant-single-as-other` | `StopWaste` violated (killed) | 325,588 / 129,028 | 3 |
+| `ReadAhead.option-locked` (D5 not taken) | pass | 131,685,264 / 31,609,296 | 31 |
 | `ReadAhead.scale-d6` | pass | 131,685,264 / 31,609,296 | 29 |
 | `ReadAhead.scale-w2` (`W0 = 2`, `D = 6`) | pass | 149,754,640 / 35,774,048 | 29 |
-| `ReadAhead.single` (`Single = TRUE`, D17) | pass | 131,685,264 / 31,609,296 | 29 |
-| `ReadAhead.option-locked` (D5 not taken) | pass | 131,685,264 / 31,609,296 | 31 |
-| `ReadAhead.mutant-cursor` | `LookupOrder` violated (killed) | 2,140,152 / 626,261 | 6 |
-| `ReadAhead.mutant-no-count-bound` | `WindowBound` violated (killed) | 1,343,700 / 352,308 | 5 |
-| `ReadAhead.mutant-no-distance-cap` | `WindowBound` violated (killed) | 3,993,777 / 1,132,528 | 7 |
-| `ReadAhead.mutant-late-trigger` | `Lead` violated (killed) | 3,426,124 / 952,173 | 7 |
-| `ReadAhead.mutant-one-page-skip` | `Lead` violated (killed) | 3,426,146 / 952,176 | 7 |
-| `ReadAhead.mutant-fixed-window` | `StopWaste` violated (killed) | 325,588 / 129,028 | 3 |
-| `ReadAhead.mutant-carry-distance` | `StopWaste` violated (killed) | 3,302,669 / 913,975 | 7 |
-| `ReadAhead.mutant-single-as-other` | `StopWaste` violated (killed) | 325,588 / 129,028 | 3 |
-| `ReadAhead.witness-hinted` / `-over-2k` | reached | 1,368,000 / 359,398; 3,993,771 / 1,132,527 | 5 / 7 |
-| `ReadAhead.apalache-indinv` | IndInv inductive | — | 1 step |
-| `KeyReadAhead` (worker look-ahead, `W0 = 1`, `D = 4`, `Cap = 4`) | pass | 1,764,560 / 1,091,989 | 39 |
-| `KeyReadAhead.cap-2` (`Cap = 2`: the OID buffer's bound limits the look-ahead) | pass | 1,744,961 / 1,079,246 | 42 |
-| `KeyReadAhead.scale-5keys` | pass | 9,771,055 / 6,060,833 | 48 |
-| `KeyReadAhead.mutant-slot-key-latest` | `KeyPairing` violated (killed) | 636,502 / 453,799 | 6 |
-| `KeyReadAhead.mutant-leak-queue` | `NoKeyLeak` violated (killed) | 534,738 / 359,688 | 5 |
-| `KeyReadAhead.mutant-error-early` | `ErrorInOrder` violated (killed) | 383,283 / 306,818 | 4 |
-| `KeyReadAhead.mutant-count-at-eval` | `CountsConsumed` violated (killed) | 190,534 / 190,472 | 3 |
-| `KeyReadAhead.mutant-skip-count-lost` | `CountsConsumed` violated (killed) | 985,486 / 652,981 | 9 |
-| `KeyReadAhead.mutant-end-at-eval` | `EndAfterDrain` violated (killed) | 68,328 / 68,328 | 2 |
-| `KeyReadAhead.mutant-late-window` | `WorkerLead` violated (killed) | 777,684 / 522,912 | 7 |
-| `KeyReadAhead.mutant-no-stop-mark` | `EvalOnce` violated (killed) | 535,526 / 360,364 | 5 |
-| `KeyReadAhead.mutant-queue-rejected` | `NoRejectedEntry` violated (killed) | 401,548 / 312,243 | 4 |
-| `KeyReadAhead.mutant-covering-window` | `NoWindowWithoutLookup` violated (killed) | 376,114 / 304,701 | 4 |
-| `KeyReadAhead.mutant-fixed-window` | `StopWaste` violated (killed) | 542,586 / 367,282 | 5 |
-| `KeyReadAhead.mutant-no-cap` | `BufferBound` violated (killed) | 398,474 / 311,321 | 4 |
-| `KeyReadAhead.witness-{queued,skipped-stop,error-twice,covered-done}` | reached | 360,428 / 307,160 / 652,715 / 518,195 distinct | 5 / 4 / 9 / 7 |
-| `KeyReadAhead.apalache-indinv` | IndInv inductive | — | 1 step |
-| `ReadAheadTrace.witness-trace-ser1` / `-ser2` / `-ser3` | accepted | 6,017 / 4,207 / 93 | 4,013 / 2,806 / 66 |
-| `ReadAheadTrace.reject-{swap-look,drop-check,flip-fired,foreign-hint}` | refused | 19 / 15 / 6 / 3 | — |
-| `KeyReadAheadTrace.witness-trace-n1` … `n5` | accepted | 1,196 / 202 / 886 / 4,582 / 144 | 1,194 / 200 / 886 / 4,580 / 143 |
-| `KeyReadAheadTrace.reject-{pos-off,drop-eval,skip-off}` | refused | 145 / 144 / 198 | — |
+| `ReadAhead.single` (`Single = TRUE`, `W0 = 2`, D17 and D21) | pass | 131,685,264 / 31,609,296 | 29 |
+| `ReadAhead.witness-hinted` | reached | 1,367,984 / 359,394 | 5 |
+| `ReadAhead.witness-over-2k` | reached | 3,993,765 / 1,132,524 | 7 |
+| `ReadAheadTrace.reject-drop-check` | refused | 15 / 15 | 11 |
+| `ReadAheadTrace.reject-flip-fired` | refused | 6 / 6 | 5 |
+| `ReadAheadTrace.reject-foreign-hint` | refused | 3 / 3 | 3 |
+| `ReadAheadTrace.reject-swap-look` | refused | 19 / 19 | 13 |
+| `ReadAheadTrace.witness-trace-ser1` | accepted | 6,017 / 6,017 | 4013 |
+| `ReadAheadTrace.witness-trace-ser2` | accepted | 4,207 / 4,207 | 2806 |
+| `ReadAheadTrace.witness-trace-ser3` | accepted | 93 / 93 | 66 |
+| `ReadAheadTrace.witness-trace-ser4` | accepted | 93 / 93 | 66 |
+| `KeyReadAhead.apalache-indinv` | IndInv inductive (Apalache) | — | 1 step |
+| `ReadAhead.apalache-indinv` | IndInv inductive (Apalache) | — | 1 step |
 
-`ReadAhead.scale-d6` and `ReadAhead.single` reach the state count of `ReadAhead` (`ReadAhead.option-locked` did in every
-earlier record too): since D13 a
-6-OID buffer ends the third window (1, 2, 4 OIDs) before a distance bound of 4 or 6 limits it, so `D = 6` scales nothing
-(`ReadAhead.cap-d2` and its mutant are the cfgs in which the bound acts, `ReadAhead.scale-w2` the one that grows the
-state space); `Single = TRUE` enters after `Fill` the state `W0 = 1` enters after its first window (`ahead_next = 1`,
-`ahead_distance = 1`, the first OID counted as told), and differs from it under `W0 = 2`, which
-`ReadAhead.mutant-single-as-other` uses.
+`ReadAhead.scale-d6`, `ReadAhead.single` and `ReadAhead.option-locked` reach the state count of `ReadAhead`, as in every
+earlier record: since D13 a 6-OID buffer ends the third window (1, 2, 4 OIDs) before a distance bound of 4 or 6 limits
+it, so `D = 6` scales nothing (`ReadAhead.cap-d2` and its mutant are the cfgs in which the bound acts,
+`ReadAhead.scale-w2` the one that grows the state space); `Single = TRUE` enters after `Fill` the state `W0 = 1` enters
+after its first window (`ahead_next = 1`, `ahead_distance = 1`, the first OID counted as told), and differs from it
+under `W0 = 2`, which `ReadAhead.mutant-single-as-other` uses.
 
-Dead expressions reported: `ReadAhead.tla:119`, `:120`, `:121`, `:122` (pass cfgs with `Single = FALSE`; none in
-`ReadAhead.single`) and `KeyReadAhead.tla:254`, `:255`, `:257`, `:258`, `:259`, `:275`, each explained above. TLAPS 요청 없음.
+Dead expressions reported: `ReadAhead.tla:122`, `:123`, `:124`, `:125` (pass cfgs with `Single = FALSE`; none in
+`ReadAhead.single`) and `KeyReadAhead.tla:298`, `:299`, `:301`, `:302`, `:303`, `:319` (the four pass cfgs of
+`KeyReadAhead`), each explained above.
 
-Spec sha256 (as checked; `MAP.md` as the last run read it, before this section was rewritten: `7449607a497293fe9d8f9279e43f0872dc5712f22701c3030c19fe4b0aa3fcd6`):
+Spec sha256 as the run checked it (its `summary.txt` also lists the 60 cfgs; every `.tla` and `.cfg` equals the file as
+committed; `MAP.md` as the run read it, before this section was rewritten: `5a68300810492018fddd4a8e543defef4122ffa4e82e504c68d35aa006584c3b`):
 
 ```
-3ed8ad353b822cbf56bfc2930e75392534f5c55204725f9062b1b66b476e5b6a  KeyReadAhead.tla
-b406097bffc47229807c5684eca9f4d41bee9c9ace715c2301942c281d380b44  KeyReadAheadTrace.tla
-1d85063d335d3236fdd4c6632a6ea3c577ef18a0f4d7c35debb1b1d038028fc1  KeyReadAheadTraceData.tla
-516372a98937f71b5c9437b02af53d2a2d89844620718ec6e12234375fbfb734  ReadAhead.tla
+42e2a9bd6256ddffd846e1d4d5a7ad61efa1ed12cdecb590cecdb8a6320948c4  KeyReadAhead.tla
+cb54884f4d57324fabb35a81ee4cc59cfbbccf53077a6bac3dd6e40ce413d3d5  KeyReadAheadTrace.tla
+882e477dd2b8e318ff12afc18a7a2d33b2638860774c63163028819db0c2edf9  KeyReadAheadTraceData.tla
+6a5b92a7e9a5e6062b0f3e469e1fbbef73a7dded4c461f678582fc054b68f2f5  ReadAhead.tla
 c4a06de577022460166a952354ef8e03e537fa87d09a48905b5749de33b4ed4f  ReadAheadTrace.tla
-e1a5c2b70b5449dfaeb7f9a438d7ff46113df6d7432757ec14f82f87ebfd690a  ReadAheadTraceData.tla
+2f86be257f9f581bbeedc4830f66446c4563d4e2ba06292fc41aa078b747601e  ReadAheadTraceData.tla
 ```
