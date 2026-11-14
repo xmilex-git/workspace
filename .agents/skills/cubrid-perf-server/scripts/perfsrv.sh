@@ -81,7 +81,7 @@ CONF
 r_reserve() {
   local mins=$1 run=$2 R=$RROOT/$2 now end cap line s e l busy= procs base
   now=$(date +%s); cap=$(date -d 'today 21:55' +%s)
-  [ "$(date +%H%M)" -ge 1200 ] || { echo "perf servers run 12:00-22:00 KST" >&2; return 2; }
+  [ "$(date +%H%M)" -ge 1300 ] || { echo "perf servers run 13:00-22:00 KST" >&2; return 2; }
   end=$((now + mins * 60)); [ "$end" -gt "$cap" ] && end=$cap
   end=$(date -d "$(date -d @"$end" '+%F %H:%M')" +%s)
   [ "$end" -gt $((now + 300)) ] || { echo "less than 5 minutes before 21:55" >&2; return 2; }
@@ -222,7 +222,7 @@ node_of() { cat "$LOUT/$1/node" 2>/dev/null || die "unknown run $1 (no $LOUT/$1/
 cmd=${1:-}; shift || :
 case $cmd in
   status)
-    for h in "${NODES[@]}"; do remote "$h" r_status < /dev/null || echo "== $h unreachable (off outside 12:00-22:00?)"; done ;;
+    for h in "${NODES[@]}"; do remote "$h" r_status < /dev/null || echo "== $h unreachable (off outside 13:00-22:00?)"; done ;;
   reserve)
     mins=${1:?minutes}; nodes=("${NODES[@]}"); [ -n "${2:-}" ] && nodes=("$2")
     for h in "${nodes[@]}"; do

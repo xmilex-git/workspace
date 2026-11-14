@@ -1,6 +1,6 @@
 ---
 name: cubrid-perf-server
-description: "Measure CUBRID performance on the team's two dedicated perf servers (perf-node0/1, 8 cores and 16 GiB each, 12:00-22:00 KST) through one script: reserve a free node in its schedule.txt, push a local install, run the benchmark, pull the results, and leave the node as it was. Use whenever a wall-time, throughput or latency number decides something (A/B of a fix, a regression check, TPC-H timing), when the user says '성능 테스트', '성능 서버', '벤치 돌려', 'wall time 재', 'TPC-H 시간 재', or when this host is too loaded to time anything."
+description: "Measure CUBRID performance on the team's two dedicated perf servers (perf-node0/1, 8 cores and 16 GiB each, 13:00-22:00 KST) through one script: reserve a free node in its schedule.txt, push a local install, run the benchmark, pull the results, and leave the node as it was. Use whenever a wall-time, throughput or latency number decides something (A/B of a fix, a regression check, TPC-H timing), when the user says '성능 테스트', '성능 서버', '벤치 돌려', 'wall time 재', 'TPC-H 시간 재', or when this host is too loaded to time anything."
 argument-hint: "<status|reserve|push|conf|exec|pull|release> ..."
 ---
 
@@ -25,8 +25,8 @@ See `GLOSSARY.md` → "성능 서버": **성능 서버**, **예약**, **빈 성�
 | `perf-node0` | `cubrid@192.168.1.248` | 0-7 (NUMA 0) | 16 GiB cgroup |
 | `perf-node1` | `cubrid@192.168.1.249` | 8-15 (NUMA 1) | 16 GiB cgroup |
 
-Both are podman containers on one Xeon Silver 4110 host and share the disk `/dev/sda5`. They run 12:00-22:00
-KST and are stopped outside that window; `/home` survives the restart. Login is by this host's SSH key
+Both are podman containers on one Xeon Silver 4110 host and share the disk `/dev/sda5`. They run 13:00-22:00
+KST (the start moved from 12:00 to 13:00 on 2026-11-14) and are stopped outside that window; `/home` survives the restart. Login is by this host's SSH key
 (installed 2026-11-06); the password is never written down. Rocky 8.10 matches this host, so a release install
 built here runs there as is (the RPATH points at the local prefix, `exec` sets `LD_LIBRARY_PATH`).
 

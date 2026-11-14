@@ -1234,7 +1234,7 @@ _Avoid_: 대기열 비어 있지 않음(FLUSH 대기자만 있어도 대기열�
 ### 성능 서버 (cubrid-perf-server 그릴링 2026-11-06)
 
 **성능 서버 (perf server)**:
-wall time·throughput 측정 전용으로 팀이 나눠 쓰는 두 컨테이너 `perf-node0`(192.168.1.248, NUMA 0)·`perf-node1`(192.168.1.249, NUMA 1)이다. 매일 12:00~22:00 KST에만 켜져 있고 디스크는 둘이 공유한다.
+wall time·throughput 측정 전용으로 팀이 나눠 쓰는 두 컨테이너 `perf-node0`(192.168.1.248, NUMA 0)·`perf-node1`(192.168.1.249, NUMA 1)이다. 매일 13:00~22:00 KST에만 켜져 있고 디스크는 둘이 공유한다.
 _Avoid_: 벤치 서버, 원격 호스트, 개발 호스트(부하가 심한 이 작업 호스트)
 
 **예약 (reservation)**:
