@@ -85,6 +85,16 @@ using 10, 100, 50, 200;`).
   a key bound by equality leaves nothing to skip → a range `g between outer.k and outer.k + 3`,
   checked for `group by nosort: true` in the subquery's plan.
 
+- CBRD-28031 (2026-11-14, caught by a per-statement probe on an instrumented build): two join cases
+  (`b.grp = a.grp`, `b.k between a.k and a.k + 20`) claimed the new path of the inner covered index
+  scan → both read through the old list, because the executor memoizes every NL inner unless the
+  planner drops it (`qo_nl_inner_memoize_is_useless`: a unique or near-unique outer key, or an
+  expected hit ratio under 10%), and a memoized inner whose results exceed the memory limit prints no
+  `MEMOIZE` line → the join cases use a unique outer key (`b.grp = a.id`), and a separate case keeps
+  the memoized side with keys that repeat and small results, so that its trace prints `MEMOIZE`. The
+  trace has no token for the new path, so the PR body records the probe (events counted for each
+  tested statement).
+
 ## Rule 2 — The data must change the output when the path is wrong
 
 Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Evidence in the answer file" (data that takes the *bug path*, columns that tell rows apart).

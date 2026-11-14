@@ -5,6 +5,11 @@
 # corrupt: swap-look | drop-check | flip-fired | foreign-hint | pos-off (worker) | drop-eval (worker) | skip-off (worker)
 #          | intr-look (worker: the error return after a cancel taken by the look-ahead turned into a lookup)
 # Writes a TLA+ data module: serial -> TraceLog, Pg (pages of each buffer); worker -> TraceLog, NOid, Base, Rej, ErrKey, Cov, Cap, Dist0.
+#        convert.py covered <log> <Name> <need> [nk=<keys>] [corrupt]  one covered index scan (CoveredVisit), the one with
+#                                                          the most selected objects among those with <need>:
+#                                                          visit | list | verr | lerr | restart | inner<k> (k-th visited scan)
+# corrupt (covered): dup-sel | list-in-visit | dlv-after-err | drop-ret | drop-dlv | foreign-in-visit
+#   covered -> TraceLog, NK, PerKey, Cap, Fail (the object whose row raised the error, 0: none)
 import re, sys
 
 def events(path):
@@ -146,6 +151,116 @@ def worker(ev, k, corrupt, need):
                       e.get("pos", "0"), e.get("skipped", "0"), e.get("intr", "0")))
     return log, noid, rej, err, cov, cap, dist0, len(good)
 
+def covered(ev, need, nk, corrupt):
+    # segments: one scan (p) from its Open to its End
+    # foreign: another scan (serial p, worker w) logged an event since this scan's previous event
+    attached = set()
+    segs, cur, last = [], {}, {}
+    for n, e in enumerate(ev):
+        a = e["a"]
+        if a == "Attach":
+            attached.add(e["p"])
+            continue
+        p = e.get("p", e.get("w"))
+        for q in cur:
+            if q != p:
+                last[q] = True
+        if a not in ("Open", "Fix", "Sel", "Ret", "Restart", "Dlv", "Again", "End"):
+            continue
+        if a == "Open":
+            cur[p] = [e]
+            segs.append(cur[p])
+            last[p] = False
+        elif p in cur:
+            cur[p].append(e)
+            if a == "End":
+                del cur[p]
+        else:
+            continue
+        e["foreign"] = "1" if last[p] else "0"
+        last[p] = False
+    def has(g, a, **kv):
+        return any(e["a"] == a and all(e.get(x) == y for x, y in kv.items()) for e in g)
+    def failed(g):
+        return g[-1]["a"] == "End" and g[-1]["err"] == "1"
+    def ok(g):
+        # a scan ends at its End, or (a join's inner scan, opened again for the next outer row) at its last batch
+        if g[-1]["a"] != "End" and not (g[-1]["a"] == "Again" and g[-1]["end"] == "1"):
+            return False
+        v = g[0]["visit"] == "1"
+        if v and g[0]["p"] not in attached:
+            return False
+        if need == "visit" or need.startswith("inner"):
+            return v and not failed(g) and has(g, "Sel")
+        if need == "verr":
+            return v and has(g, "Sel", err="1")
+        if need == "list":
+            return not v and not failed(g) and sum(1 for e in g if e["a"] == "Ret") >= 2 and not has(g, "Restart")
+        if need == "lerr":
+            return not v and failed(g) and has(g, "Dlv")
+        if need == "restart":
+            return not v and not failed(g) and has(g, "Restart")
+        return False
+    good = [g for g in segs if ok(g)]
+    if need.startswith("inner"):
+        seg = good[int(need[5:])]
+    else:
+        seg = max(good, key=lambda g: sum(1 for e in g if e["a"] == "Sel"))
+    seg = [dict(e) for e in seg]
+    # the key record of each selected object: a new (leaf, slot) starts a key
+    prev, sizes = None, []
+    for e in seg:
+        if e["a"] != "Sel":
+            continue
+        key = (e["leaf"], e["slot"])
+        first = key != prev
+        prev = key
+        if e["ks"] == "-1":
+            e["ks"] = "1" if first else "0"
+        else:
+            assert (e["ks"] == "1") == first, e
+        if first:
+            sizes.append(0)
+        sizes[-1] += 1
+    full = sizes[:-1] if failed(seg) else sizes
+    per = max(sizes)
+    assert all(x == per for x in full), sorted(set(sizes))
+    nsel = sum(sizes)
+    fail = 0
+    if failed(seg):
+        if seg[0]["visit"] == "1":
+            fail = [j for j, e in enumerate([x for x in seg if x["a"] == "Sel"]) if e["err"] == "1"][0] + 1
+        else:
+            fail = sum(1 for e in seg if e["a"] == "Dlv")
+    keys = nk if nk else len(sizes)
+    assert keys * per >= nsel
+    caps = set(int(e["cap"]) for e in seg if e["a"] == "Ret")
+    assert len(caps) == 1, caps
+    cap = max(per, (caps.pop() // per) * per)
+    if corrupt == "dup-sel":
+        j = [x for x, e in enumerate(seg) if e["a"] == "Sel"][1]
+        seg.insert(j, dict(seg[j]))
+    elif corrupt == "list-in-visit":
+        j = [x for x, e in enumerate(seg) if e["a"] == "Sel"][2]
+        seg[j]["visit"] = "0"
+    elif corrupt == "dlv-after-err":
+        j = [x for x, e in enumerate(seg) if e["a"] == "Dlv"][-1]
+        seg.insert(j, dict(seg[j]))
+    elif corrupt == "drop-ret":
+        j = [x for x, e in enumerate(seg) if e["a"] == "Ret"][0]
+        del seg[j]
+    elif corrupt == "drop-dlv":
+        j = [x for x, e in enumerate(seg) if e["a"] == "Dlv"][3]
+        del seg[j]
+    elif corrupt == "foreign-in-visit":
+        j = [x for x, e in enumerate(seg) if e["a"] == "Sel"][2]
+        seg[j]["foreign"] = "1"
+    elif corrupt:
+        sys.exit("unknown corruption " + corrupt)
+    keep = ("visit", "ks", "err", "end", "n", "foreign")
+    log = ["[a |-> \"%s\", " % e["a"] + ", ".join("%s |-> %s" % (k, e.get(k, "0")) for k in keep) + "]" for e in seg]
+    return log, keys, per, cap, fail, len(good), seg
+
 # usage (operators, appended to stdout): convert.py serial <log> <Name> [corrupt] | worker <log> <Name> <k> <need> [corrupt]
 mode, path, name = sys.argv[1], sys.argv[2], sys.argv[3]
 ev = events(path)
@@ -157,6 +272,18 @@ if mode == "serial":
     w("%sPg == <<\n  " % name + ",\n  ".join("<<" + ", ".join(map(str, x)) + ">>" for x in pg) + "\n>>\n")
     w("%sNB == %d\n%sMaxN == %d\n%sNP == %d\n" % (name, len(pg), name, maxn, name, maxp))
     sys.stderr.write("%s events=%d buffers=%d maxn=%d maxpage=%d\n" % (name, len(log), len(pg), maxn, maxp))
+elif mode == "covered":
+    rest = sys.argv[5:]
+    nk = 0
+    if rest and rest[0].startswith("nk="):
+        nk = int(rest[0][3:])
+        rest = rest[1:]
+    log, keys, per, cap, fail, ngood, seg = covered(ev, sys.argv[4], nk, rest[0] if rest else "")
+    w("%sLog == <<\n  " % name + ",\n  ".join(log) + "\n>>\n")
+    w("%sNK == %d\n%sPerKey == %d\n%sCap == %d\n%sFail == {%d}\n" % (name, keys, name, per, name, cap, name, fail))
+    cnt = lambda a: sum(1 for e in seg if e["a"] == a)
+    sys.stderr.write("%s events=%d visit=%s keys=%d perkey=%d cap=%d fail=%d sel=%d dlv=%d ret=%d restart=%d segments=%d\n"
+                     % (name, len(log), seg[0]["visit"], keys, per, cap, fail, cnt("Sel"), cnt("Dlv"), cnt("Ret"), cnt("Restart"), ngood))
 else:
     log, noid, rej, err, cov, cap, dist0, ngood = worker(ev, int(sys.argv[4]), sys.argv[6] if len(sys.argv) > 6 else "", sys.argv[5])
     w("%sLog == <<\n  " % name + ",\n  ".join(log) + "\n>>\n")
