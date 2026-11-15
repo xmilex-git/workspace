@@ -21,6 +21,11 @@
 (***************************************************************************)
 EXTENDS Integers, FiniteSets
 
+\* PromoteWait TRUE releases the READ and waits for WRITE (develop's PGBUF_PROMOTE_SHARED_READER);
+\* FALSE fails (ER_PAGE_LATCH_PROMOTE_FAIL) and the caller re-fixes WRITE.
+\* WakeAtEnd tells how a waiter blocked only by a write in progress is woken: "flag" = the releaser
+\* that leaves it blocked sets the write-waiter flag, "always" = the end of a write posts whenever
+\* the list is not empty, "none" = only waiters that saw the write set the flag.
 CONSTANTS NT,          \* worker threads 1..NT
           NB,          \* BCBs 1..NB
           NP,          \* pages 1..NP
@@ -29,17 +34,58 @@ CONSTANTS NT,          \* worker threads 1..NT
           Ops,         \* operations a worker may pick
           MaxTimeouts, \* latch timeouts / interrupts (faults)
           MaxSpur,     \* spurious wakeups (faults)
-          MaxErr,      \* page copy errors of a flush (faults)
+          MaxErr,      \* I/O errors: a claim's page read, a flush's page copy (faults)
           MaxEnv,      \* invalidations (environment)
           Daemon,      \* a page flush daemon exists
-          PromoteWait, \* open: TRUE = a promotion that is not alone releases its READ and waits for
-                       \*       WRITE (develop's PGBUF_PROMOTE_SHARED_READER); FALSE = it fails
-                       \*       (ER_PAGE_LATCH_PROMOTE_FAIL) and the caller re-fixes WRITE
-          WakeAtEnd,   \* open: how a waiter blocked only by a write in progress is woken:
-                       \*       "flag" = the releaser that leaves it blocked sets the write-waiter flag,
-                       \*       "always" = the end of a write posts whenever the list is not empty,
-                       \*       "none" = only waiters that saw the write set the flag
+          PromoteWait, \* comparison only (D13): TRUE = a promotion that is not alone waits for WRITE
+          WakeAtEnd,   \* D14: "flag" (chosen), "always" or "none" (comparison cfgs)
           Mutant       \* "none" or one known-wrong variant
+
+\* apalache-type: NT Int
+\* apalache-type: NB Int
+\* apalache-type: NP Int
+\* apalache-type: NK Int
+\* apalache-type: MaxOps Int
+\* apalache-type: Ops Set(Str)
+\* apalache-type: MaxTimeouts Int
+\* apalache-type: MaxSpur Int
+\* apalache-type: MaxErr Int
+\* apalache-type: MaxEnv Int
+\* apalache-type: Daemon Bool
+\* apalache-type: PromoteWait Bool
+\* apalache-type: WakeAtEnd Str
+\* apalache-type: Mutant Str
+\* apalache-type: pc Int -> Str
+\* apalache-type: rp Int -> Int
+\* apalache-type: rm Int -> Str
+\* apalache-type: hb Int -> Int
+\* apalache-type: hm Int -> Str
+\* apalache-type: ops Int -> Int
+\* apalache-type: inq Int -> Bool
+\* apalache-type: wm Int -> Str
+\* apalache-type: tk Int -> Int
+\* apalache-type: posted Int -> Bool
+\* apalache-type: pv Int -> Int
+\* apalache-type: cver Int -> Int
+\* apalache-type: cpg Int -> Int
+\* apalache-type: cerr Int -> Bool
+\* apalache-type: tick Int
+\* apalache-type: vpid Int -> Int
+\* apalache-type: mode Int -> Str
+\* apalache-type: fcnt Int -> Int
+\* apalache-type: dirty Int -> Bool
+\* apalache-type: writing Int -> Bool
+\* apalache-type: wwait Int -> Bool
+\* apalache-type: touched Int -> Bool
+\* apalache-type: bver Int -> Int
+\* apalache-type: diskVer Int -> Int
+\* apalache-type: latest Int -> Int
+\* apalache-type: exh Int -> Int
+\* apalache-type: tmo Int
+\* apalache-type: spur Int
+\* apalache-type: errs Int
+\* apalache-type: envs Int
+\* apalache-type: barge Bool
 
 \* Ops: "R" read fix, "Rc" conditional read fix, "W" write fix, "Wc" conditional write fix,
 \*      "P" read fix then promote to write, "C" synchronous flush of a page (checkpoint, backup)
@@ -98,24 +144,17 @@ CompatM(m, md, wr) ==
 
 \* waiters a releaser posts when it leaves b in state (md, wr): from the head, every compatible
 \* waiter before the first WRITE waiter; a WRITE waiter at the head alone
-PostSet(b, md, wr) ==
-  LET ws == Waiters(b) IN
-  IF ws = {} THEN {}
-  ELSE LET h == CHOOSE w \in ws : \A v \in ws : tk[w] <= tk[v]
-           wsW == {w \in ws : wm[w] = "W"}
-       IN IF wm[h] = "W"
-          THEN IF CompatM("W", md, wr) THEN {h} ELSE {}
-          ELSE {w \in ws : CompatM(wm[w], md, wr) /\ \A v \in wsW : tk[w] < tk[v]}
+PostFrom(ws, md, wr) ==
+  LET heads == {h \in ws : \A v \in ws : tk[h] <= tk[v]}
+      wsW == {w \in ws : wm[w] = "W"}
+  IN IF \E h \in heads : wm[h] = "W"
+     THEN IF CompatM("W", md, wr) THEN heads ELSE {}
+     ELSE {w \in ws : CompatM(wm[w], md, wr) /\ \A v \in wsW : tk[w] < tk[v]}
+
+PostSet(b, md, wr) == PostFrom(Waiters(b), md, wr)
 
 \* the same rule over the waiters other than ex (a waiter that is removing its own entry)
-PostSetEx(b, md, wr, ex) ==
-  LET ws == Waiters(b) \ {ex} IN
-  IF ws = {} THEN {}
-  ELSE LET h == CHOOSE w \in ws : \A v \in ws : tk[w] <= tk[v]
-           wsW == {w \in ws : wm[w] = "W"}
-       IN IF wm[h] = "W"
-          THEN IF CompatM("W", md, wr) THEN {h} ELSE {}
-          ELSE {w \in ws : CompatM(wm[w], md, wr) /\ \A v \in wsW : tk[w] < tk[v]}
+PostSetEx(b, md, wr, ex) == PostFrom(Waiters(b) \ {ex}, md, wr)
 
 Post(S) == posted' = [w \in Procs |-> posted[w] \/ w \in S]
 
@@ -232,7 +271,7 @@ FixExcl(t) ==
      IN /\ FreeK(k)
         /\ IsRead(rm[t]) => ~(\E b \in Resident(p) : mode[b] \in {"N", "R"})
         /\ IF Resident(p) # {}
-           THEN LET b == CHOOSE x \in Resident(p) : TRUE IN
+           THEN \E b \in Resident(p) :
              IF IsRead(rm[t])
              THEN \* mode[b] = "W" here
                   IF rm[t] = "Rc"
@@ -242,9 +281,10 @@ FixExcl(t) ==
                   ELSE /\ Enqueue(t, b, "R", FALSE)
                        /\ UNCHANGED <<writing, dirty, cver, cpg, mode, fcnt, hm, exh, pv>>
              ELSE IF rm[t] \in {"W", "Wc"}
-             THEN IF mode[b] = "N" /\ (~writing[b] \/ Mutant = "write_ignores_writing")
+             THEN IF (mode[b] = "N" \/ (Mutant = "write_ignores_readers" /\ mode[b] = "R"))
+                     /\ (~writing[b] \/ Mutant = "write_ignores_writing")
                   THEN /\ mode' = [mode EXCEPT ![b] = "W"]
-                       /\ fcnt' = [fcnt EXCEPT ![b] = 1]
+                       /\ fcnt' = [fcnt EXCEPT ![b] = @ + 1]
                        /\ hb' = [hb EXCEPT ![t] = b]
                        /\ hm' = [hm EXCEPT ![t] = "W"]
                        /\ pc' = [pc EXCEPT ![t] = "hold"]
@@ -274,7 +314,7 @@ FixExcl(t) ==
            THEN /\ pc' = [pc EXCEPT ![t] = "idle"]
                 /\ UNCHANGED <<mode, fcnt, hb, hm, inq, wm, tk, tick, posted, wwait, writing, dirty,
                                cver, cpg, exh, pv>>
-           ELSE /\ exh' = [exh EXCEPT ![k] = t]
+           ELSE /\ exh' = [exh EXCEPT ![k] = IF Mutant = "miss_no_latch" THEN 0 ELSE t]
                 /\ pc' = [pc EXCEPT ![t] = "miss"]
                 /\ UNCHANGED <<mode, fcnt, hb, hm, inq, wm, tk, tick, posted, wwait, writing, dirty,
                                cver, cpg, pv>>
@@ -291,13 +331,22 @@ Victimizable(b) ==
 CandLatchOk(t, b) ==
   vpid[b] = 0 \/ Bkt(vpid[b]) = Bkt(rp[t]) \/ FreeK(Bkt(vpid[b]))
 
-\* a fixer that missed takes a victim while holding its own bucket latch exclusive
+\* the first victimizable BCB in t's LRU order (private lists differ per thread: odd threads
+\* walk down, even threads up); used only by the mutant victim_wait
+FirstVictim(t) ==
+  {b \in Bcbs : Victimizable(b) /\
+                \A c \in Bcbs : Victimizable(c) => (IF t % 2 = 1 THEN c <= b ELSE b <= c)}
+
+\* a fixer that missed takes a victim while holding its own bucket latch exclusive; any victimizable
+\* candidate whose bucket latch it gets without waiting (mutant victim_wait: the first one in its LRU
+\* order, waiting for that candidate's latch)
 MissClaim(t) ==
   /\ pc[t] = "miss"
   /\ \E b \in Bcbs :
        /\ CandLatchOk(t, b)
        /\ Victimizable(b)
-       /\ IF touched[b] /\ Mutant # "no_second_chance"
+       /\ Mutant = "victim_wait" => b \in FirstVictim(t)
+       /\ IF touched[b]
           THEN \* second chance: clear the use mark, look further
                /\ touched' = [touched EXCEPT ![b] = FALSE]
                /\ UNCHANGED <<vpid, mode, fcnt, bver, hb, pc, exh>>
@@ -339,6 +388,23 @@ LoadEnd(t) ==
   /\ UNCHANGED <<rp, rm, hb, ops, inq, wm, tk, pv, cver, cpg, cerr, tick, vpid, fcnt, dirty,
                  writing, wwait, touched, bver, diskVer, latest, exh, tmo, spur, errs, envs, barge>>
 
+\* the page read of a claim fails (exclusive latch): the BCB leaves the chain empty and every
+\* waiter on it is woken; each removes its own entry, sees the BCB no longer holds its page and
+\* searches the chain again (mutant loaderr_no_post: the waiters are not woken)
+LoadErr(t) ==
+  /\ pc[t] = "load" /\ errs < MaxErr
+  /\ errs' = errs + 1
+  /\ FreeK(Bkt(rp[t]))
+  /\ LET b == hb[t] IN
+       /\ vpid' = [vpid EXCEPT ![b] = 0]
+       /\ mode' = [mode EXCEPT ![b] = "N"]
+       /\ fcnt' = [fcnt EXCEPT ![b] = 0]
+       /\ Post(IF Mutant = "loaderr_no_post" THEN {} ELSE Waiters(b))
+  /\ hb' = [hb EXCEPT ![t] = 0]
+  /\ pc' = [pc EXCEPT ![t] = "idle"]
+  /\ UNCHANGED <<rp, rm, hm, ops, inq, wm, tk, pv, cver, cpg, cerr, tick, dirty, writing, wwait,
+                 touched, bver, diskVer, latest, exh, tmo, spur, envs, barge>>
+
 \* promotion of a held READ to WRITE (exclusive latch): in place when alone, otherwise release the
 \* READ and wait as a WRITE waiter (mutant promote_keep_read: wait still holding the READ)
 Promote(t) ==
@@ -363,9 +429,6 @@ Promote(t) ==
                /\ wwait' = [wwait EXCEPT ![b] =
                               @ \/ (WakeAtEnd = "flag" /\ fcnt[b] = 1 /\ writing[b] /\ Waiters(b) # {})]
                /\ UNCHANGED <<inq, wm, tk, tick>>
-          ELSE IF Mutant = "promote_keep_read"
-          THEN /\ Enqueue(t, b, "W", writing[b])
-               /\ UNCHANGED <<mode, fcnt, hm>>
           ELSE /\ fcnt' = [fcnt EXCEPT ![b] = @ - 1]
                /\ mode' = [mode EXCEPT ![b] = IF fcnt[b] = 1 THEN "N" ELSE @]
                /\ hm' = [hm EXCEPT ![t] = ""]
@@ -511,7 +574,7 @@ Terminating == AllDone /\ UNCHANGED vars
 \* the non-fault steps of one process
 ProcStep(t) ==
   \/ Begin(t) \/ Finish(t) \/ FixShared(t) \/ Pin(t) \/ FixExcl(t) \/ MissClaim(t)
-  \/ MissGiveUp(t) \/ LoadEnd(t) \/ Promote(t) \/ Unfix(t) \/ WakeRetry(t, FALSE)
+  \/ MissGiveUp(t) \/ LoadEnd(t) \/ LoadErr(t) \/ Promote(t) \/ Unfix(t) \/ WakeRetry(t, FALSE)
   \/ Copy(t) \/ CopyEnd(t)
 
 DaemonStep == DaemonStart \/ DaemonDone
@@ -530,11 +593,24 @@ FairSpec == Spec /\ \A t \in Procs : WF_vars(ProcStep(t)) /\ WF_vars(DaemonStep)
 \* Properties
 
 TypeOK ==
-  /\ \A t \in Procs : pc[t] \in {"idle", "fix", "pin", "miss", "load", "hold", "sleep", "copy",
-                                 "cend", "scan", "done"}
-  /\ \A b \in Bcbs : mode[b] \in {"N", "R", "W"} /\ fcnt[b] \in 0..NT /\ vpid[b] \in 0..NP
-  /\ \A t \in Procs : hb[t] \in 0..NB /\ rp[t] \in 0..NP
+  /\ \A t \in Procs :
+       /\ pc[t] \in {"idle", "fix", "pin", "miss", "load", "hold", "sleep", "copy", "cend", "scan", "done"}
+       /\ rp[t] \in 0..NP /\ hb[t] \in 0..NB /\ cpg[t] \in 0..NP
+       /\ rm[t] \in {"", "R", "Rc", "W", "Wc", "P", "C"} /\ hm[t] \in {"", "R", "W"}
+       /\ wm[t] \in {"", "R", "W", "F"}
+       /\ ops[t] >= 0 /\ ops[t] <= MaxOps
+       /\ tk[t] >= 0 /\ pv[t] >= -1 /\ cver[t] >= 0
+       /\ inq[t] \in BOOLEAN /\ posted[t] \in BOOLEAN /\ cerr[t] \in BOOLEAN
+  /\ \A b \in Bcbs :
+       /\ mode[b] \in {"N", "R", "W"} /\ fcnt[b] >= 0 /\ fcnt[b] <= NT /\ vpid[b] \in 0..NP
+       /\ bver[b] >= 0
+       /\ dirty[b] \in BOOLEAN /\ writing[b] \in BOOLEAN /\ wwait[b] \in BOOLEAN /\ touched[b] \in BOOLEAN
+  /\ \A p \in Pages : diskVer[p] >= 0 /\ latest[p] >= 0
   /\ \A k \in Bkts : exh[k] \in 0..NT
+  /\ tick >= 1
+  /\ tmo >= 0 /\ tmo <= MaxTimeouts /\ spur >= 0 /\ spur <= MaxSpur
+  /\ errs >= 0 /\ errs <= MaxErr /\ envs >= 0 /\ envs <= MaxEnv
+  /\ barge \in BOOLEAN
 
 HoldersOf(b) == {t \in Workers : pc[t] \in Holding /\ hb[t] = b}
 
@@ -559,9 +635,10 @@ NoWriteDuringCopy ==
 NoLostUpdate ==
   \A p \in Pages : latest[p] = diskVer[p] \/ \E b \in Bcbs : vpid[b] = p /\ bver[b] = latest[p]
 
-\* C6 a waiter entry belongs to a thread asleep on it, waiting for the page the BCB still holds
+\* C6 a waiter entry belongs to a thread asleep on it, waiting for the page the BCB still holds, or
+\* for no page once the read of that page failed
 NoStaleWaiter ==
-  \A t \in Procs : inq[t] => (pc[t] = "sleep" /\ vpid[hb[t]] = rp[t])
+  \A t \in Procs : inq[t] => (pc[t] = "sleep" /\ vpid[hb[t]] \in {rp[t], 0})
 
 \* C7 a latch nobody holds and no flush is copying never has waiters of whom none is woken, while
 \* no thread is on its way to fix that page (a fixer releases and posts in turn)
@@ -582,8 +659,70 @@ PromoteStable ==
 \* C10 (liveness) every worker finishes its operations and the daemon finishes
 Termination == <>AllDone
 
+\* Well-formedness and the strengthening conjuncts the inductive check needs
+
+Copying == {"copy", "cend"}
+
+\* each process's fields in the shape its program counter allows
+Shape ==
+  /\ \A t \in Procs :
+       /\ (t = D) => pc[t] \in {"scan", "copy", "cend", "done"} /\ rp[t] = 0 /\ ~inq[t] /\ hm[t] = ""
+       /\ (t # D) => pc[t] \notin {"scan"}
+       /\ pc[t] \in {"idle", "done", "fix", "miss", "scan"} => hb[t] = 0
+       /\ pc[t] \in {"load", "hold", "sleep", "copy", "cend", "pin"} => hb[t] \in Bcbs
+       /\ (hm[t] # "") <=> pc[t] = "hold"
+       /\ inq[t] <=> pc[t] = "sleep"
+       /\ posted[t] => inq[t]
+       /\ (t # D /\ pc[t] \notin {"idle", "done"}) => rp[t] \in Pages /\ rm[t] \in Ops \cup {"W"}
+       /\ pc[t] = "sleep" =>
+            /\ wm[t] \in {"R", "W", "F"}
+            /\ wm[t] = "R" => rm[t] \in {"R", "P"}
+            /\ wm[t] = "W" => rm[t] = "W"
+            /\ wm[t] = "F" <=> rm[t] = "C"
+            /\ tk[t] >= 1 /\ tk[t] < tick
+       /\ (t # D /\ pc[t] \in Copying) => rm[t] = "C"
+       /\ pc[t] = "hold" /\ rm[t] = "P" => hm[t] = "R"
+       /\ pc[t] = "hold" /\ hm[t] = "W" => mode[hb[t]] = "W"
+       /\ pc[t] = "hold" /\ hm[t] = "R" => mode[hb[t]] = "R"
+       /\ pc[t] = "load" => mode[hb[t]] = "W" /\ vpid[hb[t]] = rp[t] /\ ~dirty[hb[t]] /\ ~writing[hb[t]]
+       /\ pc[t] = "miss" => exh[Bkt(rp[t])] = t /\ Resident(rp[t]) = {}
+       /\ pc[t] \in Copying => writing[hb[t]] /\ cpg[t] = vpid[hb[t]] /\ cver[t] = bver[hb[t]]
+       /\ pv[t] # -1 => pc[t] = "hold" /\ hm[t] = "W" /\ bver[hb[t]] = pv[t]
+       /\ pc[t] # "pin"
+  /\ \A k \in Bkts : exh[k] # 0 => pc[exh[k]] = "miss" /\ Bkt(rp[exh[k]]) = k
+  /\ \A t, u \in Procs : (t # u /\ inq[t] /\ inq[u]) => tk[t] # tk[u]
+
+\* a write in progress has exactly one copier
+OneCopier ==
+  \A b \in Bcbs :
+    /\ writing[b] => \E t \in Procs : pc[t] \in Copying /\ hb[t] = b
+    /\ \A t, u \in Procs : (pc[t] \in Copying /\ pc[u] \in Copying /\ hb[t] = b /\ hb[u] = b) => t = u
+
+\* an empty BCB is idle and clean, and every waiter left on it (after a failed read) is woken
+EmptyIdle ==
+  \A b \in Bcbs : vpid[b] = 0 =>
+    fcnt[b] = 0 /\ mode[b] = "N" /\ ~dirty[b] /\ ~writing[b] /\ \A w \in Waiters(b) : posted[w]
+
+\* where the latest version of each page is
+Versions ==
+  /\ \A b \in Bcbs : vpid[b] # 0 => bver[b] = latest[vpid[b]]
+  /\ \A b \in Bcbs : (vpid[b] # 0 /\ ~dirty[b] /\ ~writing[b]) => diskVer[vpid[b]] = bver[b]
+  /\ \A p \in Pages : Resident(p) = {} => diskVer[p] = latest[p]
+
+\* waiters of whom none is woken have a reason to be woken later: a holder whose release posts, or
+\* a write in progress whose end posts
+WaitReason ==
+  \A b \in Bcbs :
+    (Waiters(b) # {} /\ \A w \in Waiters(b) : ~posted[w]) =>
+      fcnt[b] > 0 \/ (writing[b] /\ wwait[b])
+
 IndInv ==
   /\ TypeOK
+  /\ Shape
+  /\ OneCopier
+  /\ EmptyIdle
+  /\ Versions
+  /\ WaitReason
   /\ FcntExact
   /\ Exclusive
   /\ SamePage
@@ -592,11 +731,11 @@ IndInv ==
   /\ NoStaleWaiter
   /\ NoStrandedWaiter
   /\ UniqueResident
+  /\ PromoteStable
 
 \* Witnesses: outcomes that must be reachable (each cfg expects the invariant violated)
 NotBarged == ~barge
 NotWriteWaitsForCopy == ~\E t \in Workers : inq[t] /\ wm[t] = "W" /\ writing[hb[t]]
-NotPromoteWaited == ~\E t \in Workers : inq[t] /\ pv[t] >= 0
 NotReclaimed == ~\E t \in Workers : pc[t] = "load"
 NotCopyFailed == ~\E t \in Procs : pc[t] = "cend" /\ cerr[t]
 NotFlushWaiter == ~\E t \in Workers : inq[t] /\ wm[t] = "F"
