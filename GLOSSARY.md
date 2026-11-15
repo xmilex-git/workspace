@@ -1224,7 +1224,15 @@ _Avoid_: 섹터 목록(섹터 안의 페이지 비트까지 가리키지 못함)
 ### 페이지 latch 대기자 (CBRD-27970·27971 그릴링 2026-11-06)
 
 **R/W 대기자 (reader/writer waiter)**:
-BCB 대기열에서 READ 또는 WRITE latch를 기다리는 스레드다. latch를 쥔 스레드가 마지막 unfix에서 깨워 latch를 넘겨준다.
+BCB 대기열에서 READ 또는 WRITE latch를 기다리는 스레드다. latch를 쥔 스레드가 마지막 unfix에서 깨워 latch를 넘겨준다(넘겨주기). BCB mutex 제거 설계(`docs/tla/bcb-mutex-removal/`)에서는 넘겨주지 않고 깨우기만 한다(깨우고 다시 시도).
+
+**버킷 래치 (hash-bucket latch)**:
+해시 버킷 하나에 걸린 BCB들의 상태(fix 수, latch 모드, 대기자, 페이지 정체, flush 상태)를 지키는 읽기·쓰기 래치다. fix는 공유로, victim claim·invalidate·정체 변경은 배타로 잡는다. 페이지 latch(READ/WRITE)와 다르다: 페이지 latch는 페이지 내용을 지키고 오래 쥐며, 버킷 래치는 BCB 상태를 바꾸는 몇 명령어 동안만 쥔다.
+_Avoid_: 해시 mutex(지금의 `hash_mutex`는 배타 전용 pthread mutex), BCB 래치
+
+**깨우고 다시 시도 (wake-and-retry)**:
+latch를 놓는 스레드가 대기자에게 latch를 넘겨주지 않고 깨우기만 하며, 깨어난 대기자가 해시 체인부터 fix를 처음부터 다시 하는 방식이다. 깨운 뒤 그 BCB가 다른 페이지로 바뀌었을 수도 있으므로 다시 찾는다. 넘겨주기와 달리 timeout과 넘겨주기가 겹치는 경쟁이 없다.
+_Avoid_: 핸드오프, grant
 _Avoid_: 대기자(FLUSH 대기자와 섞임)
 
 **FLUSH 대기자 (flush waiter)**:
