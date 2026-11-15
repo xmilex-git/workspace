@@ -24,6 +24,24 @@ is `docs/tla/CBRD-27970-27971/`. No model yet: the spec is written once the latc
   `hash_mutex` or a new array) and its granularity, whether an unfix without waiters takes the bucket
   latch.
 
+## Prior art (public)
+
+PostgreSQL development branch (`~/dev/postgres` at `b0392c26bd3`, 2026-10-30), `src/backend/storage/buffer/bufmgr.c`:
+
+- One 64-bit buffer state word holds refcount (18 bits), usage count (4), flags (12, among them the
+  header spinlock bit `BM_LOCKED`, `BM_IO_IN_PROGRESS`, `BM_LOCK_HAS_WAITERS`, `BM_LOCK_WAKE_IN_PROGRESS`),
+  share-lock count (18), a share-exclusive bit and an exclusive bit (`buf_internals.h`; content locks
+  moved into the word by `fcb9c977aa5`, 2026-01-15). Pin, unpin and content lock are CAS loops on it.
+- Content lock modes SHARE, SHARE_EXCLUSIVE (conflicts with itself and EXCLUSIVE), EXCLUSIVE. Writing a
+  buffer out and setting hint bits require SHARE_EXCLUSIVE (`82467f627bd`, 2026-03-10), so the write no
+  longer copies the page (`41d3d64e87a`, 2026-03-27): readers proceed during the I/O, an exclusive
+  locker waits for it.
+- Waiters: `BufferLockAcquire` queues itself, retries, sleeps; `BufferLockWakeup` collects waiters
+  under the header spinlock and wakes them after; a woken waiter retries the CAS (no hand-off, barging
+  allowed). The wait list lives in the buffer descriptor under `BM_LOCKED`.
+- Lookup takes the buffer-mapping partition lock shared, eviction exclusive; usage count is bumped at
+  pin and decremented by the clock sweep.
+
 ## Claim and sources
 
 To be written from the CBRD-27970-27971 claims C1–C9 (fix count exact, latch exclusivity, same page,
