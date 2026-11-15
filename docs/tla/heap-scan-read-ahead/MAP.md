@@ -5,7 +5,8 @@ loader threads that read the next sectors into the buffer while the serial walk 
 branch `heap-scan-read-ahead` (`abc4c1fbb`, on `3328953d3`). The sector-based scan itself (the page bitmap, the
 walk in file order) is `docs/tla/CBRD-28043/`; its decisions D1..D17 and claims C1..C5 keep their numbers here.
 Models: `PageBatchRead.tla` (two batch readers and one single-page fixer over one run of pages),
-`ReadAheadHandoff.tla` (how a loaded page stays in the buffer until the walk takes it).
+`ReadAheadHandoff.tla` (how a loaded page stays in the buffer until the walk takes it), `ReadAheadPool.tla` (where the
+read-ahead gets its threads: one server-wide pool, D24).
 
 trace-exempt: design spec of a trial implementation (workspace #642); the implementation's trace validation (cubrid-tla step 9) belongs to the issue that carries the code
 
@@ -19,6 +20,15 @@ trace-exempt: design spec of a trial implementation (workspace #642); the implem
 | D21 | No direct I/O (O_DIRECT) for the read-ahead. | settled | user 2026-11-14 ("direct도 못써") | the reads go through the OS cache: not a model step |
 | D22 | A loaded page is not pinned for the walk: no protection (D20's option `none`). | settled | user 2026-11-14 ("pin 넣지말고") | `ReadAheadHandoff.cfg` |
 | D23 | The read-ahead is not part of CBRD-28043; it is carried by workspace #642 on its own branch. | settled | user 2026-11-14 | — |
+| D24 | The loaders are not parallel query workers reserved per scan: one server-wide read-ahead pool of 10 threads (a cubthread worker pool registered with `REGISTER_WORKERPOOL`; its threads start when a request comes and leave after 5 s without one, `thread_worker_pool_impl.hpp` idle timeout). A walk asks the pool to read a sector ahead of it; the request is a copy of the sector (volume, sector, page bitmap) and holds nothing of the walk, so a walk ends without waiting for its requests. The pool takes a request only while one of its threads is free (`worker_pool_task_capper::try_task`): a refused request is not queued and the walk reads that sector itself when it gets there. Struck: per-scan adaptive loaders from the parallel query workers (A: needs a reserve-one/release-one API beside `worker_manager`'s one-shot reservation and a lifetime rule between a retiring loader and the walk's end, and still competes with parallel queries for `max_parallel_workers`); reading the heap through `mmap` outside the page buffer (C: no less kernel CPU on a cold read, measured; the warm gain needs the page unchanged while its rows are read, i.e. a buffer lock held across the walk's work, which makes other readers wait on a walk that stands still, A8). | settled (user 2026-11-15 "B로 가고"); the pool size is D26's parameter | user 2026-11-15; measurement `.git_ignored_dir/scratch/mmap-probe/results.txt` | `ReadAheadPool.tla`: `WReq` (try_task), `TLock`/`TDone`/`TErr` (a pool thread), `Slots` |
+| D25 | The read-ahead distance of a walk starts at one sector and follows feedback ("처음엔 1개로 올리다가, 점점 늘려가면서 조절"; PostgreSQL `read_stream.c`): after a sector the walk waited for (another thread was reading it) or read itself, the distance doubles, never beyond the sectors entered (C15) nor 16; after more than 16 sectors in a row found in the buffer it goes down by one per sector. Struck: double at every sector entered (`mutant-ramp-each`), PostgreSQL's rule without the cap by the sectors entered (`mutant-wait-uncapped`: 10 requests after 4 cold sectors). Compared: `walked` (grows with the walk's progress, never shrinks; `option-walked`, `option-long-walked`). A sector read itself because the pool refused it does not count (C18, `CountRefused = FALSE`). | settled (round 3 Q1 "응") | user 2026-11-15 | constant `Ramp = "wait_capped"`, `WaitWin`, `WWait`, `mcause` |
+| D26 | The pool's upper bound is a hidden server parameter (working name `heap_read_ahead_threads`), default 8, at most 32 (PostgreSQL's `io_max_workers` default and `MAX_IO_WORKERS`); 0 turns the read-ahead off. Default on is a feature-specific exception to the house rule (a new engine path is default off), recorded in workspace #642: the measured cold gain is the issue's purpose and C14 keeps the hot path unchanged. | settled | user 2026-11-15 (round 2 Q4; round 5 "PG처럼 8,32로두자") | constant `Slots` |
+| D27 | The pool's size follows the cubthread worker pool as it is: one core, one resident thread, a thread started at once when a request finds no free one, every other thread leaving after 5 s without a request (`worker_impl::get_new_task`); a thread that finished a request waits for the next one, so one thread takes a walk's sectors one after another, one request per sector. No controller like PostgreSQL's (`io_min_workers`, one launch per `io_worker_launch_interval`): its signal is a submission queue, and this pool has none (`try_task`). | settled | user 2026-11-15 (round 4 Q1 "응") | `Slots` is the bound; thread start and exit are not modeled (no state a claim reads) |
+| D28 | No size threshold: every serial sector-based walk reads ahead (the trial's "16 sectors or more" goes). The distance starts at one sector, C15 bounds what an early end wastes, and C14 sends nothing for sectors in the buffer. | settled | user 2026-11-15 (round 5 Q1, "언급없는건 추천대로") | `S` is any size |
+| D29 | A serial walk run by a worker thread (a parallel subquery's) reads ahead too: the pool needs no reservation, so the reason to keep it off (a worker reserving workers) is gone. | settled | user 2026-11-15 (round 5 Q2) | a walk is a walk, whichever thread runs it |
+| D30 | Only D26's parameter turns the read-ahead off; `parallelism` and the `NO_PARALLEL_SCAN` hint do not touch it. | settled | user 2026-11-15 (round 5 Q4) | — |
+| D31 | A walk run again (the inner scan of a nested loop join, `scan_reset_scan_block`, `scan_start_scan`) starts again at distance 1, as PostgreSQL's `read_stream_reset` ("Start off assuming data is cached"). A cached inner sends nothing (C14); a cold one grows again by feedback. The issue's "do not start the next pass when this one had nothing to read" is not needed. | settled | user 2026-11-15 (round 5 Q5) | a pass is a walk: its state starts from `Init`'s values (two walks, `NW = 2`) |
+| D32 | The workers of a parallel heap scan do not read ahead; only a serial walk does (D29). Measured cold on perf-node0 (run 20261115-130112-248, trial build ec26894fca74bd1f with per-worker loaders, orders SF10 2.4 GB, 6 runs each, medians): at equal thread counts more scan workers beat loaders: 4 threads: parallel 4 1.43 s, parallel 2 + one loader each 1.56 s; 6: parallel 2 + two loaders each 1.64 s; 8: parallel 8 1.10 s, parallel 4 + one loader each 1.33 s, parallel 2 + three loaders each 1.47 s, serial + 8 loaders 1.51 s; parallel 2 alone 2.08 s, serial alone 3.64 s. A loader helps a parallel scan (2.08 -> 1.47..1.64, 1.43 -> 1.33) but the same thread spent as a scan worker helps more, so the threads go to `parallelism`. On the SATA SSD of the development host every configuration except the serial scan without loaders took 4.41..4.47 s (device bandwidth), so it could not separate them. | settled | user 2026-11-15 ("로더붙힐바에 병렬 늘리는게 이득 ... 굳이 이거 진행안해도되겠다") | the model has no parallel scan; a walk is serial |
 
 ## Claim and sources
 
@@ -32,6 +42,11 @@ trace-exempt: design spec of a trial implementation (workspace #642); the implem
 | C11 | When a walk and its loaders have ended, on any path (end of the bitmap, a LIMIT, an error), no page is left protected for them. | user 2026-11-14 (review of the handoff) |
 | C12 | While a walk stands still (it waits for its client) a writer still gets the write latch of any page the walk does not hold, and another thread still gets a BCB. | user 2026-11-14 (review of the handoff); assumption A8 |
 | C13 | The walk and its loaders end. | D19 |
+| C14 | A walk over a table whose sectors all stay in the buffer sends the read-ahead pool no request. | user 2026-11-14 ("버퍼에 많은 경우도 있으니 적응적으로"); round 2 Q2 2026-11-15 accepted (the walk checks the sector's first listed page; in scan order it is the oldest page of the sector in the LRU, so it is the first to leave). Prior art: PostgreSQL `bufmgr.c` `StartReadBuffersImpl` pins every block ahead and issues I/O only for misses, `read_stream.c` decays the distance to 1 and takes `fast_path` on an all-hit scan (b0392c26bd3); a pin ahead is struck here (D20, C10) |
+| C15 | A walk that ends after entering k sectors has sent at most 2k+1 read-ahead requests (a scan ended early by a LIMIT reads little for nothing). | user, Q3 2026-11-15 ("응") |
+| C16 | Nothing reads a walk's memory after the walk ended; the walk's end waits for no request. | D24 (the request is a copy); round 2 Q3 2026-11-15 accepted |
+| C17 | A walk never waits for a read-ahead thread: a request the pool cannot take now is dropped. | D24 (`try_task`); round 2 Q3 2026-11-15 accepted |
+| C18 | A sector the walk read itself because the pool refused its request does not make the walk's read-ahead distance grow: when the pool is full, a longer distance only adds refused requests. | user 2026-11-15 (round 4 Q2 "응") |
 
 ## Refinement map (model -> code)
 
@@ -66,6 +81,17 @@ trace-exempt: design spec of a trial implementation (workspace #642); the implem
 | `WWant`, `WGrant`, `WRelease` | any `pgbuf_fix (..., PGBUF_LATCH_WRITE)` and its unfix | page latch | — |
 | `OFix` | `pgbuf_allocate_bcb` for a page of another file | — | — |
 
+`ReadAheadPool.tla` (D24, D25) is a design model: the pool does not exist in the branch (the trial reserves 8 parallel query workers per scan). The code sites below are where the design puts each step.
+
+| Model | Code (planned) | Protection | One step because |
+|---|---|---|---|
+| `WEnter` | `scan_heap_next_listed_page` at page offset 0 (today's `scan_heap_read_ahead` call): the distance and the last sector to ask for | private to the walk | private state |
+| `WReq` | per sector up to the target: the hot check (a hash lookup of the sector's first listed page), then `worker_pool_task_capper::try_task` with a request holding a copy of the sector | the capper's mutex (`thread_worker_pool_taskcap.cpp`) | the free-thread check and the hand-over are one hold of that mutex |
+| `WReqEnd`, `WNext`, `WStop` | the walk's own control flow; `WStop` is `scan_end_scan` / an error / an interrupt, which frees nothing a request uses | private | — |
+| `WFix`, `WReadDone`, `WReadErr` | `heap_page_list_fix_next`: the page is in the buffer, or buffer-locked by another reader (`pgbuf_lock_page` waits), or read by the walk's own `pgbuf_load_page_run` (D18) | the page's hash mutex and buffer lock (`PageBatchRead`) | a sector is the unit here; `PageBatchRead` has the pages |
+| `TLock`, `TDone`, `TErr` | the pool thread: `heap_page_list_load_sector` → `pgbuf_load_page_run` on the copied sector; the run ends at a page in the buffer or being read | as `PageBatchRead`'s `BLock` .. `BInstall`, `BReadError` | — |
+| `Evict` | `pgbuf_get_victim` of a page no walk holds | BCB mutex | — |
+
 ## Properties
 
 | Property | Kind | Claim |
@@ -80,6 +106,13 @@ trace-exempt: design spec of a trial implementation (workspace #642); the implem
 | `WriterEnds`, `OtherEnds` (`still*.cfg`, no fairness on the walk) | liveness | C12 |
 | `Ends` (`ReadAheadHandoff.live*.cfg`) | liveness | C13 |
 | `IndInv` (`ReadAheadHandoff.apalache-indinv.cfg`, both left options, Depth 1 and 2) | inductive invariant | C11 is a conjunct |
+| `Ends` (`ReadAheadPool.live.cfg`) | liveness, WF on each walk's steps but `WStop` and on each pool thread | C13 |
+| `HotNoRequest` | invariant | C14 |
+| `WasteBound` | invariant | C15 |
+| `NoUseAfterEnd` | invariant (ghost `uaf`) | C16 |
+| `NoSlotWait` | invariant | C17 |
+| `NoGrowOnRefused` | invariant (ghost `grewOnRefused`) | C18 |
+| `IndInv` (`ReadAheadPool.apalache-indinv.cfg`, `Ramp = "wait_capped"`, S 3, 2 walks, 2 threads, MaxWin 1..16, evictions and errors any number) | inductive invariant | C14, C15, C16, C17, C18 are conjuncts |
 
 ## Fault model and environment assumptions
 
@@ -105,6 +138,7 @@ Faults of `PageBatchRead` (D18):
 - A7: batch readers never wait for a buffer lock; only single-page fixers wait, for the lock holder's unlock. The fixer gets weak fairness with the readers (`WF_vars(Threads)`); the environment gets none and its budget is finite (`MaxVer`).
 
 - A8: a serial walk may stand still for any time between two pages (its rows go to a client that does not fetch), and may never stop; so C12 is checked with no fairness on the walk (`SpecStill`). Every other thread is weakly fair.
+- `ReadAheadPool` faults: a read error of a pool thread (`TErr`: the sector goes back out, nothing is reported) and of the walk (`WReadErr`: the scan ends with the error); a walk stops at any step but its own read (`WStop`: LIMIT, error, interrupt); eviction of a sector no walk holds (`Evict`); the pool refuses a request when no thread is free (`WReq`). Not applicable: lock timeout and deadlock victim (no lock manager lock), conditional latch (none taken), OOM (a refused allocation of the request is a refused request), crash (nothing durable), spurious wakeup (`try_task` never waits), concurrent DML, vacuum and checkpoint (as `PageBatchRead`: the batch read keeps C6 for any page), HA and nested statements (no snapshot read). Not modeled: server shutdown, which must stop the pool before the page buffer goes (a fault-table row for the implementation).
 - `ReadAheadHandoff` faults: the walk stops at any page (`ScanStop`: LIMIT, error, interrupt); a loader finishes the page it is reading after the stop (`LInstall` has no stop check); eviction of any unprotected page at any time. Not applicable: crash (nothing durable), lock manager locks, OOM (no allocation in the handoff).
 
 ## Mutants
@@ -125,7 +159,16 @@ Faults of `PageBatchRead` (D18):
 | `ReadAheadHandoff.mutant-latch-pin` | (option `latch_pin`) the loader keeps a read latch until the walk passed | `WriterEnds` (liveness) | C12 |
 | `ReadAheadHandoff.mutant-holder-handoff` | (option `handoff`) the loader fixes the page and hands its holder entry to the walk's thread: the walk then holds read latches on pages it has not reached | `WriterEnds` (liveness) | C12 |
 | `ReadAheadHandoff.mutant-depth-over-buffer` | (option `flag`) the spare BCB beyond the marked pages: Depth 2 with 3 BCBs | `WriterEnds` / `OtherEnds` (liveness) | C12 |
+| `ReadAheadPool.mutant-ramp-each` (was `long`, the correct variant until round 2 struck Ramp "each") | walk enters sectors 1, 2, 3 with distances 1, 2, 4 and asks for sectors 2..7 → enters sector 4: distance 8, target 12 → asks for 8..12: 10 requests after 4 sectors (> 2·4+1). A `LIMIT` stopping there leaves 8 sectors read for nothing | design conflict between D25's rule and C15: round 2 question |
 | `ReadAheadHandoff.mutant-loader-ignores-stop` | the loader's stop check | `Ends` (liveness) | C13 |
+| `ReadAheadPool.mutant-err-keeps-lock` | the release of the buffer lock when a pool thread's read fails | `Ends` (liveness: the walk waits for the sector for ever) | C13 |
+| `ReadAheadPool.mutant-no-hot-check` | the walk's check that the sector is already in the buffer | `HotNoRequest` | C14 |
+| `ReadAheadPool.mutant-no-ramp` | the ramp: the longest distance from the first sector (the trial's 16) | `WasteBound` | C15 |
+| `ReadAheadPool.mutant-task-reads-scan` | the copy: the request reads the walk's state (where the walk is, to skip a passed sector) | `NoUseAfterEnd` | C16 |
+| `ReadAheadPool.mutant-push-blocks` | `try_task`: the walk waits for a free thread (`push_task`) | `NoSlotWait` | C17 |
+| `ReadAheadPool.mutant-ramp-each` | (struck rule, D25) the distance doubles at every sector entered | `WasteBound` | C15 |
+| `ReadAheadPool.mutant-count-refused` | a sector the walk read itself because the pool refused it counts as a wait | `NoGrowOnRefused` | C18 |
+| `ReadAheadPool.mutant-wait-uncapped` | (option, round 3) the distance doubles after every sector the walk waited for, with no cap by the sectors entered (PostgreSQL's `read_stream.c` rule) | `WasteBound` | C15 |
 
 ## Witnesses
 
@@ -144,6 +187,13 @@ Faults of `PageBatchRead` (D18):
 | `ReadAheadHandoff.witness-marked` | (option `flag`) a page is marked |
 | `ReadAheadHandoff.witness-stopped-early` | a walk stops before the last page and everything ends |
 | `ReadAheadHandoff.witness-all-done` | the walk, the loader, the writer and the other thread end |
+| `ReadAheadPool.witness-used` | a walk finds a sector a pool thread put into the buffer |
+| `ReadAheadPool.witness-cross` | ... one another walk's request put there (two scans share the pool's work) |
+| `ReadAheadPool.witness-stale` | a request starts after its walk passed its sector |
+| `ReadAheadPool.witness-refused` | the pool refuses a request and the walk goes on |
+| `ReadAheadPool.witness-hot-done` | a walk over a table all in the buffer ends |
+| `ReadAheadPool.witness-shrunk` | a walk's distance goes down after sectors found in the buffer |
+| `ReadAheadPool.witness-all-done` | every walk and every request end |
 
 ## Dead expressions (pass cfg)
 
@@ -152,11 +202,15 @@ Faults of `PageBatchRead` (D18):
 | PageBatchRead.tla:304, PageBatchRead.tla:305, PageBatchRead.tla:306, PageBatchRead.tla:307, PageBatchRead.tla:308, PageBatchRead.tla:309, PageBatchRead.tla:310, PageBatchRead.tla:312 | `PageBatchRead.live` | `BReadError` is disabled by `MaxErrors = 0` in the liveness cfg (P68: smallest bound); the main cfg fires it (`witness-errored`) |
 | PageBatchRead.tla:207, PageBatchRead.tla:208, PageBatchRead.tla:209, PageBatchRead.tla:210, PageBatchRead.tla:211 | `PageBatchRead.live` | `Reset` as called from `BReadError` (TLC counts an operator's body per call site); its calls from `BInstall` and `FInstall` fire |
 | ReadAheadHandoff.tla:149, ReadAheadHandoff.tla:150 | all `ReadAheadHandoff` pass cfgs | `LRelease`: the loader holds a read latch only under the struck option `latch_pin` (`mutant-latch-pin`) |
+| ReadAheadPool.tla:228, ReadAheadPool.tla:229 | all `ReadAheadPool` pass cfgs | the blocking push's branch, taken only by `mutant-push-blocks` |
+| ReadAheadPool.tla:214, ReadAheadPool.tla:215, ReadAheadPool.tla:216 | `ReadAheadPool.option-long-walked`, `option-long-wait-capped` | the hot skip: with one walk starting cold, the sector after the last one asked for is put into the buffer only by the walk itself, after it asked (`req` only grows); the main cfg fires it (`Start = "any"`, two walks) |
 
 ## Bounds and limits
 
 - `PageBatchRead`: main 3 pages of one run, 2 content versions, 3 BCBs, 2 batch readers (a run of up to 3 pages each, any start page) and one single-page fixer doing 2 fixes, 1 read error. Scale: 4 pages, runs of up to 4. Liveness: 2 pages, 2 BCBs, 1 fix, no error (P68). Not modeled: the hint to the OS for the next sector (`heap_page_list_hint_sector`: nothing is read into the buffer, no state the scan or the buffer uses), the LRU position of the loaded pages, TDE decryption other than as a failure, temporary volumes (not read in runs), more than one waiter per page (each waiter is woken by the same unlock).
 - `ReadAheadHandoff`: 3 pages, read-ahead distance 2, 3 BCBs (4 for the option `flag`: two marked pages, the writer's and the other thread's), one loader, one writer, one other thread. Scale: 4 pages, 4 BCBs. Not modeled: where a loaded page sits in the LRU list (it changes how likely an eviction is, not whether it can happen), several loaders (`PageBatchRead`), the batch read's steps.
+
+- `ReadAheadPool`: main 3 sectors, 2 walks, 2 pool threads, distance up to 2, 1 eviction, 1 read error, any start (each sector in or out). Scale: 4 sectors, the claims' invariants without IndInv (IndInv is checked on every reachable state of the main cfg and inductively over every value of the integer constants by Apalache; with it the scale run timed out at 1800 s after 35.5M distinct states, the queue still growing (run heap-scan-read-ahead-20261115-131600-391021)). Liveness: 2 sectors, 1 thread (P68). `mutant-ramp-each`/`mutant-wait-uncapped`/`option-long-*`: 12 sectors, one walk, 1 thread, distance up to 8, cold start (the ramp needs the length). Not modeled: the pages of a sector (`PageBatchRead`), the pool's 5 s idle exit (a thread count, not a state any claim reads), several tables.
 
 ## Counterexamples and divergences
 
@@ -172,3 +226,5 @@ Faults of `PageBatchRead` (D18):
 `ReadAheadHandoff` main 97,424 / 26,848, depth 21; scale 685,100 / 160,856; 7 mutants killed (three of them the struck options), 5 witnesses reached, the standing-still and liveness cfgs and the Apalache inductive check pass.
 Spec sha256 at the run: `PageBatchRead.tla` 7a858e26e138a8ac…, `ReadAheadHandoff.tla` 24e3a0caaf01de87… (this Result section was written after the run, so MAP.md's hash differs from the run's).
 Trace-exempt: design spec of a trial implementation (fork branch `heap-scan-read-ahead` `abc4c1fbb`); TLAPS not requested.
+
+`ReadAheadPool` (2026-11-15) has no whole-directory `RESULT: OK` yet: the record run was stopped by the user. Last results per cfg: run `heap-scan-read-ahead-20261115-131600-391021` (`RESULT: FAILED (6)`): 56 cfgs PASS, among them `ReadAheadPool.apalache-indinv` (12 s), the 9 mutants and the 7 witnesses; main (with IndInv) 33,391,282 states generated / 8,686,827 distinct, depth 41, and live, option-walked, option-long-walked, option-long-wait-capped got pass from TLC but failed the completeness check on dead-expression line numbers MAP.md had not updated (fixed since: 228, 229 and 214..216); scale-4s timed out at 1800 s with IndInv. `--only ReadAheadPool.scale-4s` without IndInv, run `heap-scan-read-ahead-20261115-151728-419628`: PASS, 1,053,893,090 / 250,506,879, depth 54, 7937 s. Open: one whole-directory record run after these edits.
