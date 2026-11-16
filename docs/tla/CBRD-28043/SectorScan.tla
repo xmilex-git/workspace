@@ -13,7 +13,9 @@
 (* deallocated", skips a page that is no longer a heap page of this table, *)
 (* and otherwise returns the rows of the page its snapshot sees.  The scan *)
 (* ends when every worker has ended (the manager's join).  A rewind walks  *)
-(* the same bitmap again with the same decision (D5, D13).  A scan closed  *)
+(* the same bitmap again with the same decision (D5, D13), unless a nested *)
+(* statement rebuilt the snapshot since: that pass reads the pages         *)
+(* allocated by then (D17).  A scan closed                                 *)
 (* and opened again in the same statement (a correlated subquery) reads    *)
 (* the bitmap the statement kept, and decides again; when a nested         *)
 (* statement has rebuilt the snapshot since, it collects a new bitmap      *)
@@ -41,7 +43,7 @@ CONSTANTS N,          \* pages of the file, in file order 1..N; page 1 is the fi
 
 \* Mutant: "late_snapshot" | "revisit" | "no_release" | "fix_freed" | "assert_heap"
 \*         | "no_visibility" | "rewind_keep_cur" | "no_dedup_assert_heap" | "no_shared_cursor"
-\*         | "reopen_stale_list"
+\*         | "reopen_stale_list" | "rewind_stale_list"
 
 \* apalache-type: N Int
 \* apalache-type: MaxRow Int
@@ -376,19 +378,29 @@ Join ==
   /\ UNCHANGED <<reusedList, recollected>>
   /\ UNCHANGED envVars
 
-\* the scan opened again with the same snapshot walks the same bitmap with the same decision (D5, D13)
-Rewind ==
+\* a rewind (the inner of a nested loop): with the snapshot the bitmap was collected under, the scan walks the same
+\* bitmap with the same decision (D5, D13).  When a nested statement rebuilt the snapshot since (READ COMMITTED), the
+\* pass reads the pages allocated by then (D17): the parallel manager collects a new bitmap, the serial scan follows
+\* the page links, which reach every page a collection at that moment lists; both are a new collection here.
+Rewind(rebuilt) ==
   /\ phase = "done" /\ ~aborted /\ rew < MaxRewind
   /\ rew' = rew + 1
-  /\ taken' = IF Mutant = "rewind_keep_cur" THEN taken ELSE 0
-  /\ cur' = [w \in W |-> 0]
-  /\ wpc' = [w \in W |-> IF w = 1 \/ mode = "parallel" THEN "pick" ELSE "idle"]
+  /\ snapVis' = IF rebuilt THEN live ELSE snapVis
   /\ out' = [r \in Rows |-> 0]
   /\ readBy' = {}
-  /\ phase' = "walk"
-  /\ UNCHANGED <<snapVis, list, ftabSnap, mode, held, aborted, errs, badFix, wasFreed,
-                 skippedFreed, skippedForeign, reusedRead>>
-  /\ UNCHANGED <<reusedList, recollected>>
+  /\ cur' = [w \in W |-> 0]
+  /\ IF rebuilt /\ Mutant # "rewind_stale_list"
+     THEN /\ phase' = "snapped"
+          /\ list' = {} /\ ftabSnap' = {} /\ wasFreed' = {}
+          /\ recollected' = TRUE
+          /\ mode' = "none"
+          /\ taken' = 0
+          /\ wpc' = [w \in W |-> "idle"]
+     ELSE /\ taken' = IF Mutant = "rewind_keep_cur" THEN taken ELSE 0
+          /\ wpc' = [w \in W |-> IF w = 1 \/ mode = "parallel" THEN "pick" ELSE "idle"]
+          /\ phase' = "walk"
+          /\ UNCHANGED <<list, ftabSnap, mode, wasFreed, recollected>>
+  /\ UNCHANGED <<held, aborted, errs, badFix, skippedFreed, skippedForeign, reusedRead, reusedList>>
   /\ UNCHANGED envVars
 
 \* the scan closed and opened again in the same statement (a correlated subquery, once per outer row): with the
@@ -423,7 +435,7 @@ ScanStep ==
 \* nothing left to do (the environment's budget is spent): stutter instead of a false deadlock
 Idle == phase = "done" /\ UNCHANGED vars
 
-Next == Env \/ ScanStep \/ (\E w \in W : Abort(w)) \/ Rewind \/ (\E b \in BOOLEAN : Reopen(b)) \/ Idle
+Next == Env \/ ScanStep \/ (\E w \in W : Abort(w)) \/ (\E b \in BOOLEAN : Rewind(b)) \/ (\E b \in BOOLEAN : Reopen(b)) \/ Idle
 
 Spec == Init /\ [][Next]_vars /\ WF_vars(ScanStep)
 

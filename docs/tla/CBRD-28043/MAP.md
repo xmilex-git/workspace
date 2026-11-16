@@ -29,9 +29,10 @@ trace-exempt: design spec of D1..D17; the implementation's trace validation (cub
 | D12 | A sector-based scan reads forward only, as every heap scan does at run time: `scan_end_scan` flips `scan_id->direction`, but the next `scan_start_scan` sets `S_FORWARD` again (`scan_manager.c`, the end of `scan_start_scan`), so `heap_prev` is never reached from a query heap scan. Measured 2026-11-12 on develop `956e1c19f` (optdebug, `csql -S` under gdb, `probeC.sh`): 0 `heap_prev` calls in a nested-loop join (2 and 3 tables), a correlated subquery, NOT EXISTS / IN subqueries and an outer join; a nested-loop inner returns its rows in the same order for every outer row (`smoke3.sh` B1). The review's proposal to walk the bitmap backward on every other pass (comment 4778360, 3-1) rests on an alternation that does not happen; an implementation of it was written and removed the same day as unreachable. The 2026-11-11 wording "`scan_end_scan` no longer flips" is dropped: the flip is left as it is. | settled | user, Q11 2026-11-11; re-examined 2026-11-12 (review 3-1) | `Rewind` restarts the forward walk |
 | D13 | A rewind of the parallel heap scan splits the bitmap of the open again (the manager keeps it) instead of collecting a new one, like the serial scan. | settled | user, Q13 2026-11-11 | `Rewind` keeps `list` and `mode` |
 
-| D14 | The access spec keeps the bitmap until the execution ends (`page_list_keep`, freed by `qexec_clear_access_spec_list` on the thread that ran the clone). A scan closed and opened again in the same execution (a correlated subquery: `qexec_execute_mainblock` → `qexec_open_scan` once per outer row) reads the kept bitmap when the heap is the same and the snapshot is the build the bitmap followed (`MVCC_SNAPSHOT.build_serial`, counted in `mvcctable::build_mvcc_info`); otherwise (another partition, a snapshot a nested statement rebuilt under READ COMMITTED) it collects again. The parallel decision is made again at every open. | settled | user 2026-11-12 ("재사용해. 차피 같은 스냅샷이고 같은 상황") | `Reopen(FALSE)` keeps `list`, goes to `decide`; `Reopen(TRUE)` takes the new snapshot and collects again |
+| D14 | The access spec keeps the bitmap until the execution ends (`page_list_keep`, freed by `qexec_clear_access_spec_list` on the thread that ran the clone). A scan closed and opened again in the same execution (a correlated subquery: `qexec_execute_mainblock` → `qexec_open_scan` once per outer row) reads the kept bitmap when the heap is the same and the snapshot is the build the bitmap followed (`MVCC_SNAPSHOT.build_serial`, counted in `mvcctable::build_mvcc_info`); otherwise (a snapshot a nested statement rebuilt under READ COMMITTED) it collects again. A partition's bitmap is kept in its `PARTITION_SPEC_TYPE` (2026-11-16, PR #8497 review, user "재사용 넣어"): a partitioned class opened again collects once per partition and build, not at every partition switch (measured on perf-node0, 8 one-page partitions under 1.5M outer rows: +13..17% before, +5% after, against develop `956e1c19f`). The parallel decision is made again at every open. | settled | user 2026-11-12 ("재사용해. 차피 같은 스냅샷이고 같은 상황") | `Reopen(FALSE)` keeps `list`, goes to `decide`; `Reopen(TRUE)` takes the new snapshot and collects again |
 | D15 | Rows the scanning transaction itself inserts during the scan (visible to it whatever the snapshot: `MVCC_IS_REC_INSERTED_BY_ME`, `mvcc.c:174`) into a page allocated after the bitmap are not returned; the link-order scan returned them. The only way to such an insert inside a statement is a stored procedure called from it, and CBRD-27579 (PR #8182, open) refuses DML there (`ER_SP_DML_IN_QUERY`). Measured 2026-11-12 (optdebug, 200 one-row pages, `SELECT f (id, pad) FROM t` with f inserting into t): develop `956e1c19f` returns 400 rows, this branch 201, the #8182 build `0f920af` raises the error. | settled | user 2026-11-12 (review 1-1) | assumption A5 |
 | D16 | A listed page not yet linked into the heap chain (`HEAP_PAGE_FLAG_NOT_IN_HEAP`: a CS-mode loaddb batch links its pages in the commit postpone, `heap_log_postpone_heap_append_pages`, after `logtb_complete_mvcc` made the rows visible, `log_manager.c:5256` then `:5273`) is read like any other listed page: its rows are committed. It must not be skipped. | settled | user 2026-11-12 (review 1-4) | `InsertNewPage` has no chain: an allocated page with committed rows is in the bitmap (`witness-new-page-row-returned`) |
+| D17 | A rewind after a nested statement rebuilt the snapshot (READ COMMITTED) does not walk the bitmap of the open: the serial scan follows the page links for the rest of that open (`HEAP_SCAN_ID.page_list_build` against `MVCC_SNAPSHOT.build_serial` in `scan_start_scan` and `scan_reset_scan_block`), the parallel manager's reset collects again (`manager::reset` → `scan_heap_scan_page_list`). D13 holds only while the snapshot is the build the bitmap followed. Measured 2026-11-16 (optdebug, READ COMMITTED, nested-loop join whose outer row calls a stored function running a SELECT, another session inserting one row per page): inner rows per outer row develop `956e1c19f` 31, 34, 38, 41, 44, 44; before this decision 31, 33, 33, 33, 33, 33; after it 31, 34, 38, 41, 44, 44. | settled | PR #8497 review (soheejung-cs) 2026-11-16, user "넣어" | `Rewind(TRUE)` takes the new snapshot and collects again; `Rewind(FALSE)` keeps `list` and `mode` |
 | D17 | `file_get_all_data_sectors` reads the file table's own pages into the buffer before it takes the header latch over them (`file_table_pages_to_buffer`, a walk that holds no latch between pages and uses nothing it read), so the latch is held for no disk read. The parallel workers' share of the bitmap is balanced by pages, not by sectors (`ftab_set::split`). A deallocated page read from disk for a maybe-deallocated fix goes to the LRU bottom (`page_buffer.c`, the `OLD_PAGE_MAYBE_DEALLOCATED` branch). A listed page that is not a heap page is skipped in a release build too (`heap_page_list_fix_next`). | settled | user 2026-11-12 (review 2-2, 3-3, 3-4, 4) | the pre-read reads no value the scan uses: not a model step; `Fix` skips a page that is not a heap page |
 
 ## Claim and sources
@@ -61,7 +62,7 @@ Code at branch `CBRD-28043` (develop `2d1513a8a` + the change).
 | `Finish` | serial: `scan_heap_next_listed_page` lets the held page go at the bitmap's end; parallel: `input_handler_heap::finalize` | — | one latch operation |
 | `Abort` | `ER_INTERRUPTED` or a fix error: serial `S_ERROR`; parallel `m_interrupt_p->set_code`, the other workers stop at their next step | interrupt flag | — |
 | `Join` | serial: the scan's `S_END`; parallel: `manager::wait_for_workers` | — | — |
-| `Rewind` | serial: `scan_start_scan` / `scan_reset_scan_block` reset the cursor and keep `page_list` (D5, D12); parallel: `scan_reset_scan_block_parallel_heap_scan` → `manager::reset` → `open` → `init_on_main` splits `m_page_list` again (D13) | private | private state |
+| `Rewind` | serial: `scan_start_scan` / `scan_reset_scan_block` reset the cursor and keep `page_list` (D5, D12); parallel: `scan_reset_scan_block_parallel_heap_scan` → `manager::reset` → `open` → `init_on_main` splits `m_page_list` again (D13). After a rebuilt snapshot (D17): serial drops `sector_order` and reads by `heap_next` (the page links reach every page a collection at that moment lists, and pages linked later); parallel `manager::reset` calls `scan_heap_scan_page_list` before `open`. Both are `Rewind(TRUE)`, a new collection: the link walk itself is not modeled | private | private state; the rebuild and the rewind are one step because the scan does nothing in between |
 | `Reopen` | `qexec_close_scan` then `qexec_open_scan` on the same spec in one execution: `scan_heap_scan_page_list` compares `page_list_keep_hfid` and `page_list_keep_snapshot` with the heap and the snapshot's `build_serial`; equal: the kept bitmap; else `scan_heap_scan_page_list_free` and a new collection. A rebuilt snapshot: `logtb_invalidate_snapshot_data` (`network_sr.c:938`, a nested request under READ COMMITTED) then `build_mvcc_info` at the next `logtb_get_mvcc_snapshot` | private (the spec belongs to the thread running the clone) | the scan is closed between the two opens; the rebuild and the open are one step because the scan does nothing in between |
 | `InsertInto` | `heap_insert` into a page with room; commit | page write latch | the page latch serializes it with `Read` (guard: not a held page) |
 | `InsertNewPage` | `heap_alloc_new_page` → `file_alloc` → `file_perm_alloc` takes the first partial sector's lowest free page | header write latch | alloc is one step under the header latch |
@@ -103,7 +104,7 @@ Code at branch `CBRD-28043` (develop `2d1513a8a` + the change).
 Environment assumptions:
 - A1: vacuum never removes a version an active snapshot sees (`Vacuum` guard `r \notin snapVis`); so a page holding such a row is never freed.
 - A2: a sector stays reserved to its file until the file is destroyed: a freed page is reallocated only by the same file, as a heap page or a file table page. The table cannot be dropped or truncated while the scan holds its class lock.
-- A3: under READ COMMITTED a nested statement may rebuild the snapshot while the scan is open (`logtb_invalidate_snapshot_data`); rows committed on pages allocated after the list are then not returned by that pass and its rewinds, as in the parallel heap scan. Not modeled. A scan opened again after the rebuild collects a new bitmap (D14, modeled: `Reopen(TRUE)`).
+- A3: under READ COMMITTED a nested statement may rebuild the snapshot while the scan is open (`logtb_invalidate_snapshot_data`); rows committed on pages allocated after the list are then not returned by the pass that is under way (not modeled; the parallel heap scan before this change did the same within a pass). A rewind or a reopen after the rebuild reads the pages allocated by then (D17 `Rewind(TRUE)`, D14 `Reopen(TRUE)`).
 - A5: the scanning transaction inserts no row into the scanned table during the scan (D15; CBRD-27579).
 - A4: a class without snapshots keeps the link order (D11); not modeled.
 - The serial scan's runs are a subset of the parallel runs (worker 2 may find the bitmap exhausted); `Decide` still takes both branches.
@@ -123,6 +124,7 @@ Environment assumptions:
 | `mutant-no-visibility` | the snapshot check on the page's rows | `NoExtraRow` | C1 |
 | `mutant-rewind-keep-cur` | the cursor reset of a rewind | `AllRowsReturned` | C1 |
 | `mutant-reopen-stale-list` | the snapshot check of a reopen: the kept bitmap is read under a rebuilt snapshot (`page_list_keep_snapshot`) | `AllRowsReturned` | C1 |
+| `mutant-rewind-stale-list` | the snapshot check of a rewind: the bitmap of the open is walked under a rebuilt snapshot (`page_list_build`) | `AllRowsReturned` | C1 |
 | `mutant-no-shared-cursor` | the shared cursor: each parallel worker walks the whole bitmap (a split that gives a sector to two workers) | `NoDuplicate` | C2 |
 
 ## Witnesses
@@ -146,11 +148,11 @@ Environment assumptions:
 
 | Line | Cfg | Why it is never evaluated |
 |---|---|---|
-| SectorScan.tla:233 | all pass cfgs | the snapshot after the list: mutant `late_snapshot` only |
-| SectorScan.tla:319 | all pass cfgs | a freed page read as a heap page: mutant `fix_freed` only |
-| SectorScan.tla:324 | all pass cfgs | a file table page read as a heap page: mutants `assert_heap`, `no_dedup_assert_heap` only |
-| SectorScan.tla:281, SectorScan.tla:282 | `live` | a pick after another worker's error: `MaxErrors = 0` in the liveness cfg (P68: smallest bound); the main cfg reaches it (`witness-aborted`) |
-| SectorScan.tla:361, SectorScan.tla:362, SectorScan.tla:363, SectorScan.tla:364, SectorScan.tla:365, SectorScan.tla:366, SectorScan.tla:367 | `live` | `Abort` is disabled by `MaxErrors = 0` in the liveness cfg; the main cfg fires it |
+| SectorScan.tla:235 | all pass cfgs | the snapshot after the list: mutant `late_snapshot` only |
+| SectorScan.tla:321 | all pass cfgs | a freed page read as a heap page: mutant `fix_freed` only |
+| SectorScan.tla:326 | all pass cfgs | a file table page read as a heap page: mutants `assert_heap`, `no_dedup_assert_heap` only |
+| SectorScan.tla:283, SectorScan.tla:284 | `live` | a pick after another worker's error: `MaxErrors = 0` in the liveness cfg (P68: smallest bound); the main cfg reaches it (`witness-aborted`) |
+| SectorScan.tla:363, SectorScan.tla:364, SectorScan.tla:365, SectorScan.tla:366, SectorScan.tla:367, SectorScan.tla:368, SectorScan.tla:369 | `live` | `Abort` is disabled by `MaxErrors = 0` in the liveness cfg; the main cfg fires it |
 
 ## Bounds and limits
 
@@ -165,39 +167,40 @@ Environment assumptions:
 
 ## Result
 
-2026-11-12, `tools/tla/tla-check --workers 12 docs/tla/CBRD-28043`: **RESULT: OK** (27 cfgs, all PASS). Run dir
-`.git_ignored_dir/scratch/tla/CBRD-28043-20261112-134743-1928257`, log `.git_ignored_dir/scratch/cbrd28043-impl/tla-record-v5.log`
-(`SectorScan.tla` sha256 `d3ce99b847f6418f83005d657137f5bceb81a42357729756a362d007ea273573`; this section was written after the run).
-Engine refined: `3328953d3` (develop `99279799f` + 1), optdebug libcubrid sha256 prefix `97e3556caa6deae4`.
-No trace validation (trace-exempt above). Earlier record runs, superseded: `CBRD-28043-20261112-003513-3789990`
-(D9..D13, 24 cfgs, before the reopen of D14), `CBRD-28043-20261111-184348-2659175` (D1..D8).
+2026-11-17, `tools/tla/tla-check --workers 12 docs/tla/CBRD-28043`: **RESULT: OK** (28 cfgs, all PASS). Run dir
+`.git_ignored_dir/scratch/tla/CBRD-28043-20261117-011743-2874798`, log `.git_ignored_dir/scratch/cbrd28043-rv/tla-r4.out`
+(`SectorScan.tla` sha256 `4bd743dfe2321b38e1d00921ca3acff6f477d24ae4a62ba7743d1097438a0b1e`; this section was written after the run).
+Engine refined: `344f2359f` (the review fixes of D17; PR head `ddb6aa025` is its merge with develop `8e6c51784`).
+No trace validation (trace-exempt above). Earlier record runs, superseded: `CBRD-28043-20261112-134743-1928257` (D1..D16, 27 cfgs),
+`CBRD-28043-20261112-003513-3789990` (D9..D13), `CBRD-28043-20261111-184348-2659175` (D1..D8).
 
 | cfg | Result | States / distinct | Depth |
 |---|---|---|---|
-| `SectorScan` | pass | 349,745,759 / 100,006,828 | 59 |
-| `SectorScan.scale-6p` | pass | 662,709,488 / 188,273,504 | 67 |
-| `SectorScan.live` | pass | 18,394,440 / 6,103,597 | 58 |
+| `SectorScan` | pass | 349,972,295 / 100,006,828 | 59 |
+| `SectorScan.scale-6p` | pass | 663,092,553 / 188,273,504 | 67 |
+| `SectorScan.live` | pass | 18,441,210 / 6,103,597 | 58 |
 | `SectorScan.apalache-indinv` | IndInv inductive | — | 1 step |
-| `SectorScan.mutant-assert-heap` | `NoForeignRead` violated (killed) | 566,173 / 206,590 | 16 |
-| `SectorScan.mutant-fix-freed` | `NoForeignRead` violated (killed) | 226,027 / 89,417 | 13 |
-| `SectorScan.mutant-late-snapshot` | `AllRowsReturned` violated (killed) | 7,221,430 / 2,347,314 | 20 |
-| `SectorScan.mutant-no-dedup-assert-heap` | `NoForeignRead` violated (killed) | 35,911 / 15,257 | 11 |
-| `SectorScan.mutant-no-release` | `NoPageHeld` violated (killed) | 410,275 / 154,791 | 14 |
-| `SectorScan.mutant-no-shared-cursor` | `NoDuplicate` violated (killed) | 1,081,135 / 369,657 | 16 |
-| `SectorScan.mutant-no-visibility` | `NoExtraRow` violated (killed) | 122,961 / 50,722 | 12 |
-| `SectorScan.mutant-reopen-stale-list` | `AllRowsReturned` violated (killed) | 30,729,869 / 9,384,159 | 24 |
-| `SectorScan.mutant-revisit` | `NoDuplicate` violated (killed) | 1,372,316 / 457,733 | 16 |
-| `SectorScan.mutant-revisit-live` | liveness violated (killed) | 1,281,829 / 381,586 | 36 |
-| `SectorScan.mutant-rewind-keep-cur` | `AllRowsReturned` violated (killed) | 24,795,541 / 7,648,535 | 24 |
-| `SectorScan.witness-aborted` | reached | 39,128 / 16,524 | 10 |
-| `SectorScan.witness-deleted-after-snap-returned` | reached | 1,483,492 / 501,192 | 16 |
-| `SectorScan.witness-finished` | reached | 4,322,711 / 1,390,282 | 17 |
-| `SectorScan.witness-new-page-row-returned` | reached | 191,324 / 76,022 | 13 |
-| `SectorScan.witness-parallel-finished` | reached | 18,848,945 / 5,865,858 | 23 |
-| `SectorScan.witness-recollected-finished` | reached | 38,368,993 / 11,570,376 | 25 |
-| `SectorScan.witness-reopen-reused-finished` | reached | 24,995,801 / 7,713,596 | 23 |
-| `SectorScan.witness-reused-read` | reached | 1,183,748 / 411,338 | 16 |
-| `SectorScan.witness-rewound-finished` | reached | 18,950,977 / 5,905,665 | 22 |
-| `SectorScan.witness-serial-finished` | reached | 4,845,258 / 1,554,736 | 18 |
-| `SectorScan.witness-skipped-foreign` | reached | 592,867 / 217,436 | 14 |
-| `SectorScan.witness-skipped-freed` | reached | 296,933 / 115,372 | 13 |
+| `SectorScan.mutant-assert-heap` | `NoForeignRead` violated (killed) | 585,207 / 214,345 | 14 |
+| `SectorScan.mutant-fix-freed` | `NoForeignRead` violated (killed) | 306,402 / 119,260 | 14 |
+| `SectorScan.mutant-late-snapshot` | `AllRowsReturned` violated (killed) | 7,712,247 / 2,505,099 | 20 |
+| `SectorScan.mutant-no-dedup-assert-heap` | `NoForeignRead` violated (killed) | 47,235 / 20,094 | 11 |
+| `SectorScan.mutant-no-release` | `NoPageHeld` violated (killed) | 401,684 / 152,013 | 14 |
+| `SectorScan.mutant-no-shared-cursor` | `NoDuplicate` violated (killed) | 1,356,490 / 454,458 | 16 |
+| `SectorScan.mutant-no-visibility` | `NoExtraRow` violated (killed) | 143,577 / 58,500 | 13 |
+| `SectorScan.mutant-reopen-stale-list` | `AllRowsReturned` violated (killed) | 30,670,226 / 9,358,125 | 24 |
+| `SectorScan.mutant-revisit` | `NoDuplicate` violated (killed) | 1,321,813 / 442,715 | 16 |
+| `SectorScan.mutant-revisit-live` | liveness violated (killed) | 1,281,851 / 381,586 | 36 |
+| `SectorScan.mutant-rewind-keep-cur` | `AllRowsReturned` violated (killed) | 24,485,918 / 7,546,126 | 24 |
+| `SectorScan.mutant-rewind-stale-list` | `AllRowsReturned` violated (killed) | 24,331,301 / 7,500,514 | 23 |
+| `SectorScan.witness-aborted` | reached | 47,849 / 20,299 | 10 |
+| `SectorScan.witness-deleted-after-snap-returned` | reached | 1,514,109 / 514,123 | 16 |
+| `SectorScan.witness-finished` | reached | 4,926,393 / 1,581,974 | 18 |
+| `SectorScan.witness-new-page-row-returned` | reached | 236,905 / 93,159 | 12 |
+| `SectorScan.witness-parallel-finished` | reached | 20,825,443 / 6,459,663 | 22 |
+| `SectorScan.witness-recollected-finished` | reached | 37,450,931 / 11,297,956 | 25 |
+| `SectorScan.witness-reopen-reused-finished` | reached | 24,503,949 / 7,557,788 | 23 |
+| `SectorScan.witness-reused-read` | reached | 1,143,112 / 396,641 | 15 |
+| `SectorScan.witness-rewound-finished` | reached | 18,776,565 / 5,839,736 | 22 |
+| `SectorScan.witness-serial-finished` | reached | 4,856,991 / 1,558,574 | 19 |
+| `SectorScan.witness-skipped-foreign` | reached | 588,070 / 215,585 | 14 |
+| `SectorScan.witness-skipped-freed` | reached | 302,789 / 117,684 | 14 |
