@@ -37,3 +37,15 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Rule: A PR whose `/run all` or `/run rerun` passed is left as it is and gets no develop sync; when the engine head and a `tc/pr-<N>` branch disagree (the TC branch carries a newer develop's testcases than the engine head), the TC branch is moved back to the develop line the engine head was built on instead of merging develop into all three
 - Applies at: Run, before any `/run`
 - Case (2026-11-10, #8470): after `/run rerun` was posted, develop had moved 6 commits that overlapped all 11 files of the PR, and the sync script stopped on OVERLAP; merging would have cost a local merge, build and gate of all three repos. The user: "rerun 통과하면 sync 하지말고 그냥 두자. 앞으로도. 만약 엔진 - tc 어긋남이 발생하면 tc 브랜치를 develop 선으로 후퇴시키는 방안으로 앞으로는 처리하자." Moving a pushed TC branch back needs a force-push or a rebuilt branch: confirm the push with the user the first time.
+
+### P6 — a TC-only sync is followed by `/run rerun`
+- Rule: After a sync that moved only the TC branches (engine head unchanged), post `/run rerun <failed run id>`, not `/run all`: the rerun runs only the failed cases and reads the latest `tc/pr-<N>` branches; a changed engine head needs `/run all`.
+- Applies at: Run, after a sync
+- Case (2026-10-28, #8207): the user said `/run rerun` reruns only the failed cases and reads the latest tc/pr-N branches, so a full `/run all` after a TC-only sync is wasted.
+- Source: memory:tc-only-sync-then-run-rerun
+
+### P7 — another PR's early TC is reverted on the TC branch, temporarily
+- Rule: When a PR's CI fails only on cases another PR's TC put on TC develop before its engine PR merged, push a commit titled "[TEMP, drop before merge]" to `tc/pr-<N>` that removes those cases, post `/run rerun <run id>`, record the commit sha in the PR's state, and drop it from the TC branch before the TC PR is merged — never a three-repo develop sync for this.
+- Applies at: Run, on a CI NOK
+- Case (2026-11-15, #8509, CMS cases of CBRD-27601): a develop sync of all three repos was proposed; the user: "tc쪽에 해당건들 revert하는 커밋 넣어서 테스트 run rerun으로 통과시키고 머지전에 해당 커밋빼고 머지하면됨."
+- Source: memory:ci-cross-pr-tc-nok-temp-revert

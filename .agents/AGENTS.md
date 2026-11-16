@@ -27,6 +27,7 @@ CTP execution rule (every suite; 2026-08-28 incident: CTP's teardown runs `pkill
 
 ### Talking to the user
 - Questions, recommendations and status lines go to the user in Korean, even when the surrounding output is English.
+- Korean text says 파티션 프루닝 (never 가지치기) and 배치 조인 for the batched nested-loop join (never 묶음 조인).
 - A decision question shows the actual SQL — what develop does, what the change does, why they differ — in one short question; while it is open, every independent step continues and only the dependent one waits.
 - Reports carry facts (hashes, diff sizes, run ids, counts), never time estimates; a series of related commits is syntax-checked one by one, then built once, smoked once and gated once on the combined head.
 - A completion report names what was actually verified (a parity, not perf vs develop; a proxy, not the real path); a partial pass is never written as a pass, and "verification incomplete because of the environment" never closes a task.
@@ -38,6 +39,7 @@ CTP execution rule (every suite; 2026-08-28 incident: CTP's teardown runs `pkill
 - A decision is made once at its resolve point and read afterwards — no "derive then override", nothing re-planned per partition or mid-execution.
 - When a gate or plan has no answer, the gate is fixed; a fallback to the old late-binding path is never designed.
 - Between keeping develop's row-time error and deciding at the gate, present the gate option with the concrete SQL it changes; gate errors that only change failing or degenerate queries are accepted.
+- The query compiler decides the operand types and the comparison once; the server never chooses them per row from runtime value types.
 - A statement that runs on develop keeps running unless the break is justified at spec level: SERIAL, host variables, PL/CSQL and JDBC binds must keep working; session variables as typed operands are the only accepted exception.
 - A regression this change turns visible or worse is fixed in this ticket even if its root cause is older; a defect develop already shows on the equivalent plan is out of scope unless the change adds a new way into it.
 - Every spec change or spec-setting decision goes into the JIRA body (only for issues the user authorized), GLOSSARY and ADR at once; an implementer's reported choice is approved only after mapping it to the principle clause, reading the code site, and checking that the cited smoke distinguishes the choice from its alternative.
@@ -52,6 +54,8 @@ CTP execution rule (every suite; 2026-08-28 incident: CTP's teardown runs `pkill
 - A claim about develop is stated only after a probe on a develop build with a discriminating row.
 - An external review the user hands over is verified finding by finding (static at the reviewed SHA, runtime repro, original intent, what was missed) and reported before anything is fixed.
 - `cubrid checkdb` is not a test: it runs only for index-structure work on a small DB and is named in the report; "정합성 체크" means comparing query results.
+- Performance on this shared host is judged by `perf stat` `instructions:u` counts; wall time decides only on the perf servers (`cubrid-perf-server`).
+- The TPC-H bench conf (16G buffer, parallelism=16, DWB off) is for TPC-H only; CTP, smoke and shell servers keep `data_buffer_size=512M`.
 - Gate lanes (CTP, counters on an install copy, targeted TC) run as parallel background jobs after the optdebug build while the release build and the SA probes run; whole-suite CTP keeps 16 shards; two counter harnesses never run at once; shell is one run over the union of affected directories and otherwise upstream CI's.
 - Minimum verification of a new or changed path: optdebug and release builds green; fail-before-fix then PASS by the same method; a live run on a CS-mode optdebug server with no assert, crash or tracker leak; orphan-zero temp files after normal, abnormal and `kill -9` exits; tree restored, daemons stopped, the libcubrid fingerprint in the proof.
 - Every CUBRID source change gets a memory check, not through CTP: its smoke (the fail-before/PASS script and the CS live run) runs once more on the optdebug install with `use_system_malloc=yes` in the conf of an install copy and `MALLOC_CHECK_=3 MALLOC_PERTURB_=165` in the environment of `csql -S` and the server; a SIGSEGV, glibc abort or result diff that appears only there is a use-after-free, double free or overrun in the change and is fixed before the gate (CBRD-27974; how: `cubrid-diagnose` P19).
@@ -69,7 +73,8 @@ CTP execution rule (every suite; 2026-08-28 incident: CTP's teardown runs `pkill
 - Memory a worker thread `db_private_alloc`ed is never `db_private_free`d by the leader (per-thread mspaces corrupt): the leader allocates shared arrays, workers only fill them.
 - A PEEK (borrowed) pointer is never freed or realloc'ed; a consumer that frees needs COPY (peek=0).
 - No API swallows a failure (silent truncation): close/flush/freeze failures are latched and raised at the next use; an OOM path fails before ownership is handed over.
-- A new source file is registered in both the server and SA CMakeLists; a new engine path is env-gated default OFF unless a ticket records a feature-specific exception.
+- Engine code goes into existing source files in their own style (no new .i/.cpp/.hpp/header files); when a ticket does add a source file, it is registered in both the server and SA CMakeLists; a new engine path is env-gated default OFF unless a ticket records a feature-specific exception.
+- Oracle (its name, function names, addresses) never appears in source comments, commit messages, PR bodies or comments, JIRA, TCs or public-repo documents; cite public literature instead.
 - Peer worktrees are read-only (`git -C <peer> show <ref>:<path>`, `git log`, `git diff`; never checkout, stash or reset there).
 
 ### Subagents (only when the user asks for them)
@@ -85,6 +90,8 @@ CTP execution rule (every suite; 2026-08-28 incident: CTP's teardown runs `pkill
 - A handover written in a resolution comment is also edited into the receiving ticket's body at once; before a map's finishing tickets, closed tickets' comments are grepped for 인계/후속/이관/→ # and checked against open bodies.
 - A workspace issue whose fix was handed to the owning session or PR is closed at the handover with a comment saying what was sent.
 - cubrid-nix work stays in the cubrid-nix repo; this workspace's justfile and recipes are not edited for it.
+- A supervisor of parallel sessions assigns the next ticket to a freed session itself, without asking the user which one.
+- Review findings about `*_windows_answer` or other non-Linux TC baselines are ignored (no reply, no edit): Windows support is deprecated.
 - A failed hypothesis is recorded so it is not re-entered; a changed conclusion supersedes the old record explicitly; an implementation issue is self-contained (coordinates + repro + mechanical acceptance criteria, [CONFIRMED]/[VERIFY]).
 
 ### Documents and rendering

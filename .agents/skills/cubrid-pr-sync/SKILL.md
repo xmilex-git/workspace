@@ -19,6 +19,10 @@ Develop content reaches a PR only through this three-repo sync — never `git me
 
 A PR whose `/run all` or `/run rerun` passed is left as it is and gets no develop sync; when the engine head and a `tc/pr-<N>` branch disagree (the TC branch carries a newer develop's testcases than the engine head), the TC branch is moved back to the develop line the engine head was built on instead of merging develop into all three. (P5)
 
+After a sync that moved only the TC branches (engine head unchanged), post `/run rerun <failed run id>`, not `/run all`: the rerun runs only the failed cases and reads the latest `tc/pr-<N>` branches; a changed engine head needs `/run all`. (P6)
+
+When a PR's CI fails only on cases another PR's TC put on TC develop before its engine PR merged, push a commit titled "[TEMP, drop before merge]" to `tc/pr-<N>` that removes those cases, post `/run rerun <run id>`, record the commit sha in the PR's state, and drop it from the TC branch before the TC PR is merged — never a three-repo develop sync for this. (P7)
+
 When the user supplies a PR number or `https://github.com/CUBRID/cubrid/pull/<number>`, run immediately without asking for repository paths or confirmation:
 
 ```bash
