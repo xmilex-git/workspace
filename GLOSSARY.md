@@ -1366,3 +1366,27 @@ _Avoid_: 누락 기능, 미구현
 **구현 격차 (implementation gap)**:
 CUBRID에도 같은 기법이 있지만 구현 방식이 달라 같은 워크로드에서 더 느린 경우다. 기능의 유무만으로는 드러나지 않으므로, 기능 격차와 따로 측정해 판정한다.
 _Avoid_: 성능 격차(원인이 기능 부재인지 구현 차이인지 가리지 않음)
+
+**병렬 부질의 실행기 (parallel subquery executor)**:
+한 문장의 비상관 부질의를 job으로 만들어 문장 하나가 공유하는 큐에 넣고, 워커와 기다리는 스레드가 꺼내 실행하게 하는 실행기다. 부질의가 둘 이상인 노드마다 executor 하나가 붙고, 맨 처음 붙은 것이 root executor다.
+_Avoid_: 병렬 서브쿼리 스케줄러, px 실행기(병렬 스캔·해시 조인 실행과 혼동)
+
+**도움 (helping)**:
+run_jobs에서 자기 executor의 job이 끝나기를 기다리는 스레드가, 공유 큐에 남은 job(다른 executor의 것이어도)을 꺼내 직접 실행하는 것이다. 워커가 모자라거나 중첩 executor를 기다리는 중일 때 교착을 막는다.
+_Avoid_: 작업 훔치기(work stealing — 다른 스레드의 로컬 큐에서 빼앗는 방식과 다르다)
+
+**문장 깨움 이벤트 (statement wake event)**:
+root executor가 소유하는 문장당 하나의 대기 지점으로, job의 push, 어떤 executor의 마지막 job 종료, root의 run_jobs 종료가 깨운다. executor의 run_jobs와 부질의 워커가 모두 여기서 기다리고, 큐가 빌 때까지 도운 뒤에만 잔다.
+_Avoid_: join cv(executor별 조건 변수와 혼동)
+
+**늦은 실행기 (late executor)**:
+root executor의 job 밖에 있는 노드(WHERE 스칼라 부질의 등)에 붙어, root의 run_jobs가 끝난 뒤에 run_jobs가 도는 병렬 부질의 실행기다. root의 큐와 깨움 이벤트를 같이 쓰고, 워커 없이 자기 job을 직접 꺼내 실행한다.
+_Avoid_: 자식 실행기(root가 만든 모든 비-root 실행기를 뜻함)
+
+**문장 워커 묶음 (statement worker group)**:
+문장이 시작할 때 root에서 서버 워커 풀로부터 한 번에 받는 B개의 워커 단위로, 그 문장의 부질의 워커와 job 안의 모든 병렬 연산자가 이 안에서만 받는다. B는 parallelism과 root 순회로 센 필요량 중 작은 값이다.
+_Avoid_: 문장 예산(상한만 두는 안과 혼동), 워커 매니저(연산자별 예약 객체)
+
+**탄력 워커 (elastic subquery worker)**:
+job이 push될 때 묶음에 단위가 있으면 시작하고, 큐가 비면 단위를 반납하고 끝나는 부질의 워커다. 끝나기 전에 큐를 다시 보고, 반납 직전에 들어온 job이 있으면 단위를 다시 잡는다.
+_Avoid_: 고정 워커(문장 끝까지 단위를 쥐는 안)
