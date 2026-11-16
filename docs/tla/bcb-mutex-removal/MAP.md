@@ -23,17 +23,20 @@ trace-exempt: design with no implementation yet; the implementation spec will re
 | D9 | Every fix and every unfix takes the bucket latch (shared for READ, exclusive otherwise); the develop lock-free READ path is not kept | 2026-11-15 |
 | D10 | A flush sets a write-in-progress flag under the bucket latch, copies the page (into the double-write slot; for a temporary page into its write buffer) and clears the flag under the latch; a WRITE fix or a promotion waits while the flag is set, READ fixes do not | 2026-11-15 |
 | D11 | A waiter for the write to complete (a WRITE fix, a synchronous flush) sets a write-waiter flag; the end of the write wakes the waiters when it is set | 2026-11-15 |
-| D13 | A promotion that is not alone (or meets a write in progress) fails with `ER_PAGE_LATCH_PROMOTE_FAIL` and the caller re-fixes WRITE; no promotion waits (`PromoteWait = FALSE`; the waiting variant breaks C9 under D8, `mutant-promote-wait`) | 2026-11-15 |
+| D13 | (2026-11-16, supersedes the 11-15 "a promotion never waits") A `PGBUF_PROMOTE_SHARED_READER` promotion that is not alone keeps its READ, marks the BCB promotion-pending (new READ requests wait; a holder fixing the page again does not) and waits until its own fixes are all that is left and no write is in progress, then turns the latch WRITE; a second promotion on a pending BCB fails at once with `ER_PAGE_LATCH_PROMOTE_FAIL` and its caller unfixes and fixes WRITE; a pending promoter that times out or is interrupted clears the mark, wakes the readers it held off and fails the same way. `PGBUF_PROMOTE_ONLY_READER` fails when not alone, as in develop. Releasing the READ to wait (`PromoteWait = TRUE`) breaks C9 under D8 (`mutant-promote-wait`); a failing-only promotion (11-15) restarts B-tree inserts with WRITE non-leaf latches — the side effect that reopened D13 | 2026-11-16 |
 | D14 | Whoever leaves a waiter blocked only by a write in progress — the last unfix, a failed promotion releasing its READ, a waiter leaving the list — sets the write-waiter flag, so the end of the write wakes it (`WakeAtEnd = "flag"`; the flag set only by waiters strands one, `mutant-wake-none`) | 2026-11-15 |
 | D12 | A waiter removes its own entry (woken, timed out, interrupted, spuriously woken) under the exclusive bucket latch and then applies the wake rule to the waiters left (passes the wakeup on); a victim search tries the candidate's bucket latch without waiting and moves on | 2026-11-15 |
+| D16 | A deallocation-preventing fix (`OLD_PAGE_PREVENT_DEALLOC`) registers on the BCB before it waits and keeps the registration across its wakeups and retries until it fixes the page or fails (the woken waiter is no longer in the list vacuum's `pgbuf_has_any_waiters` sees); a BCB with a registration is neither taken as a victim nor invalidated (develop takes it and accepts the rare loss, `pgbuf_bcb_unregister_avoid_deallocation` comment) | 2026-11-16 |
+| D17 | A flush that finds the page WRITE-latched sets `PGBUF_BCB_ASYNC_FLUSH_REQ` (the flush daemon does not wait, a synchronous flush waits as a flush waiter); the WRITE holder starts that flush in its unfix's critical section; the end of every flush wakes every flush waiter. Kept from develop | 2026-11-16 |
+| D18 | A deallocation-preventing waiter woken off a BCB whose page read failed drops its registration before leaving and fails with `ER_PAGE_LATCH_ABORTED` (the BCB is freed by the last waiter to leave; the page is not protected while not in the buffer) | 2026-11-16 |
+| D19 | The global fix/unfix counters (`pgbuf_fix_req_cnt`, `pgbuf_pg_unfix_cnt`, per-thread shards) stay unsynchronized: only heuristics read them (the flush daemon's boost from the miss rate, `pgbuf_adjust_quotas`), never a latch decision. The model makes the daemon's choice of page and the victim choice nondeterministic, which covers every value they can hold | 2026-11-16 |
 | D15 | A failed page read of a claim empties the BCB under the exclusive bucket latch and wakes every waiter on it; each removes its own entry, sees the BCB no longer holds its page and searches the chain again (D7 applied to the read error: D4 and D12 unchanged; develop's waiters wait on the hash anchor until the read ends) | 2026-11-16 |
 
 ## Settled by TLC (history)
 
-- `PromoteWait`: a promotion that is not alone either releases its READ and waits for WRITE
-  (develop's `PGBUF_PROMOTE_SHARED_READER`, today the waiting promoter is queued first) or fails with
-  `ER_PAGE_LATCH_PROMOTE_FAIL` so the caller re-fixes WRITE (every caller has that path). With D8 the
-  waiting variant breaks C9 (`probe-true-*`).
+- `PromoteWait`: a promotion that is not alone either releases its READ and waits for WRITE, or keeps
+  its READ and waits behind a pending mark (D13; develop queues the waiting promoter first, so nobody
+  writes before it either). With D8 the releasing variant breaks C9 (`probe-true-*`, `mutant-promote-wait`).
 - `WakeAtEnd`: a waiter blocked only by a write in progress, whose blocker was a READ holder, is woken
   either because the releaser that leaves it so sets the write-waiter flag ("flag") or because the end
   of a write always applies the wake rule when the list is not empty ("always"); D11 alone ("none")
@@ -75,7 +78,9 @@ PostgreSQL development branch (`~/dev/postgres` at `b0392c26bd3`, 2026-10-30), `
 | C6 | a waiter entry belongs to a thread asleep on it, waiting for the page the BCB still holds, or for no page once the read of that page failed (the waiter then removes its entry and searches the chain again) | safety | D12; D15 |
 | C7 | a BCB nobody holds and no flush copies never keeps waiters of whom none is woken while no thread is on its way to fix that page; every worker finishes (liveness) | safety + liveness | CBRD-27970-27971 C7; `pgbuf_wakeup_reader_writer` "how it works" |
 | C8 | a page is held by at most one BCB | safety | hash chain contract (`pgbuf_search_hash_chain`) |
-| C9 | a promotion that had to wait hands over a page nobody changed since the promoter's READ | safety | `pgbuf_promote_read_latch_release`: the waiting promoter "register as first blocker" and a second promoter fails (`ER_PAGE_LATCH_PROMOTE_FAIL`); btree callers continue after a successful promotion without re-reading |
+| C9 | a promotion hands over as WRITE the page the promoter read: nobody changes it between the READ and the WRITE, waiting or not; a second promotion on the same page fails at once instead of waiting (two waiting promoters would wait for each other) | safety | `pgbuf_promote_read_latch_release`: the waiting promoter "register as first blocker" and a second promoter fails (`ER_PAGE_LATCH_PROMOTE_FAIL`); btree callers continue after a successful promotion without re-reading |
+| C10 | a deallocation-preventing fix never gets a deallocated page: vacuum does not deallocate a page while such a fix is registered on it, waits on it, or still holds the page that links it | safety | `OLD_PAGE_PREVENT_DEALLOC` (`pgbuf_fix`), `heap_remove_page_on_vacuum` "recheck the dealloc flag after all latches are acquired", `vacuum_heap_page` |
+| C11 | a waiter the wake rule admits is already woken: no step leaves an admitted reader or writer waiter asleep (a pending promotion that ends wakes the readers it held off) | safety | D4, D12, D13 |
 
 ## Properties
 
@@ -89,7 +94,10 @@ PostgreSQL development branch (`~/dev/postgres` at `b0392c26bd3`, 2026-10-30), `
 | `NoStaleWaiter` | C6 | TLC invariant |
 | `NoStrandedWaiter`, `Termination` | C7 | TLC invariant; TLC liveness (own cfg) |
 | `UniqueResident` | C8 | TLC invariant |
-| `PromoteStable` | C9 | TLC invariant |
+| `PromoteStable`; `promote-both-wait` deadlock | C9 | TLC invariant; mutant |
+| `PreventDealloc` | C10 | TLC invariant |
+| `PromptWake` | C11 | TLC invariant |
+| `FlushRequest`, `Registrations`, `WaitReason` | IndInv strengthening (C7, C10) | TLC invariant (main), Apalache |
 
 ## Mutants
 
@@ -114,6 +122,14 @@ Each re-enables one wrong ordering or missing guard; the cfg's bounds are the ma
 | `mutant-miss-no-latch` | a miss looks for a victim without holding its bucket latch | C8 | violation `UniqueResident` |
 | `mutant-loaderr-no-post` | a failed page read leaves the waiters on the emptied BCB asleep (NP = 3, MaxOps = 1, Ops = {"R", "W"}, no other fault, no daemon) | C7 | violation `NoStrandedWaiter` |
 | `mutant-promote-wait` | `PromoteWait = TRUE`: a promotion releases its READ and waits (option not taken, D13) | C9 | violation `PromoteStable` |
+| `mutant-promote-both-wait` | a second promotion on a pending BCB waits too (Ops = {"P"}, NP = NB = 1, MaxOps 1, no faults) | C9 | deadlock |
+| `mutant-promote-no-post` | an unfix that leaves the pending promoter alone does not wake it (Ops R P, no faults) | C7 | violation `NoStrandedWaiter` |
+| `mutant-flend-no-prom-post` | the end of a write does not wake a pending promoter left alone | C7 | violation `NoStrandedWaiter` |
+| `mutant-promote-cancel-no-post` | a pending promoter that times out does not wake the readers it held off (Ops R P C) | C7, C11 | violation `NoStrandedWaiter` (the woken promoter's timeout races the post) |
+| `mutant-unfix-ignores-areq` | the WRITE holder ignores the flush request at its unfix (Ops W C, no daemon) | C7 | violation `NoStrandedWaiter` |
+| `mutant-reg-at-grant` | the deallocation-preventing fix registers only when granted (the S1 code before D16; NP = NB = 1, Ops W D V) | C10 | violation `PreventDealloc` |
+| `mutant-reg-per-wait` | the registration is dropped when the waiter leaves the list and taken again when it waits again (NP = NB = 1, Ops W D V) | C10 | violation `PreventDealloc` |
+| `mutant-victim-ignores-avd` | develop's victim rule: a BCB with a registration is taken (MaxOps 3, Ops R D V, no faults, no daemon) | C10 | violation `PreventDealloc` |
 
 ## Witnesses
 
@@ -125,6 +141,11 @@ Each re-enables one wrong ordering or missing guard; the cfg's bounds are the ma
 | `witness-reclaimed` | a miss takes a victim and loads the page |
 | `witness-copy-failed` | a page copy fails (C5's error path) |
 | `witness-timed-out-retry` | a worker holds a page after a latch timeout happened |
+| `witness-promote-waiting` | a promotion waits with its READ kept (D13) |
+| `witness-second-promote-failed` | a second promotion on a pending BCB fails and its caller fixes WRITE (D13) |
+| `witness-holder-flushed` | a WRITE holder flushes the page at its unfix on a flush request (D17) |
+| `witness-dealloc-prevented` | vacuum holds the page WRITE while a fix is registered against its deallocation (D16) |
+| `witness-deallocated` | vacuum deallocates a page (C10 is not vacuous) |
 
 ## Dead expressions
 
@@ -164,10 +185,16 @@ Design: the rows name the develop `4bf2b2e32` sites each action replaces in `src
 | `MissClaim`, `MissGiveUp` | `pgbuf_claim_bcb_for_fix` → `pgbuf_get_victim` (`pgbuf_get_victim_from_lru_list`: candidate bucket latch tried without waiting) | the candidate's latch is held only for the check and the unlink |
 | `LoadEnd` | end of `pgbuf_claim_bcb_for_fix` read, `pgbuf_unlock_page` | exclusive section |
 | `LoadErr` | `pgbuf_claim_bcb_for_fix` read failure (`fileio_read` NULL, `tde_decrypt_data_page` error) → `pgbuf_put_bcb_into_invalid_list`, `pgbuf_unlock_page`; the waiters are now on the BCB (develop keeps them on the hash anchor's page lock until the read ends) | exclusive section |
-| `Promote` | `pgbuf_promote_read_latch_release` | exclusive section |
+| `Promote` | `pgbuf_promote_read_latch_release`: in place, or `bufptr->promoter`/`promoter_fcnt` set and the promoter sleeps (`thread_suspend_timeout_wakeup_and_unlock_entry`), or `ER_PAGE_LATCH_PROMOTE_FAIL` (the caller's `pgbuf_unfix` + WRITE fix merged: the state between is an ordinary READ hold) | exclusive section |
+| `PromWake`, `PromTimeout` | the promoter's wakeup loop in `pgbuf_promote_read_latch_release`; posts: `pgbuf_unlatch_bcb_upon_unfix` (fcnt = `promoter_fcnt`), the given-up READ path of `pgbuf_fix_latch`; `pgbuf_unfix_shared` and `pgbuf_fix_read_shared` defer to the exclusive path while a promotion is pending | exclusive section |
+| `prom` | `bufptr->promoter` (SERVER_MODE), read under the shared latch, written under the exclusive one | — |
+| `avd`, `reg` | `count_fix_and_avoid_dealloc` low 16 bits; the fixer's `avd_bcb` in `pgbuf_fix_latch` (`pgbuf_fix_move_avoid_dealloc`), dropped by `pgbuf_fix` after the grant; `pgbuf_bcb_avoid_victim` excludes a registered BCB from every victim and invalidation path | register/unregister are atomics inside exclusive sections (before the wait; in `pgbuf_wait_on_bcb` on a failed read) |
+| `reg = -1`, `dealloc`, op `D`, op `V` | the heap scan holding the page that links the next one (`heap_next` ordered fix), vacuum's `heap_remove_page_on_vacuum` (`pgbuf_has_prevent_dealloc`, `pgbuf_has_any_waiters` under its WRITE latch, then `file_dealloc`) | dealloc is checked and done while vacuum holds the page WRITE; modeled at its unfix |
+| `areq`, `DaemonAsk`, `Unfix` flush | `PGBUF_BCB_ASYNC_FLUSH_REQ`: `pgbuf_bcb_safe_flush_internal`, `pgbuf_unlatch_bcb_upon_unfix` → `pgbuf_bcb_safe_flush_force_unlock`; `pgbuf_bcb_mark_is_flushing` clears it | exclusive section |
 | `Unfix` | `pgbuf_unfix` (replaces `pgbuf_lockfree_unfix_ro` and `pgbuf_unlatch_bcb_upon_unfix` under the BCB mutex) | shared or exclusive section; posting only reads the list |
 | `WakeRetry`, `Timeout`, `Leave` | `pgbuf_timed_sleep`, `pgbuf_timed_sleep_error_handling` → remove own entry, pass the wakeup on | exclusive section |
-| `Copy`, `CopyEnd`, `DaemonStart` | `pgbuf_bcb_flush_with_wal` (copy, `dwb_set_data_on_next_slot`), `pgbuf_bcb_mark_was_flushed` / `_was_not_flushed`, `pgbuf_wake_flush_waiters`; daemon = `pgbuf_flush_victim_candidates` | start and end are exclusive sections; the copy runs with the flag set and no latch |
+| `Copy`, `CopyEnd`, `DaemonStart` | `pgbuf_bcb_flush_with_wal` (copy, `dwb_set_data_on_next_slot`), `pgbuf_bcb_mark_was_flushed` / `_was_not_flushed`, `pgbuf_wake_flush_waiters`; daemon = `pgbuf_flush_victim_candidates` | start and end are exclusive sections; the copy runs with the flag set and no latch. S1 (branch `bcb-bucket-latch`) still copies inside the start section, as develop does: `writing` is then never seen outside it, a WRITE fix does not wait for the I/O, and flush waiters wait for the I/O end |
+| busy counters (D19) | `pgbuf_fix_req_cnt`, `pgbuf_pg_unfix_cnt`, `pgbuf_flush_victim_candidates` boost, `pgbuf_adjust_quotas` | not modeled as state: the daemon's page and the victim are chosen nondeterministically |
 | `Invalidate` | `pgbuf_invalidate_bcb` callers | exclusive section |
 
 ## Fault model
@@ -182,13 +209,19 @@ Design: the rows name the develop `4bf2b2e32` sites each action replaces in `src
 | crash / `kill -9` | n/a | volatile buffer state |
 | spurious wakeup | yes | `WakeRetry(t, TRUE)`, budget `MaxSpur` |
 | concurrent DML | yes | WRITE holders change pages (`Unfix` of a WRITE) |
-| vacuum | n/a | fixes through the same paths |
+| vacuum | yes | op `V`: WRITE fix, deallocation at the unfix unless prevented (C10); otherwise fixes through the same paths |
+| promotion timeout / interrupt | yes | `PromTimeout` (budget `MaxTimeouts`) |
+| spurious wakeup of a promoter | yes | `PromWake(t, TRUE)` |
 | checkpoint, page flush, page replacement | yes | synchronous flush (`C`), the flush daemon, victim claim |
 | page read error after a claim | yes | `LoadErr` (budget `MaxErr`, shared with the copy error): the BCB leaves the chain empty and every waiter on it is woken (D15) |
 | HA log apply | n/a | no protocol difference |
 | fairness | weak fairness per process step; none on faults | a WRITE waiter can lose to newcomers (D8); termination holds because every worker has a finite budget |
 
 ## Result
+
+The record below is the 11-16 04:04 run of D1-D15 (C1-C9). The B promotion, D16-D19 and C10-C11
+(this revision) are checked per cfg while iterating; the record run follows the last edit, and the
+dead-expression table above is regenerated from it.
 
 2026-11-16, `tools/tla/tla-check --workers 8 docs/tla/bcb-mutex-removal` → **RESULT: OK**
 (run dir `.git_ignored_dir/scratch/tla/bcb-mutex-removal-20261116-040414-603034`).
