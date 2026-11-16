@@ -8,7 +8,7 @@
 #        convert.py covered <log> <Name> <need> [nk=<keys>] [corrupt]  one covered index scan (CoveredVisit), the one with
 #                                                          the most selected objects among those with <need>:
 #                                                          visit | list | verr | lerr | restart | inner<k> (k-th visited scan)
-# corrupt (covered): dup-sel | list-in-visit | dlv-after-err | drop-ret | drop-dlv | foreign-in-visit
+# corrupt (covered): dup-sel | list-in-visit | dlv-after-err | drop-ret | drop-dlv | foreign-in-visit | drop-put | flip-on
 #   covered -> TraceLog, NK, PerKey, Cap, Fail (the object whose row raised the error, 0: none)
 import re, sys
 
@@ -165,7 +165,7 @@ def covered(ev, need, nk, corrupt):
         for q in cur:
             if q != p:
                 last[q] = True
-        if a not in ("Open", "Fix", "Sel", "Ret", "Restart", "Dlv", "Again", "End"):
+        if a not in ("Open", "Fix", "Sel", "Ret", "Restart", "Dlv", "Again", "End", "Put"):
             continue
         if a == "Open":
             cur[p] = [e]
@@ -192,6 +192,9 @@ def covered(ev, need, nk, corrupt):
             return False
         if need == "visit" or need.startswith("inner"):
             return v and not failed(g) and has(g, "Sel")
+        if need.startswith("memo"):
+            # memo<k>: the k-th scan that stored a row (visited or listed)
+            return not failed(g) and has(g, "Put")
         if need == "verr":
             return v and has(g, "Sel", err="1")
         if need == "list":
@@ -204,6 +207,8 @@ def covered(ev, need, nk, corrupt):
     good = [g for g in segs if ok(g)]
     if need.startswith("inner"):
         seg = good[int(need[5:])]
+    elif need.startswith("memo"):
+        seg = good[int(need[4:])]
     else:
         seg = max(good, key=lambda g: sum(1 for e in g if e["a"] == "Sel"))
     seg = [dict(e) for e in seg]
@@ -255,9 +260,15 @@ def covered(ev, need, nk, corrupt):
     elif corrupt == "foreign-in-visit":
         j = [x for x, e in enumerate(seg) if e["a"] == "Sel"][2]
         seg[j]["foreign"] = "1"
+    elif corrupt == "drop-put":
+        j = [x for x, e in enumerate(seg) if e["a"] == "Put"][1]
+        del seg[j]
+    elif corrupt == "flip-on":
+        j = [x for x, e in enumerate(seg) if e["a"] == "Put"][0]
+        seg[j]["on"] = "0"
     elif corrupt:
         sys.exit("unknown corruption " + corrupt)
-    keep = ("visit", "ks", "err", "end", "n", "foreign")
+    keep = ("visit", "ks", "err", "end", "n", "foreign", "on")
     log = ["[a |-> \"%s\", " % e["a"] + ", ".join("%s |-> %s" % (k, e.get(k, "0")) for k in keep) + "]" for e in seg]
     return log, keys, per, cap, fail, len(good), seg
 
@@ -281,6 +292,8 @@ elif mode == "covered":
     log, keys, per, cap, fail, ngood, seg = covered(ev, sys.argv[4], nk, rest[0] if rest else "")
     w("%sLog == <<\n  " % name + ",\n  ".join(log) + "\n>>\n")
     w("%sNK == %d\n%sPerKey == %d\n%sCap == %d\n%sFail == {%d}\n" % (name, keys, name, per, name, cap, name, fail))
+    # the put at which the storage's budget ran out is not logged: every object is a candidate when the scan stored rows
+    w("%sStops == %s\n" % (name, "{" + ", ".join(map(str, range(keys * per + 1))) + "}" if any(e["a"] == "Put" for e in seg) else "{0}"))
     cnt = lambda a: sum(1 for e in seg if e["a"] == a)
     sys.stderr.write("%s events=%d visit=%s keys=%d perkey=%d cap=%d fail=%d sel=%d dlv=%d ret=%d restart=%d segments=%d\n"
                      % (name, len(log), seg[0]["visit"], keys, per, cap, fail, cnt("Sel"), cnt("Dlv"), cnt("Ret"), cnt("Restart"), ngood))
