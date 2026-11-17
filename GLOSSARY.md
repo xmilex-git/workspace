@@ -464,6 +464,22 @@ _Avoid_: 접속 성공 응답(세션 수립 전이다 — 거절은 이 뒤에�
 핸드오프 슬롯(`MAX_NUM_APPL_SERVER`)이 다 차서 접속 프런트가 핸드오프를 미루는 시간으로, CAS 시절의 잡큐 대기와 같은 자리다(#117 D3). 드라이버는 이 동안 접속 응답을 기다리며, 상한은 `DIRECT_HANDOFF_WAIT_TIMEOUT`(미설정 시 60초)이다.
 _Avoid_: 잡큐(CAS 시절의 이름), 서버 수용 대기(서버 `max_clients` 거절은 백스톱이지 이 대기가 아니다)
 
+**세션 양보 (session yield)**:
+`KEEP_CONNECTION=AUTO` 브로커의 세션이 요청 경계에서 유휴일 때, 입장 대기 중인 접속 프런트나 `cubrid broker reset`의 요구로 드라이버 연결을 닫고 핸드오프 슬롯을 돌려주는 것이다. CAS 시절의 CHANGE CLIENT와 같은 자리다. 유휴는 트랜잭션 밖, holdable 커서 없음, XA prepare 아님, method/SP 콜백 자원 없음을 모두 만족하며 다음 요청을 기다리는 상태만을 뜻한다.
+_Avoid_: 세션 종료(세션은 남는다), 연결 끊김(오류가 아니다), 유휴 타임아웃(`SESSION_TIMEOUT`과 혼동)
+
+**보관 세션 (kept session)**:
+양보로 연결을 잃었지만 서버 세션과 그 client 컨텍스트(세션 변수, 세션 파라미터, 워크스페이스, 현재 스키마)가 남아 있는 세션이다. 연결, 핸드오프 슬롯, 트랜잭션 인덱스, 스레드는 쥐지 않는다. `session_state_timeout`은 양보 시점부터 세며, 그 안에 재개되지 않으면 세션 제어 데몬이 지운다.
+_Avoid_: detach된 세션(코드 주석의 옛 이름), 좀비 세션, 연결이 끊긴 세션(양보가 아닌 종료는 세션을 지운다)
+
+**세션 재개 (session resume)**:
+드라이버가 다음 접속에서 보관 세션의 드라이버 세션(서버 키, 세션 id, 세션 secret)을 내고 같은 사용자로 비밀번호 로그인에 성공해 그 세션을 이어 쓰는 것이다. 보관 세션 하나는 한 연결만 재개한다. CAS statement handle은 넘어오지 않아 드라이버가 다시 prepare한다.
+_Avoid_: 세션 reattach(CS 클라이언트의 세션 id 재사용 — client 컨텍스트가 없다), 재접속(새 세션일 수도 있다)
+
+**유휴 감시 (idle watch)**:
+양보시킬 유휴 세션이 하나도 없을 때 접속 프런트가 슬롯을 쥔 서버들에게 걸어 두는 요청으로, 세션 하나가 유휴가 되면 서버가 힌트를 한 번 보내고 접속 프런트는 양보를 다시 시도한다.
+_Avoid_: yield 요구 플래그(옛 구현의 방식), 폴링
+
 **핸드셰이크 예산 (handshake budget)**:
 SSL 드라이버가 접속 응답을 받은 뒤 서버의 ServerHello를 기다려 주는 시간. JDBC는 1초(`BrokerHandler.TIMEOUT_UNIT`), CCI는 블로킹 `SSL_connect`라 상한이 없다. 접속 응답은 이 예산이 시작되기 전에 서버가 fd를 쥐고 있어야 한다는 제약을 낳는다.
 _Avoid_: connectTimeout(접속 응답까지의 예산 — 다른 타이머다), 로그인 타임아웃

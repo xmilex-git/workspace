@@ -1,0 +1,120 @@
+TLATRACE seq=1 a=BStart p=0 t=1 s=0 c=good
+TLATRACE seq=2 a=BTop p=0 full=0
+TLATRACE seq=3 a=Create p=0 t=1 s=1
+TLATRACE seq=4 a=Top p=0 t=1 clean=0
+TLATRACE seq=5 a=Request p=0 t=1 ok=1
+TLATRACE seq=6 a=Exec p=0 t=1
+TLATRACE seq=7 a=Top p=0 t=1 clean=1
+TLATRACE seq=8 a=Rst p=0 t=1 rreq=0
+TLATRACE seq=9 a=Wch p=0 t=1 go=0
+TLATRACE seq=10 a=Request p=0 t=1 ok=1
+TLATRACE seq=11 a=Exec p=0 t=1
+TLATRACE seq=12 a=Top p=0 t=1 clean=0
+TLATRACE seq=13 a=Request p=0 t=1 ok=1
+TLATRACE seq=14 a=Exec p=0 t=1
+TLATRACE seq=15 a=Top p=0 t=1 clean=1
+TLATRACE seq=16 a=Rst p=0 t=1 rreq=0
+TLATRACE seq=17 a=Wch p=0 t=1 go=0
+TLATRACE seq=18 a=Request p=0 t=1 ok=1
+TLATRACE seq=19 a=Exec p=0 t=1
+TLATRACE seq=20 a=Top p=0 t=1 clean=0
+TLATRACE seq=21 a=Request p=0 t=1 ok=1
+TLATRACE seq=22 a=Exec p=0 t=1
+TLATRACE seq=23 a=Top p=0 t=1 clean=1
+TLATRACE seq=24 a=Rst p=0 t=1 rreq=0
+TLATRACE seq=25 a=Wch p=0 t=1 go=0
+TLATRACE seq=26 a=Request p=0 t=1 ok=1
+TLATRACE seq=27 a=Exec p=0 t=1
+TLATRACE seq=28 a=Top p=0 t=1 clean=0
+TLATRACE seq=29 a=Request p=0 t=1 ok=1
+TLATRACE seq=30 a=Exec p=0 t=1
+TLATRACE seq=31 a=Top p=0 t=1 clean=0
+TLATRACE seq=32 a=BStart p=0 t=2 s=0 c=good
+TLATRACE seq=33 a=BTop p=0 full=1
+TLATRACE seq=34 a=BTry p=0 
+TLATRACE seq=35 a=CStart p=0 op=try
+TLATRACE seq=36 a=CTCas p=0 t=1 ok=0
+TLATRACE seq=37 a=BTryRep p=0 rep=0
+TLATRACE seq=38 a=BWatch p=0 
+TLATRACE seq=39 a=CStart p=0 op=w1
+TLATRACE seq=40 a=CW1 p=0 
+TLATRACE seq=41 a=CWScan p=0 idle=0
+TLATRACE seq=42 a=Request p=0 t=1 ok=1
+TLATRACE seq=43 a=Exec p=0 t=1
+TLATRACE seq=44 a=Top p=0 t=1 clean=1
+TLATRACE seq=45 a=Rst p=0 t=1 rreq=0
+TLATRACE seq=46 a=Wch p=0 t=1 go=1
+TLATRACE seq=47 a=Wx p=0 t=1
+TLATRACE seq=48 a=BHint p=0 
+TLATRACE seq=49 a=BTop p=0 full=1
+TLATRACE seq=50 a=BTry p=0 
+TLATRACE seq=51 a=CStart p=0 op=w0
+TLATRACE seq=52 a=CStart p=0 op=try
+TLATRACE seq=53 a=CTCas p=0 t=1 ok=1
+TLATRACE seq=54 a=CTWake p=0 
+TLATRACE seq=55 a=WakeSeen p=0 t=1
+TLATRACE seq=56 a=BTryRep p=0 rep=1
+TLATRACE seq=57 a=Finish p=0 t=1 yld=1
+TLATRACE seq=58 a=EndSession p=0 t=1
+TLATRACE seq=59 a=FreeConn p=0 t=1
+TLATRACE seq=60 a=Deact p=0 t=1
+TLATRACE seq=61 a=Send p=0 t=1
+TLATRACE seq=62 a=BSlot p=0 
+TLATRACE seq=63 a=Create p=0 t=2 s=2
+TLATRACE seq=64 a=Top p=0 t=2 clean=0
+TLATRACE seq=65 a=Request p=0 t=2 ok=1
+TLATRACE seq=66 a=Exec p=0 t=2
+TLATRACE seq=67 a=Top p=0 t=2 clean=1
+TLATRACE seq=68 a=Rst p=0 t=2 rreq=0
+TLATRACE seq=69 a=Wch p=0 t=2 go=0
+TLATRACE seq=70 a=Request p=0 t=2 ok=1
+TLATRACE seq=71 a=Exec p=0 t=2
+TLATRACE seq=72 a=Top p=0 t=2 clean=0
+TLATRACE seq=73 a=Request p=0 t=2 ok=1
+TLATRACE seq=74 a=Exec p=0 t=2
+TLATRACE seq=75 a=Top p=0 t=2 clean=1
+TLATRACE seq=76 a=Rst p=0 t=2 rreq=0
+TLATRACE seq=77 a=Wch p=0 t=2 go=0
+TLATRACE seq=78 a=Request p=0 t=2 ok=1
+TLATRACE seq=79 a=Exec p=0 t=2
+TLATRACE seq=80 a=Top p=0 t=2 clean=1
+TLATRACE seq=81 a=Rst p=0 t=2 rreq=0
+TLATRACE seq=82 a=Wch p=0 t=2 go=0
+TLATRACE seq=83 a=Request p=0 t=2 ok=1
+TLATRACE seq=84 a=Exec p=0 t=2
+TLATRACE seq=85 a=Top p=0 t=2 clean=0
+TLATRACE seq=86 a=Request p=0 t=2 ok=1
+TLATRACE seq=87 a=Exec p=0 t=2
+TLATRACE seq=88 a=Top p=0 t=2 clean=0
+TLATRACE seq=89 a=ClientClose p=0 t=2
+TLATRACE seq=90 a=Finish p=0 t=2 yld=0
+TLATRACE seq=91 a=EndSession p=0 t=2
+TLATRACE seq=92 a=FreeConn p=0 t=2
+TLATRACE seq=93 a=Deact p=0 t=2
+TLATRACE seq=94 a=Send p=0 t=2
+TLATRACE seq=95 a=BStart p=0 t=3 s=1 c=good
+TLATRACE seq=96 a=BTop p=0 full=0
+TLATRACE seq=97 a=Claim p=0 t=3 ok=1
+TLATRACE seq=98 a=Swap p=0 t=3
+TLATRACE seq=99 a=Auth p=0 t=3 ok=1
+TLATRACE seq=100 a=Top p=0 t=3 clean=0
+TLATRACE seq=101 a=Request p=0 t=3 ok=1
+TLATRACE seq=102 a=Exec p=0 t=3
+TLATRACE seq=103 a=Top p=0 t=3 clean=0
+TLATRACE seq=104 a=Request p=0 t=3 ok=1
+TLATRACE seq=105 a=Exec p=0 t=3
+TLATRACE seq=106 a=Top p=0 t=3 clean=1
+TLATRACE seq=107 a=Rst p=0 t=3 rreq=0
+TLATRACE seq=108 a=Wch p=0 t=3 go=0
+TLATRACE seq=109 a=Request p=0 t=3 ok=1
+TLATRACE seq=110 a=Exec p=0 t=3
+TLATRACE seq=111 a=Top p=0 t=3 clean=0
+TLATRACE seq=112 a=Request p=0 t=3 ok=1
+TLATRACE seq=113 a=Exec p=0 t=3
+TLATRACE seq=114 a=Top p=0 t=3 clean=0
+TLATRACE seq=115 a=ClientClose p=0 t=3
+TLATRACE seq=116 a=Finish p=0 t=3 yld=0
+TLATRACE seq=117 a=EndSession p=0 t=3
+TLATRACE seq=118 a=FreeConn p=0 t=3
+TLATRACE seq=119 a=Deact p=0 t=3
+TLATRACE seq=120 a=Send p=0 t=3
