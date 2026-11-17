@@ -22,7 +22,7 @@ module="$(basename "$cfg" .cfg)"; module="${module%%.*}"
 inv="$(sed -n 's/^ *INVARIANTS\{0,1\} *//p' "$cfg" | xargs)"
 if [ $# -gt 0 ]; then all=("$@")
 else
-  mapfile -t all < <(cat "$dir"/*.tla | awk -v inv="$inv" '$0 ~ "^"inv" *==" {f=1; next} f && /^  \/\\ [A-Za-z_][A-Za-z0-9_]* *$/ {print $2; next} f {exit}')
+  mapfile -t all < <(cat "$dir/$module.tla" "$dir"/*.tla | awk -v inv="$inv" '$0 ~ "^"inv" *==" {f=1; next} f && /^  \/\\ [A-Za-z_][A-Za-z0-9_]* *$/ {print $2; next} f {exit}')
 fi
 [ ${#all[@]} -gt 0 ] || { echo "error: $inv is not a list of '  /\\ Name' lines"; exit 2; }
 grp=(); for ((i = k - 1; i < ${#all[@]}; i += n)); do grp+=("${all[$i]}"); done

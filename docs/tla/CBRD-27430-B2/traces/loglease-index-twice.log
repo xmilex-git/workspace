@@ -1,0 +1,37 @@
+TLATRACE seq=1 a=SBegin p=0 s=1
+TLATRACE seq=2 a=STry p=0 s=1 idx=1 got=1
+TLATRACE seq=3 a=SOpen p=0 s=1
+TLATRACE seq=4 a=SBegin p=0 s=4
+TLATRACE seq=5 a=STry p=0 s=4 idx=1 got=1
+TLATRACE seq=6 a=STry p=0 s=4 idx=2 got=1
+TLATRACE seq=7 a=SOpen p=0 s=4
+TLATRACE seq=8 a=SBegin p=0 s=7
+TLATRACE seq=9 a=STry p=0 s=7 idx=1 got=0
+TLATRACE seq=10 a=STry p=0 s=7 idx=2 got=0
+TLATRACE seq=11 a=STry p=0 s=7 idx=3 got=1
+TLATRACE seq=12 a=SOpen p=0 s=7
+TLATRACE seq=13 a=SClose p=0 s=1
+TLATRACE seq=14 a=SRelease p=0 s=1
+TLATRACE seq=15 a=SDone p=0 s=1
+TLATRACE seq=16 a=SBegin p=0 s=10
+TLATRACE seq=17 a=STry p=0 s=10 idx=1 got=1
+TLATRACE seq=18 a=SOpen p=0 s=10
+TLATRACE seq=19 a=SClose p=0 s=10
+TLATRACE seq=20 a=SRelease p=0 s=10
+TLATRACE seq=21 a=SDone p=0 s=10
+TLATRACE seq=22 a=SClose p=0 s=4
+TLATRACE seq=23 a=SRelease p=0 s=4
+TLATRACE seq=24 a=SDone p=0 s=4
+TLATRACE seq=25 a=Crash p=0 p=1
+TLATRACE seq=26 a=SBegin p=0 s=2
+TLATRACE seq=27 a=STry p=0 s=2 idx=1 got=1
+TLATRACE seq=28 a=SOpen p=0 s=2
+TLATRACE seq=29 a=SClose p=0 s=2
+TLATRACE seq=30 a=SRelease p=0 s=2
+TLATRACE seq=31 a=SDone p=0 s=2
+TLATRACE seq=32 a=SBegin p=0 s=3
+TLATRACE seq=33 a=STry p=0 s=3 idx=1 got=1
+TLATRACE seq=34 a=SOpen p=0 s=3
+TLATRACE seq=35 a=SClose p=0 s=3
+TLATRACE seq=36 a=SRelease p=0 s=3
+TLATRACE seq=37 a=SDone p=0 s=3

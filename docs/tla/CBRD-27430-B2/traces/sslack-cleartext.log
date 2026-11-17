@@ -1,0 +1,8 @@
+TLATRACE seq=1 a=BPark p=0 
+TLATRACE seq=2 a=BPeeked p=0 
+TLATRACE seq=3 a=BDequeue p=0 
+TLATRACE seq=4 a=BDial p=0 up=1
+TLATRACE seq=5 a=BSlot p=0 got=1
+TLATRACE seq=6 a=BRequest p=0 sent=1
+TLATRACE seq=7 a=SHandle p=0 ok=1
+TLATRACE seq=8 a=BAck p=0 

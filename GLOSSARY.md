@@ -480,6 +480,26 @@ _Avoid_: 세션 reattach(CS 클라이언트의 세션 id 재사용 — client �
 양보시킬 유휴 세션이 하나도 없을 때 접속 프런트가 슬롯을 쥔 서버들에게 걸어 두는 요청으로, 세션 하나가 유휴가 되면 서버가 힌트를 한 번 보내고 접속 프런트는 양보를 다시 시도한다.
 _Avoid_: yield 요구 플래그(옛 구현의 방식), 폴링
 
+**세션 설정 사본 (session config)**:
+CAS가 브로커의 공유 메모리에서 읽던 브로커 conf 값(SQL_LOG, LONG_QUERY_TIME, MAX_PREPARED_STMT_COUNT, 로그 경로 등)을 통합 서버의 세션이 자기 것으로 갖고 있는 사본이다. 브로커가 핸드오프마다 공유 메모리를 찍어 실어 보내고, `broker_changer`가 값을 바꾸면 그 브로커의 세션이 있는 모든 서버에 다시 보낸다. 세션은 다음 요청 경계에서 새 사본을 가져간다.
+_Avoid_: `cas_*` 서버 파라미터(옛 구현의 방식 — 서버 파라미터는 ACCESS_CONTROL 3개뿐이다), shm stub, 브로커 공유 메모리(서버는 그것을 읽지 않는다)
+
+**설정 seq (config seq)**:
+브로커가 공유 메모리를 찍을 때마다 1씩 올리는 번호로, 세션 설정 사본마다 붙는다. 브로커가 재시작해도 이전보다 큰 값에서 시작한다. 서버는 브로커별로 가장 큰 seq의 사본을 기억하고, 세션의 사본을 더 큰 seq로만 바꾼다. 브로커가 응답을 포기한 변경이 뒤늦게 처리되어도 나중 값을 덮지 못하게 하는 장치다.
+_Avoid_: 설정 버전(conf 값 자체의 버전이 아니다 — 같은 값을 두 번 찍으면 seq는 둘이다), 세대(채널 generation과 혼동)
+
+**로그 인덱스 임대 (log index lease)**:
+세션이 SQL 로그·slow 로그·DDL 감사 로그 파일 이름(`<브로커>_<N>`)의 N을 쥐는 방식으로, 호스트의 잠금 파일 `var/cas_log_slots/<브로커>_<N>.lock`에 건 `flock`이다. 가장 작은 빈 N부터 잡고, 로그 파일을 닫은 뒤에 놓는다. 한 브로커의 세션이 여러 서버에 있고 브로커 재시작을 넘겨 살기 때문에 서버 안의 할당기가 아니라 호스트의 잠금이다. 서버가 죽으면 커널이 놓는다.
+_Avoid_: 세션 슬롯 id(옛 구현의 서버 내 할당기), CAS 번호(CAS는 없다), 핸드오프 슬롯(접속 수 상한 — 다른 것이다)
+
+**세션 제어 소켓 (session control socket)**:
+`DIRECT_HANDOFF` 브로커가 여는 유닉스 소켓(`br_session_<appl shm key>`)으로, `broker_changer`와 `cubrid broker reset`이 여기에 요청하면 브로커가 제어 채널로 서버들에게 세션 설정 사본이나 RESET을 보낸다. 같은 OS 사용자만 쓸 수 있다.
+_Avoid_: 제어 채널(브로커와 서버 사이의 연결 — 이 소켓은 관리 명령과 브로커 사이다), admin 소켓
+
+**세션 상태 행 (session status row)**:
+`SHOW SESSION STATUS`가 세션마다 돌려주는 한 줄로, 세션이 로그인 직후와 요청이 끝날 때마다 자기 통계를 통째로 복사해 게시한 것이다. 읽는 쪽은 게시된 복사본만 읽으므로 요청 도중의 값은 보이지 않는다. `cubrid broker status`의 CAS별 줄이 있던 자리다.
+_Avoid_: 실시간 통계(요청 경계 기준이다), as_info 슬롯(세션 스레드만 읽고 쓴다)
+
 **핸드셰이크 예산 (handshake budget)**:
 SSL 드라이버가 접속 응답을 받은 뒤 서버의 ServerHello를 기다려 주는 시간. JDBC는 1초(`BrokerHandler.TIMEOUT_UNIT`), CCI는 블로킹 `SSL_connect`라 상한이 없다. 접속 응답은 이 예산이 시작되기 전에 서버가 fd를 쥐고 있어야 한다는 제약을 낳는다.
 _Avoid_: connectTimeout(접속 응답까지의 예산 — 다른 타이머다), 로그인 타임아웃

@@ -161,6 +161,12 @@ line under "Folded" at the end.
 - Applies at: SKILL.md step 4; INDUCTIVE.md
 - Case (2026-11-06, PR #8356 review `PartWalk`): a bare `VARIABLES` line with one commented name per line below failed Apalache with `Expected a type annotation for VARIABLE memoOn` although all 31 `apalache-type` lines were present.
 
+
+### P84 — a pair of one type is ambiguous to Apalache
+- Rule: A tuple of two expressions of one type (`<<sa, sb>>`, `UNCHANGED <<dq, seq>>`) carries a `\* @type: <<T, T>>;` line above its definition or is written as two conjuncts: Apalache cannot tell the pair from a two-element sequence and stops with "Annotation required".
+- Applies at: SKILL.md step 4
+- Case (2026-11-17, CBRD-27430 B2, five modules in one directory): `StatsKill.apalache-indinv` stopped at `slotVars == <<sa, sb>>` and `ConfigPush` at `okVars == <<okv, okq>>` and `UNCHANGED <<dq, seq>>` (rc=120, "Found 2 matching operator signatures"); a three-element or mixed-type tuple passed. The same run showed `tools/tla/apalache-split` reading the first `IndInv` of any module in the directory; it now reads the cfg's own module first.
+
 ### P72 — pass a name, not an expression, to a multi-reference parameter
 - Rule: An operator whose body reads a parameter more than once takes a name, never a compound expression: the call site binds the expression in a LET and passes the name, because TLC's `-coverage` and Apalache's InlinePass copy the argument per reference, which multiplies through nested calls.
 - Applies at: SKILL.md step 4

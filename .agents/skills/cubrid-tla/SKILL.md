@@ -124,6 +124,7 @@ Spec traps — each a wrong verdict TLC or Apalache reports silently, or a parse
 - Comments say `COUNT-star`, never `COUNT(*)`: `(*` opens a nested block comment and SANY reports the EOF far below it. (P60)
 - Apalache takes no `Seq(_)` and no `a..b` with a non-constant bound: a program is a function over `1..N` with `N` a constant, and a variable-bounded range is written as inequalities over a constant range. (P59)
 - Every CONSTANTS and VARIABLES declaration carries its first name on the keyword's line, or `tools/tla/apalache-types` leaves the block untyped. (P47)
+- A tuple of two expressions of one type (`<<sa, sb>>`, `UNCHANGED <<dq, seq>>`) carries a `\* @type: <<T, T>>;` line above its definition or is written as two conjuncts: Apalache cannot tell the pair from a two-element sequence and stops with "Annotation required". (P84)
 - An operator whose body reads a parameter more than once takes a name, never a compound expression: the call site binds the expression in a LET and passes the name, because TLC's `-coverage` and Apalache's InlinePass copy the argument per reference, which multiplies through nested calls. (P72)
 
 ### 5. Check, then hunt
