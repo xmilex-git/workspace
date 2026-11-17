@@ -16,7 +16,8 @@ its own. Five models, one per shared state:
 | `SslAck` | what the broker and the server send an SSL client before TLS | C1 |
 
 Code: fork branch `cas-fold-v2`, B2 commit `b78af44d4` on `46c8e2e49` (worktree
-`~/dev/cubrid-worktree/cas-fold-v2`); the line numbers below are at that commit. Old implementation: `cas-merge` @
+`~/dev/cubrid-worktree/cas-fold-v2`); the line numbers below were
+moved to `3b377107d` (develop `93fedbbec` merged, no model step changed). Old implementation: `cas-merge` @
 `cdb9da11e`, the attribution table's B2 commits (36 commits, 17 files; per-file lines in the tooling scratch
 `fold-v2/b2/lines/`).
 
@@ -114,7 +115,7 @@ need are B5's.
 | `SErase (s)` | `registry_session_finished` erases the entry (`:639`) | under `registry_mutex` |
 | `SClose (s)` | `close (params.client_fd)` (`driver_session.cpp:871`), after the erase | one system call |
 | `RBegin`, `RRow (s)`, `REnd` | `registry_stats_snapshot` (`:447`, from `server_support.c:312`): `rows[count++] = binding.stats` (`:467`) | `registry_mutex` for the scan, `control_mutex` per row |
-| `KBegin`, `KPin (s)`, `KShut`, `KEnd` | `registry_shutdown_session` (`:474`, from `connection_sr.c:1356`): `binding_pin` (`:485`), `shutdown (pin.client_fd, SHUT_RD)` (`:489`) | `registry_mutex` for the scan; the pin holds `SDrain` back |
+| `KBegin`, `KPin (s)`, `KShut`, `KEnd` | `registry_shutdown_session` (`:474`, from `connection_sr.c:1359`): `binding_pin` (`:488`), `shutdown (pin.client_fd, SHUT_RD)` (`:492`) | `registry_mutex` for the scan; the pin holds `SDrain` back |
 | a pin that finds another transaction | the scan pins every entry to read its transaction index and unpins it | it shuts nothing down and only delays that session's `SDrain`; not a step of the model |
 
 `SslAck` (`broker_direct.cpp`, `adoption.cpp`, `driver_session.cpp`):
