@@ -49,7 +49,7 @@ Line numbers below are at the A4 commit.
 | `Deact` (`TDeact`, `ADeact`) | `csc_deactivate`: `orphaned` read once, `csc_teardown` if set, `tl_Csc_active = NULL` | under the bracket |
 | `Unlock` | `csc_deactivate`: `bracket_mutex.unlock ()` | one release |
 | `Del` | `csc_deactivate`: `delete ctx` when the value read before the unlock was set | the context is unreachable (C2) |
-| `Reread` (mutant) | the old `csc_deactivate` (`cdb9da11e:client_session_context.cpp:88`): `if (ctx->orphaned)` after the unlock | — |
+| `Reread` (mutant) | the old `csc_deactivate` (`cdb9da11e:client_session_context.cpp:94`): `if (ctx->orphaned)` after the unlock | — |
 | `Teardown(t, c)` | `csc_teardown`: `db_on_server = 0` for its extent, `pt_free_label_table`, plan dump name, method error, execution plan, `ws_final (false)` (decaches through `db_ws_free`, value containers through `db_private_free`, destroys the session's lea heap); shared areas stay | under the bracket |
 | `TNotAdopted`, `TRTear` | tracer: `csc_deactivate`, then `csc_retire_and_delete` when not adopted | no session can reach it |
 | `ARef`, `ARead`, `AWork`, `AUnref` | another request on the session: `session_check_session` (reference under the entry mutex), `csc_p` read, its bracket, its reference drop. **No such caller exists in A4** (only the tracer brackets); the role is the B1 dispatch the orphan protocol is designed for | the reference is taken under the session mutex |

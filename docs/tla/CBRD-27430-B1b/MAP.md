@@ -60,25 +60,25 @@ were put to the user and confirmed on 2026-11-17 (ticket #632, Q1–Q7).
 | `CW1`, `CWScan`, `CWX` | `handle_idle_watch` (`:773`): `watch_requested.store` (`:782`), the scan for an idle binding, `watch_requested.exchange (false)` (`:801`) then IDLE_HINT | each an atomic (the scan reads atomics of bindings that change under it; its result is one read of "some binding idle") |
 | `CRMark(d, u)`, `CRCas(d)` | `handle_reset` (`:811`): `reset_requested.store (true)` (`:821`), then the compare-and-swap idle → yielded and the wake | two atomics on one binding |
 | `Create(t)` | `db_restart_ex` (`driver_session.cpp:522`): the client boot creates the session; `session_adopt_client_context` | the session is not reachable by another connection before its id and secret are sent |
-| `Claim(t)` | `session_claim_kept_context` (`session.c:3020`): key, find, secret, `csc_kept && ref_count == 0`, then `csc_kept = false`, `active_time`, the reference and the conn entry (`:3054`) | under the session's state mutex (the hash map's `find` returns it locked) |
+| `Claim(t)` | `session_claim_kept_context` (`session.c:3056`): key, find, secret, `csc_kept && ref_count == 0`, then `csc_kept = false`, `active_time`, the reference and the conn entry (`:3090`) | under the session's state mutex (the hash map's `find` returns it locked) |
 | `Swap(t)` | `csc_deactivate`, `csc_retire_and_delete` of the thread's own context, `csc_activate (kept)` (`driver_session.cpp:488-491`) | `bracket_mutex` of the kept context |
-| `Auth(t)` | `boot_resume_client` (`boot_cl.c:1759`): the user is the context's, `boot_register_client`, `au_login`, commit; a failure aborts and unregisters | the thread's own bracket and transaction |
+| `Auth(t)` | `boot_resume_client` (`boot_cl.c:1760`): the user is the context's, `boot_register_client`, `au_login`, commit; a failure aborts and unregisters | the thread's own bracket and transaction |
 | `Top(t, c)` | the request loop's condition (`driver_session.cpp:348-353`) and `registry_auto_ready`'s `state.store (idle)` (`adoption.cpp:455`) | the condition reads the thread's own state; the store is one atomic |
 | `Rst(t)` | `reset_requested.load ()`, the compare-and-swap idle → yielded, `wake_session` (`adoption.cpp:456-461`) | a load and a compare-and-swap of the thread's own binding; either order with `CRCas` leaves it yielded |
 | `Wch(t)`, `Wx(t)` | `watch_requested.load () && state.load () == idle` and `watch_requested.exchange (false)` + IDLE_HINT (`adoption.cpp:462-467`) | the reads, then one atomic |
 | `WakeSeen(t)` | `read_buffer`'s poll returns the wake descriptor and the binding is yielded (`cas_network.c:604-610`) | the thread's own descriptor |
-| `Request(t)` | a request header was read; `registry_auto_begin_request` (`adoption.cpp:471`, called at `cas_conn_helpers.c:257`): compare-and-swap idle → busy, or the binding is yielded and the connection ends as CHANGE CLIENT (`cas_dispatch.c:478`) | one atomic |
+| `Request(t)` | a request header was read; `registry_auto_begin_request` (`adoption.cpp:471`, called at `cas_conn_helpers.c:257`): compare-and-swap idle → busy, or the binding is yielded and the connection ends as CHANGE CLIENT (`cas_dispatch.c:498`) | one atomic |
 | `Exec(t)` | `cas_process_request` runs the function | the thread's own session |
 | `ClientClose(t)` | `net_read_int_keep_con_auto` returns an error (the peer closed, the socket failed) | — |
 | `Finish(t)` | `registry_auto_finish` (`adoption.cpp:490`): `state.exchange (closing)` (`:497`) | one atomic |
-| `EndSession(t)` | `driver_session.cpp:580-594`: rollback unless yielded, `db_set_keep_session (yielded)`, `ux_end_session` → `session_state_destroy` (`session.c:838`; keep: `active_time`, `csc_kept` at `:871`; else uninit and erase, the context orphaned inside its own bracket); after a failed login `session_rekeep_client_context` (`session.c:3072`) | under the state mutex |
-| `FreeConn(t)` | `css_free_conn` (`driver_session.cpp:611`): `session_state_decrease_ref_count` | an atomic decrement |
-| `Deact(t)` | `csc_deactivate` (`driver_session.cpp:620`): an orphaned context is torn down and deleted | `bracket_mutex` (A4) |
-| `Send(t)` | `registry_session_finished` (`driver_session.cpp:632`, `adoption.cpp:504`): the registry erase, SESSION_END | `registry_mutex`; the slot accounting is B1a's |
+| `EndSession(t)` | `driver_session.cpp:580-599`: rollback unless yielded, `db_set_keep_session (yielded)`, `ux_end_session` → `session_state_destroy` (`session.c:874`; keep: `active_time`, `csc_kept` at `:907`; else uninit and erase, the context orphaned inside its own bracket); after a failed login `session_rekeep_client_context` (`session.c:3108`) | under the state mutex |
+| `FreeConn(t)` | `css_free_conn` (`driver_session.cpp:616`): `session_state_decrease_ref_count` | an atomic decrement |
+| `Deact(t)` | `csc_deactivate` (`driver_session.cpp:625`): an orphaned context is torn down and deleted | `bracket_mutex` (A4) |
+| `Send(t)` | `registry_session_finished` (`driver_session.cpp:637`, `adoption.cpp:504`): the registry erase, SESSION_END | `registry_mutex`; the slot accounting is B1a's |
 | `Timeout(s)` | `time (NULL) - active_time >= session_state_timeout` for a kept session | the environment |
-| `XScan(s)` | `session_remove_expired_sessions` (`session.c:1004`) iterating, `session_check_timeout` (`:1129`); the active connections' session ids are read once per pass | the iterator holds the entry's state mutex |
-| `XRecheck` | the second `session_check_timeout` under the state mutex (`session.c:1077`) | the state mutex, kept until the erase |
-| `XTear` | `session_state_uninit` → `csc_retire_and_delete` (`session.c:386`) enters the context's bracket, tears it down; `erase_locked` | `bracket_mutex`, then the erase under the state mutex |
+| `XScan(s)` | `session_remove_expired_sessions` (`session.c:1040`) iterating, `session_check_timeout` (`:1165`); the active connections' session ids are read once per pass | the iterator holds the entry's state mutex |
+| `XRecheck` | the second `session_check_timeout` under the state mutex (`session.c:1113`) | the state mutex, kept until the erase |
+| `XTear` | `session_state_uninit` → `csc_retire_and_delete` (`session.c:422`) enters the context's bracket, tears it down; `erase_locked` | `bracket_mutex`, then the erase under the state mutex |
 | `pc`, `st`, `wake`, `rreq` | the session thread's position; `session_binding::state`, the eventfd, `reset_requested` | |
 | `att`, `ref`, `kept`, `present`, `exp` | `conn->session_p`, `session_state::ref_count`, `csc_kept`, the hash map entry, `active_time` against the timeout | |
 | `holder`, `cx`, `orphan`, `tear` | `client_session_context::bracket_mutex`, the thread's active context, `orphaned`, a ghost | |
@@ -198,7 +198,7 @@ Lines of `AutoSession.tla` the main cfg never evaluates; `tla-check` lists them 
 | AutoSession.tla:281 | `Cancel`'s `UNCHANGED <<q, qn>>` as used by `BHint` | mutant-only: `BHint` fires with the watch on; only `retry_after_claim` enters it without one |
 | AutoSession.tla:425 | `Create`: no session id left, the connection is refused | a model bound, not code (session ids are 32 bits): reached only with more connections than `NS`; fires in `scale-nt3` |
 | AutoSession.tla:426 | the same branch's `UNCHANGED` | as above |
-| AutoSession.tla:628 | `XScan`: a session past its timeout that is on the active connections' list gets its `active_time` refreshed | mutant-only (`no_renew`): the model lets only a kept, unreferenced session time out, and the claim renews `active_time`; in the code the branch serves attached sessions (`session_check_timeout`, `session.c:1129`), which the model keeps out of `exp` (Fault model, "an attached session's `active_time`") |
+| AutoSession.tla:628 | `XScan`: a session past its timeout that is on the active connections' list gets its `active_time` refreshed | mutant-only (`no_renew`): the model lets only a kept, unreferenced session time out, and the claim renews `active_time`; in the code the branch serves attached sessions (`session_check_timeout`, `session.c:1165`), which the model keeps out of `exp` (Fault model, "an attached session's `active_time`") |
 
 ## Bounds
 
