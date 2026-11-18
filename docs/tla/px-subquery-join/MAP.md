@@ -218,6 +218,6 @@ deadlock check): every group timed out at 7200 s without a verdict (IStackShape+
 IThreads+RunsOnce, IJobs+NoUseAfterFree, IExecs+NoPolling, IWake+NoSleepWithWork, IIdle). IndInv holds on
 every reachable state of the five pass cfgs that list it; its inductiveness is not established.
 
-2026-11-18 rerun after the PR #8556 review (no spec step changed; D16 and D17 are outside the join protocol): `tla-check --only 'PxSubqueryJoin*'` 18 cfgs PASS (`px-subquery-join-20261118-122445-359514`); `scale-3w` failed only on the vacuity check (the SpuriousWake disjunct of Next never fires with MaxSpur = 0) and passed after its `uncovered-ok` line (`px-subquery-join-20261118-132326-500963`, 11,479,528 / 3,520,797 states). Apalache not rerun (D12).
+2026-11-18 rerun after the PR #8556 review (no spec step changed; D16 and D17 are outside the join protocol): `tla-check --only 'PxSubqueryJoin*'` 26 TLC cfgs PASS and `PxSubqueryJoinInd.apalache-base` timed out at 7200 s as on 11-16 (`px-subquery-join-20261118-122445-359514`); `scale-3w` failed only on the vacuity check (the SpuriousWake disjunct of Next never fires with MaxSpur = 0) and passed after its `uncovered-ok` line (`px-subquery-join-20261118-132326-500963`, 11,479,528 / 3,520,797 states). Apalache not rerun (D12).
 
 TLAPS 요청 없음. Trace validation not done (trace-exempt above).
