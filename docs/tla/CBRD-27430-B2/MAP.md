@@ -17,7 +17,7 @@ its own. Five models, one per shared state:
 
 Code: fork branch `cas-fold-v2`, B2 commit `b78af44d4` on `46c8e2e49` (worktree
 `~/dev/cubrid-worktree/cas-fold-v2`); the line numbers below were
-moved to `3b377107d` (develop `93fedbbec` merged, no model step changed). Old implementation: `cas-merge` @
+moved to `f9e3e6637` (develop `ce985257b` merged, no model step changed). Old implementation: `cas-merge` @
 `cdb9da11e`, the attribution table's B2 commits (36 commits, 17 files; per-file lines in the tooling scratch
 `fold-v2/b2/lines/`).
 
@@ -73,7 +73,7 @@ need are B5's.
 | `CSnap` | `config_snapshot (m, config)` in `control_broadcast` | under `config_mutex` |
 | `CSend (d)`, `CReply (d)`, `CTimeout (d)` | `channel_request (SESSION_CONFIG)` (`:1047`) per target, one after another | one request and its reply; a failure marks the push incomplete |
 | `CDone` | `control_broadcast` returns the sessions reached or -1; `admin_session_control` prints the partial-delivery message | the reply on the control socket |
-| `SHandoff (m)` | `handle_handoff` (`adoption.cpp:681`): under `registry_mutex` the session's conf is the newer of `latest_config[broker]` and the HANDOFF's (`:776`), then the entry is registered (`:794`) | under `registry_mutex` |
+| `SHandoff (m)` | `handle_handoff` (`adoption.cpp:681`): under `registry_mutex` the session's conf is the newer of `latest_config[broker]` and the HANDOFF's (`:778`), then the entry is registered (`:796`) | under `registry_mutex` |
 | `SRefuse (m)` | the reject paths of `handle_handoff`, and the undo when HANDOFF_ACK cannot be sent (`:818`) | no entry is left |
 | `SConfigBegin (m)` | `handle_session_config` (`:967`, dispatched at `:1153`) takes `registry_mutex` and raises `latest_config` | under `registry_mutex` |
 | `SWrite (s)` | `if (config.seq <= binding.config.seq) continue; binding.config = config;` (`:988`, `:992`) | under the binding's `control_mutex` |
@@ -91,17 +91,17 @@ need are B5's.
 | `LStart (l)` | `cas_server_acl_reload` (`:442`) takes `cas_Acl_load_mutex` (`:446`); callers: `acl_reload` (`adoption.cpp:399`, from `cubrid server acl reload`) and the first check | the mutex |
 | `LParse (l)` | `cas_acl_parse (table)` (`:450`) into the loader's own table | no shared state but the file |
 | `LSwap (l)` | `cas_Acl_table.swap (table)` (`:459`), `cas_Acl_load_failed`, `cas_Acl_loaded` | under `cas_Acl_mutex`; then `cas_Acl_load_mutex` is released |
-| `CCheck (c)` | `cas_server_acl_check` (`:471`, called at `driver_session.cpp:619`): the mark and the table | under `cas_Acl_mutex` (`:490`) |
+| `CCheck (c)` | `cas_server_acl_check` (`:471`, called at `driver_session.cpp:677`): the mark and the table | under `cas_Acl_mutex` (`:548`) |
 | `CAgain (c)` | the next connection | — |
 
 `LogLease` (`cas_server_support.cpp`, `driver_session.cpp`):
 
 | Model | Code | One step because |
 |---|---|---|
-| `SBegin (s)`, `STry (s)` | `cas_server_session_log_begin` (`:198`, called at `driver_session.cpp:528`): `flock (fd, LOCK_EX \| LOCK_NB)` on `var/cas_log_slots/<broker>_<N>.lock`, N from 1 (`:230`) | one system call per index; the kernel decides |
-| `SOpen (s)` | `cas_log_open`, `cas_slow_log_open` (`driver_session.cpp:537`), the DDL log by its first line | the session's own files |
-| `SClose (s)` | `logddl_destroy`, `cas_log_close`, `cas_slow_log_close` (`driver_session.cpp:830`) | the session's own files |
-| `SRelease (s)`, `SDone (s)` | `cas_server_session_slot_end` (`:251`, called at `driver_session.cpp:833`) closes the lock file (`:260`) | one system call |
+| `SBegin (s)`, `STry (s)` | `cas_server_session_log_begin` (`:198`, called at `driver_session.cpp:586`): `flock (fd, LOCK_EX \| LOCK_NB)` on `var/cas_log_slots/<broker>_<N>.lock`, N from 1 (`:288`) | one system call per index; the kernel decides |
+| `SOpen (s)` | `cas_log_open`, `cas_slow_log_open` (`driver_session.cpp:595`), the DDL log by its first line | the session's own files |
+| `SClose (s)` | `logddl_destroy`, `cas_log_close`, `cas_slow_log_close` (`driver_session.cpp:913`) | the session's own files |
+| `SRelease (s)`, `SDone (s)` | `cas_server_session_slot_end` (`:251`, called at `driver_session.cpp:916`) closes the lock file (`:318`) | one system call |
 | `Crash (p)` | `kill -9` of a `cub_server` | the kernel closes its descriptors |
 
 `StatsKill` (`adoption.cpp`, `driver_session.cpp`):
@@ -109,11 +109,11 @@ need are B5's.
 | Model | Code | One step because |
 |---|---|---|
 | `SNew (s, f)` | `handle_handoff` registers the binding with the descriptor it received (`:794`) | under `registry_mutex` |
-| `SPublish (s)` | `publish_stats` (`driver_session.cpp:371`) → `registry_publish_stats` (`:436`): after the login and after every return of `cas_process_request` | under the binding's `control_mutex` |
+| `SPublish (s)` | `publish_stats` (`driver_session.cpp:429`) → `registry_publish_stats` (`:494`): after the login and after every return of `cas_process_request` | under the binding's `control_mutex` |
 | `SReqA (s)`, `SReqB (s)` | a request changes the thread's `as_info` counters one after another (`cas_dispatch.c`, `cas_common_execute.c`) | the slot is the thread's own; two steps so that a reader of the slot could see them apart |
 | `SCleanup (s)`, `SDrain (s)` | `registry_begin_session_cleanup` (`:371`): `closing = true` (`:390`), wait for `users == 0`, `client_fd = -1` (`:393`) | under the binding's `mutex`; the wait is its own step |
 | `SErase (s)` | `registry_session_finished` erases the entry (`:639`) | under `registry_mutex` |
-| `SClose (s)` | `close (params.client_fd)` (`driver_session.cpp:871`), after the erase | one system call |
+| `SClose (s)` | `close (params.client_fd)` (`driver_session.cpp:954`), after the erase | one system call |
 | `RBegin`, `RRow (s)`, `REnd` | `registry_stats_snapshot` (`:447`, from `server_support.c:312`): `rows[count++] = binding.stats` (`:467`) | `registry_mutex` for the scan, `control_mutex` per row |
 | `KBegin`, `KPin (s)`, `KShut`, `KEnd` | `registry_shutdown_session` (`:474`, from `connection_sr.c:1359`): `binding_pin` (`:488`), `shutdown (pin.client_fd, SHUT_RD)` (`:492`) | `registry_mutex` for the scan; the pin holds `SDrain` back |
 | a pin that finds another transaction | the scan pins every entry to read its transaction index and unpins it | it shuts nothing down and only delays that session's `SDrain`; not a step of the model |
@@ -126,10 +126,10 @@ need are B5's.
 | `BPeeked`, `BPeekTimeout` | `park_complete` (`:790`), `park_drop` (`:838`) | the peek thread owns it |
 | `BDequeue`, `BDial`, `BSlot` | `brd_dispatch_job` (`:1347`): `channel_get_or_dial` (`:1379`), `brd_wait_for_slot` (`:1392`) | B1a's steps; here each one step |
 | `BRequest (sent)` | `channel_request (HANDOFF)` with the descriptor (`:1420`); `fd_transferred` says whether it left | one request |
-| `SHandle (ok)` | `handle_handoff`: registered and HANDOFF_ACK (`adoption.cpp:818`), or HANDOFF_REJECT | under `registry_mutex` |
+| `SHandle (ok)` | `handle_handoff`: registered and HANDOFF_ACK (`adoption.cpp:820`), or HANDOFF_REJECT | under `registry_mutex` |
 | `BAck` | HANDOFF_ACK read: the ack to an SSL client (`:1446`), then the broker closes its copy | the dispatch thread owns the broker's copy |
 | `BReject`, `BReplyTimeout`, `SLate` | HANDOFF_REJECT: the error code; no reply (`:1423`): nothing is sent after the descriptor left | as above |
-| after the ack | `cas_init_ssl` in the session thread (`driver_session.cpp:545`) | the session owns the connection |
+| after the ack | `cas_init_ssl` in the session thread (`driver_session.cpp:603`) | the session owns the connection |
 
 ## Properties
 
@@ -214,7 +214,7 @@ witness `partial` (a push that is answered as not delivered).
 1. **A late SESSION_CONFIG could put an older conf back** (found by `ConfigPush`, no seq). The broker gives a channel
    up after a timeout and dials again; the old channel's thread on the server may still handle the message it had.
    Fix in the design: every snapshot carries a seq (`config_seq`, `broker_direct.cpp:964`); the server keeps the
-   broker's latest and replaces a session's conf only by a larger seq (`adoption.cpp:776`, `:988`). Mutants
+   broker's latest and replaces a session's conf only by a larger seq (`adoption.cpp:778`, `:990`). Mutants
    `no_seq_order`, `no_latest`, `seq_restart`, `snap_unlocked`.
 2. **Two ACL loads could finish in the wrong order** (found by `AclTable`): the parse runs outside the table's
    mutex, so the load that read the older file could swap last. Fix: `cas_Acl_load_mutex` around a whole load
@@ -222,7 +222,7 @@ witness `partial` (a push that is answered as not delivered).
 3. **A session answered a cursor close as "no transaction"** (found by the smoke, not by a model; present since
    B1a). `is_first_request` was set when the session began and never cleared, so every request that starts no
    transaction restored the status to out-of-transaction; a JDBC client with autocommit off then skipped its
-   END_TRAN and the transaction kept its locks. Fix: `driver_session.cpp:432`. Before: the probe
+   END_TRAN and the transaction kept its locks. Fix: `driver_session.cpp:490`. Before: the probe
    `fold-v2/b2/probe_lock.sh` shows the class lock held after the commit and one `end_tran` in the SQL log; after:
    no lock, two `end_tran`. The 51 cases that ran in the in-process tracer never took this path; cases 34–36 hung
    on it once they ran through the wire.

@@ -55,15 +55,15 @@ were put to the user and confirmed on 2026-11-17 (ticket #632, Q1–Q7).
 | `hint` | `idle_hint_generation != seen_hint`; the reader counts IDLE_HINTs (`:384`) | under `slots_mutex` |
 | `EReset(d)` | a RESET message on the control channel (`msg_op::RESET`) — its sender, `cubrid broker reset` through the broker's session control socket, is B2 | — |
 | `CStart(d)` | `channel_thread_run` reads one message and enters its handler (`adoption.cpp` switch) | the channel thread handles one message at a time |
-| `CTCas(d, u)` | `handle_yield_try` (`adoption.cpp:879`): `state.compare_exchange_strong (idle, yielded)` on one registry entry | one atomic; the pass holds `registry_mutex`, so the set of entries is fixed |
+| `CTCas(d, u)` | `handle_yield_try` (`adoption.cpp:881`): `state.compare_exchange_strong (idle, yielded)` on one registry entry | one atomic; the pass holds `registry_mutex`, so the set of entries is fixed |
 | `CTWake(d)` | `wake_session` (`:386`) writes the eventfd through a `binding_pin`, then YIELD_TRY_REPLY | the write; the pin keeps the descriptor open (B1a's pin/drain) |
 | `CW1`, `CWScan`, `CWX` | `handle_idle_watch` (`:773`): `watch_requested.store` (`:782`), the scan for an idle binding, `watch_requested.exchange (false)` (`:801`) then IDLE_HINT | each an atomic (the scan reads atomics of bindings that change under it; its result is one read of "some binding idle") |
 | `CRMark(d, u)`, `CRCas(d)` | `handle_reset` (`:811`): `reset_requested.store (true)` (`:821`), then the compare-and-swap idle → yielded and the wake | two atomics on one binding |
-| `Create(t)` | `db_restart_ex` (`driver_session.cpp:699`): the client boot creates the session; `session_adopt_client_context` | the session is not reachable by another connection before its id and secret are sent |
+| `Create(t)` | `db_restart_ex` (`driver_session.cpp:771`): the client boot creates the session; `session_adopt_client_context` | the session is not reachable by another connection before its id and secret are sent |
 | `Claim(t)` | `session_claim_kept_context` (`session.c:3056`): key, find, secret, `csc_kept && ref_count == 0`, then `csc_kept = false`, `active_time`, the reference and the conn entry (`:3090`) | under the session's state mutex (the hash map's `find` returns it locked) |
-| `Swap(t)` | `csc_deactivate`, `csc_retire_and_delete` of the thread's own context, `csc_activate (kept)` (`driver_session.cpp:665-668`) | `bracket_mutex` of the kept context |
-| `Auth(t)` | `boot_resume_client` (`boot_cl.c:1782`): the user is the context's, `boot_register_client` (the fold boundary records the password proof CBRD-27445 asks for on the session's own connection, `network_interface_cl.c:4122`), `au_login` checks the password, commit; a failure aborts and unregisters | the thread's own bracket and transaction |
-| `Top(t, c)` | the request loop's condition (`driver_session.cpp:422-427`) and `registry_auto_ready`'s `state.store (idle)` (`adoption.cpp:566`) | the condition reads the thread's own state; the store is one atomic |
+| `Swap(t)` | `csc_deactivate`, `csc_retire_and_delete` of the thread's own context, `csc_activate (kept)` (`driver_session.cpp:737-740`) | `bracket_mutex` of the kept context |
+| `Auth(t)` | `boot_resume_client` (`boot_cl.c:1782`): the user is the context's, `boot_register_client` (the fold boundary records the password proof CBRD-27445 asks for on the session's own connection, `network_interface_cl.c:4208`), `au_login` checks the password, commit; a failure aborts and unregisters | the thread's own bracket and transaction |
+| `Top(t, c)` | the request loop's condition (`driver_session.cpp:480-485`) and `registry_auto_ready`'s `state.store (idle)` (`adoption.cpp:566`) | the condition reads the thread's own state; the store is one atomic |
 | `Rst(t)` | `reset_requested.load ()`, the compare-and-swap idle → yielded, `wake_session` (`adoption.cpp:567-572`) | a load and a compare-and-swap of the thread's own binding; either order with `CRCas` leaves it yielded |
 | `Wch(t)`, `Wx(t)` | `watch_requested.load () && state.load () == idle` and `watch_requested.exchange (false)` + IDLE_HINT (`adoption.cpp:573-578`) | the reads, then one atomic |
 | `WakeSeen(t)` | `read_buffer`'s poll returns the wake descriptor and the binding is yielded (`cas_network.c:604-610`) | the thread's own descriptor |
@@ -71,10 +71,10 @@ were put to the user and confirmed on 2026-11-17 (ticket #632, Q1–Q7).
 | `Exec(t)` | `cas_process_request` runs the function | the thread's own session |
 | `ClientClose(t)` | `net_read_int_keep_con_auto` returns an error (the peer closed, the socket failed) | — |
 | `Finish(t)` | `registry_auto_finish` (`adoption.cpp:607`): `state.exchange (closing)` (`:614`) | one atomic |
-| `EndSession(t)` | `driver_session.cpp:794-813`: rollback unless yielded, `db_set_keep_session (yielded)`, `ux_end_session` → `session_state_destroy` (`session.c:874`; keep: `active_time`, `csc_kept` at `:907`; else uninit and erase, the context orphaned inside its own bracket); after a failed login `session_rekeep_client_context` (`session.c:3108`) | under the state mutex |
-| `FreeConn(t)` | `css_free_conn` (`driver_session.cpp:844`): `session_state_decrease_ref_count` | an atomic decrement |
-| `Deact(t)` | `csc_deactivate` (`driver_session.cpp:853`): an orphaned context is torn down and deleted | `bracket_mutex` (A4) |
-| `Send(t)` | `registry_session_finished` (`driver_session.cpp:865`, `adoption.cpp:621`): the registry erase, SESSION_END | `registry_mutex`; the slot accounting is B1a's |
+| `EndSession(t)` | `driver_session.cpp:877-896`: rollback unless yielded, `db_set_keep_session (yielded)`, `ux_end_session` → `session_state_destroy` (`session.c:874`; keep: `active_time`, `csc_kept` at `:907`; else uninit and erase, the context orphaned inside its own bracket); after a failed login `session_rekeep_client_context` (`session.c:3108`) | under the state mutex |
+| `FreeConn(t)` | `css_free_conn` (`driver_session.cpp:927`): `session_state_decrease_ref_count` | an atomic decrement |
+| `Deact(t)` | `csc_deactivate` (`driver_session.cpp:936`): an orphaned context is torn down and deleted | `bracket_mutex` (A4) |
+| `Send(t)` | `registry_session_finished` (`driver_session.cpp:948`, `adoption.cpp:621`): the registry erase, SESSION_END | `registry_mutex`; the slot accounting is B1a's |
 | `Timeout(s)` | `time (NULL) - active_time >= session_state_timeout` for a kept session | the environment |
 | `XScan(s)` | `session_remove_expired_sessions` (`session.c:1040`) iterating, `session_check_timeout` (`:1165`); the active connections' session ids are read once per pass | the iterator holds the entry's state mutex |
 | `XRecheck` | the second `session_check_timeout` under the state mutex (`session.c:1113`) | the state mutex, kept until the erase |

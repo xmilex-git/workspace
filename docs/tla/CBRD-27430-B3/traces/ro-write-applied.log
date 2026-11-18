@@ -1,0 +1,68 @@
+TLATRACE seq=0 a=Connect p=0 s=1 t=RW
+TLATRACE seq=1 a=Admit p=0 s=1 h=active d=0 rej=0
+TLATRACE seq=2 a=Register p=0 s=1 ok=1 retry=0 resumed=0 cnt=0 base=0
+TLATRACE seq=3 a=Begin p=0 s=1
+TLATRACE seq=4 a=End1 p=0 s=1 hu=0 base=0
+TLATRACE seq=5 a=End2 p=0 s=1 h=active d=0 r=0 roc=0
+TLATRACE seq=6 a=Begin p=0 s=1
+TLATRACE seq=7 a=Write p=0 s=1 c=exe out=ok
+TLATRACE seq=8 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=9 a=Write p=0 s=1 c=ser out=ok
+TLATRACE seq=10 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=11 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=12 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=13 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=14 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=15 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=16 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=17 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=18 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=19 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=20 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=21 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=22 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=23 a=Write p=0 s=1 c=exe out=ok
+TLATRACE seq=24 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=25 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=26 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=27 a=MBegin p=0 s=1 cnt=1
+TLATRACE seq=28 a=MEnd p=0 s=1 cnt=0
+TLATRACE seq=29 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=30 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=31 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=32 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=33 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=34 a=Write p=0 s=1 c=exe out=ok
+TLATRACE seq=35 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=36 a=Write p=0 s=1 c=exe out=ok
+TLATRACE seq=37 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=38 a=Write p=0 s=1 c=exe out=ok
+TLATRACE seq=39 a=Write p=0 s=1 c=bnd out=ok
+TLATRACE seq=40 a=End1 p=0 s=1 hu=1 base=0
+TLATRACE seq=41 a=End2 p=0 s=1 h=active d=0 r=0 roc=0
+TLATRACE seq=42 a=Connect p=0 s=2 t=RO
+TLATRACE seq=43 a=Admit p=0 s=2 h=active d=0 rej=0
+TLATRACE seq=44 a=Register p=0 s=2 ok=1 retry=0 resumed=0 cnt=1 base=0
+TLATRACE seq=45 a=Begin p=0 s=2
+TLATRACE seq=46 a=End1 p=0 s=2 hu=0 base=0
+TLATRACE seq=47 a=End2 p=0 s=2 h=active d=0 r=0 roc=0
+TLATRACE seq=48 a=Begin p=0 s=2
+TLATRACE seq=49 a=Write p=0 s=2 c=cl out=ok
+TLATRACE seq=50 a=Write p=0 s=2 c=cl out=cl
+TLATRACE seq=51 a=Write p=0 s=2 c=ser out=ok
+TLATRACE seq=52 a=End1 p=0 s=2 hu=1 base=0
+TLATRACE seq=53 a=End2 p=0 s=2 h=active d=0 r=0 roc=0
+TLATRACE seq=54 a=Begin p=0 s=2
+TLATRACE seq=55 a=End1 p=0 s=2 hu=0 base=0
+TLATRACE seq=56 a=End2 p=0 s=2 h=active d=0 r=0 roc=0
+TLATRACE seq=57 a=Leave p=0 s=2 y=0 tr=0
+TLATRACE seq=58 a=Connect p=0 s=2 t=SO
+TLATRACE seq=59 a=Admit p=0 s=2 h=active d=0 rej=1
+TLATRACE seq=60 a=Begin p=0 s=1
+TLATRACE seq=61 a=Write p=0 s=1 c=exe out=ok
+TLATRACE seq=62 a=End1 p=0 s=1 hu=1 base=0
+TLATRACE seq=63 a=End2 p=0 s=1 h=active d=0 r=0 roc=0
+TLATRACE seq=64 a=Begin p=0 s=1
+TLATRACE seq=65 a=End1 p=0 s=1 hu=0 base=0
+TLATRACE seq=66 a=End2 p=0 s=1 h=active d=0 r=0 roc=0
+TLATRACE seq=67 a=Leave p=0 s=1 y=0 tr=0

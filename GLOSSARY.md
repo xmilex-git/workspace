@@ -488,6 +488,22 @@ _Avoid_: yield 요구 플래그(옛 구현의 방식), 폴링
 CAS가 브로커의 공유 메모리에서 읽던 브로커 conf 값(SQL_LOG, LONG_QUERY_TIME, MAX_PREPARED_STMT_COUNT, 로그 경로 등)을 통합 서버의 세션이 자기 것으로 갖고 있는 사본이다. 브로커가 핸드오프마다 공유 메모리를 찍어 실어 보내고, `broker_changer`가 값을 바꾸면 그 브로커의 세션이 있는 모든 서버에 다시 보낸다. 세션은 다음 요청 경계에서 새 사본을 가져간다.
 _Avoid_: `cas_*` 서버 파라미터(옛 구현의 방식 — 서버 파라미터는 ACCESS_CONTROL 3개뿐이다), shm stub, 브로커 공유 메모리(서버는 그것을 읽지 않는다)
 
+**세션의 쓰기 금지 카운터 (session's modification counter)**:
+통합 서버의 세션이 갖는, client 절반의 쓰기 금지 횟수다(`csc_db ()->disable_modifications`). CAS 프로세스의 클라이언트 라이브러리가 `db_Disable_modifications`로 갖던 것과 같다: 읽기 전용 클라이언트 타입(RO·SO 브로커)이나 `read_only`면 세션 부팅 때 1이 되고, builtin 메서드 호출 동안 올랐다 내린다. `db_` 진입점의 `CHECK_MODIFICATION_*`가 이 값만 읽는다. 서버의 `db_Disable_modifications`(standby·`read_only`)와는 다른 값이고, 그쪽은 트랜잭션의 게이트(`tdes->disable_modifications`)로 심겨 폴드 경계와 실행기가 검사한다(ADR 0063).
+_Avoid_: 세션의 read-only 플래그(횟수다 — 메서드 호출이 올리고 내린다), tdes 게이트(서버가 트랜잭션 경계마다 심는 다른 값)
+
+**폴드 경계의 쓰기 검사 (modification check at the fold boundary)**:
+세션의 client 절반이 `CHECK_DB_MODIFICATION` 요청에 해당하는 서버 함수로 들어가기 직전에 트랜잭션의 게이트를 묻는 검사다(`modification_is_refused`). CS에서 wire 디스패치(`net_server_request`)가 하던 일이다. 거절하면 -581을 내고 트랜잭션을 롤백하며 연결에 `reset_on_commit`을 남긴다.
+_Avoid_: 진입점 검사(`CHECK_MODIFICATION_*` — 세션의 쓰기 금지 카운터를 읽는 다른 검사)
+
+**접속 판정 (admission check)**:
+통합 서버가 세션을 세울 때 브로커의 클라이언트 타입과 서버의 HA 상태를 한 번 보고 받을지 정하는 것이다. reset 표(`xtran_should_connection_reset`)가 첫 트랜잭션 경계에서 닫을 조합과, replica가 아닌 서버의 replica-only 브로커를 `CAS_ER_FREE_SERVER`로 거절한다. CAS가 호스트 목록을 돌 때의 엄격한 1차 pass 자리이고, 드라이버는 그 오류에 다음 altHost로 간다(ADR 0063).
+_Avoid_: 접속 제어(ACL — ACCESS_CONTROL의 IP 검사), 능력 검사(CS 클라이언트의 `NET_CAP_*` 비교)
+
+**경계 reset (reset at a transaction boundary)**:
+커밋이나 롤백 때 reset 표가 참이면 그 경계에서 세션의 드라이버 연결을 닫는 것이다. CAS는 드라이버 연결을 둔 채 DB 접속만 다시 맺었다. 드라이버가 다시 접속하면 접속 판정이 맞는 호스트로 보낸다.
+_Avoid_: 세션 양보(슬롯 때문에 세션을 보관하는 것 — 경계 reset은 세션을 끝낸다), 연결 오류
+
 **설정 seq (config seq)**:
 브로커가 공유 메모리를 찍을 때마다 1씩 올리는 번호로, 세션 설정 사본마다 붙는다. 브로커가 재시작해도 이전보다 큰 값에서 시작한다. 서버는 브로커별로 가장 큰 seq의 사본을 기억하고, 세션의 사본을 더 큰 seq로만 바꾼다. 브로커가 응답을 포기한 변경이 뒤늦게 처리되어도 나중 값을 덮지 못하게 하는 장치다.
 _Avoid_: 설정 버전(conf 값 자체의 버전이 아니다 — 같은 값을 두 번 찍으면 seq는 둘이다), 세대(채널 generation과 혼동)
