@@ -3,13 +3,17 @@
 The user-facing workflow is [SKILL.md](SKILL.md); the runs behind its rules are in [PITFALLS.md](PITFALLS.md).
 All commands below run from the standalone tooling repository, not an engine checkout.
 
-## Image update (2026-09-11)
+## Image update (2026-11-18)
 
 The default image is `docker.io/cubridci/cubridci:test_rl8.10`, pulled and run by
-full digest from `scripts/ctp_run.sh`. The September update uses
-`sha256:79a344fc7664af48cd13b4b01bc54c059dd92ac2be812f2e4d9802234e06fb7e`.
-The image's entrypoint matches upstream commit
-`452b7be0cee601b9efd59a1d9c9faf89886d255f`.
+full digest from `scripts/ctp_run.sh`: since 2026-11-18
+`sha256:16034cb1f0965880f62b8b95477c7a6bf6561e28701cfb9c01dbef7131830608` (built 2026-11-12),
+whose `/entrypoint.sh` is byte-identical to upstream test_rl8.10
+`268cda005373a44583e45717e050244e779db4da` (`docker/ci/docker-entrypoint.sh`). Over the
+September image (`sha256:79a344fc…`, upstream `452b7be0c`) it adds the split-CI verbs
+`cases`/`keep`/`results`/`evidence` (#127, #134, unused here), refuses a testcases
+checkout that does not land on a requested 40-hex sha, and pins the JDK (#141).
+The local additions were re-applied unchanged (same added lines).
 
 - [#120](https://github.com/CUBRID/cubridci/pull/120): prepare the node account's DB directory and ownership.
 - [#121](https://github.com/CUBRID/cubridci/pull/121): disable shell/rqg testcase updates and print start/end provenance.

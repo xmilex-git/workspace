@@ -50,6 +50,8 @@ CTP 의 teardown 은 `pkill cub` 과 `ps -u $USER` 기반 `kill -9` 를 쓴다(`
 `sha256:79a344fc7664af48cd13b4b01bc54c059dd92ac2be812f2e4d9802234e06fb7e`이다.
 단순 태그를 실행하고 digest 불일치를 경고만 하던 방식 대신 pull/run에 digest 참조를 사용한다.
 다른 이미지는 명시적 `--image`로 선택한다.
+(2026-11-18) digest를 `sha256:16034cb1f0965880f62b8b95477c7a6bf6561e28701cfb9c01dbef7131830608`
+(상류 test_rl8.10 `268cda005373a44583e45717e050244e779db4da`)로 올렸다. 로컬 추가분은 그대로 다시 얹었다.
 
 **D5 — shell/HA 사본의 상속된 전체-locale 설정만 초기화한다.** 이번 이미지 검증에서 SQL은
 통과했지만 shell/HA가 locale 초기화에 실패했다. 동일 바이너리로 확인한 원인은 CTP가 매

@@ -342,6 +342,7 @@ with two rules that keep the disk from filling:
    `ctp-conf/`, the install's `cubrid-log/`), `reports/`, `cores/` (a symlink to the HDD store). The copies are
    reproducible from `--build` / `--testcases`. `--keep-copies` (or
    `CTP_KEEP_COPIES=1`) keeps them for a run whose shard you need to debug in place.
+   - A run that ends early also prunes its copies: Ctrl-C, SIGTERM and `die` prune in the runner's EXIT trap (timing mark `interrupted_pruned`), and a runner that was SIGKILLed is swept by the next run, which removes its leftover `ctprun_<run id>_*` containers too (`runner.pid` holds the pid and run id) and leaves alone a run that reached its prune step (`--keep-copies`); a sql/medium shard carries only its own cases' answer files. (P21)
 2. **Analyze, then delete.** `just ctp-runs` lists runs with size; `just ctp-prune
    [KEEP]` deletes all but the newest KEEP (default 3), never a run whose container
    is still up. Read `console.log` / `cores/` first — a deleted run is gone. Remove
@@ -371,7 +372,7 @@ Every run writes, under its `--out` dir:
 - `failed.list` — failing cases in the exact shape `--only` accepts.
 - `timing.txt` / `timing.tsv` — where the wall clock went.
   - Host marks, in seconds from start: `planned`, `workdirs_built`, `launched`,
-    `shards_done`, `pruned`.
+    `shards_done`, `pruned` (`interrupted_pruned` for a run that ended early).
   - Per shard, from `shard_N/console.ts.log` (`podman logs --timestamps`): when each CTP
     stage started (CTP start, locale, createdb, SP load, server start), `setup` (container
     up → first case) and `tc` (first → last case).

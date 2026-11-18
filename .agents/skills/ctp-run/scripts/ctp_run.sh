@@ -45,7 +45,7 @@ C_TCREPO=""       # testcases repo mount point inside the container
 # not built here. Pinned because the tag moves: an upgrade must be a
 # deliberate edit of this line, never a silent `podman pull`.
 readonly DEFAULT_IMAGE="docker.io/cubridci/cubridci:test_rl8.10"
-readonly DEFAULT_IMAGE_DIGEST="sha256:79a344fc7664af48cd13b4b01bc54c059dd92ac2be812f2e4d9802234e06fb7e"
+readonly DEFAULT_IMAGE_DIGEST="sha256:16034cb1f0965880f62b8b95477c7a6bf6561e28701cfb9c01dbef7131830608"
 
 # One id per invocation: every container / network of this run carries it, so
 # concurrent runs (different sessions, different suites) never share a name and
@@ -1529,6 +1529,27 @@ strip_prebuilt_locale() {
   info "locale: removed the prebuilt locale lib and the early-exit make_locale.sh guard from the $ARG_SUITE install copy."
 }
 
+# The answer files (scenario-relative) of shard $1's assigned .sql cases. CQT's rule
+# (TestUtil.getAnswerDir/getFileName): the case dir cut at its last "cases", plus
+# "answers" (or "answers32"); the file is <stem>.answer[_<mode>], stem = the case
+# name up to its first dot. So every answers*/<stem>.* of a case goes along.
+shard_answer_files() {
+  ( cd "$SCN" && find . -type f \( -path '*/answers/*' -o -path '*/answers32/*' \) | sed 's#^\./##' ) \
+    | awk 'NR == FNR {
+             n = split($0, p, "/"); stem = p[n]; sub(/\..*/, "", stem)
+             d = substr($0, 1, length($0) - length(p[n]) - 1)
+             pos = 0; s = d
+             while ((k = index(s, "cases")) > 0) { pos += k; s = substr(s, k + 1) }
+             if (pos == 0) { want[d "/" stem] = 1; next }
+             base = substr(d, 1, pos - 1)
+             want[base "answers/" stem] = 1; want[base "answers32/" stem] = 1
+             next
+           }
+           { n = split($0, p, "/"); stem = p[n]; sub(/\..*/, "", stem)
+             if ((substr($0, 1, length($0) - length(p[n]) - 1) "/" stem) in want) print }' \
+         "$WORK/shard_${1}.sql.txt" -
+}
+
 build_shard_workdir() {
   local i="$1" d="$OUT/shard_${i}"
   mkdir -p "$d"
@@ -1596,9 +1617,16 @@ build_shard_workdir() {
     [ -d "$SCN/config" ] && rsync -a "$SCN/config" "$scn_dst/" || :
     find "$SCN" -maxdepth 1 -type f -exec cp -f {} "$scn_dst/" \; 2>/dev/null || :
   elif command -v rsync >/dev/null 2>&1; then
-    rsync -a --delete --exclude='*.sql' --exclude='*.result' --exclude='*.log' "$SCN/" "$scn_dst/"
+    # Answer dirs are ~60% of the sql tree and a shard runs 1/16 of the cases, so
+    # pass A leaves them out and pass B ships only this shard's answers. The
+    # compatibility patch files (38M) are read only by CTP's run_compat_*.sh.
+    rsync -a --delete --exclude='*.sql' --exclude='*.result' --exclude='*.log' \
+      --exclude='answers/' --exclude='answers32/' \
+      --exclude='/config/daily_regression_test_exclude_list_compatibility/' "$SCN/" "$scn_dst/"
+    shard_answer_files "$i" > "$WORK/shard_${i}.answers.txt"
     # (a file list, so recursion is moot here — unlike the dir list above.)
-    rsync -a --files-from="$WORK/shard_${i}.sql.txt" "$SCN/" "$scn_dst/"
+    cat "$WORK/shard_${i}.sql.txt" "$WORK/shard_${i}.answers.txt" \
+      | rsync -a --files-from=- "$SCN/" "$scn_dst/"
   else
     cp -a "$SCN/." "$scn_dst/"
     find "$scn_dst" -type f \( -name '*.result' -o -name '*.log' \) -delete
@@ -2386,25 +2414,73 @@ OUT=""
 # that needs a shard's copy for debugging.
 prune_shard_copies() {
   [ "$ARG_KEEP_COPIES" -eq 0 ] || { info "--keep-copies set: shard working copies left in place."; return 0; }
-  local i d before after sub
+  local i before after
   before="$(du -sh "$OUT" 2>/dev/null | cut -f1)"
   for (( i=0; i<NSHARDS; i++ )); do
-    d="$OUT/shard_${i}"
-    [ -d "$d" ] || continue
-    mkdir -p "$d/out"
-    [ -d "$d/CTP/conf" ]   && rm -rf "$d/out/ctp-conf"   && cp -a "$d/CTP/conf"   "$d/out/ctp-conf"   2>/dev/null || :
-    [ -d "$d/CUBRID/log" ] && rm -rf "$d/out/cubrid-log" && cp -a "$d/CUBRID/log" "$d/out/cubrid-log" 2>/dev/null || :
-    for sub in CUBRID CUBRID.slave CTP CTP.slave testcases CUBRID_DB CUBRID_DB.slave; do
-      rm -rf "$d/$sub" 2>/dev/null || :
-    done
-    # The volatile overlay's workdir keeps a mode-000 work/ owned by the
-    # container's root; only the rootless user namespace can remove it.
-    if [ -e "$d/volatile" ]; then
-      rm -rf "$d/volatile" 2>/dev/null || podman unshare rm -rf "$d/volatile" 2>/dev/null || :
-    fi
+    [ -d "$OUT/shard_${i}" ] && prune_shard_dir "$OUT/shard_${i}"
   done
   after="$(du -sh "$OUT" 2>/dev/null | cut -f1)"
   info "pruned shard working copies: $OUT $before -> $after (evidence kept: console.log, out/, reports/, cores/)."
+}
+
+prune_shard_dir() {
+  local d="$1" sub
+  mkdir -p "$d/out"
+  [ -d "$d/CTP/conf" ]   && rm -rf "$d/out/ctp-conf"   && cp -a "$d/CTP/conf"   "$d/out/ctp-conf"   2>/dev/null || :
+  [ -d "$d/CUBRID/log" ] && rm -rf "$d/out/cubrid-log" && cp -a "$d/CUBRID/log" "$d/out/cubrid-log" 2>/dev/null || :
+  for sub in CUBRID CUBRID.slave CTP CTP.slave testcases CUBRID_DB CUBRID_DB.slave; do
+    rm -rf "$d/$sub" 2>/dev/null || :
+  done
+  # The volatile overlay's workdir keeps a mode-000 work/ owned by the
+  # container's root; only the rootless user namespace can remove it.
+  if [ -e "$d/volatile" ]; then
+    rm -rf "$d/volatile" 2>/dev/null || podman unshare rm -rf "$d/volatile" 2>/dev/null || :
+  fi
+}
+
+# A run whose runner died before prune_shard_copies (SIGKILL, host reboot, or a
+# runner older than the interrupt cleanup) left ~3G of DB volumes per shard
+# behind: three such sql runs held 121G on 2026-11-16. Each new run removes the
+# working copies of every dead sibling run, keeping its evidence like a normal
+# prune, and removes its leftover containers; a run that reached its prune step
+# (so one run with --keep-copies) is left alone. Dead = runner.pid names no live
+# ctp_run.sh; a run without runner.pid (older runner) counts as dead once no
+# container of it is running and its timing.tsv is 12h old.
+sweep_dead_runs() {
+  local root d n pid rid swept=0 names running
+  root="$(dirname "$OUT")"
+  names="$(podman ps -a --format '{{.Names}}' 2>/dev/null || :)"
+  running="$(podman ps --format '{{.Names}}' 2>/dev/null || :)"
+  for d in "$root"/*-*Z-*/; do
+    d="${d%/}"; n="$(basename "$d")"
+    [ "$d" != "$OUT" ] || continue
+    compgen -G "$d/shard_*/CUBRID" >/dev/null || compgen -G "$d/shard_*/testcases" >/dev/null \
+      || compgen -G "$d/shard_*/volatile" >/dev/null || continue
+    # A run that reached its prune step kept its copies on purpose (--keep-copies).
+    grep -qE '^host'$'\t''(interrupted_)?pruned'$'\t' "$d/timing.tsv" 2>/dev/null && continue
+    if [ -f "$d/runner.pid" ]; then
+      read -r pid rid < "$d/runner.pid" || continue
+      if kill -0 "$pid" 2>/dev/null && tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q ctp_run.sh; then
+        continue
+      fi
+    else
+      rid="${n#*-}"
+      printf '%s\n' "$running" | grep -qF "ctprun_${rid}_" && continue
+      [ -n "$(find "$d/timing.tsv" -mmin +720 2>/dev/null)" ] || continue
+    fi
+    # Its runner is gone, so its containers (named by its run id) are orphans.
+    printf '%s\n' "$names" | grep -F "ctprun_${rid}_" | xargs -r podman rm -f >/dev/null 2>&1 || :
+    local s
+    for s in "$d"/shard_*; do
+      [ -d "$s" ] || continue
+      mkdir -p "$s/cores"
+      find "$s/CUBRID" "$s/CUBRID_DB" "$s/CTP" "$s/volatile" -type f -name 'core.*' -exec mv -t "$s/cores/" {} + 2>/dev/null || :
+      prune_shard_dir "$s"
+    done
+    info "swept the working copies of dead run $n (evidence kept)."
+    swept=$((swept + 1))
+  done
+  [ "$swept" -eq 0 ] || info "swept $swept dead run(s) under $root."
 }
 
 #####################################################################
@@ -2415,7 +2491,9 @@ prune_shard_copies() {
 # Container phases are the first line matching each CTP stage banner. A suite
 # without one (shell/HA print no "[SQL] TEST STARTED") shows "-" there.
 #####################################################################
-mark_phase() { printf 'host\t%s\t%s\n' "$1" "$(date +%s)" >> "$OUT/timing.tsv"; }
+LAST_PHASE=""
+SHARD_NAMES=()
+mark_phase() { LAST_PHASE="$1"; printf 'host\t%s\t%s\n' "$1" "$(date +%s)" >> "$OUT/timing.tsv"; }
 
 write_timing() {
   local i f t0 p v line up first last n
@@ -2472,6 +2550,23 @@ write_timing() {
 
 cleanup() {
   stop_core_watchdog 2>/dev/null || :
+  # A run that ends between building its shard copies and pruning them (Ctrl-C,
+  # kill, die) removes its containers and copies here; --keep leaves both.
+  case "$LAST_PHASE" in
+    planned|workdirs_built|launched|shards_done)
+      if [ "$ARG_KEEP" -eq 0 ]; then
+        warn "run ended in phase '$LAST_PHASE': removing its containers and pruning its shard copies."
+        local i
+        for (( i=0; i<${#SHARD_NAMES[@]}; i++ )); do
+          podman rm -f "${SHARD_NAMES[i]}" >/dev/null 2>&1 || :
+          [ -z "${HA_SLAVE_NAMES[i]:-}" ] || podman rm -f "${HA_SLAVE_NAMES[i]}" >/dev/null 2>&1 || :
+        done
+        # collect_shards saves results and cores, but needs the shards launched.
+        case "$LAST_PHASE" in launched|shards_done) collect_shards >/dev/null 2>&1 || : ;; esac
+        prune_shard_copies || :
+        mark_phase interrupted_pruned || :
+      fi ;;
+  esac
   [ -n "${WORK:-}" ] && rm -rf "$WORK" 2>/dev/null || :
 }
 
@@ -2510,8 +2605,10 @@ main() {
   OUT="$ARG_OUT"
   mkdir -p "$OUT"
   OUT="$(cd "$OUT" && pwd)"
+  printf '%s %s\n' "$$" "$RUN_ID" > "$OUT/runner.pid"
   WORK="$(mktemp -d "${OUT}/.work.XXXXXX")"
   trap cleanup EXIT
+  trap 'exit 130' INT; trap 'exit 143' TERM; trap 'exit 129' HUP
   mark_phase start
 
   # Which testcases ref, materialized as a worktree we own (host checkout untouched).
@@ -2550,6 +2647,7 @@ main() {
   fi
 
   mark_phase planned
+  sweep_dead_runs || :
   setup_core_capture
   resolve_locale
   declare -ga SHARD_NAMES SHARD_RC

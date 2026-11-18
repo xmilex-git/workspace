@@ -121,6 +121,12 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-09-23 → 2026-10-17, four user reminders): "코어 분석된건 지우면서 진행좀" (one crash-looping shard: 170 cores, 393 G; the dpin store: 539 G of diagnosed cores); "CTP 결과도 분석끝났으면 좀 지우고!!" (≈100 analyzed run dirs, 400 G of NVMe); "core 랑 CTP 결과 분석바로바로 해서 정리/제거"; "코어 지워가면서 작업중이지? 디스크 얼마나 사용중이야" (432 smoke DB dirs, 89 G; two run dirs unpruned because 32 exited `ctprun_*` containers were still there; 65 G of cores from builds whose binaries were gone). Cores are sparse: `du`, not `stat`, gives the real size. A volatile workdir needs `podman unshare rm -rf`. Answer a "how much disk" question with a per-location `du` table.
 - Source: memory:delete-analyzed-cores
 
+### P21 — an interrupted run must not keep its copies
+- Rule: A run that ends early also prunes its copies: Ctrl-C, SIGTERM and `die` prune in the runner's EXIT trap (timing mark `interrupted_pruned`), and a runner that was SIGKILLed is swept by the next run, which removes its leftover `ctprun_<run id>_*` containers too (`runner.pid` holds the pid and run id) and leaves alone a run that reached its prune step (`--keep-copies`); a sql/medium shard carries only its own cases' answer files.
+- Applies at: Output → Storage
+- Case (2026-11-18): /home held five dead runs (three 16-shard sql runs of 39-42 G, two medium) that stopped at `launched` and never reached the end-of-run prune: shard DB volumes (≈3.3 G each, the volatile overlay's upper) and full copies of the sql tree (232 M per shard, 17,832 answer files for 1,113 assigned cases). The install copies were not the cost: `cp --reflink` left 47 MiB per shard unshared. The user: "ctp한번당 잡아먹는 디스크가 너무많아서". After the fix a 1,425-case shard holds 17 M of testcases; SIGTERM pruned 1.7 G → 44 M with 0 containers left; a SIGKILLed run was swept 3.7 G → 14 M by the next run, and a `CTP_KEEP_COPIES=1` run kept its copies through the next run.
+- Source: session 2026-11-18
+
 ## Small runs
 
 ### P17 — the single-case fast path
