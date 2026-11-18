@@ -101,7 +101,7 @@ Rows == {"r1", "r2", "r3", "r5", "r6", "r7", "r8"}
 Leaves == {"l1", "l2", "l3"}
 Quarters == {"q1", "q2", "q3", "q4"}
 Pages == {"p1", "p2", "p3", "p4", "p5", "p9"}
-StoreIds == {"tbl", "stg", "h2", "c2", "c3", "c4"}
+StoreIds == {"tbl", "stg", "h1", "h2", "c2", "c3", "c4"}
 NoLeaf == "no_leaf"
 NoPage == "no_page"
 
@@ -119,9 +119,12 @@ Vis(s) == IF s = 2 THEN {"r1", "r2", "r3", "r5", "r6", "r7"} ELSE {"r1", "r2", "
 \* The rows the scan must return: those of the statement's snapshot.
 Expected == Vis(1)
 
-\* The quarters of the partition a full table keeps, and the temp records a mark of quarter q goes to otherwise.
-Mem == IF TwoLevel THEN {"q1", "q2"} ELSE {"q1"}
-ChainFor(q) == IF TwoLevel THEN "h2" ELSE IF q = "q2" THEN "c2" ELSE IF q = "q3" THEN "c3" ELSE "c4"
+\* The quarter a full table keeps: the first part of the first partition, which fits a table whatever the number
+\* of levels.  A mark of any other quarter goes to the temp records of its partition.
+Mem == {"q1"}
+ChainFor(q) ==
+  IF TwoLevel THEN (IF q \in {"q1", "q2"} THEN "h1" ELSE "h2")
+  ELSE IF q = "q2" THEN "c2" ELSE IF q = "q3" THEN "c3" ELSE "c4"
 \* The partitions the heap step starts from: one quarter each, or one half each when the table needs two levels.
 Units == IF TwoLevel THEN {{"q1", "q2"}, {"q3", "q4"}} ELSE {{"q1"}, {"q2"}, {"q3"}, {"q4"}}
 

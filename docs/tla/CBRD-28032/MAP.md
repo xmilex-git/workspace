@@ -4,7 +4,7 @@ Spec directory of the bitmap heap scan's second design round (2026-11-18). It st
 of the implementation in `docs/tla/CBRD-28005/` (the code at CUBRID `a29e041a4`, the port of that implementation
 onto develop `406d2d87a`); the decisions below replace parts of it and are written into the spec as they settle.
 
-trace-exempt: the design of this round has no implementation yet; `BitmapScan` as copied here was trace-validated in `docs/tla/CBRD-28005/` (section "Trace validation (`BitmapScan`, ...)") against the code it models.
+trace-exempt: the implementation (CUBRID `fa5af21dd`, branch `CBRD-28032`) has no instrumented build yet; its runs are checked against this spec by result comparison only (section "Runtime checks of the implementation"), and trace validation is an open item of the PR. `BitmapScan`, the model this one starts from, was trace-validated in `docs/tla/CBRD-28005/`.
 
 ## Design tree (grilling ledger)
 
@@ -42,6 +42,9 @@ trace-exempt: the design of this round has no implementation yet; `BitmapScan` a
 | E30 | The partition count is fixed when the scan starts, from the heap's page count taken from the sector list: pages / entries a table holds, rounded up to a power of two, at most 256; a table too large for that gets a second level (the heap worker divides its partition 256 ways once more). A worker keeps every page in its table until the table is full for the first time, then switches once: the table holds the lowest partition only and the rest are records. No doubling, no shared count, no record written under a smaller count. Measured reason (prototype `.git_ignored_dir/scratch/cbrd28032/proto/bmhash.cpp`, lineitem shape 729,600 pages x 82 rows, 4 workers, memory only, no page buffer): with doubling 60-80% (1%) and 41-45% (10%) of the 16-byte records were written under a smaller count and had to be divided again, and at 1% every one of the 64 partitions overflowed the heap worker's table (295,517 records written again); with the count set to 256 from the first overflow no record was written again. Structure cost in `instructions:u` per row (index step + merge + sort): 568 at 1%, 253 at 10%, against 84 and 39 for one shared atomic bitmap. Supersedes E23, E24 (round 13 Q39). | settled 2026-11-18 (the user) | `Switch`, `Units`, `TwoLevel`; mutants `evict-lost`, `no-redivide` |
 | E31 | A record of E27 is first gathered in the worker's memory, 4,096 records (64 KB, the OID buffer's default size) at a time; a full batch is distributed by partition in one counting pass and appended to that partition's chain of pages in the worker's temp file (one file a worker, each page linked to the next, about 1,020 records a 16K page). The worker writes its last batch before it leaves the index step. Measured on perf-node0 (runs `20261118-202041-248` records in memory, `20261118-203134-248` sorted batch, `20261118-212647-248` counting pass, release `558d04423bf5` / `5e1837c88d28` / `a1547c0c8747`): 10% of lineitem SF10 hot with a 12G buffer 1.57-1.59 s / 1.99-2.01 s / 1.61-1.63 s, so the temp pages cost 0.04 s and the sort had cost 0.4 s. | settled 2026-11-18 (the user: "temp로 보내는거 만들고 성능테스트서버 실험해") | store `"stg"`, action `Flush`, guard of `IdxFinish`; mutant `no-flush` |
 | E30a | Correction of E30's count: a partition is a run of whole sectors, so the count is the smallest power of two for which (sectors / count, rounded up) x 64 pages fits a table, not pages / entries (a count from pages alone overflowed the table on a small heap: "Internal system failure" with a 100-entry table). | found 2026-11-18 on the prototype | `Units` are whole quarters; nothing else changes |
+| E32 | The optimizer's choice (E3, E29) is made once, after the plan is chosen and after the parallelism of its driving index scan is decided (`qo_plan_decide_bitmap_heap_scan` from `qo_to_xasl`): only the heap parts are compared, since the index part costs the same both ways. Lookup in key order: the pages its rows touch (Mackert and Lohman), each a random read, and `cost_heap_fetch_per_oid` a row. Bitmap: the distinct pages at `random - (random - seq) * sqrt (P / T)`, and the CPU prices of E28 measured on release `d46a0d8e0b79` as instructions of the server against the 1,328 a row of a parallel sequential scan takes (TPC-H SF10 lineitem by `l_partkey`, 12,038 / 600,334 / 5,996,296 rows on 11,936 / 407,968 / 716,271 pages, hot): mark 0.24, record 0.12, page 1.39, row lookup on the held page 1.92 (lookup in key order measured 2.72 to 2.82 a row). Not chosen: a scan left serial, a covering scan, index skip scan, loose scan, multi range optimization, a scan with no range term, a plan that skips ORDER BY or GROUP BY by the key order (E9), a key limit. The plan's own cost stays the index scan's: the choice does not move the join order. The decision travels as a spec flag to the access spec (`ACCESS_SPEC_FLAG_BITMAP_HEAP_SCAN`); the plan prints `(bitmap heap scan)` on the index line. Parameters `bitmap_heap_scan` and `index_scan_oid_bitmap_size` are gone (E1). | the removal of the two parameters and the choice by the optimizer: settled 2026-11-19 (the user: "파라미터 2개 삭제, 옵티마이저 선택"). Open, to be put to the user: a serial scan is not chosen (the CBRD-28032 body of 2026-11-11 said a query without workers runs both steps in one thread; no such path exists), no SQL hint, the plan's cost unchanged | not modeled (plan-time rule) |
+| E33 | Implementation forms of E12, E25, E30. A table takes the memory of an index scan's key buffer (`index_scan_key_buffer_pages`, 20 pages: 3,528 entries of 88 bytes and 8,192 buckets with 16K pages); a worker has two, one for each step. When its index step ends a worker groups its table's entries by partition once, so that a heap worker reads those of its partition only (a scan of every table a partition cost 5,408 against 7,572 instructions a row on a 12,038-row range). After the switch a table keeps the first partition's first part only, which fits it whatever the number of levels. The partition count is the smallest power of two for which a part fits a table, raised to four a worker while sectors remain, so that the heap step of a small heap is shared too (a 575-page heap read by one worker took 247 ms, by four 77 ms on optdebug). Second level: the heap worker that takes a partition wider than a table writes every part but the first to chains of its own temp file and reads them one after another itself; the number of parts is not bounded. The over-width list is a list file with one OID column a worker; the worker that takes them appends the others to the first, sorts it distinct (`qfile_sort_list`) and scans it; every worker closes its own list and its own scan before it ends, on any path. | settled 2026-11-19 | `Mem` is one quarter, records of the first partition have a chain of their own (`h1`); `Divide` and `TakeRedo` by the same worker is one of the runs the model allows |
+
 
 ## Claim and sources
 
@@ -54,23 +57,25 @@ trace-exempt: the design of this round has no implementation yet; `BitmapScan` a
 
 ## Refinement map
 
-The code is the prototype in the CBRD-28032 worktree (uncommitted, behind the experiment switch `BM_HASH`); the second level of partitions (`Divide`, `TakeRedo`) and the list file of E25 (the lists are vectors there) are not implemented in it.
+The code is CUBRID `fa5af21dd` (branch `CBRD-28032`), `src/query/parallel/px_scan/`.
 
 | Model | Code | One step because |
 |---|---|---|
-| `TakeLeaf`, `EndLeaf`, `fheld`, `lastDisp` | `px_scan_index_leaf_page_dispatcher.cpp` (`m_frontier`, the hand-out under `m_leaf_mutex`) | the next leaf is fixed under the dispatcher's mutex while the frontier's worker still holds its latch |
+| `TakeLeaf`, `EndLeaf`, `fheld`, `lastDisp` | `index/px_scan_index_leaf_page_dispatcher.cpp` (`m_frontier`, the hand-out under `m_leaf_mutex`) | the next leaf is fixed under the dispatcher's mutex while the frontier's worker still holds its latch |
 | `MergeLR` | another transaction's `btree_merge_node` under both leaves' write latches | a merge holds both latches for the whole move |
-| `MarkRow` | `leaf_slot_walker::process_oid` -> `input_handler_index::bh_mark` | the worker's own table, record batch and list: no other thread reads them before the barrier |
-| `Switch` | `bh_mark`, the branch where `bh_table::get` returns no entry for the first time | same: the worker's own table |
-| `Flush` | `input_handler_index::bh_flush` (a full batch in `bh_stage`; the last one from `task` before `bitmap_leave_index_phase`) | the worker's own temp file; pages are fixed and let go inside the call |
-| `IdxFinish`, `Barrier` | `bitmap_leave_index_phase`, `bitmap_wait_index_phase` | the count of workers still in the index step, under the handler's mutex |
-| `TakeUnit` | `bh_take_partition` (atomic counter) then `bh_load_partition` | the counter hands a partition to one worker; after the barrier nobody writes the tables or the temp pages |
-| `TakeOver` | `bh_take_over` (atomic flag), sort and unique of the lists | one worker gets the flag |
-| `FixPage`, `SkipFreedPage` | `leaf_slot_walker::fix_bitmap_page` (`OLD_PAGE_MAYBE_DEALLOCATED`) | one page fix |
-| `LookupRow` | `slot_iterator_index::next_bitmap_row` -> `lookup_heap_row` (`heap_get_visible_version`) | the page stays fixed by this worker |
-| `ReleasePage`, `EndUnit` | `release_bitmap_page`, the end of the partition's loop in `task::bitmap_heap_phase` | the worker's own fix |
+| `MarkRow` | `leaf_slot_walker::process_oid` -> `input_handler_index::bitmap_mark` | the worker's own `bitmap_worker` (table, batch, list): no other thread reads it before the barrier |
+| `Switch` | `bitmap_mark`, the branch where `bitmap_table::get` returns no entry for the first time | same: the worker's own table |
+| `Flush` | `input_handler_index::bitmap_write` (a full batch in `bitmap_add`; the last one in `bitmap_end_marks`) | the worker's own temp file; pages are fixed and let go inside the call |
+| `IdxFinish`, `Barrier` | `bitmap_end_marks`, `bitmap_leave_index_step`, `bitmap_wait_index_step` | the count of workers still in the index step, under `m_bm_mutex` |
+| `TakeUnit` | `bitmap_take_partition` (atomic counter) then `bitmap_load (part, 0)` | the counter hands a partition to one worker; after the barrier nobody writes the tables or the temp pages |
+| `Divide` | `bitmap_load (part, 0)` with `m_bm_nsub > 1`: the other parts go to `bitmap_worker::sub` | the worker's own temp file |
+| `TakeRedo` | `bitmap_load (part, sub)` for `sub > 0`, by the worker that divided | the worker's own temp file |
+| `TakeOver` | `bitmap_take_over` (atomic flag): `qfile_append_list`, `qfile_sort_list` distinct, `bitmap_next_over` | one worker gets the flag; the lists were closed by their workers before the barrier |
+| `FixPage`, `SkipFreedPage` | `slot_iterator_index::set_bitmap_page` -> `leaf_slot_walker::fix_bitmap_page` (`OLD_PAGE_MAYBE_DEALLOCATED`) | one page fix |
+| `LookupRow` | `slot_iterator_index::next_bitmap_row` -> `process_bitmap_row` -> `lookup_heap_row` (`heap_get_visible_version`) | the page stays fixed by this worker |
+| `ReleasePage`, `EndUnit` | `release_bitmap_page`, the end of the part's loop in `task::bitmap_heap_step` | the worker's own fix |
 | `Vacuum`, `FreePage` | vacuum's heap cleanup and `file_dealloc` of an emptied heap page | the page's write latch |
-| `Abort` | the interrupt code set by a worker, read by every loop of `task`; the temp files freed in the handler's destructor | the interrupt is one atomic store |
+| `Abort` | the interrupt code set by a worker, read by every loop of `task`; `bitmap_close_worker` from `slot_iterator_index::finalize` on the worker, the temp files and lists freed in `~input_handler_index` | the interrupt is one atomic store |
 
 ## Fault model
 
@@ -140,18 +145,31 @@ Fairness: weak fairness on each worker's steps (`Fairness`); `Switch` and the en
 
 | Lines | Action | Why TLC does not evaluate them in a pass cfg |
 |---|---|---|
-| `BitmapHash.tla:350`, `BitmapHash.tla:351`, `BitmapHash.tla:352`, `BitmapHash.tla:353`, `BitmapHash.tla:354`, `BitmapHash.tla:355`, `BitmapHash.tla:356`, `BitmapHash.tla:357`, `BitmapHash.tla:358` | `TakeRedoU` | one level of partitions in this cfg: nothing is handed on; `BitmapHash.scale-twolevel` (TwoLevel = TRUE) evaluates it |
-| `BitmapHash.tla:365`, `BitmapHash.tla:366`, `BitmapHash.tla:367`, `BitmapHash.tla:368`, `BitmapHash.tla:369`, `BitmapHash.tla:370`, `BitmapHash.tla:371`, `BitmapHash.tla:372`, `BitmapHash.tla:373`, `BitmapHash.tla:374`, `BitmapHash.tla:375` | `Divide` | one level of partitions in this cfg: no partition is divided again; `BitmapHash.scale-twolevel` evaluates it |
-| `BitmapHash.tla:469`, `BitmapHash.tla:470`, `BitmapHash.tla:471`, `BitmapHash.tla:472` | `RebuildSnap` | `Rebuild` is FALSE in every pass cfg: the snapshot is rebuilt only in the environment C8 excludes; `BitmapHash.witness-snapshot-rebuilt` evaluates it |
-| `BitmapHash.tla:475`, `BitmapHash.tla:476`, `BitmapHash.tla:477`, `BitmapHash.tla:478`, `BitmapHash.tla:479`, `BitmapHash.tla:480`, `BitmapHash.tla:481`, `BitmapHash.tla:482`, `BitmapHash.tla:483`, `BitmapHash.tla:484`, `BitmapHash.tla:485`, `BitmapHash.tla:486`, `BitmapHash.tla:487`, `BitmapHash.tla:488`, `BitmapHash.tla:489`, `BitmapHash.tla:490`, `BitmapHash.tla:491` | `Abort` | `MaxErrors` is 0 in `BitmapHash.live` and `BitmapHash.scale-3h`; the main cfg (MaxErrors = 1) evaluates it |
+| `BitmapHash.tla:353`, `BitmapHash.tla:354`, `BitmapHash.tla:355`, `BitmapHash.tla:356`, `BitmapHash.tla:357`, `BitmapHash.tla:358`, `BitmapHash.tla:359`, `BitmapHash.tla:360`, `BitmapHash.tla:361` | `TakeRedoU` | one level of partitions in this cfg: nothing is handed on; `BitmapHash.scale-twolevel` (TwoLevel = TRUE) evaluates it |
+| `BitmapHash.tla:368`, `BitmapHash.tla:369`, `BitmapHash.tla:370`, `BitmapHash.tla:371`, `BitmapHash.tla:372`, `BitmapHash.tla:373`, `BitmapHash.tla:374`, `BitmapHash.tla:375`, `BitmapHash.tla:376`, `BitmapHash.tla:377`, `BitmapHash.tla:378` | `Divide` | one level of partitions in this cfg: no partition is divided again; `BitmapHash.scale-twolevel` evaluates it |
+| `BitmapHash.tla:472`, `BitmapHash.tla:473`, `BitmapHash.tla:474`, `BitmapHash.tla:475` | `RebuildSnap` | `Rebuild` is FALSE in every pass cfg: the snapshot is rebuilt only in the environment C8 excludes; `BitmapHash.witness-snapshot-rebuilt` evaluates it |
+| `BitmapHash.tla:478`, `BitmapHash.tla:479`, `BitmapHash.tla:480`, `BitmapHash.tla:481`, `BitmapHash.tla:482`, `BitmapHash.tla:483`, `BitmapHash.tla:484`, `BitmapHash.tla:485`, `BitmapHash.tla:486`, `BitmapHash.tla:487`, `BitmapHash.tla:488`, `BitmapHash.tla:489`, `BitmapHash.tla:490`, `BitmapHash.tla:491`, `BitmapHash.tla:492`, `BitmapHash.tla:493`, `BitmapHash.tla:494` | `Abort` | `MaxErrors` is 0 in `BitmapHash.live` and `BitmapHash.scale-3h`; the main cfg (MaxErrors = 1) evaluates it |
+| `BitmapHash.tla:125`, `BitmapHash.tla:126`, `BitmapHash.tla:127`, `BitmapHash.tla:128`, `BitmapHash.tla:129` | `ChainFor` | the branch of the other number of levels: `BitmapHash.scale-twolevel` evaluates the two-level one, every other pass cfg the one-level one |
+
+## Runtime checks of the implementation
+
+CUBRID `fa5af21dd`, optdebug `b94c72b3cdba`, smoke DB of 2.7M to 3.2M-row tables (`.git_ignored_dir/scratch/cbrd28032/smoke/`), parallel 4:
+
+| Check | Result |
+|---|---|
+| results against the lookup in key order: plain, filtered, function and prefix indexes, a key filter, a data filter, a table of 656 rows a page (64 thousand OIDs through the lists) | 0 differing lines of 128 result lines |
+| the same with a one-page key buffer (174 entries a table: 256 partitions of 2 parts, every worker switched) | 0 differing lines |
+| both with `use_system_malloc=yes`, `MALLOC_CHECK_=3`, `MALLOC_PERTURB_=165` | 0 differing lines, no abort |
+| SIGINT 0.3, 0.8 and 1.6 s into two scans, then the same scans again | interrupted or finished, same results afterwards, no assert, no core |
+| server `kill -9` during a scan, restart, the same scan | same result; temp volume empty after the restart |
+| temp space after 8 rounds of two scans | 16 cached temp files, 0 used pages |
 
 ## Result
 
-`tools/tla/tla-check docs/tla/CBRD-28032` on 2026-11-19: `RESULT: OK`, 30 cfgs (run dir `.git_ignored_dir/scratch/tla/CBRD-28032-20261119-000508-2959571`).
+`tools/tla/tla-check docs/tla/CBRD-28032` on 2026-11-19 (run dir `.git_ignored_dir/scratch/tla/CBRD-28032-20261119-041607-3157480`): all 30 cfgs passed; the run ended `RESULT: FAILED (1)` on a MAP.md heading lost in an edit, restored afterwards and confirmed by the completeness-only rerun below.
 
-- `BitmapHash`: 5,585,538 distinct states, depth 54; `BitmapHash.scale-twolevel` 8,475,552; `BitmapHash.scale-3h` (three heap workers, no error) 48,015,762 in 3,952 s; `BitmapHash.live` (`Ends`) 737,682.
+- `BitmapHash`: 5,585,538 distinct states, depth 54; `BitmapHash.scale-twolevel` 8,543,250; `BitmapHash.scale-3h` (three heap workers, no error) 48,015,762 in 4,575 s; `BitmapHash.live` (`Ends`) 737,682.
 - 13 mutants rejected as expected, 12 witnesses reached.
-- `BitmapHash.apalache-indinv`: `IndInv` inductive for both values of `TwoLevel` and any `MaxErrors` (47 s).
+- `BitmapHash.apalache-indinv`: `IndInv` inductive for both values of `TwoLevel` and any `MaxErrors` (53 s).
 - TLAPS: not requested.
-- Not covered by this model: the plan choice (E3, E9, E29), the cost prices (E28), a crash (fault table), three index workers, and trace validation (`trace-exempt`): the prototype is experiment code, the implementation ticket records its runs against this spec.
-
+- Not covered by this model: the plan choice (E3, E9, E29, E32), the cost prices (E28), a crash (fault table), three index workers, and trace validation (`trace-exempt`).

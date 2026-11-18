@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0067
 date: 2026-11-10
 issue: CBRD-28005 (조사, `docs/tla/CBRD-28005/`, 모델 `BitmapScan`, claim C6), 구현은 CBRD-28032
 ---
