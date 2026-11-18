@@ -1467,6 +1467,16 @@ _Avoid_: 문장 예산(상한만 두는 안과 혼동), 워커 매니저(연산�
 job이 push될 때 묶음에 단위가 있으면 시작하고, 큐가 비면 단위를 반납하고 끝나는 부질의 워커다. 끝나기 전에 큐를 다시 보고, 반납 직전에 들어온 job이 있으면 단위를 다시 잡는다.
 _Avoid_: 고정 워커(문장 끝까지 단위를 쥐는 안)
 
+### 힙 페이지 단위 가시성 (CBRD-28188, 2026-11-18)
+
+**페이지 판정 (page judgment)**:
+힙 묶음 순회가 페이지에 들어갈 때 한 번 하는 비교로, 그 페이지 HEAP_CHAIN의 max_mvccid가 스냅샷의 lowest_active_mvccid보다 작은지 본다. 통과한 페이지의 MVCCID는 모두 스냅샷 전에 끝난 트랜잭션의 것이라 insert된 레코드는 보이고 delete된 레코드는 안 보인다. 힙 헤더 페이지(slot 0이 HEAP_HDR_STATS)와 MVCC 스냅샷이 아닌 스캔은 판정하지 않는다.
+_Avoid_: all-visible 페이지(지속 표시를 세우는 안과 혼동), page-skip(CBRD-26928 POC의 snapshot_fnc만 빼는 안)
+
+**첫 워드 답 (word answer)**:
+레코드 첫 4바이트(표현 ID와 MVCC 플래그)만 한 번 비교해 헤더를 풀지 않고 정하는 답이다. 판정이 통과한 페이지에서는 delete 플래그와 표현 ID를, 그 밖의 페이지에서는 insert·delete 플래그가 없는지와 표현 ID를 본다. 답하지 못한 레코드는 develop과 같은 헤더 판정으로 간다.
+_Avoid_: fast path(무엇을 건너뛰는지 말하지 않음)
+
 ### 인덱스 범위 스캔의 리프 상한 판정 (CBRD-28141, 2026-11-18)
 
 **리프 상한 판정 (leaf upper-key decision)**:
