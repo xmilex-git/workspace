@@ -1,0 +1,51 @@
+TLATRACE seq=0 a=DStart p=0 d=2 port=1 scan=1
+TLATRACE seq=1 a=DScan p=0 e=2 res=ok
+TLATRACE seq=2 a=DScan p=0 e=1 res=ok
+TLATRACE seq=3 a=DScanEnd p=0
+TLATRACE seq=4 a=DDial p=0 res=live
+TLATRACE seq=5 a=DWait p=0
+TLATRACE seq=6 a=DSendOk p=0 sid=1 t=1
+TLATRACE seq=7 a=Hang p=0 e=2
+TLATRACE seq=8 a=DStart p=0 d=2 port=2 scan=0
+TLATRACE seq=9 a=DDial p=0 res=live
+TLATRACE seq=10 a=DWait p=0
+TLATRACE seq=11 a=Kill p=0 e=2
+TLATRACE seq=12 a=DSendNo p=0
+TLATRACE seq=13 a=DStart p=0 d=1 port=2 scan=1
+TLATRACE seq=14 a=DScan p=0 e=2 res=noans
+TLATRACE seq=15 a=DScan p=0 e=1 res=live
+TLATRACE seq=16 a=DScanEnd p=0
+TLATRACE seq=17 a=DDial p=0 res=live
+TLATRACE seq=18 a=DWait p=0
+TLATRACE seq=19 a=DSendOk p=0 sid=1 t=1
+TLATRACE seq=20 a=SEnd p=0 e=1 t=1
+TLATRACE seq=21 a=Hang p=0 e=2
+TLATRACE seq=22 a=DStart p=0 d=2 port=2 scan=1
+TLATRACE seq=23 a=DScan p=0 e=2 res=ok
+TLATRACE seq=24 a=DScan p=0 e=1 res=live
+TLATRACE seq=25 a=DScanEnd p=0
+TLATRACE seq=26 a=DDial p=0 res=live
+TLATRACE seq=27 a=DWait p=0
+TLATRACE seq=28 a=DSendOk p=0 sid=1 t=2
+TLATRACE seq=29 a=SEnd p=0 e=2 t=2
+TLATRACE seq=30 a=SCrash p=0 e=2
+TLATRACE seq=31 a=RDie p=0 e=2
+TLATRACE seq=32 a=SRestart p=0 e=2
+TLATRACE seq=33 a=DStart p=0 d=2 port=1 scan=1
+TLATRACE seq=34 a=DScan p=0 e=2 res=ok
+TLATRACE seq=35 a=DScan p=0 e=1 res=live
+TLATRACE seq=36 a=DScanEnd p=0
+TLATRACE seq=37 a=DDial p=0 res=live
+TLATRACE seq=38 a=DWait p=0
+TLATRACE seq=39 a=DSendOk p=0 sid=1 t=1
+TLATRACE seq=40 a=SEnd p=0 e=2 t=1
+TLATRACE seq=41 a=DStart p=0 d=2 port=1 scan=0
+TLATRACE seq=42 a=DDial p=0 res=live
+TLATRACE seq=43 a=DWait p=0
+TLATRACE seq=44 a=DSendOk p=0 sid=1 t=2
+TLATRACE seq=45 a=SEnd p=0 e=2 t=2
+TLATRACE seq=46 a=DStart p=0 d=2 port=1 scan=0
+TLATRACE seq=47 a=DDial p=0 res=live
+TLATRACE seq=48 a=DWait p=0
+TLATRACE seq=49 a=DSendOk p=0 sid=1 t=3
+TLATRACE seq=50 a=SEnd p=0 e=2 t=3
