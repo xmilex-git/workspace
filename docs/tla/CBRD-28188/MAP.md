@@ -2,7 +2,7 @@
 
 Spec: `PageVisibility.tla` (state-shaped TLA+), its Apalache check `PageVisibilityInd.tla`, trace
 validation `PageVisibilityTrace.tla` + `PageVisibilityTraceData.tla` (from `traces/`).
-Code: `xmilex-git/cubrid` branch `CBRD-28188` at `aab8ac860` (develop `406d2d87a` + one commit, `src/storage/heap_file.c` +90/-9).
+Code: `xmilex-git/cubrid` branch `CBRD-28188` at `619e3f403` (develop `406d2d87a` + two commits, `src/storage/heap_file.c` +102/-10).
 Ticket: CBRD-28188 (Improve). Origin: CBRD-26928 comment 4778581 (mode D of the PoC on `og12-pagevis` `fb1bccc55`).
 
 ## Claim and sources
@@ -10,9 +10,9 @@ Ticket: CBRD-28188 (Improve). Origin: CBRD-26928 comment 4778581 (mode D of the 
 | Claim | Statement | Kind | Source |
 |---|---|---|---|
 | C1 | Every record `heap_page_collect_visible ()` answers from its first word gets the answer the header walk (`heap_page_row_mvcc_header` + `snapshot_fnc` + repid search) gives it: a row, a skipped record, or the end of the chunk | equivalence | CBRD-28188 *Specification Changes* "질의 결과: 바뀌지 않습니다"; design.md "정확성 근거" |
-| C1a | On a page whose `HEAP_CHAIN.max_mvccid` precedes the snapshot's `lowest_active_mvccid`, an inserted record is visible and a deleted one is not, whatever its ids | equivalence (premise of C1) | CBRD-28188 *Implementation* first paragraph; code comment at `heap_file.c:8545-8550` |
+| C1a | On a page whose `HEAP_CHAIN.max_mvccid` precedes the snapshot's `lowest_active_mvccid`, an inserted record is visible and a deleted one is not, whatever its ids | equivalence (premise of C1) | CBRD-28188 *Implementation* first paragraph; code comment at `heap_file.c:8550-8554` |
 | C1b | A record with no MVCC id is visible to every snapshot | equivalence | `MVCC_IS_HEADER_ALL_VISIBLE` (`mvcc.h:95`), develop's walk skips `snapshot_fnc` for it |
-| C1c | The heap header page (slot 0 = `HEAP_HDR_STATS`) is never judged | safety | design.md "헤더 페이지는 chain이 NULL"; `heap_file.c:8608` |
+| C1c | The heap header page (slot 0 = `HEAP_HDR_STATS`) is never judged | safety | design.md "헤더 페이지는 chain이 NULL"; `heap_file.c:8611`, `:8621-8622` |
 | C2 | A record the first word can answer for is not decoded (the work the change saves) | safety (ghost-free: a predicate over the state the call reads, P83) | CBRD-28188 *Description* last paragraph |
 
 CBRD-26928 comment 4778581 measured mode D on the PoC; the ticket body and design.md (2026-11-18) are the latest statement.
@@ -21,12 +21,12 @@ CBRD-26928 comment 4778581 measured mode D on the PoC; the ticket body and desig
 
 | Model | Code | One step because |
 |---|---|---|
-| `ScanCall(p)` (stutter; answers = `FastDecide`) | `heap_page_collect_visible ()` `heap_file.c:8552-8754`: page judgment `:8608-8616`, first word `:8646`, word row `:8652`, word delete `:8659`, header walk `:8666-8729` | the page is held under a read latch (`heap_scan_pb_latch_and_fetch (... PGBUF_LATCH_READ ...)` `:8582`) or is the scan's local copy (`HEAP_SCAN_IS_LOCAL_CACHE_READ`) for the whole call; chain and records are read inside it; every writer below holds the write latch |
-| `Passed(p)` | `snapshot->snapshot_fnc == mvcc_satisfies_snapshot && spage_get_record (slot 0) && length == sizeof (HEAP_CHAIN) && MVCC_ID_PRECEDES (max_mvccid, lowest_active_mvccid)` `:8609-8612` | read once per call |
+| `ScanCall(p)` (stutter; answers = `FastDecide`) | `heap_page_collect_visible ()` `heap_file.c:8557-8765`: page judgment `:8621-8627`, first word `:8657`, word row `:8663`, word delete `:8670`, header walk `:8678-8740` | the page is held under a read latch (`heap_scan_pb_latch_and_fetch (... PGBUF_LATCH_READ ...)` `:8588`) or is the scan's local copy (`HEAP_SCAN_IS_LOCAL_CACHE_READ`) for the whole call; chain and records are read inside it; every writer below holds the write latch |
+| `Passed(p)` | `snapshot->snapshot_fnc == mvcc_satisfies_snapshot && spage_get_record (slot 0) && length == sizeof (HEAP_CHAIN) && MVCC_ID_PRECEDES (max_mvccid, lowest_active_mvccid)` `:8606-8611`, `:8622-8623` | read once per call; the same read answers the bestspace check `:8612` |
 | `WordRow`, `WordDel` | `(word & word_mask) == word_want`, `page_precedes_snapshot && (word & delid_bit) != 0` | — |
-| `w \in Repids` (want) | `word_want`: `repids[0]` `:8566`, then the repid of a row the header walk accepted `:8727` | `word_want` only takes repids the walk accepted (membership checked `:8703-8723`), so it is always one of `repids[]`, which is also why the header walk skips the `repids[]` search for a record of `word_want`'s repid (`:8703-8704`); with `n_repids == 0` `repid_bits = 0` and every repid matches (trace: `nrep=0` maps to the want) |
-| `DevDecide`, `DevRes`, `InSnap`, `ByMe` | `mvcc_satisfies_snapshot ()` `mvcc.c:156-269`, `mvcc_is_id_in_snapshot ()` `mvcc.c:91-108`, `MVCC_IS_REC_INSERTED_BY_ME` / `DELETED_BY_ME` `mvcc.h:118-123`; the walk's TOO_NEW + `prev_version_lsa` split `:8692-8701` | — |
-| `rel` record | `REC_RELOCATION`, `REC_BIGONE` home slots `:8647-8651` (the header is on the forward page) | — |
+| `w \in Repids` (want) | `word_want`: `repids[0]` `:8572`, then the repid of a row the header walk accepted `:8738` | `word_want` only takes repids the walk accepted (membership checked `:8715-8734`), so it is always one of `repids[]`, which is also why the header walk skips the `repids[]` search for a record of `word_want`'s repid (`:8714-8715`); with `n_repids == 0` `repid_bits = 0` and every repid matches (trace: `nrep=0` maps to the want) |
+| `DevDecide`, `DevRes`, `InSnap`, `ByMe` | `mvcc_satisfies_snapshot ()` `mvcc.c:156-269`, `mvcc_is_id_in_snapshot ()` `mvcc.c:91-108`, `MVCC_IS_REC_INSERTED_BY_ME` / `DELETED_BY_ME` `mvcc.h:118-123`; the walk's TOO_NEW + `prev_version_lsa` split `:8703-8712` | — |
+| `rel` record | `REC_RELOCATION`, `REC_BIGONE` home slots `:8658-8662` (the header is on the forward page) | — |
 | `Insert(t,p,s)` | `heap_insert_logical ()` -> `heap_log_insert_physical ()` -> `heap_mvcc_log_insert ()` `:17826-17887` -> `heap_page_update_chain_after_mvcc_op ()` `:26542-26622`; also a `REC_ASSIGN_ADDRESS` filled in place (`catcls_insert_instance ()` `catalog_class.c:3943`, `ER_HEAP_NODATA_NEWADDRESS` `locator_sr.c:6197`): `heap_update_home ()` logs it `RVHF_UPDATE_NOTIFY_VACUUM` (`:24769`), an MVCC op, and `heap_log_update_physical ()` raises the chain (`:25029`) | record and chain change under one write latch, logged together |
 | `Delete(t,p,s)` | `heap_delete_home ()` -> `heap_mvcc_log_delete ()`; `heap_delete_relocation ()` / `heap_delete_bigone ()` raise the home page through `heap_mvcc_log_home_no_change ()` `:21267-21280` / `heap_mvcc_log_home_change_on_delete ()` `:21232-21256` | same |
 | `Update(t,p,s)` (`rl`: the new version moves to a forward page or back home) | `heap_update_home ()`, `heap_update_relocation ()`, `heap_update_bigone ()` with an MVCC op: `heap_log_update_physical ()` with `RVHF_UPDATE_NOTIFY_VACUUM` on the home page `:25015-25045`, or `heap_mvcc_log_home_no_change ()` for the home page when only the forward record changes | same |
@@ -120,7 +120,7 @@ The mutants under 1,000 distinct states are not vacuous passes (P67): each is a 
 
 ## Trace validation
 
-Instrumented scratch worktree `~/dev/cubrid-worktree/CBRD-28188-trace` at `aab8ac860` + 117 added lines (`git diff | grep -E '^-[^-]'` empty); optdebug install `~/optdebug/CUBRID-CBRD-28188-trace`. Events: `ScanCall` (one per call that holds an MVCC snapshot: page, header page or not, `max_mvccid`, `lowest_active_mvccid`, own MVCCID, the judgment) and `Decide` (one per record answered: rel, ins, del, prev, repid, want, the in-snapshot bits of the ids, `nrep`, `inrep`, the path, the answer, and develop's answer computed from the decoded header).
+Instrumented scratch worktree `~/dev/cubrid-worktree/CBRD-28188-trace` at `619e3f403` + 117 added lines (`git diff | grep -E '^-[^-]'` empty); optdebug install `~/optdebug/CUBRID-CBRD-28188-trace`. Events: `ScanCall` (one per call that holds an MVCC snapshot: page, header page or not, `max_mvccid`, `lowest_active_mvccid`, own MVCCID, the judgment) and `Decide` (one per record answered: rel, ins, del, prev, repid, want, the in-snapshot bits of the ids, `nrep`, `inrep`, the path, the answer, and develop's answer computed from the decoded header).
 
 The trace spec validates the reader step: every logged answer and path must be `FastDecideIn` / `DevDecideIn` / `WordRowIn` / `WordDelIn` of the logged record, the logged judgment must be `PassedIn`, and every id on a data-page record must be at most the page's `max_mvccid` (`IdBound` on every record the run read). Writer steps are not logged; they reach the trace only through the record contents.
 
@@ -132,6 +132,8 @@ The trace spec validates the reader step: every logged answer and path must be `
 
 The query results of the scenario equal develop release `6a1bb273f`'s (14 queries).
 
+Recorded first on `aab8ac860`; re-recorded on `619e3f403` (slot 0 read once per call; the optdebug cross-check skipped while MVCC snapshot statistics are collected), byte-identical to `traces/run1.log` (0 differing lines).
+
 ## Counterexamples
 
 | Cfg | Classification |
@@ -141,17 +143,17 @@ The query results of the scenario equal develop release `6a1bb273f`'s (14 querie
 
 ## Result
 
-2026-11-18 17:20-18:00, `tools/tla/tla-check --workers 12 docs/tla/CBRD-28188`: **RESULT: OK**, run dir `.git_ignored_dir/scratch/tla/CBRD-28188-20261118-172035-2416443`.
+2026-11-18 18:09-18:30, `tools/tla/tla-check --workers 12 docs/tla/CBRD-28188` on `619e3f403`'s coordinates: **RESULT: OK**, run dir `.git_ignored_dir/scratch/tla/CBRD-28188-20261118-180945-2544494` (first record on `aab8ac860`: `CBRD-28188-20261118-172035-2416443`, same verdicts).
 
 | Cfg | Verdict | Distinct states / depth | Time |
 |---|---|---|---|
-| `PageVisibility` | pass (TypeOK, EquivNow, NoDecodeWhenAnswered, IndInv) | 4,472,968 / 16 | 161 s |
-| `PageVisibility.scale-3tx` | pass | 22,826,918 / 17 | 403 s |
+| `PageVisibility` | pass (TypeOK, EquivNow, NoDecodeWhenAnswered, IndInv) | 4,472,968 / 16 | 155 s |
+| `PageVisibility.scale-3tx` | pass | 22,826,918 / 17 | 456 s |
 | 9 mutants | each violated as expected (table above) | 422-9,264 / 4-6 | 1-2 s |
 | 5 witnesses | each reached (table above) | 348-39,964 / 4-6 | 1-2 s |
-| `PageVisibilityInd.apalache-indinv` | pass (IndInv inductive, Apalache 0.62.4) | — | 682 s |
-| `PageVisibilityTrace.witness-trace-run1` | accepted (3,453 events consumed) | 3,699 / 3,454 | 880 s |
-| `PageVisibilityTrace.reject-flipped-fast` | refused at event 2220 | 2,465 / 2,220 | 258 s |
+| `PageVisibilityInd.apalache-indinv` | pass (IndInv inductive, Apalache 0.62.4) | — | 757 s |
+| `PageVisibilityTrace.witness-trace-run1` | accepted (3,453 events consumed) | 3,699 / 3,454 | 998 s |
+| `PageVisibilityTrace.reject-flipped-fast` | refused at event 2220 | 2,465 / 2,220 | 259 s |
 | `PageVisibilityTrace.reject-max-at-low` | refused at event 243 | 488 / 243 | 30 s |
 
 TLAPS: not requested (P48).
@@ -165,7 +167,7 @@ ce94c47d67caa4d0b27750371d9e666034c25bad267c631d5fcd07e95064c3f8  PageVisibility
 d1bf86206d54362357d995484eef780231cb6cbb4200a58e52dc48f9ece9d6b7  PageVisibilityTraceData.tla
 ```
 
-Engine: `aab8ac860` (draft PR CUBRID/cubrid#8614); trace recorded on its instrumented optdebug build (`~/optdebug/CUBRID-CBRD-28188-trace`). Gate of the same sha: optdebug libcubrid `9645c80a...`, release `6fa1a427...`; CTP sql 17,821 + medium 975, 0 NOK (`sql-20261118T080537Z-2293632`).
+Engine: `619e3f403` (PR CUBRID/cubrid#8614); trace recorded on its instrumented optdebug build (`~/optdebug/CUBRID-CBRD-28188-trace`). Gate of the same sha: optdebug libcubrid `f22a0eb4...`, release `9f1668dc...`; CTP sql 17,821 + medium 975, 0 NOK (`sql-20261118T090345Z-2434060`). First gate on `aab8ac860`: optdebug `9645c80a...`, release `6fa1a427...`, `sql-20261118T080537Z-2293632`, 0 NOK.
 
 ```
 TLA+ 검증: 통과 — docs/tla/CBRD-28188
