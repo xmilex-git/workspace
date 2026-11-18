@@ -252,6 +252,10 @@ verify.md §6b.
   3-row tables printed `(parallel workers: ...)` on their two input subqueries (`SUBQUERY` /
   `MERGELIST`), a line worker reservation can drop under load → their traces were left out, the
   results stay compared, and the plan shape (`HASH JOIN (left outer join)`) is a probe in the PR body.
+- CBRD-28126 (2026-11-18, caught by the fix x3 run): an error case over parallel subquery arms
+  (`col / 0` in one arm) was traced → whether the other arm scanned before the error stopped the
+  statement depends on timing: its `SCAN` printed `heap` in two runs and `noscan` in one → an error case
+  under parallel jobs is judged by its error code and the next statement, with no `show trace`.
 
 ## Rule 5 — Coverage comes from the code, and new code always has a case
 

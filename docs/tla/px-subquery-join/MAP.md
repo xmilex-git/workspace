@@ -50,6 +50,8 @@ trace-exempt: the spec is the design model; the CBRD-28126 implementation is tie
 | D13 | The 3-level tree (2 → 4 → 8) is not modeled (the user: scope reduced with the implementation); the scale cfg is the base tree with three workers and the late executor, because the two-level tree with three workers did not finish in 1 h 40 min. | locked (Q2 of the split, Q22) | — |
 | D14 | An executor that runs after the root's `run_jobs` (CBRD-27823) is fixed here: the root's end stops the workers without closing the queue; the late executor pushes its jobs and its waiter runs them (D9); the queue closes when the root executor is deleted. | locked (Q5 of the split: "코드일관성을 위해") | `mutant-closed-queue` deadlocks; `witness-late-helped` |
 | D15 | `add_job` counts and wakes only a job the queue took; a job `push_slow` refuses on the interrupt ends without running, as one popped after the interrupt would. Follows from D14 (no job is lost while its count stays). | locked (consequence of D14) | `mutant-count-refused` deadlocks; `witness-refused` |
+| D16 | Review of PR #8556 (2026-11-18): D14 removed the hang that hid an input class, the branches of a correlated subquery that a joined scan evaluates per row. The checker (`add_xasl_recursive`, px_query_checker.cpp) refused a correlated subquery on the block itself but not on a joined scan's `dptr_list`, while `make_parallel_query_executor_recursively` gives an executor to every node `iterate_xasl_tree` reaches, that list included; each job's `qexec_clear_xasl_for_parallel_aptr (..., true)` then cleared the outer row's values its predicates point to. The checker now flags every node under a joined scan's `dptr_list` and `fptr_list` `XASL_NO_PARALLEL_SUBQUERY`, so no executor is made inside such a subquery and the rest of the statement keeps its executors. Q1 (a), refusing the whole statement as for a correlated subquery on the block itself, was dropped after its build took the parallel arms away from cbrd_28044 (correlated subqueries without a UNION under a joined scan, correct on develop: 24 answer lines differ). Outside the join protocol: a job is an opaque step of the model. | locked (review Q1 (b) after (a) failed cbrd_28044, Q2: in this ticket) | runtime, `.git_ignored_dir/scratch/cbrd28126-review/`: review query s1 on `b22001002` release `0 8589934600`/`0 0`, optdebug abort in `qfile_tuple_fill_from_values`, develop `4bf2b2e32` optdebug hang; a nested executor (n1) wrong on develop `4bf2b2e32` release and on `b22001002`; `f6961b036` optdebug and release (libcubridcs `8abe88d15b652dfe`, `b04f45b31124589d`) s1 and n1 equal the NO_PARALLEL_SUBQUERY results with the FROM UNION still parallel, also with system malloc and `MALLOC_CHECK_=3`; cbrd_28044 PASSED in CTP; CBRD-28155 (two derived tables, each with a correlated UNION IN subquery under its join, hang in `push_slow`) returns `2 2` on `f6961b036` optdebug 3 of 3 and hangs on develop `4bf2b2e32` optdebug |
+| D17 | The late executor's trace prints no worker count (text and JSON): it records at the start of `run_jobs` that the workers had stopped, and the dump prints workers only above one (`get_executed_parallelism`), as hash and merge join do. | locked (review Q3 (a)) | `f6961b036` optdebug: review query h1 prints `(time: …)` under the WHERE subquery's UNION and `parallel workers: 2` under the FROM's |
 
 ## Refinement map (model -> code; "28126" = branch CBRD-28126)
 
@@ -118,6 +120,7 @@ IJobs, IExecs, IWake, IIdle and the five safety properties).
 | push refused | yes | `AddPush`'s refused branch: `push_slow` returns on the interrupt (D15) |
 | full queue | n/a | capacity covers every executor's jobs (code facts) |
 | an executor after the root's `run_jobs` | yes | `Late` (CBRD-27823, D14) |
+| a job whose branch reads the outer row (correlated subquery of a joined scan) | n/a | no executor inside such a subquery (D16); the model's jobs read no shared row |
 | concurrent DML, vacuum, checkpoint, HA | n/a | inside a job's work, not in the join protocol |
 | nested statement (SP SQL) | n/a | a separate statement with its own executors; its wait does not share this statement's event |
 
@@ -187,7 +190,7 @@ Union over the pass cfgs (main, `one-worker`, `nest-main`, `wide`, `liveness`, `
 | `PxSubqueryJoin.tla:383` `PxSubqueryJoin.tla:390` `PxSubqueryJoin.tla:397` `PxSubqueryJoin.tla:406` `PxSubqueryJoin.tla:407` `PxSubqueryJoin.tla:408` | SpinCheck, SpinPop, ExitPop, Join: Mode "spin" / "exitOnEmpty" only |
 | `PxSubqueryJoin.tla:433` | EvPop's Mutant "noHelp" arm (`mutant-no-help` only) |
 | `PxSubqueryJoin.tla:496` `PxSubqueryJoin.tla:497` `PxSubqueryJoin.tla:498` `PxSubqueryJoin.tla:508` `PxSubqueryJoin.tla:509` `PxSubqueryJoin.tla:510` `PxSubqueryJoin.tla:512` `PxSubqueryJoin.tla:513` `PxSubqueryJoin.tla:514` `PxSubqueryJoin.tla:520` `PxSubqueryJoin.tla:521` `PxSubqueryJoin.tla:523` | TaskFast, TaskSlowCheck, TaskSlowWait: develop's `pop` / `pop_slow`, replaced by the event wait in Mode "event" (D4) |
-| `PxSubqueryJoin.tla:580` `PxSubqueryJoin.tla:581` `PxSubqueryJoin.tla:582` | SpuriousWake: MaxSpur = 0 in `scale-3w`; the other pass cfgs fire it |
+| `PxSubqueryJoin.tla:580` `PxSubqueryJoin.tla:581` `PxSubqueryJoin.tla:582` `PxSubqueryJoin.tla:601` | SpuriousWake and its disjunct in Next: MaxSpur = 0 in `scale-3w`; the other pass cfgs fire it |
 
 ## Result
 
@@ -214,5 +217,7 @@ Inductive check (Apalache, `PxSubqueryJoinInd.apalache-base`, `apalache-split` 6
 deadlock check): every group timed out at 7200 s without a verdict (IStackShape+JoinAfterAllEnded,
 IThreads+RunsOnce, IJobs+NoUseAfterFree, IExecs+NoPolling, IWake+NoSleepWithWork, IIdle). IndInv holds on
 every reachable state of the five pass cfgs that list it; its inductiveness is not established.
+
+2026-11-18 rerun after the PR #8556 review (no spec step changed; D16 and D17 are outside the join protocol): `tla-check --only 'PxSubqueryJoin*'` 18 cfgs PASS (`px-subquery-join-20261118-122445-359514`); `scale-3w` failed only on the vacuity check (the SpuriousWake disjunct of Next never fires with MaxSpur = 0) and passed after its `uncovered-ok` line (`px-subquery-join-20261118-132326-500963`, 11,479,528 / 3,520,797 states). Apalache not rerun (D12).
 
 TLAPS 요청 없음. Trace validation not done (trace-exempt above).
