@@ -103,3 +103,4 @@ The completion marker of a build is the log's last line `installed <mode> (<ws>)
 
 - `just --list` shows all recipes; read a failed build's error output before changing anything.
 - Builds never run while a measurement or parity run uses the same install — a rebuild in place swaps the libraries under a running comparison (P4) and resets its conf (P6).
+- A copy of an install directory runs the libraries of the prefix it was built for: `cub_server`, `csql` and `libcubrid.so` carry `RPATH: <prefix>/lib`, which wins over `LD_LIBRARY_PATH` while that directory exists, so two builds are compared from two prefixes each built in place, or by copying one build's `lib/` and `bin/` into the prefix before its run, and each side is identified in the log by a symbol only it has (`strings <prefix>/lib/libcubrid.so.11.5 | grep -c '^<function>'`). (P14)
