@@ -95,6 +95,14 @@ using 10, 100, 50, 200;`).
   trace has no token for the new path, so the PR body records the probe (events counted for each
   tested statement).
 
+- CBRD-28141 (2026-11-19, caught by reading the answer plans and gdb first hits): a descending sweep
+  put `use_desc_idx` on a join with GROUP BY → the hint was dropped (absent from `Query stmt`) and the
+  scan ran ascending; an exclusive range written on outer expressions (`i.k > n.x and i.k <= n.x + 10`)
+  kept one bound as a key filter, so the scan had no upper key at all → the descending scan sits in a
+  correlated scalar subquery (plan shows `desc_index forced`), and both bounds come from columns of one
+  outer table (`i.k > r.lo and i.k <= r.hi`), so the plan shows them in one key range. A range whose
+  bounds come from two outer tables made the inner a heap scan (190 s): one outer table carries both.
+
 ## Rule 2 — The data must change the output when the path is wrong
 
 Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Evidence in the answer file" (data that takes the *bug path*, columns that tell rows apart).
@@ -256,6 +264,12 @@ verify.md §6b.
   (`col / 0` in one arm) was traced → whether the other arm scanned before the error stopped the
   statement depends on timing: its `SCAN` printed `heap` in two runs and `noscan` in one → an error case
   under parallel jobs is judged by its error code and the next statement, with no `show trace`.
+
+- CBRD-28141 (2026-11-19, caught by running the case on 11.3.6 release as an oracle): an R5 case has
+  no twin, and pre, fix and dev printed the same wrong rows in a key-filter case (a GE_LE upper key
+  equal to a key the key filter drops returns the next key; 11.4 regression) → an R5 answer is also
+  checked against a release older than the code area it covers (SA result rows only, plans differ),
+  and a shape that hits an unrelated develop defect is changed to avoid it and named in the PR.
 
 ## Rule 5 — Coverage comes from the code, and new code always has a case
 
