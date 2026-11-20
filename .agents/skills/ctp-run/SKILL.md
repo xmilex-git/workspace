@@ -384,10 +384,9 @@ Every run writes, under its `--out` dir:
 
 - **CircleCI** (sql, medium): the public API needs no token; failing case paths
   come straight from `/api/v2/project/gh/CUBRID/cubrid/<job>/tests`.
-- **GitHub Actions** (shell): the run uploads no artifacts — the complete
-  `failed.list` exists only on the self-hosted runner's storage. What is readable
-  is the `collect` job's log summary, which upstream caps at 50 rows. Past that
-  cap only the first 50 are reproducible here; the rest need CI's `/run rerun <id>`.
+- **GitHub Actions** (shell): the run uploads no artifacts, and the `shell / collect`
+  job writes its case table only to the step summary. The failing cases are read
+  from each failed `shard` job's `[TESTCASE] <repo>/<path> ... [NOK]` log lines.
 
 It always uses 1 shard and re-runs whole test DIRECTORIES, not single cases: sql
 cases in one directory share state, so a case run without its directory-mates

@@ -106,25 +106,30 @@ circle_pr() {
     | jq -r '.branch // empty' | sed -nE 's#^pull/([0-9]+)(/head)?$#\1#p'
 }
 
-# Echo the failing shell cases named in a gha-ci run's `collect` job log.
+# Echo the failing shell cases named in a gha-ci run's failed shard job logs.
+# The collect job (now "shell / collect") writes its case table to the step
+# summary only, so the shards' `[TESTCASE] <repo>/<path> ... [NOK]` lines are read.
 gha_failed() {
-  local run="$1" job
+  local run="$1" jobs job
   command -v gh >/dev/null 2>&1 || die "gh is required to read a GitHub Actions log"
-  job="$(gh run view "$run" -R "$GH_REPO" --json jobs \
-          --jq '.jobs[] | select(.name=="collect") | .databaseId' 2>/dev/null | head -1)"
-  [ -n "$job" ] || die "run $run has no finished 'collect' job (still running, or the tests were skipped)"
-  gh run view "$run" -R "$GH_REPO" --job "$job" --log 2>/dev/null \
-    | grep -oP '\|\s*\d{2}\s*\|\s*`\K[^`]+' | LC_ALL=C sort -u
+  jobs="$(gh run view "$run" -R "$GH_REPO" --json jobs \
+          --jq '.jobs[] | select((.name | test("shard")) and .conclusion=="failure") | .databaseId' 2>/dev/null)"
+  [ -n "$jobs" ] || die "run $run has no failed shard job (still running, or the tests were skipped)"
+  for job in $jobs; do
+    gh api --allow-escape-sequences "repos/${GH_REPO}/actions/jobs/${job}/logs" 2>/dev/null \
+      | grep -oP '\[TESTCASE\]\s+[^/\s]+/\K\S+(?=.*\[NOK\])'
+  done | LC_ALL=C sort -u
 }
 
-# Echo the tc/pr-<N> branch the collect job recorded for a gha-ci run.
+# Echo the tc/pr-<N> branch of a gha-ci run, from the `PR: <N>` env line its collect job logs.
 gha_tc_branch() {
-  local run="$1" job
+  local run="$1" job pr
   job="$(gh run view "$run" -R "$GH_REPO" --json jobs \
-          --jq '.jobs[] | select(.name=="collect") | .databaseId' 2>/dev/null | head -1)"
+          --jq '.jobs[] | select(.name | test("(^|/ )collect$")) | .databaseId' 2>/dev/null | head -1)"
   [ -n "$job" ] || return 0
-  gh run view "$run" -R "$GH_REPO" --job "$job" --log 2>/dev/null \
-    | grep -oP '\|\s*tc branch\s*\|\s*`?\K[^`|]+' | head -1 | tr -d ' '
+  pr="$(gh api --allow-escape-sequences "repos/${GH_REPO}/actions/jobs/${job}/logs" 2>/dev/null \
+    | grep -oP '^\S+\s+PR:\s*\K[0-9]+' | head -1)"
+  [ -z "$pr" ] || printf 'tc/pr-%s\n' "$pr"
 }
 
 #####################################################################
@@ -189,14 +194,9 @@ from_circle_job() {
 }
 
 from_gha_run() {
-  local run="$1" n
-  info "GitHub Actions run $run: reading the collect job's summary ..."
+  local run="$1"
+  info "GitHub Actions run $run: reading the failed shard logs ..."
   gha_failed "$run" | add_raw "shell"
-  n="$(awk -F'\t' '$1=="shell"' "$RAW" | wc -l)"
-  if [ "$n" -ge 50 ]; then
-    CAP_NOTE="the gha-ci summary table is capped at 50 rows upstream; only those $n case(s) are reproducible here. For the complete set use CI's own '/run rerun $run'."
-    warn "$CAP_NOTE"
-  fi
   if [ -z "$PR" ]; then
     local b; b="$(gha_tc_branch "$run" || true)"
     case "$b" in tc/pr-[0-9]*) PR="${b#tc/pr-}" ;; esac
