@@ -38,7 +38,7 @@ CONSTANTS BufCap,     \* OIDs of one OID buffer of the inner scan (D24); the bat
           Forget      \* TRUE: the batch may fail to remember the keys of its rows (no memory for them)
 
 \* Mutant: "no_restore" | "stale_slice" | "partial_as_complete" | "no_flush" | "no_close_at_half"
-\*         | "replay_any_order" | "keep_batch" | "reread_in_batch"
+\*         | "replay_any_order" | "keep_batch" | "reread_in_batch" | "drop_slice"
 
 \* apalache-type: BufCap Int
 \* apalache-type: MaxOuter Int
@@ -96,7 +96,7 @@ Rank(x) == x[1] * 10 + x[2]
 VARIABLES jt, pass,   \* fixed for the plan
           phase,    \* "collect" | "replay" | "done" | "stopped"
           next,     \* the outer row that arrives next
-          kind,     \* [OuterIds -> "none" | "read" | "defer"]: the rows the batch holds
+          kind,     \* [OuterIds -> "none" | "read" | "partial" | "defer"]: the rows the batch holds
           cur,      \* the row inside the row path (0: none)
           valrow,   \* the outer row whose values the outer's value list holds
           slice,    \* the row whose stored OIDs the inner scan was handed and has not taken (0: none)
@@ -130,7 +130,7 @@ TypeOK ==
   /\ jt \in JoinTypes /\ pass \in SUBSET Entries
   /\ phase \in {"collect", "replay", "done", "stopped"}
   /\ next \in 1..(N + 1)
-  /\ kind \in [OuterIds -> {"none", "read", "defer"}]
+  /\ kind \in [OuterIds -> {"none", "read", "partial", "defer"}]
   /\ cur \in 0..N
   /\ valrow \in 0..N
   /\ slice \in 0..N
@@ -163,6 +163,8 @@ Init ==
 
 \* The outer row that arrives is held.  A read row's key has no more entries than one OID buffer, and it is
 \* taken only while the stored OIDs are fewer than one buffer: the array of two buffers always has room.
+\* A "partial" row's key has more entries than one buffer: the index was read for one buffer, the search did not
+\* end, and the OIDs are not kept (the row is joined as a deferred row, which reads the index again).
 \* Any row may be held deferred.  While memoize is on, the index is not read for a key memoize holds, nor for
 \* the key of a row the batch holds already: memoize will hold it when that row was joined.
 \* (The mutant reads it for every row whose key is not stored yet.)
@@ -176,6 +178,7 @@ AddOuter(k) ==
   /\ Mutant # "no_close_at_half" => Used < BufCap
   /\ k = "read" => (NumEntries(next) <= BufCap \/ Mutant = "partial_as_complete")
   /\ k = "read" => FreshKey(next)
+  /\ k = "partial" => (NumEntries(next) > BufCap /\ FreshKey(next))
   /\ kind' = [kind EXCEPT ![next] = k]
   /\ valrow' = next
   /\ next' = next + 1
@@ -227,7 +230,7 @@ OpenRow ==
        /\ Mutant # "replay_any_order" => \A p \in BatchRows : o <= p
        /\ cur' = o
        /\ LET v == IF Mutant = "no_restore" THEN valrow ELSE o
-              s == IF kind[o] = "read" THEN o ELSE IF Mutant = "stale_slice" THEN slice ELSE 0
+              s == IF kind[o] = "read" /\ Mutant # "drop_slice" THEN o ELSE IF Mutant = "stale_slice" THEN slice ELSE 0
           IN  /\ valrow' = v
               /\ RunRow(v, s)
   /\ UNCHANGED <<cfgv, phase, next, kind, out, memo, errs, exec>>
@@ -291,7 +294,7 @@ Restart ==
 
 Terminated == phase \in {"done", "stopped"} /\ UNCHANGED vars
 
-Step == AddOuter("read") \/ AddOuter("defer") \/ PassRow \/ CloseBatch \/ OpenRow \/ EmitOne \/ RowDone
+Step == AddOuter("read") \/ AddOuter("partial") \/ AddOuter("defer") \/ PassRow \/ CloseBatch \/ OpenRow \/ EmitOne \/ RowDone
           \/ EndBatch
 Next == Step \/ MemoDrop \/ Stop \/ Restart \/ Terminated
 Spec == Init /\ [][Next]_vars /\ WF_vars(Step)
@@ -311,12 +314,15 @@ InOrder == \A x \in AllItems : \A y \in AllItems :
 ArrayBound == Used <= 2 * BufCap
 \* C11: memoize never answers a row whose OIDs were read from the index when it was held.
 NoWastedRead == ~Forget => ~(how = "memo" /\ slice # 0)
+\* C11: a held row whose OIDs were read to the end of its key is not searched for again when it is joined.
+ReadOnce == ~(how = "scan" /\ cur # 0 /\ kind[cur] = "read")
 Ends == <>(phase \in {"done", "stopped"})
 
 \* Witnesses
 NotMemoHit == how # "memo"
 NotSliceTaken == how # "slice"
 NotDeferScan == ~(how = "scan" /\ cur # 0 /\ kind[cur] = "defer")
+NotPartialReread == ~(how = "scan" /\ cur # 0 /\ kind[cur] = "partial")
 NotPassed == ~(cur # 0 /\ kind[cur] = "none")
 NotUntakenSlice == ~(how = "memo" /\ slice # 0)
 NotDropHeld == ~(memo = "dropped" /\ how = "scan" /\ cur # 0 /\ kind[cur] = "defer")
@@ -336,6 +342,7 @@ BatchShape ==
     /\ \A o \in OuterIds : kind[o] # "none" => o < next
     /\ \A o \in OuterIds : \A p \in OuterIds : (kind[o] # "none" /\ o < p /\ p < next) => kind[p] # "none"
     /\ \A o \in OuterIds : kind[o] = "read" => NumEntries(o) <= BufCap
+    /\ \A o \in OuterIds : kind[o] = "partial" => NumEntries(o) > BufCap
     /\ Cardinality(BatchRows) <= MaxOuter
     /\ Used <= 2 * BufCap
     /\ phase = "collect" => cur = 0
@@ -386,4 +393,5 @@ IndInv ==
   /\ ArrayBound
   /\ ReadFresh
   /\ NoWastedRead
+  /\ ReadOnce
 =============================================================================

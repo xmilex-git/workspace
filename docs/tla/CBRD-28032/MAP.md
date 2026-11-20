@@ -4,7 +4,7 @@ Spec directory of the bitmap heap scan's second design round (2026-11-18). It st
 of the implementation in `docs/tla/CBRD-28005/` (the code at CUBRID `a29e041a4`, the port of that implementation
 onto develop `406d2d87a`); the decisions below replace parts of it and are written into the spec as they settle.
 
-trace-exempt: the implementation (CUBRID `fa5af21dd`, branch `CBRD-28032`) has no instrumented build yet; its runs are checked against this spec by result comparison only (section "Runtime checks of the implementation"), and trace validation is an open item of the PR. `BitmapScan`, the model this one starts from, was trace-validated in `docs/tla/CBRD-28005/`.
+trace-exempt: the implementation (CUBRID `84c72e356`, branch `CBRD-28032`) has no instrumented build yet; its runs are checked against this spec by result comparison only (section "Runtime checks of the implementation"), and trace validation is an open item of the PR. `BitmapScan`, the model this one starts from, was trace-validated in `docs/tla/CBRD-28005/`.
 
 ## Design tree (grilling ledger)
 
@@ -55,6 +55,10 @@ trace-exempt: the implementation (CUBRID `fa5af21dd`, branch `CBRD-28032`) has n
 | E42 | A scan that an `inst_num ()` predicate stops below the statement's sort (ORDER BY, GROUP BY, DISTINCT) keeps the lookup in key order: the predicate is counted below the sort and ends the scan, so a bitmap would record the whole key range for the few rows read. Only a hash join, which stores both inputs before the count, reads to the end under such a predicate. Found by the census of order consumers (2026-11-20, 79 statements against develop `406d2d87a`): `where k between .. and rownum <= 4 order by id` chose a bitmap heap scan before `efca4544a` and an index scan in key order after it (TC Case 18). Left as is: `rownum` in the select list or above a hash join numbers rows in heap order instead of key order when no ORDER BY asks for one. | | |
 | E43 | A join step that holds no row (its scan is not read ahead: a covering scan; or it backed off) closes nothing below when it returns the end of its outer row: the step after it keeps its batch open across the outer rows, until the batch is full or the first scan ends (`Pass1`; `BatchChain.pass-through`, `witness-pass-span`, mutant `pass_no_end`: the rows still held when the first scan ends must be joined). Found by the design review (2026-11-20): with A, B, C and a B that only passes rows on, C's batch was emptied at every row of A, held one OID with a fan-out of 1, named no page and backed off (9 of 20,000 rows batched, 0 pages named, C cold). | settled 2026-11-20 (the user: fix) | |
 | E44 | Kept as they are (the user, design review 2026-11-20): a step batches for one correlated subquery only (`qexec_sq_batch_arm`: `sq_xasl->next != NULL` is refused), and a partitioned class is not batched, neither as a join inner nor as the class a batched subquery reads. A block that evaluates a value changing from row to row (session variable, serial, random number, non-deterministic stored function; `pt_is_result_reuse_safe`) batches nothing (`XASL_NO_ROW_BATCH`, `757ae03f5`): the inner key of a held row was computed before the rows ahead of it were output. | settled 2026-11-20 (the user) | |
+| E45 | Review of 2026-11-20 (PR #8627), settled the same day. (a) A correlated subquery and the scan of a CONNECT BY iteration read no heap through a bitmap: they run once an outer or parent row and made the bitmap again every time (`22b8f0f35`, `ca5406cb1`); the start of a bitmap heap scan costs 0.5 a heap sector besides its constant (`ea66e1f47`). (b) The heap step of a parallel bitmap heap scan keeps its page while the block takes a row only where the serial scan does (`bitmap_keep_page`, `ca5406cb1`). (c) Rows held for a subquery are joined before an outer row whose key memoize already holds: its rows left ahead of them and broke the order of a plan that skips ORDER BY (`ca5406cb1`). (d) A batch closes on its row count too; a plan clears every bitmap mark before it decides; a serial bitmap registers its temp files under its scan's query (`c33c1d537`). (e) A scan that only `USE_DESC_IDX` asks to read downward may be a bitmap heap scan: the hint promises no row order (the user). (f) `rownum` without ORDER BY numbers rows in heap order under a bitmap heap scan; a query that needs an order says so (the user). | settled 2026-11-20 (the user) | |
+| E46 | The batch constants stay as they are after a measurement (first batch 16 OIDs, first back-off 64 rows, at most 65,536): six combinations (64/256/1,024 rows, 65,536/1,048,576, 16/64 OIDs) on TPC-H SF10 Q7, Q9, Q20 (perf server, 15G buffer, `def6e7048`): instructions with every page in the buffer within 0.2% (Q7, Q20) and 0.5% (Q9) of each other; a first back-off of 1,024 rows lengthens the cold run (Q7 38.27 to 39.96 s, Q9 31.58 to 33.50 s). Against develop `3f11aeb26` the change costs 2.2%, 2.6% and 0.9% of the instructions with every page in the buffer, which the constants do not move. Posted on the issue (comment 4778870). | measured 2026-11-20 | |
+| E47 | Review of the models against the code (`.claude/review/PR-8627/PR-8627-tla-review.md`, ten findings, all taken). New models: `BatchMemo` (a memoize hit behind held rows), `BitmapOver` (C13), `BitmapRefix` (C12); `BatchChain` gets a pass that holds nothing (`PassRoot`, `PassEnd`); `BatchJoin` gets the `partial` row and `ReadOnce`. C11 follows the code for a key of more than one OID buffer: the first buffer is read and dropped (option 1 of the three put to the user; the code is not changed). What stays outside every model is listed under Result. | the user 2026-11-20 ("1로해") | |
+| E48 | Under READ COMMITTED a statement a stored function runs between two rows of the heap step takes a new snapshot (`logtb_invalidate_snapshot_data`); the rows marked under the old snapshot are then read under the new one and their key range is not checked again. Reproduced: `select id, k, f_nest (id) from t where k between 0 and 2000` while another session commits `update t set k = 99999 where id = 180966` returns (180966, 99999) (19,997 rows; develop `3f11aeb26` 19,996, three runs). CBRD-27579 (PR #8182) allows a procedure's SELECT, so it does not close this. Decision: `qo_plan_decide_bitmap_heap` returns for a block whose tree holds a `PT_METHOD_CALL` (CUBRID `18d3a61d0`); such a block looks its rows up in key order as before the change. The guard goes when a nested statement no longer replaces the snapshot of the statement that runs it (the fix at the cause, CBRD-28297). A batched join under a procedure declared DETERMINISTIC keeps the window of the OIDs it read ahead (two OID buffers; without the batch, one). `witness-snapshot-rebuilt` stays the model's picture of the excluded environment. TC Case 19. | PR #8627 review 4640736239; the user 2026-11-20 ("1로해 그럼") | |
 
 
 ## Claim and sources
@@ -64,32 +68,66 @@ trace-exempt: the implementation (CUBRID `fa5af21dd`, branch `CBRD-28032`) has n
 | C6 | Every OID an index scan collected whose row its snapshot sees is returned exactly once, and nothing else is returned; a row vacuum removed between the index read and the heap read is skipped. | CBRD-28005 MAP C6 (grilling Q33 2026-11-10); CBRD-28032 body, Acceptance Criteria 1 |
 | C4 | A scan that ends early (LIMIT, interrupt, error) or runs to its end leaves no heap page fixed and no leaf latched. | CBRD-28005 MAP C4 (grilling Q15 2026-11-10) |
 | C7 | An OID of a key present for the whole scan is recorded whatever merges of leaves other transactions cause during the index step; an OID recorded twice (two keys of one row, two workers) is returned once. | the user, round 2 Q8 (E8) |
-| C8 | A row inserted after the statement's snapshot is not returned, wherever its page lies; stated for a statement whose snapshot is not rebuilt while it runs (environment assumption, CBRD-27579). | the user, round 2 Q8 (E8), round 11 Q34 (E26) |
+| C8 | A row inserted after the statement's snapshot is not returned, wherever its page lies; stated for a statement whose snapshot is not rebuilt while it runs. The plan keeps that environment: a block that calls a stored procedure or a method, the only way a statement runs inside a SELECT, does not choose a bitmap heap scan (E48). CBRD-27579 does not provide it: it rejects a procedure's writes, not its SELECT. | the user, round 2 Q8 (E8), round 11 Q34 (E26) |
 | C9 | A batched nested-loop join returns the same rows, the same number of times and in the same order as the join taken a row at a time; an outer row with no match leaves a left outer join exactly once, a semi join returns an outer row once when it has a match and an anti join once when it has none. A statement that stopped (error, interrupt, LIMIT) holds no row: the cached plan's next execution starts with nothing held. | E35 (the user 2026-11-19), carried from `docs/tla/CBRD-28005/MAP.md` C8 |
 | C10 | The heap pages a batch names to the OS and has not yet looked up stay within one read-ahead window. | E36 Q7 (the user 2026-11-19) |
-| C11 | A batched nested-loop join reads the inner index for an outer row at most once, and not at all for a row memoize or the subquery's result cache answers when it is joined: a key they hold, and a key an earlier row of the same batch has. Excepted: a semi or anti join step whose key has more OIDs than one OID buffer reads one buffer to name its pages and the row path reads the index again (E35 Q5); a batch that could not remember its keys (no memory) reads a repeated key once a row. | E39 Q13 (the user 2026-11-20) |
+| C11 | A batched nested-loop join reads the inner index for an outer row at most once, and not at all for a row memoize or the subquery's result cache answers when it is joined: a key they hold, and a key an earlier row of the same batch has. Excepted: a semi or anti join step whose key has more OIDs than one OID buffer reads one buffer to name its pages and the row path reads the index again (E35 Q5); an inner or left outer join step whose key has more OIDs than one OID buffer reads one buffer, keeps none of its OIDs, closes the batch, and the row path reads the index again from the key's start (E47: the claim follows the code; a key read to its end is never searched again); a batch that could not remember its keys (no memory) reads a repeated key once a row. | E39 Q13 (the user 2026-11-20); E47 (the user 2026-11-20) |
+| C12 | While the block above works on a row the heap step of a parallel bitmap heap scan copied, the step holds no heap page; a row the block reads in place stays on a fixed page until the page's last slot. | PR #8627 review, the user 2026-11-20 (E45) |
+| C13 | An overflow list is closed once, by the worker that wrote it; from the barrier on, only the one worker that merges the lists touches them, and it merges every list that has rows. | static review of `def6e7048`, the user 2026-11-20 (E47) |
 
 ## Refinement map
 
-The code is CUBRID `fa5af21dd` (branch `CBRD-28032`), `src/query/parallel/px_scan/`.
+The code is CUBRID `84c72e356` (branch `CBRD-28032`): `src/query/scan_manager.c` (`scan_bitmap_marks`, which the serial and the parallel scan share) and `src/query/parallel/px_scan/`. The rows were re-grounded on that commit on 2026-11-20 (E47); the names before it (`input_handler_index::bitmap_mark`, `bitmap_write`, `bitmap_load`, `bitmap_take_over`) are those of `fa5af21dd`.
 
 | Model | Code | One step because |
 |---|---|---|
 | `TakeLeaf`, `EndLeaf`, `fheld`, `lastDisp` | `index/px_scan_index_leaf_page_dispatcher.cpp` (`m_frontier`, the hand-out under `m_leaf_mutex`) | the next leaf is fixed under the dispatcher's mutex while the frontier's worker still holds its latch |
 | `MergeLR` | another transaction's `btree_merge_node` under both leaves' write latches | a merge holds both latches for the whole move |
-| `MarkRow` | `leaf_slot_walker::process_oid` -> `input_handler_index::bitmap_mark` | the worker's own `bitmap_worker` (table, batch, list): no other thread reads it before the barrier |
-| `Switch` | `bitmap_mark`, the branch where `bitmap_table::get` returns no entry for the first time | same: the worker's own table |
-| `Flush` | `input_handler_index::bitmap_write` (a full batch in `bitmap_add`; the last one in `bitmap_end_marks`) | the worker's own temp file; pages are fixed and let go inside the call |
-| `IdxFinish`, `Barrier` | `bitmap_end_marks`, `bitmap_leave_index_step`, `bitmap_wait_index_step` | the count of workers still in the index step, under `m_bm_mutex` |
-| `TakeUnit` | `bitmap_take_partition` (atomic counter) then `bitmap_load (part, 0)` | the counter hands a partition to one worker; after the barrier nobody writes the tables or the temp pages |
-| `Divide` | `bitmap_load (part, 0)` with `m_bm_nsub > 1`: the other parts go to `bitmap_worker::sub` | the worker's own temp file |
-| `TakeRedo` | `bitmap_load (part, sub)` for `sub > 0`, by the worker that divided | the worker's own temp file |
-| `TakeOver` | `bitmap_take_over` (atomic flag): `qfile_append_list`, `qfile_sort_list` distinct, `bitmap_next_over` | one worker gets the flag; the lists were closed by their workers before the barrier |
+| `MarkRow` | `leaf_slot_walker::process_oid` -> `scan_bitmap_marks::mark` | the worker's own `scan_bitmap_worker` (table, batch, list): no other thread reads it before the barrier. A mark of a sector or a page outside the sector list taken at `scan_bitmap_marks::init` is dropped here (`scan_manager.c` `mark`, the two early returns); the model keeps such a mark and lets the heap step's visibility check refuse the row, so the model's runs are a superset |
+| `Switch` | `scan_bitmap_marks::mark`, the branch where `scan_bitmap_table::get` returns no entry for the first time | same: the worker's own table. The model lets a worker switch at any time, a table that is not full included: more runs than the code has, the same row sets |
+| `Flush` | `scan_bitmap_marks::write` (a full batch in `add`; the last one in `end_marks`) | the worker's own temp file; pages are fixed and let go inside the call. One step for the rows it writes; a failure between a new page and its link into the chain is not a state of the model (fault table) |
+| `IdxFinish`, `Barrier` | `scan_bitmap_marks::end_marks`, `input_handler_index::bitmap_leave_index_step`, `bitmap_wait_index_step` | the count of workers still in the index step, decremented under `m_bm_mutex`; the wait re-reads the count and the interrupt code every 10 ms under the same mutex. `BitmapOver` splits these steps (`EndMarks`, `Leave`, `Pass`) |
+| `TakeUnit` | `take_partition` (atomic counter) then `scan_bitmap_marks::load (part, 0)` | the counter hands a partition to one worker; after the barrier nobody writes the tables or the temp pages, so the claim and the reads of several temp pages are one step for the row set they give |
+| `Divide` | `scan_bitmap_marks::load (part, 0)` with `m_bm_nsub > 1`: the other parts go to `scan_bitmap_worker::sub` | the worker's own temp file |
+| `TakeRedo` | `scan_bitmap_marks::load (part, sub)` for `sub > 0`, by the worker that divided | the worker's own temp file. The model takes a part from one global set by any worker; the code keeps it with the worker that divided. The row sets are the same; `witness-handed-on` therefore shows only that a part was put aside, not that another worker read it |
+| `TakeOver` | `scan_bitmap_marks::take_over` (atomic flag): `qfile_append_list`, `qfile_sort_list` distinct, `next_over` | one step in `BitmapHash` for the rows it returns; who touches a list's header between the flag and the end of the workers is `BitmapOver`'s (C13) |
 | `FixPage`, `SkipFreedPage` | `slot_iterator_index::set_bitmap_page` -> `leaf_slot_walker::fix_bitmap_page` (`OLD_PAGE_MAYBE_DEALLOCATED`) | one page fix |
-| `LookupRow` | `slot_iterator_index::next_bitmap_row` -> `process_bitmap_row` -> `lookup_heap_row` (`heap_get_visible_version`) | the page stays fixed by this worker |
+| `LookupRow` | `slot_iterator_index::next_bitmap_row` -> `process_bitmap_row` -> `lookup_heap_row` (`heap_get_visible_version`) | the page is fixed by this worker while the slot is read; letting it go with a copied row and fixing it again is `BitmapRefix`'s (C12) |
 | `ReleasePage`, `EndUnit` | `release_bitmap_page`, the end of the part's loop in `task::bitmap_heap_step` | the worker's own fix |
 | `Vacuum`, `FreePage` | vacuum's heap cleanup and `file_dealloc` of an emptied heap page | the page's write latch |
-| `Abort` | the interrupt code set by a worker, read by every loop of `task`; `bitmap_close_worker` from `slot_iterator_index::finalize` on the worker, the temp files and lists freed in `~input_handler_index` | the interrupt is one atomic store |
+| `Abort` | the interrupt code set by a worker, read by every loop of `task`; `scan_bitmap_marks::close_worker` from `slot_iterator_index::finalize` on the worker, the temp files and lists freed in `~scan_bitmap_marks` | the interrupt is one atomic store. `BitmapHash` clears every worker's holdings in that one step; the workers' own ends after an interrupt are steps of `BitmapOver` (`StopIndex`, `StopHeap`, `Close`) and `BitmapRefix` (`Stop`) |
+
+### BitmapOver (the overflow lists of a parallel scan; CUBRID `84c72e356`, `scan_manager.c`, `px_scan_task.cpp`)
+
+| Model | Code | One step because |
+|---|---|---|
+| `EndMarks`, `closed` | `scan_bitmap_marks::end_marks`: `qfile_close_list (w->over)`, `over_closed = true` | the worker's own list; its last page is fixed by this thread |
+| `Leave`, `pending` | `input_handler_index::bitmap_leave_index_step` | under `m_bm_mutex` |
+| `Pass` | `input_handler_index::bitmap_wait_index_step`: the count is 0 or the interrupt code is set | the predicate is read under `m_bm_mutex` |
+| `Take`, `taken`, `base` | `scan_bitmap_marks::take_over`: `m_bm_over_taken.compare_exchange_strong`, then the first worker whose list has rows | one compare-and-swap; the workers' `over` pointers are not written after the barrier |
+| `AppendBegin`, `AppendEnd` | `qfile_append_list (base->over, w.over)` | two steps: the call reads both headers and writes the base's, with no latch on either |
+| `SortBegin`, `SortEnd` | `qfile_sort_list (base->over, NULL, Q_DISTINCT, true)`, `qfile_open_list_scan` | two steps: the sort clears the list's header and copies the sorted list's header over it |
+| `ScanEnd` | `next_over` until S_END, in `task::bitmap_heap_step` | the merging worker's own scan |
+| `Fail` | `raise ()` in `task::bitmap_heap_step`, the S_ERROR branches of `task`'s scan loop: the interrupt code is set; a worker that fails inside its index step never reaches `bitmap_heap_step`, so it neither calls `end_marks` nor leaves the step | the interrupt is one atomic store |
+| `StopIndex`, `StopHeap` | a worker reads the interrupt code in its loop | one atomic load |
+| `Close` | `scan_bitmap_marks::close_worker`: `qfile_close_list` only when `!over_closed` | the worker's own flag |
+
+### BitmapRefix (one heap page of the parallel heap step; CUBRID `84c72e356`, `px_scan_slot_iterator_index.cpp`)
+
+One worker reads a page; the only other actor is vacuum, which needs the page unfixed.
+
+| Model | Code | One step because |
+|---|---|---|
+| `Start`, `StartFail` | `slot_iterator_index::read_page` -> `leaf_slot_walker::fix_bitmap_page` (`OLD_PAGE_MAYBE_DEALLOCATED`) | one page fix |
+| `Row`: the refix | `next_bitmap_row`: `m_bm_unfixed` -> `fix_bitmap_page` again | one page fix; between it and the read of the slot the page stays fixed |
+| `Row`: the read, `letgo` | `process_bitmap_row`; `!keeps_bitmap_page ()` -> `release_bitmap_page`, `m_bm_unfixed = true` (`INDX_SCAN_ID::bitmap_keep_page`, copied from the plan's scan in `px_scan_task.cpp`) | single owner |
+| `RefixFail`, `RowFail` | `fix_bitmap_page` returns an error; `process_bitmap_row` returns S_ERROR (the page is let go) | single owner |
+| `RefixGone` | `fix_bitmap_page` finds the page deallocated: S_END | not reachable (dead expressions) |
+| `EndPage` | no marked slot is left: `release_bitmap_page`, `m_bm_page_on = false` | single owner |
+| `Consumed` | the block above returns to `next_bitmap_row` | the worker's own call |
+| `Stop` | `slot_iterator_index::finalize` with `m_bm_page_on`: `release_bitmap_page` (a no-op when no page is fixed) | single owner |
+| `Dealloc` | vacuum's `file_dealloc` of an emptied heap page | the page's write latch, which needs the page unfixed |
+| not modeled | the serial scan's same choice (`scan_manager.c`, the serial heap step keeps or lets go by the same flag); two pages (the step reads one page at a time) | — |
 
 ### BatchJoin (one join step; CUBRID `0b92ed687` and the commit after it, `query_executor.c`, `scan_manager.c`)
 
@@ -99,7 +137,8 @@ One thread runs a join (the statement's thread, or a parallel worker on its own 
 |---|---|---|
 | `kind`, `AddOuter` | `qexec_execute_scan_join` -> `qexec_nl_batch_add`: the value lists are copied into `QEXEC_NL_BATCH.vals` (`qexec_nl_batch_copy_lists`), `scan_index_nl_batch_collect` reads the inner index once | single owner; the leaf is read under its latch |
 | `AddOuter("read")`: `NumEntries <= BufCap` | `scan_index_nl_batch_collect`: complete only when the search ended (`BTREE_END_OF_SCAN`) | leaf latch |
-| `AddOuter("defer")` | `qexec_nl_batch_add`: `oid_cnt = -1` for a key memoize holds, a null join value, a search that did not end (it closes the batch of an inner or left outer step; a semi or anti step keeps the OIDs of that one read for naming and stays open), a scan that cannot be read ahead while rows are held | single owner |
+| `AddOuter("partial")` | `scan_index_nl_batch_collect` read one OID buffer and the search did not end (`complete = false`): `qexec_nl_batch_add` stores `oid_cnt = -1` and closes the batch of an inner or left outer step; a semi or anti step keeps the OIDs of that one read for naming and stays open. The row is joined as a deferred row: the scan reads the index again from the key's start (`witness-partial-reread`) | leaf latch |
+| `AddOuter("defer")` | `qexec_nl_batch_add`: `oid_cnt = -1` with no index read, for a key memoize holds, a null join value, a scan that cannot be read ahead while rows are held | single owner |
 | `AddOuter`: `Used < BufCap`, `ArrayBound`, `MaxOuter` | `qexec_nl_batch_add` returns S_END when `n_oids >= oid_target` or `bytes >= oid_target * sizeof (OID)`; the array holds two OID buffers (`oid_cap`) | single owner |
 | `PassRow` | `qexec_nl_batch_add` returns S_DOESNT_EXIST with nothing held (not a scan to read ahead, or the back-off after a batch that named no page): `passing` | single owner |
 | `CloseBatch` | `qexec_execute_scan_join`: the first window is named (`qexec_nl_batch_read_ahead` -> `scan_index_nl_batch_read_ahead` -> `pgbuf_read_ahead`), `replaying = true`; the outer scan's end reaches it as `flush` from `qexec_execute_scan_outer`, `qexec_next_root_row` or `qexec_nl_batch_flush_worker` | single owner |
@@ -108,7 +147,8 @@ One thread runs a join (the statement's thread, or a parallel worker on its own 
 | `EndBatch` | `qexec_execute_scan_join`: `qexec_nl_batch_drop_rows` | single owner |
 | `MemoDrop` | memoize disables and frees itself (`memoize.cpp` `can_insert`, `clear_memoize_storage`) inside a memoize call of the row path | inside one call |
 | `Stop`, `Restart` | S_ERROR or the consumer stops asking; `qexec_execute_mainblock_internal` and `qexec_clear_xasl` free every batch of the block (`qexec_nl_batch_free`) before the scans open again | single owner |
-| not modeled | which scans batch (`qexec_nl_batch_arm`, `scan_index_nl_batch_ok`), the growth of the target and the back-off (they change when a batch closes, never what it returns), a partitioned inner (not batched) | — |
+| not modeled | the growth of the target and the back-off (they change when a batch closes, never what it returns); the steps inside one `RunRow` (memoize stores a key at the end of its rows, `key_first` / `key_last` / `no_put`; `BatchMemo` has the order of a hit and the held rows) | — |
+| outside the model: which scans batch | `qexec_nl_batch_arm` refuses a step flagged `XASL_NL_FOLLOWING_JOIN` or `XASL_NO_ROW_BATCH`, a semi or anti step over a partitioned class, a scan that is not an index scan of a class; `qexec_sq_batch_arm` has its own checks (`XASL_NO_ROW_BATCH`, partition pruning); `scan_index_nl_batch_ok`. `pt_gen_optimized_plan` sets `XASL_NO_ROW_BATCH` on the `scan_ptr` chain when `pt_is_result_reuse_safe` is false (E44: a session variable, a serial, a random function). The model's keys and matches are fixed at `Init`, so an expression whose value depends on when it is evaluated is not an input of it: E44 is held by code reading and by `cbrd_28032_batch_join_row_state.sql` only | — |
 
 ### BatchChain (two batched levels; the same commits)
 
@@ -118,28 +158,41 @@ One thread runs a join (the statement's thread, or a parallel worker on its own 
 | level 2 as a join step: `Fetch1` with `Prefix` | `qexec_nl_batch_arm`: `span` when the outer's own rows come out of a batch; `lists[]` holds the outer's value list and those of every scan above it, and `qexec_nl_batch_add` copies them all | single owner |
 | level 2 as a subquery lookup: `Fetch1` with `Prefix` | `qexec_sq_batch_add` at the hold point of `qexec_execute_scan_row` (before the step's `dptr_list`): `b.lists[]` from `qexec_sq_batch_arm` | single owner |
 | `Close2`: `n2 = Cap2` | the batch's target (`qexec_nl_batch_add` / `qexec_sq_batch_add` return S_END); `sv0`, `sv1` = `saved` (`qexec_nl_batch_copy_lists` into `QEXEC_NL_BATCH.saved`) | single owner |
-| `Close2`: `BatchEnd` | `qexec_execute_scan`: the step returned S_END and holds no row of its own (`drain` for the join step below it, `flush` of its `QEXEC_SQ_BATCH`) | single owner |
+| `Close2`: `BatchEnd` | `qexec_execute_scan`: the step returned S_END after it joined the last row of its own batch (`QEXEC_NL_BATCH.ended`) and holds no row (`drain` for the join step below it, `flush` of its `QEXEC_SQ_BATCH`) | single owner |
+| `PassRoot`, `PassEnd`, `pr`, `g2p` | `qexec_execute_scan_join`, the `passing` branch: the row is joined with nothing held; its S_END sets no `ended`, so the step below closes nothing (E43) | single owner |
+| `Close2`: the first scan ended, after a pass | `qexec_nl_batch_drain_below`, called by `qexec_next_root_row`, `qexec_nl_batch_flush_worker` and the non-span branch of `qexec_execute_scan_outer`: `flush` on the first step below that holds rows, `drain` on the steps between. The model has two levels: the walk over an empty middle step and the three callers are one `Close2` here (`mutant-pass-no-end` removes it for all three at once) | single owner |
 | `Close2`: the first scan ended | the same site: the last batch of level 1 ends after `qexec_next_root_row` / `qexec_nl_batch_flush_worker` flushed it | single owner |
-| `Open2`, `named` | `qexec_nl_batch_open_row` / `qexec_sq_batch_open_row`: every value list gets the held row's values; `qexec_nl_batch_read_ahead` names the next window when the lookup is half a window from it | single owner |
+| `Open2`, `named` | `qexec_nl_batch_open_row` / `qexec_sq_batch_open_row`: every value list gets the held row's values; `qexec_nl_batch_read_ahead` names the next window when the lookup is half a window from it. The model counts a window in held rows and keeps it at `Win`; the code counts it in OIDs from the row's `oid_start` and doubles it up to the distance cap, and one outer row can have several OIDs on several pages: C10 is checked for one page a row only | single owner |
 | `Emit2`, `End2Row` (`Kind`) | the row path of the step (inner: every match; semi: the first, `QPROC_SINGLE_INNER`; anti: `qexec_execute_sa_anti_survive`) or the subquery's execution taking its slice (`qexec_sq_batch_give_slice`) | single owner |
 | `End2Batch`: `Restore = "saved"` | `qexec_execute_scan_join` (a `span` batch) / `qexec_sq_batch_end`: the lists get back `saved` | single owner |
 | `Abort` | as `BatchJoin` `Stop`: `qexec_nl_batch_free` frees `sq` and `saved` too | single owner |
 | not modeled | a subquery row whose key the result cache holds and a step whose memoize storage exists (E37 a, b): such a row is held with no OIDs or not held at all, which changes what is read ahead and not what is returned; the OIDs a semi or anti step keeps for naming when its key did not fit one buffer (E37 c) | — |
 
+### BatchMemo (a step that memoizes and holds rows for its correlated subquery; CUBRID `ca5406cb1`, `query_executor.c`)
+
+| Model | Code | One step because |
+|---|---|---|
+| `Hit` | `qexec_execute_scan_row`: memoize answers the outer row's key; its rows go out without being held | single owner |
+| `Miss`, `held` | `qexec_sq_batch_add` at the hold point: the row's value lists are copied | single owner |
+| `Join`: the batch is full or the outer rows ended | `qexec_sq_batch_add` returns S_END at the target; `flush` at the end of the outer rows | single owner |
+| `Join`: before a row of a key the batch holds | `qexec_nl_batch_seen` (the key is stored when the held rows are joined, and the row is then a hit) | single owner |
+| `Join`: before a row of a key memoize holds | `xasl->memoize_storage->has_key ()` with `sq->b.n_rows > 0`: the rows held go out first (`mutant-no-has-key` is the code before `ca5406cb1`) | single owner |
+
 ## Fault model
 
 | Fault | In the model |
 |---|---|
-| error return, interrupt / query cancel, OOM | `Abort`, enabled in every state of a run (`MaxErrors`); C4 holds after it |
+| error return, interrupt / query cancel, OOM | `Abort`, enabled in every state of a run (`MaxErrors`); C4 holds after it. `BitmapHash.Abort` empties every worker's holdings in one step; a worker's own end after a failure is in `BitmapOver` (`Fail` in the index step, the heap step, an append, a sort, the list's scan; `StopIndex`, `StopHeap`, `Close`) and in `BitmapRefix` (`StartFail`, `RefixFail`, `RowFail`, `Stop`) |
+| a failure between two allocations | not modeled, each with the code fact that bounds it: a spill that got a new temp page and failed before linking it (`scan_bitmap_marks::write`) leaves a page of the worker's temp file, which is destroyed with the scan (`~scan_bitmap_marks`); an append or a sort that fails inside `take_over` leaves the lists with their workers, and a failed sort has destroyed the base list's file (`BitmapOver.Fail` in `appending` / `sorting` covers who touches the headers, not the file's state); `qexec_nl_batch_add` that grew `rows` and failed on `vals` or on a value copy returns S_ERROR and `qexec_nl_batch_free` frees what was allocated with the statement. None of these has a runtime reproduction (no fault injection was run) |
 | lock timeout, deadlock victim | not applicable: the scan takes no lock of its own (the index scan's key and row visibility are read under MVCC) |
 | conditional latch failure | not applicable: the heap step fixes its pages unconditionally; the dispatcher's wait for the frontier is the code of CBRD-28005, unchanged |
 | crash / `kill -9` | not modeled: the scan writes temp files only, which the server removes at restart; the orphan check after an abnormal end is a runtime check of the implementation ticket |
-| spurious wakeup | the barrier's wait re-reads the count under the mutex (`bitmap_wait_index_phase`); the model's `Barrier` is that predicate |
+| spurious wakeup | the barrier's wait re-reads the count and the interrupt code under the mutex (`bitmap_wait_index_step`, a timed wait of 10 ms in a loop); the model's `Barrier` and `BitmapOver.Pass` are that predicate |
 | concurrent DML | `MergeLR` (leaf merge), r5 (a row inserted after the snapshot, on a page of a new sector), r1 and r7 (two keys of one row) |
-| vacuum | `Vacuum`, `FreePage` |
+| vacuum | `Vacuum`, `FreePage`; `BitmapRefix.Dealloc` for the page let go between two rows |
 | checkpoint, page flush, page replacement | not applicable: a page is read only while fixed |
 | HA log apply | not applicable: the scan reads through MVCC as any index scan |
-| nested statement (SP SQL from the client) | `RebuildSnap`, the environment C8 excludes (`witness-snapshot-rebuilt` shows the row it lets through; CBRD-27579) |
+| nested statement (SP SQL from the client) | `RebuildSnap`, the environment C8 excludes by the plan's guard (E48: no bitmap heap scan in a block that calls a procedure or a method; `witness-snapshot-rebuilt` shows the row it would let through). In the code a row on a page outside the sector list is never marked, whatever the snapshot: the row a rebuilt snapshot lets through there is one inserted into a page inside the list; the model's r5 on a new sector stands for it (E47) |
 
 Fairness: weak fairness on each worker's steps (`Fairness`); `Switch` and the environment (`Merge`, `Vacuum`, `FreePage`, `Abort`) get none. Liveness `Ends` is checked in `BitmapHash.live` at the smallest bound.
 | error, interrupt, LIMIT in a batched join (`BatchJoin` `Stop`, `BatchChain` `Abort`) | modeled: enabled in every state, at most `MaxErrors` times; the batches are freed with the statement (`NoneHeld`, `mutant-keep-on-error`, `BatchJoin.mutant-keep-batch`) |
@@ -159,6 +212,14 @@ Fairness: weak fairness on each worker's steps (`Fairness`); `Switch` and the en
 | `BatchJoin.NoExtra`, `BatchJoin.AllReturned`, `BatchJoin.InOrder` | invariants: no join row the row-at-a-time join does not return and none twice; a join that ran to its end returned every row; a row leaves only after every row before it | C9 |
 | `BatchJoin.ArrayBound` | invariant: the stored OIDs never exceed the batch's array of two OID buffers | C9 |
 | `BatchJoin.NoWastedRead`, `BatchJoin.ReadFresh` | invariants: memoize never answers a row whose OIDs were read when it was held; a held row whose OIDs were read has a key memoize does not hold and no earlier held row has (the inductive form). With `Forget = TRUE` (`option-forget`) only C9 is claimed | C11 |
+| `BatchJoin.ReadOnce` | invariant and conjunct of `IndInv`: a held row whose OIDs were read to the end of its key is not searched for again when it is joined | C11 |
+| `BatchMemo.InOrder`, `NoExtra`, `AllReturned`, `HeldInOrder` | invariants: the rows leave in the outer order, each once, a hit behind held rows included | C9 |
+| `BatchMemo.SameHits` | invariant: memoize answers exactly the outer rows it answers in the join taken a row at a time | C11 |
+| `BitmapRefix.CopyNotHeld`, `PeekHeld` | invariants | C12 |
+| `BitmapRefix.ReadFixed`, `NoPageHeld`, `Flags` | invariants: a slot is read on a fixed page; nothing stays fixed when the page is finished, failed or closed | C4 |
+| `BitmapRefix.NoExtra`, `AllReturned` | invariants: every marked row the snapshot sees is returned | C6 |
+| `BitmapOver.CloseOnce`, `NoClash`, `OneMerger`, `Handed`, `AllMerged`, `AllClosed` | invariants | C13 (`AllMerged`: C7; `AllClosed`: C4) |
+| `BatchMemo`, `BitmapOver`, `BitmapRefix`: no inductive invariant | TLC at the bounds of their cfgs only (four outer rows of two keys; three and four workers; three and five slots) | C9, C11, C12, C13 |
 | `BatchJoin.Ends` | liveness (WF on the join's steps), own cfg `BatchJoin.live` | C9 |
 | `BatchJoin.IndInv` | inductive invariant by Apalache, one cfg per conjunct (`BatchJoin.apalache-*`) | C9 |
 | `BatchChain.NoExtra`, `BatchChain.AllReturned`, `BatchChain.InOrder` | invariants, for inner, semi and anti steps (`BatchChain`, `scale-semi`, `scale-anti`) | C9 |
@@ -192,11 +253,25 @@ Fairness: weak fairness on each worker's steps (`Fairness`); `Switch` and the en
 | `BatchJoin.mutant-replay-any-order` | the held rows are joined in any order | violation `InOrder` | C9 |
 | `BatchJoin.mutant-keep-batch` | a second execution of the plan starts with the rows the first one held | violation `NoExtra` | C9 |
 | `BatchJoin.mutant-reread-in-batch` | the index is read for every held row whose key memoize does not hold yet, a key repeated inside the batch included (the code before `c01d1edae`) | violation `NoWastedRead` | C11 |
+| `BatchJoin.mutant-drop-slice` | the scan is not handed the OIDs read for a held row (`scan_index_take_nl_slice`), so it searches the index again | violation `ReadOnce` | C11 |
+| `BatchMemo.mutant-no-has-key` | a row whose key memoize holds is answered while rows are held for earlier outer rows (the code before `ca5406cb1`) | violation `InOrder` | C9 |
+| `BatchMemo.mutant-no-seen` | a row whose key the batch holds is held too instead of joining the batch first | violation `SameHits` | C11 |
+| `BatchMemo.mutant-no-end` | the rows held when the outer rows end are forgotten | violation `AllReturned` | C9 |
+| `BitmapOver.mutant-close-twice` | a worker that ends closes its list again (the code before `84c72e356`) | violation `CloseOnce` | C13 |
+| `BitmapOver.mutant-close-twice-clash` | the same: the second close runs while another worker sorts the list | violation `NoClash` | C13 |
+| `BitmapOver.mutant-no-end-close` | a worker leaves the index step with its list open: the merging worker appends a list whose last page another thread has fixed | violation `Handed` | C13 |
+| `BitmapOver.mutant-no-stop-close` | a worker that stopped inside its index step never closes its list | violation `AllClosed` | C13, C4 |
+| `BitmapOver.mutant-skip-list` | the merging worker sorts the first list without appending the others | violation `AllMerged` | C13, C7 |
+| `BitmapRefix.mutant-no-unfix` | the page stays fixed with a copied row | violation `CopyNotHeld` | C12 |
+| `BitmapRefix.mutant-unfix-peek` | the page is let go with a row the block above reads in place | violation `PeekHeld` | C12 |
+| `BitmapRefix.mutant-no-refix` | the next slot is read without fixing the page again | violation `ReadFixed` | C12, C4 |
+| `BitmapRefix.mutant-end-holds`, `BitmapRefix.mutant-stop-holds` | the page stays fixed after its last slot; after the scan is closed | violation `NoPageHeld` | C4 |
 | `BatchChain.mutant-no-prefix` | a row held by level 2 carries only the value list of the step above it | violation `AllReturned` | C9 |
 | `BatchChain.mutant-bottom-up` | at the end of the first scan level 2 is emptied once, whatever level 1 still holds | violation `AllReturned` | C9 |
 | `BatchChain.mutant-late-close` | a full batch of level 2 closes only after the scans above moved on | violation `NoExtra` | C9 |
 | `BatchChain.mutant-keep-on-error` | a stopped statement keeps its held rows for the plan's next execution | violation `NoneHeld` | C9 |
 | `BatchChain.mutant-name-all` | the whole batch is named to the OS when it closes | violation `WinBound` | C10 |
+| `BatchChain.mutant-pass-no-end` | the rows held below a step that passed its rows are not joined when the first scan ends (`qexec_nl_batch_drain_below` missing) | deadlock (the statement cannot end with rows held) | C9 (E43) |
 
 ## Witnesses
 
@@ -216,11 +291,22 @@ Fairness: weak fairness on each worker's steps (`Fairness`); `Switch` and the en
 | `BitmapHash.witness-snapshot-rebuilt` | with the snapshot rebuilt while the scan runs (the environment C8 excludes) a row inserted after the statement's snapshot is returned: `NoExtraRow` fails |
 | `BatchJoin.witness-memo-hit`, `-slice-taken`, `-defer-scan`, `-passed`, `-untaken-slice`, `-drop-held`, `-null-row`, `-flush`, `-full-run`, `-stopped-held`, `-second-done` | memoize answered a row; the scan took stored OIDs; a deferred row searched the index itself; a row was joined with nothing held; stored OIDs were left untaken (`Forget = TRUE`); memoize gave up with rows held; a NULL-extended row; the outer ended with rows held; a full run; a stop with rows held; a second execution ran to its end |
 | `BatchChain.witness-span` | a batch of level 2 holds rows of two different root rows |
-| `BatchChain.witness-pass-span` | with a level 1 that holds no row (`Pass1`), a batch of level 2 holds rows of two different root rows |
+| `BatchChain.witness-pass-span` | level 2 holds rows of two root rows that both went through level 1 unheld, while level 1 holds nothing (`n1 = 0`) |
+| `BatchChain.witness-pass-then-held` | level 2 holds a row that came through a pass and a row of a batch level 1 held: the two ways alternate in one run |
 | `BatchChain.witness-nested` | level 2 replays in the middle of a row of level 1 |
 | `BatchChain.witness-second-window` | a second window was named during a replay |
 | `BatchChain.witness-stopped` | a statement stopped after it returned rows |
 | `BatchChain.witness-done` | a statement ran to its end and returned rows |
+| `BatchJoin.witness-partial-reread` | a row whose key has more OIDs than one buffer was read once when it was held and searches the index again when it is joined (the exception of C11) |
+| `BatchMemo.witness-hit-behind-held`, `-same-key-held`, `-done` | an outer row whose key memoize holds arrives while rows are held; one whose key the batch holds; a run ended with rows returned and hits |
+| `BitmapOver.witness-ended-during-sort` | the worker whose list is the base has ended while another worker sorts that list |
+| `BitmapOver.witness-stopped-closed` | a worker that stopped inside its index step closed its list as it ended |
+| `BitmapOver.witness-merged-two` | a run merged two lists and every worker ended |
+| `BitmapRefix.witness-refixed` | the page was let go with a row and fixed again for a later row |
+| `BitmapRefix.witness-gone-end` | a page deallocated before it was read ends at once |
+| `BitmapRefix.witness-stopped-with-row` | the scan was closed while the block above held a row |
+
+Limits of three older witnesses (E47): `BitmapHash.witness-freed-page` shows a run that ended with a page deallocated, not that the page had been marked and skipped; `BatchChain.witness-stopped` shows rows returned before the stop, not rows held at the stop (`NoneHeld` and `mutant-keep-on-error` cover those); `BitmapHash.witness-handed-on` shows a part put aside, not another worker reading it.
 
 ## Dead expressions (pass cfg)
 
@@ -231,8 +317,11 @@ Fairness: weak fairness on each worker's steps (`Fairness`); `Switch` and the en
 | `BitmapHash.tla:472`, `BitmapHash.tla:473`, `BitmapHash.tla:474`, `BitmapHash.tla:475` | `RebuildSnap` | `Rebuild` is FALSE in every pass cfg: the snapshot is rebuilt only in the environment C8 excludes; `BitmapHash.witness-snapshot-rebuilt` evaluates it |
 | `BitmapHash.tla:478`, `BitmapHash.tla:479`, `BitmapHash.tla:480`, `BitmapHash.tla:481`, `BitmapHash.tla:482`, `BitmapHash.tla:483`, `BitmapHash.tla:484`, `BitmapHash.tla:485`, `BitmapHash.tla:486`, `BitmapHash.tla:487`, `BitmapHash.tla:488`, `BitmapHash.tla:489`, `BitmapHash.tla:490`, `BitmapHash.tla:491`, `BitmapHash.tla:492`, `BitmapHash.tla:493`, `BitmapHash.tla:494` | `Abort` | `MaxErrors` is 0 in `BitmapHash.live` and `BitmapHash.scale-3h`; the main cfg (MaxErrors = 1) evaluates it |
 | `BitmapHash.tla:125`, `BitmapHash.tla:126`, `BitmapHash.tla:127`, `BitmapHash.tla:128`, `BitmapHash.tla:129` | `ChainFor` | the branch of the other number of levels: `BitmapHash.scale-twolevel` evaluates the two-level one, every other pass cfg the one-level one |
-| `BatchChain.tla:190` | `Abort` | the `keep_on_error` branch is a mutant's (`BatchChain.mutant-keep-on-error`) |
-| `BatchChain.tla:188`, `BatchChain.tla:191`, `BatchChain.tla:192`, `BatchChain.tla:193`, `BatchChain.tla:194` | `Abort` | `MaxErrors = 0` in the option cfgs (`option-last-row`, `option-late-saved`, `option-upper-end`): they compare designs on full runs; `BatchChain`, `scale-semi` and `scale-anti` fire `Abort` |
+| `BatchChain.tla:212` | `Abort` | the `keep_on_error` branch is a mutant's (`BatchChain.mutant-keep-on-error`) |
+| `BatchChain.tla:210`, `BatchChain.tla:212`, `BatchChain.tla:213`, `BatchChain.tla:214`, `BatchChain.tla:215`, `BatchChain.tla:216`, `BatchChain.tla:217` | `Abort` | `MaxErrors = 0` in the option cfgs (`option-last-row`, `option-late-saved`, `option-upper-end`, `option-pass-drain`): they compare designs on full runs; `BatchChain`, `scale-semi` and `scale-anti` fire `Abort` |
+| `BatchChain.tla:104`, `BatchChain.tla:105`, `BatchChain.tla:106`, `BatchChain.tla:112`, `BatchChain.tla:113` | `PassRoot`, `PassEnd` | `Pass1` is FALSE in every cfg but the pass cfgs (`pass-through`, `witness-pass-span`, `witness-pass-then-held`, `mutant-pass-no-end`, `option-pass-drain`), which evaluate them: a level 1 that always holds its rows never passes one |
+| `BitmapRefix.tla:82`, `BitmapRefix.tla:83` | `RefixGone` | a page that returned a row holds a row the statement's snapshot sees, and vacuum does not deallocate such a page: the page let go between two rows is never found deallocated. The code keeps the branch as a guard (`px_scan_slot_iterator_index.cpp`, `!is_fixed` after the second `fix_bitmap_page`) |
+| `BitmapRefix.tla:76`, `BitmapRefix.tla:77` | `RefixFail` | `BitmapRefix.keep-page` (`Keep = TRUE`): the page stays fixed between its rows and is never fixed again; `BitmapRefix` and `scale-5` fire it |
 
 ## Runtime checks of the implementation
 
@@ -282,14 +371,17 @@ Batched join, memoize and the subquery result cache (E39, E40), CUBRID `c01d1eda
 
 ## Result
 
-`tools/tla/tla-check docs/tla/CBRD-28032` on 2026-11-20 (run dir `.git_ignored_dir/scratch/tla/CBRD-28032-20261120-022314-1583613`): `RESULT: OK`, 84 cfgs passed, none failed. After the run this file was edited in its ledger only (E38's figures, E40) and in this section.
+`tools/tla/tla-check docs/tla/CBRD-28032` on 2026-11-20 (run dir `.git_ignored_dir/scratch/tla/CBRD-28032-20261120-185034-31675`): `RESULT: OK`, 121 cfgs passed, none failed. While it ran, this file was edited in its ledger and claim text only (E48 and its CBRD-28297 key, C8's basis); after it, in this section.
 
-- `BitmapHash`: 5,585,538 distinct states, depth 54; `BitmapHash.scale-twolevel` 8,543,250; `BitmapHash.scale-3h` (three heap workers, no error) 48,015,762 in 6,665 s; `BitmapHash.scale-serial` 62,805; `BitmapHash.live` (`Ends`) 737,682.
-- `BatchJoin`: 148,576 distinct states, depth 52; `BatchJoin.scale-b5` 248,312; `BatchJoin.live` (`Ends`) 95,512; `BatchJoin.option-forget` 154,038.
-- `BatchChain`: 129,740 distinct states, depth 50; `BatchChain.scale-semi` 122,642.
-- 27 mutants rejected as expected, 28 witnesses reached.
-- Apalache: `BitmapHash.apalache-indinv` and the eleven conjuncts of `BatchJoin`'s `IndInv` (`ReadFresh` and `NoWastedRead` of C11 among them), each inductive over every value of the integer constants. `BatchChain` has no IndInv: its claims are checked by TLC at the bounds of its cfgs only.
+- `BitmapHash`: 5,585,538 distinct states, depth 54; `BitmapHash.scale-twolevel` 8,543,250; `BitmapHash.scale-3h` (three heap workers, no error) 48,015,762 in 6,323 s; `BitmapHash.scale-serial` 62,805; `BitmapHash.live` (`Ends`) 737,682.
+- `BitmapOver` (C13, three workers, one fault): 6,940 distinct states, depth 23; `BitmapOver.scale-4` 128,400.
+- `BitmapRefix` (C12): 624 distinct states, depth 9, the same with `keep-page`; `BitmapRefix.scale-5` 13,184.
+- `BatchJoin`: 148,576 distinct states, depth 52; `BatchJoin.scale-b2` 117,604; `BatchJoin.scale-b5` 248,312; `BatchJoin.live` (`Ends`) 117,604; `BatchJoin.option-forget` 154,038.
+- `BatchChain`: 129,740 distinct states, depth 50; `BatchChain.pass-through` 325,044; `BatchChain.option-pass-drain` 199,273; `BatchChain.scale-semi` 122,642; `BatchChain.scale-anti` 114,322.
+- `BatchMemo`: 868 distinct states, depth 7; `BatchMemo.scale-5` 47,988.
+- 42 mutants rejected as expected, 40 witnesses reached.
+- Apalache: `BitmapHash.apalache-indinv` and the twelve conjuncts of `BatchJoin`'s `IndInv` (`ReadFresh`, `NoWastedRead` and `ReadOnce` of C11 among them), each inductive over every value of the integer constants. `BatchChain`, `BatchMemo`, `BitmapOver` and `BitmapRefix` have no Apalache cfg: their claims are checked by TLC at the bounds of their cfgs only.
 - TLAPS: not requested.
-- Not covered by a model: the plan choice (E3, E9, E29, E32), the cost prices (E28), a crash (fault table), three index workers, trace validation (`trace-exempt`), the subquery lookup batch (E35 Q6, E37 a) and its memoize registration (E39 Q12), the memoize judgment (E40). Their runtime checks are in the section above.
+- Not covered by a model: the plan choice (E3, E9, E29, E32) and its guards (the block that calls a stored procedure or a method, E48), the cost prices (E28), a crash (fault table), three index workers, trace validation (`trace-exempt`), the subquery lookup batch (E35 Q6, E37 a), the snapshot a nested statement replaces (CBRD-28297). Their runtime checks are in the section above.
 
-The run of 2026-11-19 (run dir `.git_ignored_dir/scratch/tla/CBRD-28032-20261119-041607-3157480`, 30 cfgs of `BitmapHash`, before the batched join's models were brought in) is superseded by this one.
+The run of 2026-11-20 02:23 (run dir `.git_ignored_dir/scratch/tla/CBRD-28032-20261120-022314-1583613`, 84 cfgs, before `BitmapOver`, `BitmapRefix`, `BatchMemo` and the partial-key slice of `BatchJoin`) is superseded by this one.
