@@ -30,6 +30,8 @@ CONSTANTS N0,        \* root rows
           Cap2,      \* rows that close the batch of level 2
           UpperEnd,  \* TRUE: level 2 closes when the children of level 1's current row end
           BatchEnd,  \* TRUE: level 2 closes when level 1 has replayed the last row of its batch
+          Pass1,     \* TRUE: level 1 holds no row (its scan is not read ahead, or it backed off): a root row goes
+                     \* through it at once (Cap1 = 1) and its end closes nothing below
           Prefix,    \* TRUE: a row held by level 2 carries the root value too (every value list above it)
           Restore,   \* what the value lists above hold when a replay of level 2 ends: "saved" (what they held when
                      \* the batch closed, put back) | "last" (the last replayed row)
@@ -37,7 +39,7 @@ CONSTANTS N0,        \* root rows
                      \* first match) or an "anti" join step (the row once, when it has no match)
           Win,       \* rows of a batch of level 2 whose pages may be named to the OS and not yet looked up
           MaxErrors, \* errors, interrupts and early stops in a run
-          Mutant     \* "none" | "bottom_up" | "late_close" | "name_all" | "keep_on_error"
+          Mutant     \* "none" | "bottom_up" | "late_close" | "name_all" | "keep_on_error" | "pass_no_end"
 
 VARIABLES fan, mat,              \* the data: children of a root, matches of a (root, child)
           next0,                 \* the next root row of the first scan
@@ -119,7 +121,7 @@ End1Row ==
   /\ UNCHANGED <<fan, mat, next0, b1, n1, ph1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
 
 End1Batch ==
-  /\ ph1 = "replay" /\ ph2 = "collect" /\ ~Full2 /\ c1 = 0 /\ i1 > n1 /\ (BatchEnd => n2 = 0)
+  /\ ph1 = "replay" /\ ph2 = "collect" /\ ~Full2 /\ c1 = 0 /\ i1 > n1 /\ (BatchEnd /\ ~Pass1 => n2 = 0)
   /\ b1' = [k \in 1..Cap1 |-> 0] /\ n1' = 0 /\ ph1' = "collect" /\ i1' = 0
   /\ UNCHANGED <<fan, mat, next0, c1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
 
@@ -130,9 +132,9 @@ Close2 ==
   /\ ph2 = "collect" /\ n2 > 0
   /\ \/ n2 = Cap2
      \/ UpperEnd /\ Row1Ended
-     \/ BatchEnd /\ ph1 = "replay" /\ c1 = 0 /\ i1 > n1
+     \/ BatchEnd /\ ~Pass1 /\ ph1 = "replay" /\ c1 = 0 /\ i1 > n1
      \/ IF Mutant = "bottom_up" THEN next0 > N0 /\ ~endFlushed2 /\ (ph1 = "collect" \/ c1 = 0)
-                                ELSE next0 > N0 /\ n1 = 0 /\ ph1 = "collect"
+                                ELSE Mutant /= "pass_no_end" /\ next0 > N0 /\ n1 = 0 /\ ph1 = "collect"
   /\ ph2' = "replay" /\ i2' = 1 /\ m2' = 0
   /\ endFlushed2' = (endFlushed2 \/ next0 > N0)
   /\ sv0' = reg0 /\ sv1' = reg1
@@ -192,7 +194,7 @@ Abort ==
   /\ UNCHANGED <<fan, mat, next0, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder>>
 
 Done == \/ stopped
-        \/ Quiet /\ next0 > N0 /\ n1 = 0 /\ (n2 = 0 \/ (Mutant = "bottom_up" /\ endFlushed2 /\ n2 < Cap2))
+        \/ Quiet /\ next0 > N0 /\ n1 = 0 /\ (n2 = 0 \/ Mutant = "pass_no_end" \/ (Mutant = "bottom_up" /\ endFlushed2 /\ n2 < Cap2))
 
 Finished == Done /\ UNCHANGED vars
 
