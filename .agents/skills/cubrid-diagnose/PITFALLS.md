@@ -53,6 +53,12 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-10-30, workspace#515): the cubrid-fastmig develop baseline `pristine/clean` was reflink-copied to scratch and only `_keys` removed; the server opened the registered DB's `_x001`/`_x002` beside the copy's volume 0, the probe's DML went into them, and the closing `cubrid deletedb` removed the registered DB's volumes and logs. Restored with `rsync -a --delete pristine/clean/ clean/` and a sha256 diff of 0 against `evidence/clean/pristine.sha256`. The same thing happened once with `addvoldb -S` (workspace#494).
 - Source: workspace#515 resolution
 
+### P25 — HA-only paths need a heartbeat server
+- Rule: An HA-only path (a branch on `HA_DISABLED ()`, such as the multi-row UNIQUE check that raises -975) is probed on a CS server started by a one-node heartbeat — `cubrid.conf` `ha_mode=on`, `cubrid_ha.conf` `ha_port_id=<free port>`, `ha_node_list=<group>@<hostname>`, `ha_db_list=<db>`, `setsid cubrid heartbeat start > <file> 2>&1 < /dev/null`, then `cubrid changemode <db>@localhost` until it says active — never `csql -S`, which reads `ha_mode` as off; `cubrid heartbeat stop` leaves the install's `cub_master` on its port, stopped by its pid with SIGTERM, and both confs are restored.
+- Applies at: Where to run the probe
+- Case (2026-11-24, CBRD-28326): to show that the write order decides a multi-row UPDATE of a UNIQUE column under HA, `csql -S` with `ha_mode=on` in the conf ran both orders without error — `;get ha_mode` printed "off". A one-node heartbeat on the develop optdebug install (030b650ff) reached the check: the key-order index UPDATE gave 2 rows affected, the heap-order table scan -975, and `u = u - 1` the reverse. After `cubrid heartbeat stop` the wrapper's stop printed FAILED and the master stayed on port 1708 until a SIGTERM to its pid.
+- Source: session 2026-11-24 (CBRD-28326 grill-with-tla)
+
 ## Designing the probe
 
 ### P6 — discriminate, and probe the no-key cases
