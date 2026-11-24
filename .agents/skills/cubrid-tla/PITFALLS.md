@@ -445,6 +445,11 @@ line under "Folded" at the end.
 - Applies at: PROOFS.md
 - Case (2026-11-09, lazy-snapshot): a generator citing the whole IndInv and TypeOK in every step failed 1119 of 4692 obligations on SMT internal timeouts in a 99-minute run, and its frame steps without `IndInv` in the DEF list failed even for conjuncts the action leaves alone; with per-variable type steps and narrow citation a 9-lemma trial proved 4630/4656, then 4097/4103 after hand case splits (the reader's entry is or is not the one a commit starts; history monotonicity at `v2 = curVer + 1`).
 
+### P85 — a reordered reject run needs renumbered `seq`
+- Rule: A corrupted run that reorders events gives them new `seq` numbers in their new order: `tools/tla/trace2tla` orders a log by `seq`, so swapped lines go back into the recorded order and the reject cfg consumes the real run.
+- Applies at: TRACE.md
+- Case (2026-11-24, PR #8663 `SpillFoldTrace`): `reject-link-before-split` swapped the `SplitLeft` line with the first `Link` line and kept their `seq` values; `trace2tla` put them back in order, and the reject cfg ended `violation TraceNotDone` (the real run accepted, 2955 states) instead of a pass. With `seq` renumbered after the swap it refused the run at depth 1608.
+
 ## Folded
 
 - P30 (`-` binds tighter than `+`) and P40 (a quantifier swallows later conjuncts) → P35.
