@@ -15,7 +15,7 @@ whose sentence is added to this file (or the reference file it belongs to) in th
 
 ## Terms
 
-- **Verified model**: a spec directory for which `tools/tla/tla-check <dir>` prints `RESULT: OK`.
+- **Verified model**: a spec directory for which `tools/tla/tla-check <dir>` prints `RESULT: OK`, or whose record is that run plus the per-module runs of P76.
 - **Claim** `C<n>`: a falsifiable sentence the change or design promises, with its source.
 - **Refinement map**: every model step named at a code site with the protection that makes it one step. Model-checking proves the model; the map and **trace validation** (a recorded run of the real build accepted by the spec) tie it to the code.
 - **Mutant**: a known-wrong variant the properties must reject. **Witness**: an outcome that must be reachable. A pass with a **surviving mutant** or an unexplained **dead expression** is **vacuous**: it proves nothing until the mutant fails or the expression fires.
@@ -32,7 +32,7 @@ whose sentence is added to this file (or the reference file it belongs to) in th
 - `tools/tla/tla-check` is changed by writing a new file and renaming it over the old one: bash reads a running script from its open file. (P18)
 - Stop only the processes your own runner started, by the pid it recorded; other sessions run TLC and tlapm on this host. (P29)
 - `tools/tla/tla-check --only` matches cfg names without `.cfg` (`--only 'X'`, `--only 'X.mutant-*'`); `--only 'X.cfg'` matches nothing and prints only the completeness lines. (P69)
-- While a model is iterated, a change reruns only the cfgs it touches (`--only`, one glob per call: a second `--only` replaces the first); the whole directory runs once, for the record, after the last spec, cfg and MAP edit, and a comparison cfg (an option the user did not pick) lists only the claims' invariants, never IndInv. (P76)
+- While a model is iterated, a change reruns only the cfgs it touches (`--only`, one glob per call: a second `--only` replaces the first); the record is the last whole-directory `RESULT: OK` plus, for every module edited after it, a `--only '<Module>*'` run with 0 failed started after that module's last edit (`summary.txt` is written when a run ends, so its sha256 lines do not show what the run read), both run dirs named in MAP.md's `## Result`; the whole directory runs again only when an edited module is one another module EXTENDS or INSTANCEs or `tools/tla/` changed, and a comparison cfg (an option the user did not pick) lists only the claims' invariants, never IndInv. (P76)
 
 ## Where the model lives
 

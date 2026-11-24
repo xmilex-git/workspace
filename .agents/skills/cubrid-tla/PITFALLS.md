@@ -50,9 +50,10 @@ line under "Folded" at the end.
 - Case (2026-11-09, PR 8431 review): `--only 'OvfScanStable.cfg'` ran no cfg and ended `RESULT: PARTIAL` with only the MAP/trace completeness FAILs; `--only 'OvfScanStable'` ran the main cfg.
 
 ### P76 — iterate on the touched cfgs, run the whole directory once
-- Rule: While a model is iterated, a change reruns only the cfgs it touches (`--only`, one glob per call: a second `--only` replaces the first); the whole directory runs once, for the record, after the last spec, cfg and MAP edit, and a comparison cfg (an option the user did not pick) lists only the claims' invariants, never IndInv.
+- Rule: While a model is iterated, a change reruns only the cfgs it touches (`--only`, one glob per call: a second `--only` replaces the first); the record is the last whole-directory `RESULT: OK` plus, for every module edited after it, a `--only '<Module>*'` run with 0 failed started after that module's last edit (`summary.txt` is written when a run ends, so its sha256 lines do not show what the run read), both run dirs named in MAP.md's `## Result`; the whole directory runs again only when an edited module is one another module EXTENDS or INSTANCEs or `tools/tla/` changed, and a comparison cfg (an option the user did not pick) lists only the claims' invariants, never IndInv.
 - Applies at: Toolchain; grill-with-tla rounds
 - Case (2026-11-10, CBRD-27993 grill): one whole-directory run took about 15 min (scale 6 min 50 s, four comparison cfgs at main size with IndInv about 5 min 30 s, main 1 min 52 s); it ran six times, several only to refresh MAP.md explanations, and three runs were stopped midway. `--only A --only B` ran B alone. A session-variable cfg started at main size reached 15 M distinct states in 13 min before it was cut to 2 x rows and 1 execution (380 k states, 18 s). The user: "tlaps 까지 하는것도 아닌데 왤캐느림? pitfall 보고 작업한거맞음?"
+- Case (2026-11-24, CBRD-28032): the directory's run takes about 4 hours (130 cfgs, `BitmapHash.scale-3h` alone 6,323 s). `BitmapShare.tla` was edited while that run was going; no other module names it, and its 12 cfgs passed in 2 minutes by `--only 'BitmapShare*'`. The old wording asked for the 4-hour run again to re-check six modules whose files had not changed since before that run started (`git log`, mtime). The user: "전체기록을 왜 꼭 해야 해?"
 
 ## Step 2 — refinement map
 

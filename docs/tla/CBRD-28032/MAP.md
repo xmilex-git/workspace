@@ -414,16 +414,16 @@ Batched join, memoize and the subquery result cache (E39, E40), CUBRID `c01d1eda
 
 ## Result
 
-`tools/tla/tla-check docs/tla/CBRD-28032` on 2026-11-24 (run dir `.git_ignored_dir/scratch/tla/CBRD-28032-20261124-100840-1452862`): `RESULT: OK`, 122 cfgs passed, none failed. After it, this file was edited in this section only. The counts of the models other than `BatchChain` are those of the 2026-11-20 run (`CBRD-28032-20261120-185034-31675`), whose specs are unchanged.
+`tools/tla/tla-check docs/tla/CBRD-28032` on 2026-11-24 (run dir `.git_ignored_dir/scratch/tla/CBRD-28032-20261124-160851-1865610`): `RESULT: OK`, 130 cfgs passed, none failed. `BitmapShare.tla` was edited after that run started (runs of partitions, CUBRID `2d79d3f269`); no other module of the directory names it, and its 12 cfgs were run after the edit by `tools/tla/tla-check --only 'BitmapShare*'` (run dir `CBRD-28032-20261124-200546-2832773`): 12 passed, none failed. The record is the two runs together (cubrid-tla P76): 134 cfgs. The counts of the models other than `BatchChain` and `BitmapShare` are those of the 2026-11-20 run (`CBRD-28032-20261120-185034-31675`), whose specs are unchanged.
 
 - `BitmapHash`: 5,585,538 distinct states, depth 54; `BitmapHash.scale-twolevel` 8,543,250; `BitmapHash.scale-3h` (three heap workers, no error) 48,015,762 in 6,323 s; `BitmapHash.scale-serial` 62,805; `BitmapHash.live` (`Ends`) 737,682.
 - `BitmapOver` (C13, three workers, one fault): 6,940 distinct states, depth 23; `BitmapOver.scale-4` 128,400.
 - `BitmapRefix` (C12): 624 distinct states, depth 9, the same with `keep-page`; `BitmapRefix.scale-5` 13,184.
 - `BatchJoin`: 148,576 distinct states, depth 52; `BatchJoin.scale-b2` 117,604; `BatchJoin.scale-b5` 248,312; `BatchJoin.live` (`Ends`) 117,604; `BatchJoin.option-forget` 154,038.
 - `BatchChain` (with `pos1`, `NextBlock` and `ReadOnce0` of C14): 138,697 distinct states, depth 52; `BatchChain.pass-through` 364,843; `BatchChain.option-pass-drain` 201,638; `BatchChain.scale-semi` 131,599; `BatchChain.scale-anti` 123,279.
-- `BitmapShare` (C15, three workers, three partitions of three pages, chunks of two): 195,162 distinct states, depth 50; `BitmapShare.scale-4` (four workers, four pages) 7,301,991, depth 63. Run by `tools/tla/tla-check --only 'BitmapShare*'` on 2026-11-24 (run dirs `CBRD-28032-20261124-160244-1860114` and the one after it): 4 mutants rejected, 2 witnesses reached. These cfgs are not part of the whole-directory run above, which was made before the module existed: the record run of the directory with `BitmapShare` is still to be made.
+- `BitmapShare` (C15, three workers, three partitions, chunks of two, runs of partitions under `CAP`): 111,741 distinct states, depth 49; `BitmapShare.scale-4` 3,571,349, depth 64; `BitmapShare.single` 337,852, depth 56. 6 mutants rejected, 3 witnesses reached.
 - `BatchMemo`: 868 distinct states, depth 7; `BatchMemo.scale-5` 47,988.
-- 43 mutants rejected as expected, 40 witnesses reached.
+- 49 mutants rejected as expected, 43 witnesses reached.
 - Apalache: `BitmapHash.apalache-indinv` and the twelve conjuncts of `BatchJoin`'s `IndInv` (`ReadFresh`, `NoWastedRead` and `ReadOnce` of C11 among them), each inductive over every value of the integer constants. `BatchChain`, `BatchMemo`, `BitmapOver` and `BitmapRefix` have no Apalache cfg: their claims are checked by TLC at the bounds of their cfgs only.
 - TLAPS: not requested.
 - Not covered by a model: the plan choice (E3, E9, E29, E32) and its guards (the block that calls a stored procedure or a method, E48), the cost prices (E28), a crash (fault table), three index workers, trace validation (`trace-exempt`), the subquery lookup batch (E35 Q6, E37 a), the snapshot a nested statement replaces (CBRD-28297). Their runtime checks are in the section above.
