@@ -1419,6 +1419,14 @@ _Avoid_: 지금 구현을 가리키는 말로 쓰기
 섹터 비트맵이 행이 아니라 페이지만 표시하던 것이다(PostgreSQL의 lossy page). 힙 단계가 그 페이지의 모든 행을 읽고 인덱스 조건을 다시 확인해야 했다. 지금 설계에는 없다(ADR 0067).
 _Avoid_: 손실 비트맵, 근사 표시
 
+**select 단계와 force 단계 (select phase, force phase)**:
+UPDATE와 DELETE의 두 단계다. select 단계는 고칠 행을 찾아 목록으로 다 만들고, force 단계는 그 목록을 목록의 순서대로 고친다. 행 잠금은 문장에 따라 select 단계에서 잡거나(select 단계 잠금) force 단계에서 잡는다(force 단계 잠금). 어느 쪽이든 행을 잠그는 순서는 select 단계가 행을 내놓은 순서다.
+_Avoid_: 조회 단계와 갱신 단계, 1차·2차 pass(참조 PK의 wait pass·write pass와 혼동)
+
+**쓰기 순서 (write order)**:
+force 단계가 행을 고치고 잠그는 순서다. bitmap heap scan을 쓰는 문장은 힙 단계의 순서, 키 순서로 읽는 문장은 인덱스의 키 순서다. 결과 값이나 성공 여부가 이 순서에 따라 달라지는 문장(HA 서버에서 UNIQUE 컬럼을 고치는 여러 행 UPDATE, ROWNUM이나 시리얼로 번호를 매기는 대입)은 키 순서를 유지한다(CBRD-28326).
+_Avoid_: force 순번, 처리 순서
+
 **배치 조인 (batched nested-loop join)**:
 중첩 루프의 바깥 행을 여러 개 쌓아 두고 안쪽 인덱스 조회를 먼저 한 뒤, 찾은 행의 힙 페이지를 한꺼번에 읽게 하는 조인이다. 쌓아 둔 바깥 행을 온 순서대로 조인하므로 결과와 순서가 행 단위 조인과 같다.
 _Avoid_: 묶음 조인, 블록 중첩 루프(안쪽을 통째로 훑는 다른 기법)
