@@ -133,16 +133,17 @@ One worker reads a page; the only other actor is vacuum, which needs the page un
 | `Dealloc` | vacuum's `file_dealloc` of an emptied heap page | the page's write latch, which needs the page unfixed |
 | not modeled | the serial scan's same choice (`scan_manager.c`, the serial heap step keeps or lets go by the same flag); two pages (the step reads one page at a time) | — |
 
-### BitmapShare (the heap step's partitions among workers; CUBRID head after `6286b0ee24`, `scan_manager.h`, `scan_manager.c`, `px_scan_task.cpp`)
+### BitmapShare (the heap step's partitions among workers; CUBRID `2d79d3f269`, `scan_manager.h`, `scan_manager.c`, `px_scan_task.cpp`)
 
 The workers of one scan; a serial scan is one worker and takes no chunk of another table.
 
 | Model | Code | One step because |
 |---|---|---|
 | `Enter`, `Leave`, `loaders` | `scan_bitmap_marks::enter_partitions`, `leave_partitions` (`m_bm_loaders`), around the partition loop of `task::execute`; the loop is left on every path, a stop included | one atomic add |
-| `Take`, `nextPart`, `marksIn` | `scan_bitmap_marks::take_partition`: `m_bm_next_part.fetch_add`, repeated while `has_marks` finds no entry (`tbl_start`) and no record chain (`rec.chain[part].first`) of the partition in any worker; those are written in the index step, which is over for every worker (the barrier of `BitmapHash`) | one atomic add; what `has_marks` reads no longer changes |
+| `Take`, `first` | `scan_bitmap_marks::take_partitions`: `m_bm_next_part.load`, and the value a failed `compare_exchange_weak` leaves in `first` | one atomic load |
+| `Cas`, `RunEnd`, `Weight`, `nextPart`, `marksIn`, `part`, `pend` | `take_partitions`: the loop over `m_bm_part_pages` from `first` (partitions follow while their pages add up to no more than `m_bm_cap`; one without a mark adds 0; the first with marks always fits), then `m_bm_next_part.compare_exchange_weak (first, last)`; `false` when the run has no page. `m_bm_part_pages` is filled once by `count_marks` (`std::call_once`) from `tbl_start` and the record count of every chain (`scan_bitmap_chain::n`, counted in `write`), which are written in the index step, over for every worker (the barrier of `BitmapHash`); a partition that the taking worker divides (`m_bm_nsub > 1`) or that counts more than a table counts as a whole table and is a run alone | one compare-and-exchange; what the loop reads no longer changes |
 | `Unshare` | `scan_bitmap_marks::load`, first block: `share_next = share_n = 0` | under `share_mutex` of the worker's table |
-| `Load`, `tbl`, `loading` | `load`: `table.clear ()`, the entries and records of the partition (or of its part) put into `heap_tbl`, `order` sorted | the owner alone writes its table, and nothing of it is on offer (`share_n = 0`) |
+| `Load`, `tbl`, `loading`, `RunMarks` | `load (part, end, sub)`: `table.clear ()`, the entries (`tbl_order[tbl_start[part] .. tbl_start[end])`) and the record chains of every partition of the run (or of the part of a divided partition) put into `heap_tbl`, `order` sorted | the owner alone writes its table, and nothing of it is on offer (`share_n = 0`) |
 | `Share` | `load`, last block: `share_n = order.size ()` | under `share_mutex` |
 | `OwnChunk`, `HelpChunk`, `Copy` | `scan_bitmap_marks::take_chunk`: up to `SCAN_BITMAP_CHUNK` entries copied from `heap_tbl` in the order of `order`, `share_next` moved, the pages to tell the OS computed; called from `read_chunks` of `task::execute` with the worker's own table, then with every worker's | under `share_mutex`; the caller reads the copy, so the table may be loaded again at once |
 | `OwnDone` | `read_chunks (worker)` returns: `take_chunk` returned 0 | the read of `share_next` and `share_n` under `share_mutex` |
@@ -243,9 +244,9 @@ Fairness: weak fairness on each worker's steps (`Fairness`); `Switch` and the en
 | `BitmapRefix.ReadFixed`, `NoPageHeld`, `Flags` | invariants: a slot is read on a fixed page; nothing stays fixed when the page is finished, failed or closed | C4 |
 | `BitmapRefix.NoExtra`, `AllReturned` | invariants: every marked row the snapshot sees is returned | C6 |
 | `BitmapOver.CloseOnce`, `NoClash`, `OneMerger`, `Handed`, `AllMerged`, `AllClosed` | invariants | C13 (`AllMerged`: C7; `AllClosed`: C4) |
-| `BitmapShare.ReadOnce`, `CopyStable` | invariants: no page is read twice; no chunk is copied from a table being loaded | C15 |
+| `BitmapShare.ReadOnce`, `CopyStable`, `RunFits` | invariants: no page is read twice; no chunk is copied from a table being loaded; the pages of a run are no more than a table holds (`keep` in `load` asserts it) | C15 |
 | `BitmapShare.AllRead`, `Counted` | invariants: when every worker has ended every marked page was read; `loaders` counts the workers that may still load | C15, C6 |
-| `BitmapShare`: no inductive invariant, no liveness property | TLC at the bounds of its cfgs only (three and four workers, three partitions of three and four pages, chunks of two); that every worker ends is checked as the absence of a deadlock | C15 |
+| `BitmapShare`: no inductive invariant, no liveness property | TLC at the bounds of its cfgs only (three and four workers, three partitions of three and four pages, chunks of two, a table of one and of two partitions' pages); that every worker ends is checked as the absence of a deadlock | C15 |
 | `BatchMemo`, `BitmapOver`, `BitmapRefix`: no inductive invariant | TLC at the bounds of their cfgs only (four outer rows of two keys; three and four workers; three and five slots) | C9, C11, C12, C13 |
 | `BatchJoin.Ends` | liveness (WF on the join's steps), own cfg `BatchJoin.live` | C9 |
 | `BatchJoin.IndInv` | inductive invariant by Apalache, one cfg per conjunct (`BatchJoin.apalache-*`) | C9 |
@@ -298,6 +299,8 @@ Fairness: weak fairness on each worker's steps (`Fairness`); `Switch` and the en
 | `BitmapShare.mutant-no-lock` | a chunk is taken without the mutex: the place is read, then written | violation `ReadOnce` | C15 |
 | `BitmapShare.mutant-share-early` | the pages are put on offer before the table is loaded | violation `CopyStable` | C15 |
 | `BitmapShare.mutant-early-leave` | the owner goes to its next partition with pages of its table not taken | violation `AllRead` | C15 |
+| `BitmapShare.mutant-no-cap` | a run takes every partition left, whatever a table holds | violation `RunFits` | C15 |
+| `BitmapShare.mutant-no-cas` | the counter is stored without comparing it with the value read | violation `ReadOnce` | C15 |
 | `BatchChain.mutant-no-prefix` | a row held by level 2 carries only the value list of the step above it | violation `AllReturned` | C9 |
 | `BatchChain.mutant-bottom-up` | at the end of the first scan level 2 is emptied once, whatever level 1 still holds | violation `AllReturned` | C9 |
 | `BatchChain.mutant-late-close` | a full batch of level 2 closes only after the scans above moved on | violation `NoExtra` | C9 |
@@ -340,6 +343,7 @@ Fairness: weak fairness on each worker's steps (`Fairness`); `Switch` and the en
 | `BitmapRefix.witness-stopped-with-row` | the scan was closed while the block above held a row |
 | `BitmapShare.witness-helped` | a page was read by a worker that did not load it |
 | `BitmapShare.witness-done` | every worker ended |
+| `BitmapShare.witness-run` | a table holds the pages of two partitions |
 
 Limits of three older witnesses (E47): `BitmapHash.witness-freed-page` shows a run that ended with a page deallocated, not that the page had been marked and skipped; `BatchChain.witness-stopped` shows rows returned before the stop, not rows held at the stop (`NoneHeld` and `mutant-keep-on-error` cover those); `BitmapHash.witness-handed-on` shows a part put aside, not another worker reading it.
 
@@ -358,7 +362,7 @@ Limits of three older witnesses (E47): `BitmapHash.witness-freed-page` shows a r
 | `BatchChain.tla:116`, `BatchChain.tla:117`, `BatchChain.tla:118`, `BatchChain.tla:119`, `BatchChain.tla:125`, `BatchChain.tla:126`, `BatchChain.tla:127` | `PassRoot`, `PassEnd` | `Pass1` is FALSE in every cfg but the pass cfgs (`pass-through`, `witness-pass-span`, `witness-pass-then-held`, `mutant-pass-no-end`, `option-pass-drain`), which evaluate them: a level 1 that always holds its rows never passes one |
 | `BitmapRefix.tla:82`, `BitmapRefix.tla:83` | `RefixGone` | a page that returned a row holds a row the statement's snapshot sees, and vacuum does not deallocate such a page: the page let go between two rows is never found deallocated. The code keeps the branch as a guard (`px_scan_slot_iterator_index.cpp`, `!is_fixed` after the second `fix_bitmap_page`) |
 | `BitmapRefix.tla:76`, `BitmapRefix.tla:77` | `RefixFail` | `BitmapRefix.keep-page` (`Keep = TRUE`): the page stays fixed between its rows and is never fixed again; `BitmapRefix` and `scale-5` fire it |
-| `BitmapShare.tla:74`, `BitmapShare.tla:101`, `BitmapShare.tla:102`, `BitmapShare.tla:103`, `BitmapShare.tla:104`, `BitmapShare.tla:112`, `BitmapShare.tla:120`, `BitmapShare.tla:121`, `BitmapShare.tla:122`, `BitmapShare.tla:141` | `Unshare`, `OwnChunk`, `HelpChunk`, `LateCopy`, `Copy` | mutants' branches: line 74's THEN is `no_unshare` (`BitmapShare.mutant-no-unshare`); the others are the copy without the mutex (`BitmapShare.mutant-no-lock`), lines 101 to 104 being `Copy` as `LateCopy` calls it. `Copy` called from `OwnChunk` and `HelpChunk` fires in the pass cfg (71,472 times) |
+| `BitmapShare.tla:97`, `BitmapShare.tla:129`, `BitmapShare.tla:130`, `BitmapShare.tla:131`, `BitmapShare.tla:132`, `BitmapShare.tla:140`, `BitmapShare.tla:148`, `BitmapShare.tla:149`, `BitmapShare.tla:150`, `BitmapShare.tla:169` | `Unshare`, `OwnChunk`, `HelpChunk`, `LateCopy`, `Copy` | mutants' branches: line 97's THEN is `no_unshare` (`BitmapShare.mutant-no-unshare`); the others are the copy without the mutex (`BitmapShare.mutant-no-lock`), lines 129 to 132 being `Copy` as `LateCopy` calls it. `Copy` called from `OwnChunk` and `HelpChunk` fires in the pass cfg (71,472 times) |
 
 ## Runtime checks of the implementation
 
