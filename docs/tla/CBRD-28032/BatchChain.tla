@@ -20,6 +20,12 @@
 (*                                                                         *)
 (* The claim (C9, for a chain): the statement returns the same rows, the   *)
 (* same number of times and in the same order as with no batch.            *)
+(*                                                                         *)
+(* The block that drives the chain rewinds level 1's scan for every row    *)
+(* the first scan gives it, and when the first scan has ended it asks each *)
+(* scan below for a next block: a scan it finds before its first row has   *)
+(* one, and the first scan is then read again.  The claim (C14): the first *)
+(* scan is read once.                                                      *)
 (***************************************************************************)
 EXTENDS Integers, FiniteSets
 
@@ -40,6 +46,7 @@ CONSTANTS N0,        \* root rows
           Win,       \* rows of a batch of level 2 whose pages may be named to the OS and not yet looked up
           MaxErrors, \* errors, interrupts and early stops in a run
           Mutant     \* "none" | "bottom_up" | "late_close" | "name_all" | "keep_on_error" | "pass_no_end" | "pass_drain"
+                     \* | "rewind_on_drain"
 
 VARIABLES pr,                    \* the root row passing through level 1 unheld (0: none)
           g2p,                   \* level 2: the held row came through such a pass (ghost)
@@ -53,13 +60,16 @@ VARIABLES pr,                    \* the root row passing through level 1 unheld 
           sv0, sv1,              \* what they held when the batch of level 2 closed
           named,                 \* rows of level 2's batch whose pages were named to the OS
           errs, stopped,         \* errors so far; the statement stopped on one
-          emitted, last, badOrder
+          emitted, last, badOrder,
+          pos1,                  \* level 1's scan: "before" its first row (rewound) | "after" its last one
+          scans0, ended          \* times the first scan was read (ghost); the block found no next block
 
 vars == <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1,
-          sv0, sv1, named, errs, stopped, emitted, last, badOrder>>
+          sv0, sv1, named, errs, stopped, emitted, last, badOrder, pos1, scans0, ended>>
 
 Roots == 1..N0
 Kids == 1..F1
+MaxScans == 2      \* the model stops counting the reads of the first scan here
 Valid == CASE Kind = "inner" -> {t \in Roots \X Kids \X (1..M2) : t[2] <= fan[t[1]] /\ t[3] <= mat[<<t[1], t[2]>>]}
            [] Kind = "semi" -> {t \in Roots \X Kids \X {1} : t[2] <= fan[t[1]] /\ mat[<<t[1], t[2]>>] >= 1}
            [] OTHER -> {t \in Roots \X Kids \X {0} : t[2] <= fan[t[1]] /\ mat[<<t[1], t[2]>>] = 0}
@@ -82,6 +92,7 @@ Init ==
   /\ reg0 = 0 /\ reg1 = 0 /\ sv0 = 0 /\ sv1 = 0
   /\ named = 0 /\ errs = 0 /\ stopped = FALSE
   /\ emitted = {} /\ last = None /\ badOrder = FALSE
+  /\ pos1 = "before" /\ scans0 = 1 /\ ended = FALSE
 
 Quiet == ph1 = "collect" /\ ph2 = "collect"
 \* a batch that is full closes in the call that added its last row: nothing above moves first ("late_close": it may)
@@ -95,7 +106,8 @@ ReadRoot ==
   /\ reg0' = next0
   /\ b1' = [b1 EXCEPT ![n1 + 1] = next0]
   /\ n1' = n1 + 1 /\ next0' = next0 + 1
-  /\ UNCHANGED <<pr, g2p, fan, mat, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped, scans0, ended>>
+  /\ pos1' = "before"
 
 \* the first scan reads a row and level 1 lets it through without holding it (level 1 holds none): the row is
 \* inside level 1's row path at once
@@ -103,25 +115,28 @@ PassRoot ==
   /\ Pass1 /\ Quiet /\ ~Full2 /\ next0 <= N0 /\ n1 = 0
   /\ reg0' = next0 /\ pr' = next0 /\ next0' = next0 + 1
   /\ ph1' = "replay" /\ c1' = 1
-  /\ UNCHANGED <<g2p, fan, mat, b1, n1, i1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
+  /\ UNCHANGED <<g2p, fan, mat, b1, n1, i1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped, scans0, ended>>
+  /\ pos1' = "before"
 
 \* the row that passed has no more children: level 1 returns the end of its outer row and ends nothing below
 \* ("pass_drain": the batch of level 2 is joined first, as when level 1 ended a batch of its own)
 PassEnd ==
   /\ Row1Ended /\ pr > 0 /\ ph2 = "collect" /\ ~Full2 /\ (UpperEnd \/ Mutant = "pass_drain" => n2 = 0)
   /\ pr' = 0 /\ ph1' = "collect" /\ c1' = 0
-  /\ UNCHANGED <<g2p, fan, mat, next0, b1, n1, i1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
+  /\ UNCHANGED <<g2p, fan, mat, next0, b1, n1, i1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped, scans0, ended>>
+  /\ pos1' = "after"
 
 Close1 ==
   /\ Quiet /\ ~Full2 /\ n1 > 0 /\ (n1 = Cap1 \/ next0 > N0)
   /\ ph1' = "replay" /\ i1' = 1 /\ c1' = 0
-  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped, scans0, ended>>
+  /\ pos1' = IF next0 > N0 THEN "before" ELSE pos1
 
 \* a held root becomes the current row of the first scan again
 Open1 ==
   /\ ph1 = "replay" /\ pr = 0 /\ ph2 = "collect" /\ ~Full2 /\ c1 = 0 /\ i1 <= n1
   /\ reg0' = b1[i1] /\ c1' = 1
-  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped, pos1, scans0, ended>>
 
 \* level 1's scan returns a child; level 2 holds the row: the child, and with Prefix what the first scan's
 \* value list holds now
@@ -133,17 +148,18 @@ Fetch1 ==
   /\ g2r' = [g2r EXCEPT ![n2 + 1] = CurRoot]
   /\ g2p' = [g2p EXCEPT ![n2 + 1] = (pr > 0)]
   /\ n2' = n2 + 1 /\ c1' = c1 + 1
-  /\ UNCHANGED <<pr, fan, mat, next0, b1, n1, ph1, i1, ph2, i2, m2, endFlushed2, reg0, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
+  /\ UNCHANGED <<pr, fan, mat, next0, b1, n1, ph1, i1, ph2, i2, m2, endFlushed2, reg0, sv0, sv1, emitted, last, badOrder, named, errs, stopped, pos1, scans0, ended>>
 
 End1Row ==
   /\ Row1Ended /\ pr = 0 /\ ph2 = "collect" /\ ~Full2 /\ (UpperEnd => n2 = 0)
   /\ i1' = i1 + 1 /\ c1' = 0
-  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped, scans0, ended>>
+  /\ pos1' = "after"
 
 End1Batch ==
   /\ ph1 = "replay" /\ ph2 = "collect" /\ ~Full2 /\ pr = 0 /\ c1 = 0 /\ i1 > n1 /\ (BatchEnd => n2 = 0)
   /\ b1' = [k \in 1..Cap1 |-> 0] /\ n1' = 0 /\ ph1' = "collect" /\ i1' = 0
-  /\ UNCHANGED <<pr, g2p, fan, mat, next0, c1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, next0, c1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped, pos1, scans0, ended>>
 
 \* level 2 closes: its batch is full, or (UpperEnd) level 1's row has no more children, or the first scan ended
 \* and nothing above still holds rows.  "bottom_up": at the end of the first scan level 2 is emptied once,
@@ -161,7 +177,11 @@ Close2 ==
   /\ sv0' = reg0 /\ sv1' = reg1
   \* the first window is named when the batch closes ("name_all": the whole batch)
   /\ named' = IF Mutant = "name_all" THEN n2 ELSE Min(n2, Win)
-  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, reg0, reg1, emitted, last, badOrder, errs, stopped>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, reg0, reg1, emitted, last, badOrder, errs, stopped, scans0, ended>>
+  \* the first scan ended and level 1 holds nothing: the block takes one more row, only for level 1 to pass the rows of
+  \* level 2 on.  Level 1's scan does not run for it, so the block leaves it where it ended ("rewind_on_drain": it
+  \* rewinds as for any row)
+  /\ pos1' = IF Mutant = "rewind_on_drain" /\ n2 < Cap2 /\ next0 > N0 /\ n1 = 0 /\ ph1 = "collect" THEN "before" ELSE pos1
 
 \* a held row becomes the current row again: the child, and with Prefix the root
 Open2 ==
@@ -171,7 +191,7 @@ Open2 ==
   /\ m2' = 1
   \* the window moves with the lookups
   /\ named' = Max(named, Min(n2, i2 - 1 + Win))
-  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, i2, endFlushed2, sv0, sv1, emitted, last, badOrder, errs, stopped>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, i2, endFlushed2, sv0, sv1, emitted, last, badOrder, errs, stopped, pos1, scans0, ended>>
 
 \* the row path returns a match of the row; the output reads the value lists
 Emit2 ==
@@ -184,7 +204,7 @@ Emit2 ==
        /\ badOrder' = (badOrder \/ ~Less(last, t))
        /\ last' = t
   /\ m2' = m2 + 1
-  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, i2, endFlushed2, reg0, reg1, sv0, sv1, named, errs, stopped>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, i2, endFlushed2, reg0, reg1, sv0, sv1, named, errs, stopped, pos1, scans0, ended>>
 
 End2Row ==
   /\ ph2 = "replay" /\ m2 >= 1
@@ -192,7 +212,7 @@ End2Row ==
        [] Kind = "semi" -> m2 = 2 \/ mat[<<g2r[i2], b2c[i2]>>] = 0
        [] OTHER -> m2 = 2 \/ mat[<<g2r[i2], b2c[i2]>>] >= 1
   /\ i2' = i2 + 1 /\ m2' = 0
-  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, next0, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped, pos1, scans0, ended>>
 
 End2Batch ==
   /\ ph2 = "replay" /\ m2 = 0 /\ i2 > n2
@@ -201,7 +221,7 @@ End2Batch ==
   /\ n2' = 0 /\ ph2' = "collect" /\ i2' = 0 /\ named' = 0
   /\ reg0' = IF Restore = "saved" /\ Prefix THEN sv0 ELSE reg0
   /\ reg1' = IF Restore = "saved" THEN sv1 ELSE reg1
-  /\ UNCHANGED <<pr, fan, mat, next0, b1, n1, ph1, i1, c1, m2, endFlushed2, sv0, sv1, emitted, last, badOrder, errs, stopped>>
+  /\ UNCHANGED <<pr, fan, mat, next0, b1, n1, ph1, i1, c1, m2, endFlushed2, sv0, sv1, emitted, last, badOrder, errs, stopped, pos1, scans0, ended>>
 
 \* an error, an interrupt or an early stop anywhere: the statement ends and every batch forgets its rows
 \* ("keep_on_error": they stay for the next execution of the cached plan)
@@ -214,15 +234,23 @@ Abort ==
             /\ b2r' = [k \in 1..Cap2 |-> 0] /\ b2c' = [k \in 1..Cap2 |-> 0] /\ g2r' = [k \in 1..Cap2 |-> 0]
             /\ n2' = 0 /\ ph2' = "collect" /\ i2' = 0 /\ m2' = 0 /\ named' = 0
             /\ pr' = 0 /\ g2p' = [k \in 1..Cap2 |-> FALSE]
-  /\ UNCHANGED <<fan, mat, next0, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder>>
+  /\ UNCHANGED <<fan, mat, next0, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, pos1, scans0, ended>>
 
-Done == \/ stopped
-        \/ Quiet /\ next0 > N0 /\ n1 = 0 /\ (n2 = 0 \/ (Mutant = "bottom_up" /\ endFlushed2 /\ n2 < Cap2))
+\* the first scan ended and nothing is held: the block asks the scans for a next block.  Level 1's scan has one when
+\* it stands before its first row, and the first scan is then rewound and read again
+NextBlock ==
+  /\ ~ended /\ Quiet /\ next0 > N0 /\ n1 = 0 /\ (n2 = 0 \/ (Mutant = "bottom_up" /\ endFlushed2 /\ n2 < Cap2))
+  /\ IF pos1 = "before" /\ scans0 < MaxScans
+       THEN next0' = 1 /\ scans0' = scans0 + 1 /\ ended' = ended
+       ELSE ended' = TRUE /\ UNCHANGED <<next0, scans0>>
+  /\ UNCHANGED <<pr, g2p, fan, mat, b1, n1, ph1, i1, c1, b2r, b2c, g2r, n2, ph2, i2, m2, endFlushed2, reg0, reg1, sv0, sv1, emitted, last, badOrder, named, errs, stopped, pos1>>
+
+Done == stopped \/ ended
 
 Finished == Done /\ UNCHANGED vars
 
 Step == ReadRoot \/ PassRoot \/ PassEnd \/ Close1 \/ Open1 \/ Fetch1 \/ End1Row \/ End1Batch \/ Close2 \/ Open2 \/ Emit2 \/ End2Row
-        \/ End2Batch
+        \/ End2Batch \/ NextBlock
 
 Next == (~stopped /\ Step) \/ Abort \/ Finished
 
@@ -240,6 +268,7 @@ TypeOK ==
   /\ emitted \subseteq ((0..N0) \X (0..F1) \X (0..M2)) /\ last \in ((0..N0) \X (0..F1) \X (0..M2))
   /\ badOrder \in BOOLEAN
   /\ named \in 0..Cap2 /\ errs \in 0..MaxErrors /\ stopped \in BOOLEAN
+  /\ pos1 \in {"before", "after"} /\ scans0 \in 1..MaxScans /\ ended \in BOOLEAN
 
 NoExtra == emitted \subseteq Valid
 InOrder == ~badOrder
@@ -250,6 +279,8 @@ WinBound == ph2 = "replay" => named - (i2 - 1) <= Win
 NoneHeld == stopped => (n1 = 0 /\ n2 = 0)
 ArrayBound == n1 <= Cap1 /\ n2 <= Cap2
 Terminates == <>Done
+\* the first scan is read once: the block finds every scan below at its end when the first scan has ended
+ReadOnce0 == scans0 = 1
 
 \* with UpperEnd a batch of level 2 never holds more than the children of one row of level 1
 FanBound == n2 <= F1
