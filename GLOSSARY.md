@@ -1319,6 +1319,16 @@ _Avoid_: flush latch 보유자(FLUSH는 대기 모드일 뿐 latch로 쥐지 않
 latch 상태 word에 든 비트로, R/W 대기자가 있어 lock-free READ fix와 대기 없는 READ 합류를 막아야 함을 뜻한다. FLUSH 대기자는 켜지 않는다(CBRD-27971 결정 D1).
 _Avoid_: 대기열 비어 있지 않음(FLUSH 대기자만 있어도 대기열은 비어 있지 않다)
 
+### 페이지 버퍼 victim (PR 8713 리뷰 그릴링 2026-11-25)
+
+**direct victim**:
+victim을 기다리는 스레드에게 LRU 리스트를 거치지 않고 바로 넘겨주기로 찍힌 BCB다. 넘겨받기 전에 다른 스레드가 그 페이지를 fix하면 배정은 무효화되고, 기다리던 스레드는 그 BCB를 받지 않고 다시 victim을 찾는다.
+_Avoid_: 직접 희생자(코드와 보고서가 영어 그대로 씀)
+
+**VOID zone**:
+어느 LRU 리스트에도 없어 victim 후보가 되지 못하는 BCB 상태다. 막 읽어 들였거나 direct victim으로 LRU에서 빠진 BCB가 잠시 머물고, 그 BCB를 마지막으로 놓는 unfix가 LRU로 되돌린다. fix도 배정도 없이 이 상태에 남은 BCB는 다시는 victim으로 뽑히지 않는다(VOID zone 누수, CBRD-28226).
+_Avoid_: invalid zone(해제된 BCB가 가는 다른 리스트)
+
 ### 성능 서버 (cubrid-perf-server 그릴링 2026-11-06)
 
 **성능 서버 (perf server)**:
