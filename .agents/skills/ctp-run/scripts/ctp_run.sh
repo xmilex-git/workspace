@@ -59,6 +59,15 @@ SELF="$(basename "$0")"
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly CGROUPNS="private"   # rootless on cgroup-v1 hosts fails with the default ns
 
+# On cgroup-v1 container hosts, systemd --user does not receive release_agent
+# notifications when a scope cgroup empties, so each rootless podman call leaks
+# an active podman-<pid>.scope until systemd --user hits MANAGER_MAX_NAMES
+# (131,072). Disabling only podman's D-Bus dial skips StartTransientUnit (and
+# propagates to conmon's cleanup exit-command) without touching DBUS globally.
+if [ ! -f /sys/fs/cgroup/cgroup.controllers ]; then
+  podman() { DBUS_SESSION_BUS_ADDRESS=disabled: command podman "$@"; }
+fi
+
 #####################################################################
 # Tiny helpers
 #####################################################################
@@ -2469,7 +2478,10 @@ sweep_dead_runs() {
       [ -n "$(find "$d/timing.tsv" -mmin +720 2>/dev/null)" ] || continue
     fi
     # Its runner is gone, so its containers (named by its run id) are orphans.
-    printf '%s\n' "$names" | grep -F "ctprun_${rid}_" | xargs -r podman rm -f >/dev/null 2>&1 || :
+    local cname
+    while IFS= read -r cname; do
+      [ -n "$cname" ] && podman rm -f "$cname" >/dev/null 2>&1 || :
+    done < <(printf '%s\n' "$names" | grep -F "ctprun_${rid}_" || :)
     local s
     for s in "$d"/shard_*; do
       [ -d "$s" ] || continue
@@ -2481,6 +2493,7 @@ sweep_dead_runs() {
     swept=$((swept + 1))
   done
   [ "$swept" -eq 0 ] || info "swept $swept dead run(s) under $root."
+  bash "$SELF_DIR/sweep_podman_scopes.sh" || :
 }
 
 #####################################################################
@@ -2565,6 +2578,7 @@ cleanup() {
         case "$LAST_PHASE" in launched|shards_done) collect_shards >/dev/null 2>&1 || : ;; esac
         prune_shard_copies || :
         mark_phase interrupted_pruned || :
+        bash "$SELF_DIR/sweep_podman_scopes.sh" >/dev/null 2>&1 || :
       fi ;;
   esac
   [ -n "${WORK:-}" ] && rm -rf "$WORK" 2>/dev/null || :
@@ -2671,6 +2685,7 @@ main() {
   merge_results || :
   prune_shard_copies || :
   mark_phase pruned
+  bash "$SELF_DIR/sweep_podman_scopes.sh" || :
   write_timing || :
   return "$agg_rc"
 }

@@ -128,6 +128,7 @@ A run's report carries: run dir, `provenance.txt` first line (install, TC ref, `
 |---|---|
 | `scripts/ctp_run.sh` | the runner: split, mount, launch, aggregate, merge |
 | `scripts/ctp_rerun.sh` | CI failure extraction → subset run |
+| `scripts/sweep_podman_scopes.sh` | reap empty leaked rootless-podman transient scopes on cgroup-v1 hosts |
 | `scripts/entrypoint.sh` | current upstream entrypoint plus two local HA hooks, bind-mounted into the container |
 | `scripts/volatile_entry.sh` | sql/medium container entrypoint: mounts the volatile database overlay, then runs `/entrypoint.sh` |
 | `scripts/harvest_weights.sh` | turn a finished run into a timing table |
@@ -350,6 +351,7 @@ with two rules that keep the disk from filling:
    - Right after a run's evidence is read (verdicts, diffs, census extracts copied to scratch), delete the run and its analyzed cores — record a core's backtrace or assert text first — keep only the latest passing baseline, `podman rm` the run's exited `ctprun_*` containers first, and list other sessions' cores for the user instead of touching them. (P16)
    - Before `rm -rf` of a run dir or its `/bench/hdd/core/ctp/<run>` store, `head -1 <run>/provenance.txt` and match `install=` to your own install and `testcases=` to your ref; delete only the runs you started — identified by the `plan written to <OUT>` line of your own launch output (medium's from its `medium-beside-sql-*.log`), never "the ones near my timestamp" — by literal path; `just ctp-prune` keeps the newest N regardless of owner, so it is not used while other sessions' runs share the root. (P14) The run root is shared by every session on this host. `rm -rf` takes only literal absolute paths written out in full — no variables, globs or command substitution (source: AGENTS.md house rules).
    - Recipe parameters go after the recipe name, positionally (`just ctp-prune 3`); env knobs (`BUILD=`, `TC_REF=`, `SHARDS=`) go before `just` — `just ctp-prune KEEP=3` does not bind KEEP. (P15)
+   - On cgroup-v1 container hosts, `ctp_run.sh` and `just` run `podman` with `DBUS_SESSION_BUS_ADDRESS=disabled:` (preventing `podman-<pid>.scope` creation) and reap any leaked empty scopes via `sweep_podman_scopes.sh` / `just ctp-clean-scopes` so `systemd --user` never hits `MANAGER_MAX_NAMES` (131,072). (P22)
 
 Merged SQL/medium reports stay in `<run>/webconsole/`; the runner does not copy
 them into the source `CTP_HOME/sql/result`.

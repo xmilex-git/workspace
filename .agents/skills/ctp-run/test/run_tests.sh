@@ -62,6 +62,7 @@ echo; echo "## (a) static lint"
 if bash -n "$ORCH"; then ok "bash -n clean: ctp_run.sh"; else bad "bash -n FAILED: ctp_run.sh"; fi
 if bash -n "$ENTRY"; then ok "bash -n clean: entrypoint.sh"; else bad "bash -n FAILED: entrypoint.sh"; fi
 if bash -n "$SKILL/scripts/volatile_entry.sh"; then ok "bash -n clean: volatile_entry.sh"; else bad "bash -n FAILED: volatile_entry.sh"; fi
+if bash -n "$SKILL/scripts/sweep_podman_scopes.sh"; then ok "bash -n clean: sweep_podman_scopes.sh"; else bad "bash -n FAILED: sweep_podman_scopes.sh"; fi
 if command -v shellcheck >/dev/null 2>&1; then
   if shellcheck -S warning "$ORCH" "$ENTRY"; then ok "shellcheck clean"; else bad "shellcheck reported issues"; fi
 else
@@ -677,6 +678,45 @@ if bash "$HERE/ha_shell_test.sh"; then
   ok "HA csql port and slave broker setup regression"
 else
   bad "HA csql port and slave broker setup regression"
+fi
+
+#-------------------------------------------------------------------
+# (o) sweep_podman_scopes.sh dry-run fixture
+#-------------------------------------------------------------------
+echo; echo "## (o) sweep_podman_scopes dry-run fixture"
+SWEEP_T="$SCRATCH/sweep/transient"
+SWEEP_C="$SCRATCH/sweep/user.slice"
+mkdir -p "$SWEEP_T" \
+  "$SWEEP_C/podman-pause-2504f9fb.scope" \
+  "$SWEEP_C/podman-1001.scope" \
+  "$SWEEP_C/rootless-netns-abcd1234.scope" \
+  "$SWEEP_C/podman-1002.scope" \
+  "$SWEEP_C/podman-1003.scope" \
+  "$SWEEP_C/tmux-spawn-1234.scope"
+: > "$SWEEP_T/podman-pause-2504f9fb.scope"
+: > "$SWEEP_T/podman-1001.scope"
+: > "$SWEEP_T/rootless-netns-abcd1234.scope"
+: > "$SWEEP_T/podman-1002.scope"
+: > "$SWEEP_T/podman-1003.scope"
+: > "$SWEEP_T/tmux-spawn-1234.scope"
+: > "$SWEEP_C/podman-1001.scope/cgroup.procs"
+: > "$SWEEP_C/rootless-netns-abcd1234.scope/cgroup.procs"
+printf '999999\n' > "$SWEEP_C/podman-1002.scope/cgroup.procs"
+: > "$SWEEP_C/podman-1003.scope/cgroup.procs"
+: > "$SWEEP_C/tmux-spawn-1234.scope/cgroup.procs"
+touch -d '10 minutes ago' \
+  "$SWEEP_T/podman-pause-2504f9fb.scope" \
+  "$SWEEP_T/podman-1001.scope" \
+  "$SWEEP_T/rootless-netns-abcd1234.scope" \
+  "$SWEEP_T/podman-1002.scope" \
+  "$SWEEP_T/tmux-spawn-1234.scope"
+sweep_out="$(SWEEP_FORCE=1 SWEEP_TRANSIENT_DIR="$SWEEP_T" SWEEP_CGRP_USER_SLICE="$SWEEP_C" \
+  bash "$SKILL/scripts/sweep_podman_scopes.sh" --min-age 60 --dry-run)"
+expected_sweep="$(printf 'podman-1001.scope\nrootless-netns-abcd1234.scope')"
+if [ "$sweep_out" = "$expected_sweep" ]; then
+  ok "sweep_podman_scopes: selects only old empty podman/netns scopes and keeps pause/live/fresh/tmux"
+else
+  bad "sweep_podman_scopes: got [$sweep_out], expected [$expected_sweep]"
 fi
 
 #-------------------------------------------------------------------

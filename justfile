@@ -402,6 +402,9 @@ _ports_file := justfile_directory() / ".git_ignored_dir/port-registry/claims.md"
 ctp-runs:
     #!/usr/bin/env bash
     set -eu
+    if [ ! -f /sys/fs/cgroup/cgroup.controllers ]; then
+        podman() { DBUS_SESSION_BUS_ADDRESS=disabled: command podman "$@"; }
+    fi
     root="$(bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/artifact_root.sh")"
     echo "root: $root"
     for d in $(ls -dt "$root"/*-*Z-* 2>/dev/null); do
@@ -416,6 +419,9 @@ ctp-runs:
 ctp-prune KEEP="3":
     #!/usr/bin/env bash
     set -eu
+    if [ ! -f /sys/fs/cgroup/cgroup.controllers ]; then
+        podman() { DBUS_SESSION_BUS_ADDRESS=disabled: command podman "$@"; }
+    fi
     # A KEEP that is not a number (`just ctp-prune KEEP=3` passes the text "KEEP=3") fails the test below inside an
     # `&&` list, which set -e does not stop, and every run would be deleted (2026-09-27).
     case "{{KEEP}}" in ''|*[!0-9]*) echo "ERROR: KEEP must be a number: just ctp-prune 3 (got '{{KEEP}}')" >&2; exit 2 ;; esac
@@ -438,6 +444,14 @@ ctp-prune KEEP="3":
         rm -rf "$d" 2>/dev/null || podman unshare rm -rf "$d"
     done
     echo "kept newest {{KEEP}} run(s) under $root"
+    bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/sweep_podman_scopes.sh" || true
+
+# Reap empty leaked rootless-podman transient scopes on cgroup-v1 hosts.
+[doc("Reap empty leaked podman systemd transient scopes (cgroup-v1 hosts)")]
+ctp-clean-scopes MIN_AGE="60":
+    #!/usr/bin/env bash
+    set -eu
+    bash "{{justfile_directory()}}/.agents/skills/ctp-run/scripts/sweep_podman_scopes.sh" --min-age "{{MIN_AGE}}"
 
 # Show active port claims and live listeners.
 [doc("Show CUBRID port claims (port registry) + live listeners")]

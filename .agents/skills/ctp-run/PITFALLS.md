@@ -127,6 +127,12 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-11-18): /home held five dead runs (three 16-shard sql runs of 39-42 G, two medium) that stopped at `launched` and never reached the end-of-run prune: shard DB volumes (≈3.3 G each, the volatile overlay's upper) and full copies of the sql tree (232 M per shard, 17,832 answer files for 1,113 assigned cases). The install copies were not the cost: `cp --reflink` left 47 MiB per shard unshared. The user: "ctp한번당 잡아먹는 디스크가 너무많아서". After the fix a 1,425-case shard holds 17 M of testcases; SIGTERM pruned 1.7 G → 44 M with 0 containers left; a SIGKILLed run was swept 3.7 G → 14 M by the next run, and a `CTP_KEEP_COPIES=1` run kept its copies through the next run.
 - Source: session 2026-11-18
 
+### P22 — rootless podman transient scopes leak on cgroup-v1
+- Rule: On cgroup-v1 container hosts, `ctp_run.sh` and `just` run `podman` with `DBUS_SESSION_BUS_ADDRESS=disabled:` (preventing `podman-<pid>.scope` creation) and reap any leaked empty scopes via `sweep_podman_scopes.sh` / `just ctp-clean-scopes` so `systemd --user` never hits `MANAGER_MAX_NAMES` (131,072).
+- Applies at: Output → Storage
+- Case (2026-11-25): `/run/user/350001/systemd/transient/` accumulated 131,025 transient `.scope` files (131,002 `podman-<pid>.scope`, 2 `rootless-netns-*.scope`, 20 `tmux-spawn-*.scope`, 1 `podman-pause-2504f9fb.scope`) because legacy cgroup-v1 inside a container never notifies `systemd --user` when a scope cgroup empties. Once `systemd --user` hit `MANAGER_MAX_NAMES` (131,072), `systemctl --user daemon-reload` stalled inside $O(N^2)$ `unit_get_members_mask()` over `user.slice` (PID 42 RSS 368 MiB) and wedged 20 active CTP `podman` commands plus `agy remote-control`. On Podman 4.9.4, `--cgroup-manager=cgroupfs` and `DBUS_SESSION_BUS_ADDRESS=""` still leaked `podman-<pid>.scope`, whereas `DBUS_SESSION_BUS_ADDRESS=disabled:` created 0 scopes on both `podman ps` and `podman run`.
+- Source: session 2026-11-25
+
 ## Small runs
 
 ### P17 — the single-case fast path
