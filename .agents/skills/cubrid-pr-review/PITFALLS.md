@@ -204,3 +204,10 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Replying on your own PR
 - Case (2026-10-06, PR 8022 round): the user: "일단 넣어보고 assert 터지면 빼는걸로 하자. ctp sql 돌려보고 리뷰어 추가제안한 assert 가 터지는 건의 sql 케이스를 가져와서 이 건에서 터지니 안넣겠다. 라고 반박하고 안터지면 넣고." and "assert를 넣었을때 optdebug 기준으로 core 가 발생하는 sql tc가 있는거아냐? 그거 넣으면 내가 pr을 어캐머지하냐?" Upstream CI runs the TCs on optdebug, so one firing assert blocks the merge.
 - Source: memory:reviewer-asserts-try-then-drop
+
+### P31 — a leader-made result is checked in a parallel scan worker's clone
+- Rule: A PR that routes a new shape onto a result the leader made once (a CTE, a shared view, an uncorrelated list) is checked on a parallel scan whose predicate subquery a worker runs again: a `px_scan` worker runs a fresh XASL clone and gets from the leader only what `pre_execution_info` hands over (precomputed scalars, the joined scans' lists, the CTE lists since PR 8440), so a result it does not hand over reads as empty in the worker; run the shape with `parallel workers: N>1` on that scan against develop. (P31)
+- Applies at: Step 3 (Review), Step 3c
+- Case (2026-11-25, PR 8440 2nd round, CBRD-27351): the PR moved a view read twice onto the statement's CTE (PR 8556's CTE-first path). On develop a worker of a parallel scan re-ran the whole view body in its clone and got the right rows; with the PR the same predicate subquery read the clone's never-run CTE: `t.k in (select b.k from v b) or t.x = -1` and a scalar pushed into a hash join input returned 0 rows (develop 300000 / 255151, optdebug CS 3/3). The WITH form failed on develop too. The user had the reviewer fix it in the PR (`capture_cte_lists` / `bind_cte_lists` / `unbind_cte_lists`, pushed as 15c85d03f1 with maintainer edits).
+- Source: memory:pr8440-cbrd27351-review-state
+
