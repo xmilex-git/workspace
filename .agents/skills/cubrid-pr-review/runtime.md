@@ -40,6 +40,24 @@ Keep the prompt to the commands and the facts to report. Add the host gotchas: `
   3. Run `TC_REF=develop CTP_ARGS="--testcases-as-is --testcases <scratch>/tc-adhoc" CTP_KEEP_COPIES=1 just ctp sql _99_review_adhoc/<id>`. Its NOK is the placeholder; the `.result` is the evidence.
 - **A case the dir-split runs exclude** (`.agents/skills/ctp-run/dirsplit_exclusions.txt`): add `EXCLUDE=''`.
 
+## 3a. Differential probing & path-activation coverage
+
+When verifying an engine PR with BASE-vs-HEAD differential queries (representative plus randomized shapes against two CS optdebug servers on separate claimed ports and install copies):
+
+- **Prove target path activation first.** A 0-diff run proves nothing unless `SHOW TRACE` (or counters / `perf record -p <pid>` symbol bands per P16) confirms the PR's target execution path actually fired (for example `SCAN (bitmap heap lookup)`, `parallel workers: N>1`, or the target spill path) rather than silently falling back to `TABLE SCAN`, tiny compressed pages, or serial scan.
+- **Cross-check `EXPLAIN` against `SHOW TRACE`.** Equal result rows do not rule out an execution regression where `EXPLAIN` shows one scan plan (for example key-order `iscan`) while `SHOW TRACE` executes another (for example iterative `SCAN (bitmap heap lookup)`). Compare both plan and trace scan lines whenever a PR touches scan flags or plan selection.
+- **Compare full results and memory safety.** Judge output by full client rows plus robust aggregates (P13) and count all differing lines (P10). For C/C++ heap/buffer changes, re-run the differential smoke once on an optdebug install copy with `use_system_malloc=yes` in `cubrid.conf` and `MALLOC_CHECK_=3 MALLOC_PERTURB_=165` in the server and `csql` environment.
+
+## 3b. CUBRID test-data & CLI pitfalls
+
+- **LZ4 & B-tree prefix compression**: `REPEAT('x', N)` and sequential/low-entropy strings compress into far fewer pages than expected, silently preventing multi-page scans or spills. Concatenate distinct `MD5(...)` values to produce incompressible pages and index keys.
+- **`PARALLEL(N)` silent serial fallback**: parallel scan falls back to serial when B-tree user pages are below `parallel_scan_page_threshold` (default `100`, server-conf-only). Size incompressible index keys above the threshold and confirm `parallel workers: N>1` in `SHOW TRACE` (P14).
+- **High slot IDs (`slotid >= 640`)**: normal MVCC record headers cap live slots per page below 640. Reaching `slotid >= 640` (such as overflow slot lists) requires `DONT_REUSE_OID` plus multiple insert/delete churn cycles on the table.
+- **`SHOW TRACE` returning `NULL`**: `SHOW TRACE` returns `NULL` in multi-statement `csql -c "..."` and in SA mode (`csql -S`). Run `SET TRACE ON; <query>; SHOW TRACE;` via `csql -i <file>` against a CS server.
+- **`USING INDEX` with `GROUP BY`**: CUBRID requires `WHERE ... GROUP BY ... USING INDEX idx(...) ORDER BY ...`; placing `USING INDEX` before `GROUP BY` is a syntax error.
+- **Server-only / non-dynamic parameters**: parameters such as `index_scan_key_buffer_pages` and `parallel_scan_page_threshold` fail `SET SYSTEM PARAMETERS`. Set them in `cubrid.conf` of an install copy and restart via `cubrid-server-ctl.sh`.
+- **MVCC `REPEATABLE READ` in `csql`**: `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;` has no cross-statement effect under default auto-commit (each `SELECT` runs in a new transaction). Pass `--no-auto-commit` to `csql`.
+
 ## 4. Record and clean up
 
 - The report's Runtime Verification names, for each run: the build (sha, build type), the testcase ref and sha, the verdict, and for a hang the stuck frames.

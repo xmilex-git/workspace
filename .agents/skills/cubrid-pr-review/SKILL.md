@@ -145,10 +145,10 @@ The script prints JSON with `owner`, `repo`, `number`, `head_sha`, `base_ref`, `
 Run these in parallel. Downloads and scratch files go under `.git_ignored_dir/scratch/pr<NUMBER>/` of the tooling repo, never `/tmp`.
 
 1. **PR diff:** `gh pr diff <NUMBER> -R <OWNER>/<REPO>`. If `gh pr diff` returns empty or fails, surface the error and stop — there is nothing to review.
-2. **Existing PR comments**:
+2. **Existing PR comments** (always `--paginate`, see P35):
    ```bash
-   gh api "repos/<OWNER>/<REPO>/pulls/<NUMBER>/comments" --jq '.[] | {id, user: .user.login, path, line: .original_line, in_reply_to_id, body}'
-   gh api "repos/<OWNER>/<REPO>/issues/<NUMBER>/comments" --jq '.[] | {id, user: .user.login, body}'
+   gh api --paginate "repos/<OWNER>/<REPO>/pulls/<NUMBER>/comments" --jq '.[] | {id, user: .user.login, path, line: .original_line, in_reply_to_id, body}'
+   gh api --paginate "repos/<OWNER>/<REPO>/issues/<NUMBER>/comments" --jq '.[] | {id, user: .user.login, body}'
    ```
 3. **JIRA** (if the PR title contains `CBRD-XXXXX`): invoke `/jira CBRD-XXXXX` for the ticket body and its links. Download its attachments (`design.md`, `test.md`, `test_result.md`, repro scripts) with `cubrid-jira attachment CBRD-XXXXX --out .git_ignored_dir/scratch/pr<NUMBER>/jira-CBRD-XXXXX`. Do the same for each linked issue that may describe the same defect.
 4. **TC PRs**: for each of `CUBRID/cubrid-testcases` and `CUBRID/cubrid-testcases-private-ex`:
@@ -185,6 +185,7 @@ Rules that past reviews paid for:
 - In worker→leader error propagation, the leader adopts a worker's error only after its wait for every worker, in its own thread (the px_scan pattern: the worker moves its message into a holder; the leader swaps it into its thread-local error context afterwards) — a swap from the worker into a running leader is a finding. (P5)
 - A PR that routes a new shape onto a result the leader made once (a CTE, a shared view, an uncorrelated list) is checked on a parallel scan whose predicate subquery a worker runs again: a `px_scan` worker runs a fresh XASL clone and gets from the leader only what `pre_execution_info` hands over (precomputed scalars, the joined scans' lists, the CTE lists since PR 8440), so a result it does not hand over reads as empty in the worker; run the shape with `parallel workers: N>1` on that scan against develop. (P31)
 - A field added to the `regu_variable` / arith / `pred_expr` / domain stream must answer disk compatibility (filter-index `pred_stream` and function-index `expr_stream` are stored in the catalog with the same `stx_*` codec; only the XASL header and access-spec layouts are memory-only), and a "should never happen" boundary must not reuse `ER_QPROC_INVALID_XASLNODE`, which makes the client drop the xasl_id and silently recompile. (P6)
+- When a PR sets a flag on a shared mutable PT_NODE (such as an access spec) or removes an UNSET/defensive guard in a follow-up commit, check every secondary consumer that reuses that node (CONNECT BY iterations, UPDATE/DELETE, re-planning) and verify both EXPLAIN and SHOW TRACE against it (see reference.md). (P33)
 - A statement about what develop does is made only after running it on a develop build with a discriminating row (a value that matches only if the claimed mechanism is true), and a root-cause ask is answered with the code-level cause, the fix and the gate in one pass. (P9)
 
 Fill the Approval Criteria tables while reading. The JIRA rows come from `design.md` and `test.md` read against the diff; the TC rows come from `test.md` and the TC PRs.
@@ -229,6 +230,8 @@ How a run becomes evidence:
 - A TC PR based on release/11.4 or an older line has no optdebug preset (`CMakePresets.json` holds release, debug, coverage and profile only), so its runtime evidence is a local release build of the branch head run through `just ctp`, and the report says asserts were not exercised. (P26)
 - A pass/fail verdict on query output comes from robust aggregates (`COUNT`, `SUM(CAST … AS NUMERIC(38,0))`, `MIN`, `MAX`) plus the actual rows a top-level SELECT returns to the client, never from an md5 of raw output. (P13)
 - A parallel path counts as exercised only when `;trace on` shows `parallel workers: N>1` (`;plan detail` does not show it); forcing serial needs both `parallelism=1` and `max_parallel_workers=1`. (P14)
+- A BASE-vs-HEAD differential run counts as evidence only when SHOW TRACE (or counters/perf per P16) confirms the PR's target execution path actually fired and matches the EXPLAIN scan plan; 0-diff rows under a silent fallback or a plan/execution mismatch (such as EXPLAIN showing key-order iscan while SHOW TRACE runs bitmap heap lookup) prove nothing (see runtime.md §3a). (P32)
+- Shape runtime repros around CUBRID's storage and CLI traps (runtime.md §3b): use distinct MD5(...) payloads instead of REPEAT to defeat LZ4/B-tree prefix compression, run SET TRACE ON + SHOW TRACE via csql -i <file> against a CS server (multi-statement csql -c and SA csql -S return NULL), put USING INDEX after GROUP BY, set non-dynamic server parameters in an install copy's cubrid.conf, use csql --no-auto-commit for REPEATABLE READ MVCC tests, and use DONT_REUSE_OID + insert/delete cycles when high slot IDs (>= 640) are needed. (P34)
 - A nondeterministic failure is judged by N repetitions (the FAIL and the PASS alike), and a fix is shown fail-before-fix and pass-after by the same method; a theoretical race is a finding only once it is shown reachable. (P15)
 - Live verification runs on a CS-mode optdebug server (release compiles asserts and `er_log_debug` out; the resource tracker's leak checks are per-request in CS mode only, so an SA `csql -S` pass proves nothing about leaks), and gdb is never verification evidence — code-path proof is a `perf record -p <pid>` symbol band, a counter or an A/B output, and attaching gdb to a live `cub_server` is banned. (P16)
 - When a comparison decides a verdict, print the number of differing lines per file (`diff a b | grep -c '^[<>]'`) or the full diff, and truncate only after the remainder is confirmed to be the same class of difference. (P10)
@@ -275,8 +278,9 @@ Every surviving finding needs a code snippet or diagnostic as evidence.
 1. **Draft the TL;DR + Summary first.** Write the verdict label and conclusion before the body — this forces a clear stance and reveals whether the rest of the report supports it.
 2. **Write Findings tightly.** One sentence per item. Group as Blocking / Non-blocking / Questions, omitting any subsection that has no items. If no category has any items, replace the section body with a single `없음` line and omit all three subsections.
 3. **Fill JIRA -> Engine PR, TC PRs, TLA+ Verification and Runtime Verification** per Approval Criteria, Step 3d and Step 3c. Omit JIRA -> Engine PR only when there is no JIRA ticket; add Existing Comments only if useful.
-4. **Save** to `PR-<NUMBER>-report.md` in the repo root (or cwd).
-5. **Print** five things so the user can sanity-check the call at a glance: (1) the saved file path, (2) the verdict label extracted from the TL;DR (`Blocking` / `Non-blocking` / `작성자 확인 필요`), (3) the TL;DR sentence(s) without the label prefix, (4) the JIRA and TC verdicts, (5) the TLA+ verdict with its `RESULT:` line.
+4. **Check section skeleton.** Before saving PR-<NUMBER>-report.md, check its ## headings in exact report-template.md order (## Summary, ## Findings, ## JIRA -> Engine PR, ## TC PRs, ## TLA+ Verification, ## Runtime Verification, ## Existing Comments — omitting only ## JIRA -> Engine PR when there is no ticket and ## Existing Comments when none are unresolved) so long reviews or context compaction never drop or rename a required section. (P36)
+5. **Save** to `PR-<NUMBER>-report.md` in the repo root (or cwd).
+6. **Print** five things so the user can sanity-check the call at a glance: (1) the saved file path, (2) the verdict label extracted from the TL;DR (`Blocking` / `Non-blocking` / `작성자 확인 필요`), (3) the TL;DR sentence(s) without the label prefix, (4) the JIRA and TC verdicts, (5) the TLA+ verdict with its `RESULT:` line.
 
 ## Example Output
 
@@ -324,6 +328,7 @@ Mapping from report to comments:
 - On another team's PR, missing JIRA attachments (`design.md` / `test.md`), a missing regression TC and absent CI stay out of the post-ready comments by default — they are recorded in the local report's tables, and posting one is a grill question whose recommended answer is "don't post". (P19)
 - When a reviewer proposes a different architecture as a follow-up, the reply states the principle the PR protects, says the structure is open under that principle, and closes with "이슈로 올려 <reviewer>님께 assign, 검토 부탁" — no commitment to implement; the user decides whether to file it. (P20)
 - When the user says a posted comment looks cut off, first establish the client they read it on (GitHub's Android app clips paragraphs that hold inline code), report server-side integrity as its own fact ("stored in full"), and write phone-read text as plain paragraphs without inline code or bold. (P21)
+- Fetch PR comments with gh api --paginate so reviews past page 1 are never truncated; when routing findings to a local peer session (such as herdr agent prompt) instead of GitHub, inspect the peer's worktree read-only (git -C <peer> log, status -s, diff) and re-check paginated PR comments first so already-fixed, in-flight or externally-reported items are not duplicated. (P35)
 
 Before saving, run the `voice-guide.md` Section 7 self-checklist (no English headers in bodies, no `Why:` / `Fix:` labels, every comment ends in a human ending, identifiers English, only `NIT:` as a label, no emoji / `LGTM` / `Strongly recommend`, no lane / meta terms, no comment body over 6 lines).
 

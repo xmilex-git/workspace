@@ -57,6 +57,11 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-09-22, map #312 / #318): both facts were found while charting the domain-pin campaign (`class_object.c:847`, `db_vdb.c:2277`); Strategy A (domains in the stream) rested on the first, the verification-boundary design on the second. Adding a bit to the already-packed `regu->flags` int is layout-neutral.
 - Source: memory:xasl-stream-layout-is-on-disk-and-invalid-xaslnode-recompiles
 
+### P33 — shared mutable PT_NODE flags and deleted defensive guards
+- Rule: When a PR sets a flag on a shared mutable PT_NODE (such as an access spec) or removes an UNSET/defensive guard in a follow-up commit, check every secondary consumer that reuses that node (CONNECT BY iterations, UPDATE/DELETE, re-planning) and verify both EXPLAIN and SHOW TRACE against it (see reference.md).
+- Applies at: Step 3
+- Case (2026-11-25, PR #8627, CBRD-28032): `qo_plan_mark_bitmap_heap` marked the shared `PT_NODE *spec` during `START WITH` planning and a later commit removed `ACCESS_SPEC_UNSET_FLAG`; the `CONNECT BY` iterative scan reused that spec and executed `SCAN (bitmap heap lookup)` 4,001 times even though `EXPLAIN` showed a key-order `iscan`.
+
 ### P7 — Windows is not a constraint on develop
 - Rule: CUBRID builds no Windows target from guava (11.5; CBRD-26051 removed the CircleCI and Jenkins Windows jobs), so a Windows link or API limit is a finding only for a backport to a pre-11.5 branch — check the target branch first.
 - Applies at: Step 4
@@ -135,6 +140,16 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-11-06, PR 6466 r3 at f1f4f21ea): the last `/run all` was 10-29; commit 0cb8b988a (11-05) let a non-covering function index scan keep key filters, so 8 existing answers (`bug_bts_7088`, `cbrd_25164`, `cbrd_24795`, `cbrd_26266`, four `function_based_index_select_basic_*`) turned `sargs` into `filtr`, one also changing the chosen index. TC #3865 was already approved by another reviewer; only the local 8-dir run (675 cases, 9 NOK) showed it.
 - Source: session 2026-11-06 PR 6466 review
 
+### P32 — differential runs prove nothing without path activation and EXPLAIN/TRACE agreement
+- Rule: A BASE-vs-HEAD differential run counts as evidence only when SHOW TRACE (or counters/perf per P16) confirms the PR's target execution path actually fired and matches the EXPLAIN scan plan; 0-diff rows under a silent fallback or a plan/execution mismatch (such as EXPLAIN showing key-order iscan while SHOW TRACE runs bitmap heap lookup) prove nothing (see runtime.md §3a).
+- Applies at: Step 3c
+- Case (2026-11-25, PR #8627, CBRD-28032): early differential fuzzing rounds returned 0 row diffs while queries silently fell back to serial scan or tiny LZ4-compressed tables and never hit the target path; conversely, a `CONNECT BY` query returned identical rows on BASE and HEAD while `EXPLAIN` showed key-order `iscan` and `SHOW TRACE` revealed 4,001 iterations of `SCAN (bitmap heap lookup)`.
+
+### P34 — CUBRID test-data and CLI traps that silently invalidate repros
+- Rule: Shape runtime repros around CUBRID's storage and CLI traps (runtime.md §3b): use distinct MD5(...) payloads instead of REPEAT to defeat LZ4/B-tree prefix compression, run SET TRACE ON + SHOW TRACE via csql -i <file> against a CS server (multi-statement csql -c and SA csql -S return NULL), put USING INDEX after GROUP BY, set non-dynamic server parameters in an install copy's cubrid.conf, use csql --no-auto-commit for REPEATABLE READ MVCC tests, and use DONT_REUSE_OID + insert/delete cycles when high slot IDs (>= 640) are needed.
+- Applies at: Step 3c
+- Case (2026-11-25, PR #8627, CBRD-28032): `REPEAT('x', N)` compressed below `parallel_scan_page_threshold` (100) under LZ4 and B-tree prefix compression, silently serializing `PARALLEL(4)` until replaced by concatenated `MD5(...)` strings; multi-statement `csql -c` and `csql -S` returned `NULL` for `SHOW TRACE`; `USING INDEX` before `GROUP BY` failed syntax; `index_scan_key_buffer_pages` and `parallel_scan_page_threshold` failed `SET SYSTEM PARAMETERS`; default auto-commit hid MVCC snapshot reuse; and normal MVCC headers capped live slots below 640 without `DONT_REUSE_OID` plus delete/insert churn.
+
 ## TLA+ verification (Step 3d)
 
 ### P27 — the TLA+ step ends at RESULT: OK
@@ -152,6 +167,13 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Rule: A PR that turns off a develop optimization (the statistics/index aggregate evaluation, a count-only scan, the parallel scan, the page batch) to give a shape a value it already lacked before the regressing commit is a Blocking finding: measure develop against the head on that shape (`perf stat -e instructions:u`, release build) and ask to keep develop's path, with the value left to its own issue; only the exclusion that undoes the regression itself stays.
 - Applies at: Step 4 (Filter), Step 3c (Runtime Verification)
 - Case (2026-11-06, PR #8364 CBRD-27870 r3): to put a value into the hidden ODKU column, the head cleared `agg_optimized` at generation, skipped the count-only scan and set `CANNOT_PARALLEL_SCAN` for the flagged BUILDVALUE; the r3 draft called it Non-blocking and only asked for a JIRA line. The user: "AGL이나 MINMAX 최적화안되는거자나", then "C로가야돼 다막으면 그 기능 deprecate한다고하던가". Release, 1,000,000 rows, `insert into tt (id) select max(s.g) + 1 from big s on duplicate key update c = s.c`: develop 1.31G instructions:u with `c` NULL, head 4.0G with `c` = 'v999739' (the last scan row, not the MAX row). Posted REQUEST_CHANGES 5794917472: fast path and parallel stay develop, only the page-batch decline (the #8196 regression) and the per-row copy stay.
+
+## Writing the report (Step 5)
+
+### P36 — verify the report-template.md heading skeleton before saving
+- Rule: Before saving PR-<NUMBER>-report.md, check its ## headings in exact report-template.md order (## Summary, ## Findings, ## JIRA -> Engine PR, ## TC PRs, ## TLA+ Verification, ## Runtime Verification, ## Existing Comments — omitting only ## JIRA -> Engine PR when there is no ticket and ## Existing Comments when none are unresolved) so long reviews or context compaction never drop or rename a required section.
+- Applies at: Step 5
+- Case (2026-11-25, PR #8627, CBRD-28032): after multi-round investigation and context compaction, a draft report drifted from `report-template.md`'s exact `##` heading order until checked line-by-line against the template.
 
 ## Rendering and posting (Step 6)
 
@@ -184,6 +206,11 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Step 6
 - Case (2026-10-30, PR #8318 CBRD-27794): between analysis and posting the author rebased the engine PR (c75b1c11a -> 72ad4e886, range-diff all `=`) and pushed TC commit a5fc0dd91 that deleted the stray file behind the planned Request changes; the TC was approved after a one-case `just ctp sql` PASS with 0-line diff on the new answer.
 - Source: session 2026-10-30 PR 8318 review
+
+### P35 — paginate PR comments and deduplicate local peer-session handovers
+- Rule: Fetch PR comments with gh api --paginate so reviews past page 1 are never truncated; when routing findings to a local peer session (such as herdr agent prompt) instead of GitHub, inspect the peer's worktree read-only (git -C <peer> log, status -s, diff) and re-check paginated PR comments first so already-fixed, in-flight or externally-reported items are not duplicated.
+- Applies at: Step 2, Step 6
+- Case (2026-11-25, PR #8627, CBRD-28032): unpaginated `pulls/<N>/comments` stopped at 30 items and missed a newer reviewer comment on page 2; during live handover to a peer Claude session editing the PR worktree, checking `git -C <peer> log`/`status`/`diff` and paginated PR comments first avoided duplicating already-fixed or externally-reported items.
 
 ## Replying on your own PR
 

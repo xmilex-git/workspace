@@ -84,6 +84,13 @@ Adding a new error code requires updates in **6 places**:
 
 ---
 
+## Shared Parse-Tree Flags & Deleted Guards
+
+- **Shared `PT_NODE` mutation**: `PT_NODE` structs (especially `PT_SPEC` / access specs) are reused across planning phases and secondary scans (`CONNECT BY` iterative scans, `UPDATE`/`DELETE` target specs, re-planned subqueries). When a PR sets a flag on a `PT_NODE` in one phase, trace every other consumer of that pointer to verify the flag does not bleed into an unintended scan.
+- **Deleted `UNSET` / defensive guards**: when a follow-up commit removes an `UNSET` call or guard reset ("no longer needed"), audit every caller and secondary consumer of that flag and cross-check `EXPLAIN` against `SHOW TRACE` (a scan can print one method in `EXPLAIN` while executing another in `SHOW TRACE`).
+
+---
+
 ## Comment & Convention Hygiene (CI-invisible)
 
 Rules below are NOT enforced by `codestyle.sh` or any CI check. The review must catch them.
