@@ -103,6 +103,12 @@ using 10, 100, 50, 200;`).
   outer table (`i.k > r.lo and i.k <= r.hi`), so the plan shows them in one key range. A range whose
   bounds come from two outer tables made the inner a heap scan (190 s): one outer table carries both.
 
+- CBRD-28032 (2026-11-25, caught by reading the first CTP result): an index join meant to show its outer
+  index scan (`ordered use_idx`) had been drafted on `csql -S` plans → under CTP (CS mode, workers) the
+  plan was `parallel idx-join` with a heap scan outside, so the claimed index line was absent → a plan
+  case drafted in SA is read again in the first CTP result before its label is trusted; `parallel(0)`
+  with a comment when the serial plan is the one the case is about.
+
 ## Rule 2 — The data must change the output when the path is wrong
 
 Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Evidence in the answer file" (data that takes the *bug path*, columns that tell rows apart).
@@ -336,6 +342,11 @@ to `?`, so names differ in letters). What it lacks:
   (`tools/code-index/code-index ~/dev/cubrid-worktree/develop definition <name>`).
 - The digit masking covers the first `rewritten query` line and error messages too; result rows are
   not masked, so a count of workers, pages or readkeys needs a shell TC.
+
+- `--@queryplan` prints the main plan of a hierarchical query only: the "Plan for single table
+  hierarchical iterations" that `csql` `;plan detail` shows is not in the CTP output (CBRD-28032,
+  2026-11-25: a CONNECT BY case added to pin the iteration plan printed the START WITH scan alone and
+  was dropped; such a plan is a probe in the PR body).
 
 Cases:
 - cbrd_27465 (2026-09-22): a `/** */` header line ending in `;` became a statement and printed `Error:-493`.
