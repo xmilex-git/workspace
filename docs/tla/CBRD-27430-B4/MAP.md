@@ -17,7 +17,8 @@ claims are checked in models of their own: the wire order of one channel, the ch
 and the descriptor lifetimes stay B1a's (`TokenTable.tla` header says what is abstracted).
 
 Code: fork branch `cas-fold-v2` (worktree `~/dev/cubrid-worktree/cas-fold-v2`), the B4 commits `c0c4d9214` and
-`294a73c1a` on `f9e3e6637`.
+`294a73c1a` on `f9e3e6637`. The checked head is `16916de659`: those two, the merge of develop `25b933925`
+(`09ac1b3ae`, no mapped file touched) and the thread-entry fix below.
 Old implementation: `cas-merge` @ `cdb9da11e`, B4 commits `7644733f84` … `f6374a89b9` and the fixes the attribution
 table assigns (`de53931490`, `0f410d1328`, `d533969e4d`). What B1a, B1b, A4 and A5 had already taken of them
 (token multimap, RESYNC survivors, the session's end with its connection, `db_Connect_status`, SHOW metadata) is
@@ -163,6 +164,28 @@ restores it for a session whose driver sends its id, so the refusal of an ambigu
 | `DomainCache.witness-xa-left` | a prepared transaction outlives its session |
 | `DomainCache.witness-oid-node` | an OID-only node in the process lists |
 
+## Dead expressions
+
+The lines TLC never evaluated in the pass cfgs (`DomainCache`, `DomainCache.scale-3`, `TokenTable`,
+`TokenTable.scale-sid2`).
+
+| Expression | Why |
+|---|---|
+| `DomainCache.tla:121` (`THEN /\ wrongDom' = (wrongDom \/ \E n \in pm : n.a = maddr[s][c] /\ n `) | mutant-only step (`ResolveProc`: `process_list`, `oom_fallback`): a MOP domain goes into the process lists |
+| `DomainCache.tla:122` (`/\ UNCHANGED pm`) | mutant-only step (`ResolveProc`: `process_list`, `oom_fallback`): a MOP domain goes into the process lists |
+| `DomainCache.tla:123` (`ELSE pm' = pm \cup {PNode(s, c)} /\ UNCHANGED wrongDom`) | mutant-only step (`ResolveProc`: `process_list`, `oom_fallback`): a MOP domain goes into the process lists |
+| `DomainCache.tla:124` (`/\ UNCHANGED <<st, ws, inc, tran, maddr, sl, srefs, sfreed, po, uaf, f`) | mutant-only step (`ResolveProc`: `process_list`, `oom_fallback`): a MOP domain goes into the process lists |
+| `DomainCache.tla:186` (`/\ sl' = [sl EXCEPT ![s] = ZeroC] /\ sfreed' = [sfreed EXCEPT ![s] = T`) | mutant-only step (`FreeListsEarly`: `free_before_ws`) |
+| `DomainCache.tla:187` (`/\ UNCHANGED <<st, ws, inc, tran, maddr, srefs, pm, po, uaf, foreign, `) | mutant-only step (`FreeListsEarly`: `free_before_ws`) |
+| `DomainCache.tla:192` (`/\ st' = [st EXCEPT ![s] = "free"]`) | mutant-only step (`EndLeave`: `gc_teardown`) |
+| `DomainCache.tla:193` (`/\ UNCHANGED <<ws, inc, tran, maddr, sl, srefs, sfreed, pm, po, uaf, f`) | mutant-only step (`EndLeave`: `gc_teardown`) |
+| `DomainCache.tla:197` (`/\ ws' = [ws EXCEPT ![s] = "none"] /\ maddr' = [maddr EXCEPT ![s] = Ze`) | mutant-only step (`Gc`: `gc_teardown`) |
+| `DomainCache.tla:198` (`/\ srefs' = [srefs EXCEPT ![s] = {}] /\ tran' = [tran EXCEPT ![s] = "n`) | mutant-only step (`Gc`: `gc_teardown`) |
+| `DomainCache.tla:199` (`/\ UNCHANGED <<st, inc, sfreed, pm, po, uaf, foreign, wrongDom, reused`) | mutant-only step (`Gc`: `gc_teardown`) |
+| `TokenTable.tla:235` (`THEN \/ \E f \in D : tb[f][t] # 0 /\ tb' = [tb EXCEPT ![f][t] = 0] /\ `) | mutant-only branch of `SEnd` (`end_any_db`) |
+| `TokenTable.tla:236` (`\/ (\A f \in D : tb[f][t] = 0) /\ UNCHANGED tb /\ UNCHANGED slots`) | mutant-only branch of `SEnd` (`end_any_db`) |
+| `TokenTable.tla:238` (`ELSE UNCHANGED tb /\ UNCHANGED slots`) | unreachable by `TableExact`: `SEnd` needs a live session (`sport[e][t] # 0`) and an in-sync channel's table is its server's sessions (`tb[e] = sport[e]`), so the entry is there. The code keeps the branch as `bd:tokens_end`'s fall-through (`broker_direct.cpp:446`, the "token unknown" debug line); dead at `scale-sid2` too |
+
 ## Bounds
 
 - TokenTable main: ND = 2, NT = 2, NP = 2, NSid = 1, MaxSlots = 2, MaxConn = 2, one crash, broker restart, kill,
@@ -174,6 +197,51 @@ restores it for a session whose driver sends its id, so the refusal of an ambigu
   server that answers again later is dialed by the next client of its database or after the next death.
 - A request without a port from a driver that sends no session id (below PROTOCOL_V13) names its session by
   the token and the client address alone, as it did a CAS by its pid.
+
+## Trace validation
+
+Instrumented build of `294a73c1a` plus the thread-entry fix of `16916de659` (`fold-v2/b4/instrument.py`, diff
+`fold-v2/b4/trace/instrumented.diff`: it adds lines, and rewrites three for the knobs below — the
+dispatcher's `resync_pending` test, `tp_is_sub_client` and the process-list assert of `tp_domain_cache`), install `~/optdebug/CUBRID-cas-fold-v2-tla4` (libcubrid
+`0ee03e97ceaf…`), runs by `fold-v2/b4/trace/run.sh <name> <scenario>` (`B4Jdbc.java`, `B4Cancel.java`,
+`forge_cancel.py`), converted by `fold-v2/b4/events_token.py` and `events_domain.py`, cfgs by
+`fold-v2/b4/trace/mk.py`. The develop merge `09ac1b3ae` is not in the instrumented tree: it touches no mapped file.
+
+Knobs that restore the behavior before this change (to record the holes, not the code under test):
+`CUBRID_TLA_B4_NO_SCAN` (the dispatcher never asks the other servers again), `CUBRID_TLA_B4_NO_SID` (a cancel is
+not asked for its session id), `CUBRID_TLA_B4_OLD_DOMAIN` (a domain that holds a MOP goes to the process lists).
+The run script's own lines (`XHang`, `XUnhang`, `XCrash`) mark the SIGSTOP, SIGCONT and `kill -9` it sends.
+
+Renaming in the converters: a session's token (a thread id) becomes the lowest model token no live session of any
+server has, a client port the lowest free model port; a session id is 0 (a driver asked for none) or 1, a
+request's 0 (none), 1 (the session's) or 2 (another). A client context holds the lowest free slot from its login
+to the release of its lists; a class is numbered by its OID in order of appearance; a MOP's address is the lowest
+model address no live MOP and no other node holds. Lines of contexts that never logged in, and `FindOid` of
+classes no session resolved with a MOP, are dropped. A `Retire` of a kept context is the model's `Expire`. There is
+no hidden step.
+
+| Run | Model | Covers |
+|---|---|---|
+| `multi` | TokenTable | two databases, equal tokens in both tables; `DStart`, `DScan`, `DScanEnd`, `DDial`, `DWait`, `DSendOk`, `SEnd`; `CnLook`, `CnSend`: a cancel that interrupts its session, a cancel with another session id and a cancel without one that interrupt none |
+| `restart` | TokenTable | `BRestart` with a session of the other database open: the scan re-admits it and the next client waits for its slot (MAX = 1) |
+| `faults` | TokenTable | `Hang` (SIGSTOP: a dial without an answer), `Kill`, `RDie`, `SCrash` (`kill -9`), `SRestart`, `DSendNo`, the scans after each |
+| `sessions` | DomainCache | `Begin`, `Mop`, `ResolveSess` (insert and found), `FindOid`, `EndRollback`, `WsFinal`, `FreeLists` of two sessions at once; `Yield`, `Resume` |
+| `kept-expire` (scenario `expire`) | DomainCache | `Expire`: a kept session whose client stays silent 150 s (`session_state_timeout` = 60) is retired by the session-state daemon, `WsFinal` before `FreeLists` on that thread |
+| `noscan` (knob) | TokenTable | accepted only as `Mutant = "no_scan"`, ending with `overCap` |
+| `nosid` (knob) | TokenTable | accepted only as `Mutant = "no_sid_check"`, ending with `wrongCancel` |
+| `olddomain` (knob) | DomainCache | accepted only as `Mutant = "process_list"`, ending with `uaf` (`ResolveProc`; 2 `FindOid` walks read a node of an ended workspace) |
+
+Rejected runs: `noscan-as-correct`, `nosid-as-correct`, `olddomain-as-correct` (the knob runs under
+`Mutant = "none"`), `survivor-uncounted` (the scan's dial of the survivor's database dropped), `end-other-db` (a
+SESSION_END of one database logged as the other's), `wrong-sid-hit` (a cancel with another session id logged as
+an interrupt), `lists-before-ws` (the lists freed before the workspace), `second-node` (a resolve of a cached
+domain logged as an insert).
+
+Not reached by a run: `DGiveUp` (the admission budget of a waiting client runs out) and `DSendDead` (a HANDOFF
+written to a server that died after its dial) of TokenTable — both leave the table and the count as they are, or
+take `RDie`'s drop, which `faults` records; `Tran` with a prepared transaction (`xa`: no XA driver in the smoke)
+and `ResolveOom` (the code has no such path, map row) of DomainCache. The HANDOFF rejection by `max_clients` and
+the SSL client path of B4 are in no smoke either.
 
 ## Counterexamples (correct variant) and their classification
 
@@ -197,3 +265,42 @@ cleartext driver read as a length (JDBC -21112; now the connect reply's frame, -
 the 16 MiB request bound refused a 20 MiB bound string (-21003; now 1 GiB); and the B3 refusal code is not one a
 JDBC driver goes to its next altHost on (ticket
 [세션 수립 거절 응답](https://github.com/xmilex-git/workspace/issues/650)).
+
+Found by the gate of the last head (2026-11-26, optdebug `bccacd98ccff`, login smoke case 2): a fold session's
+thread gave its thread entry back to the manager with the session's `private_lru_index` and
+`m_is_private_lru_enabled` on it (`ds:driver_session_run`'s `retire`; the code is B1a's). A request worker that
+claimed the entry and served a connection without a session failed `assert (thread_ref.private_lru_index == -1)`
+(`server_support.c` `css_server_task::execute`); the core shows the worker's entry with index 53 and
+`session_p = NULL`. Outside both models (no claim reads a thread entry). Fixed in `16916de659`; the run that
+shows it is the tooling scratch `fold-v2/b4/smoke/repro_entry.sh` (40 CS clients so every request-worker core
+stops, 8 fold sessions end, a CS client connects): the assert in round 2 before, 3 rounds on both builds and
+under the memory check after.
+
+## Result
+
+2026-11-26, `tools/tla/tla-check --workers 8 docs/tla/CBRD-27430-B4`: **`RESULT: OK`**, 49 cfgs PASS, run dir
+`.git_ignored_dir/scratch/tla/CBRD-27430-B4-20261126-172000-2499279` (copy of the verdicts: tooling scratch
+`fold-v2/b4/tla-check-record.out`). The Trace validation and Result sections were written after the run; the spec
+and cfg files are the run's.
+
+| cfg | Verdict | States (generated / distinct) | Depth |
+|---|---|---|---|
+| `TokenTable` (the claims' invariants + `IndInv`) | pass | 59,862,886 / 16,826,882 | 24 |
+| `TokenTable.scale-sid2` (NSid = 2) | pass | 127,970,078 / 34,412,058 | 24 |
+| `DomainCache` (the claims' invariants + `IndInv`) | pass | 686,113 / 73,476 | 27 |
+| `DomainCache.scale-3` (NS = 3, NA = 3) | pass | 331,355,773 / 24,866,244 | 39 |
+| 16 mutant cfgs (7 TokenTable, 9 DomainCache) | each the expected violation | 73 … 2,182,656 generated | 6 … 15 |
+| 11 witness cfgs (6 TokenTable, 5 DomainCache) | each reached | 62 … 264,467 generated | 5 … 13 |
+| `TokenTable.apalache-indinv`, `DomainCache.apalache-indinv` | pass: `IndInv /\ Next => IndInv'` | Apalache, 10 s and 9 s | — |
+| 5 `witness-trace-*` cfgs of the correct build (`multi`, `restart`, `faults`; `sessions`, `kept-expire`) | accepted (the whole run consumed) | 18 … 237 states | = events + 1 |
+| 3 `witness-trace-*-mutant` cfgs (`noscan`, `nosid`; `olddomain`) | accepted as the mutant, ending in its violation | 12 … 40 states | — |
+| 8 `reject-*` cfgs | refused | 1 … 66 states | — |
+
+The pass cfgs of `DomainCache` carry `uncovered-ok` lines for its four mutant-only actions (`ResolveProc`,
+`FreeListsEarly`, `EndLeave`, `Gc`).
+
+TLAPS: not requested. Engine: `cas-fold-v2` `16916de659` (optdebug libcubrid `bcf4b0adaa30…`, release
+`fd6b23dbe002…`); the traces were recorded on an optdebug build of `294a73c1a` plus the instrumentation and the
+`16916de659` fix (libcubrid `0ee03e97ceaf…`). Not reached at runtime: `DGiveUp`, `DSendDead`, a prepared (XA)
+transaction left by a session's end, the HANDOFF rejection by `max_clients`, the SSL client path. H4 (a thread id
+reused within a cancel's round trip) has a model counterexample and no runtime reproduction.

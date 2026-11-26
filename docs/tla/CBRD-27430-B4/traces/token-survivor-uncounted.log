@@ -1,16 +1,16 @@
 TLATRACE seq=0 a=DStart p=0 d=2 port=1 scan=1
-TLATRACE seq=1 a=DScan p=0 e=1 res=ok
+TLATRACE seq=1 a=DScan p=0 e=2 res=ok
 TLATRACE seq=2 a=DScanEnd p=0
 TLATRACE seq=3 a=DDial p=0 res=live
 TLATRACE seq=4 a=DWait p=0
-TLATRACE seq=5 a=DSendOk p=0 sid=1 t=1
+TLATRACE seq=5 a=DSendOk p=0 t=1 sid=1
 TLATRACE seq=6 a=BRestart p=0
 TLATRACE seq=7 a=DStart p=0 d=1 port=2 scan=1
-TLATRACE seq=8 a=DScan p=0 e=2 res=ok
-TLATRACE seq=9 a=DScan p=0 e=1 res=ok
+TLATRACE seq=8 a=DScan p=0 e=1 res=ok
+TLATRACE seq=9 a=DScan p=0 e=2 res=ok
 TLATRACE seq=10 a=DScanEnd p=0
 TLATRACE seq=11 a=DDial p=0 res=live
 TLATRACE seq=12 a=SEnd p=0 e=2 t=1
 TLATRACE seq=13 a=DWait p=0
-TLATRACE seq=14 a=DSendOk p=0 sid=1 t=1
+TLATRACE seq=14 a=DSendOk p=0 t=1 sid=1
 TLATRACE seq=15 a=SEnd p=0 e=1 t=1
