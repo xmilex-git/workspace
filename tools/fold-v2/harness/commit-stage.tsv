@@ -1,0 +1,291 @@
+sha	introduced_by	stage	method	flags	why	subject
+9292336793	c9c0a262e2	S0	pr			wf122/S0: compile the client half into libcubrid under SERVER_MODE — build wiring + header unguards
+c097f4d652	c9c0a262e2	S0	pr			wf122/S0: db_on_server becomes thread_local — the in-process discriminator axis (D5)
+35e117c495	c9c0a262e2	S0	pr			wf122/S0: satisfy the cub_server link — remaining unguards, C linkage, grammar typedef
+1644742682	c9c0a262e2	S0	pr			wf122/S0: in-process client boot — server state is authoritative
+24a02d86a5	c9c0a262e2	S0	pr			wf122/S0: runtime crash fixes — four families exposed by the in-process compile path
+1b8daa5891	c9c0a262e2	S0	pr			wf122/S0: unit harness — test_server_compile, the track-A in-process smoke base
+85829c08d9	c9c0a262e2	S0	pr			wf122/S0: in-process smoke runner — track-A standard script (#122 D5)
+e065f29fdb	c9c0a262e2	S0	pr			wf122/S0: drop dead preprocessor block in memory_alloc.c
+eaaeb2d52b	c9c0a262e2	S0	pr			wf122/S0 review-r1: skip perfmon re-init on in-process boot (major-1)
+ff1c5c4958	c9c0a262e2	S0	pr			wf122/S0 review-r1: assert client context at formerly server-fail-stop branches (major-2)
+d1e36f7c4b	c9c0a262e2	S0	pr			wf122/S0 review-r1: cold-path leak/OOM fixes (minor-3/4/6)
+6d117efe6e	c9c0a262e2	S0	pr			wf122/S0 review-r1: smoke.sh guards (minor-7)
+a95bfdda19	c9c0a262e2	S0	pr			wf122/S0 review-r1: docs + dead preprocessor cleanup (minor-5, nits)
+775a31d93e	c9c0a262e2	S0	pr			wf122/S0 review-r2: tracer teardown — free the conn, scrub the entry, harden the boot hook
+ca7b40ea00	c9c0a262e2	S0	pr			wf122/S0 review-r2: gate the context-discipline asserts to SERVER_MODE
+c5eda5de36	c9c0a262e2	S0	pr			wf122/S0 review-r2: smoke case for the server-side OID comparison path
+160b65ab8b	c9c0a262e2	S0	pr			wf122/S0 review-r2: log SUCCESS only after the tracer's teardown completes
+5f32dc6484	c9c0a262e2	S0	pr			wf122/S0 review-r2: tracer logs its transaction out — the true shutdown-SIGABRT fix
+480e9bf10d	c9c0a262e2	S0	pr			wf122/S0 review-r2: don't plant the CS client's atexit shutdown inside cub_server
+cb7d44c04b	c9c0a262e2	S0	pr			wf122/S0 review-r3: failed in-process boot must not finalize shared modules; tracer gates every stage
+d667574ee4	c9c0a262e2	S0	pr			wf122/S0 review-r4: close the registration window in failure cleanup; harden the smoke harness
+52c7e861d1	c9c0a262e2	S0	pr			wf122/S0 review-r4: initialize tran_index in the function that actually reads it
+0102b2000e	c9c0a262e2	S0	pr			wf122/S0 review-r5: no exceptions, no static-frees, fail-closed smoke (codex convergence round)
+ff2d5273f3	c9c0a262e2	S0	pr			wf122/S0 review-r5: keep std::thread + catch — pthread conversion reverted (user decision)
+03c595abc4	c9c0a262e2	S0	pr			wf122/S0 review-r6: smoke.sh guards fail-closed end to end (codex round-3)
+89867daeb6	c9c0a262e2	S0	pr			wf122/S0 review-r7: service guard survives master-down; 'not installed' is not active (codex round-4)
+bf3390f7a5	be7254654a	A1	pr			wf122/A1: au resolves through a session-scoped client context
+46eaff1342	3365e7b2e5	A2	pr			wf122/A2: per-thread parser state - TLS first pass over the csql parser
+3f30f953e0	3365e7b2e5	A2	pr			wf122/A2: hint table cross-TU access via accessor - unsized thread_local array extern breaks gcc's TLS wrapper
+16563e52dc	693a69b1e9	A3	pr			wf122/A3 qmgr: xqmgr execute entry points take native DB_VALUE arrays
+8eaa1feb6f	cbdd1d36cb	A3	pr			wf122/A3 locator+heap: the fold takes the RR transaction lock for real
+cf06e8631f	80dbe9cc94	A3	pr			comments: drop effort-stage markers, keep comments to one line
+059bd502ec	80dbe9cc94	A3	pr			wf122/A3 audit fixes: four SA-only assumptions the fold must not inherit
+3402968aa1	80dbe9cc94	A3	pr			perf: conditional store on the shared RR-lock mirror (COH-04/A62)
+f8095ecabe	9de2682f0c	A3	pr			wf122/A3 CS-only sites: fold branches for DDL tracking and CDC supplemental log
+97e67203b9	f1bbb50ef1	A3	pr			review fixes: OOM early-return leak in sqmgr_execute_query; literal @EXPECT match
+c90ec1b5af	7c8fa8f5be	A4	pr			wf122/A4: per-session client workspace - the MOP closed system moves into client_session_context
+2bbb84df36	7c8fa8f5be	A4	pr			wf122/A4: multi-session smoke - N concurrent in-process sessions
+a2ca2d589d	7c8fa8f5be	A4	pr			wf122/A4 review fixes: query-result registry per-session; retire self-deadlock; shared-area error path; PL/SQL parse flag; QO_INFINITY init
+cdea44b397	e2f15643d9	A5	pr			wf122/A5: client-half private allocations follow CS/SA - bracketed client context allocates from the session workspace
+d862ffde57	e2f15643d9	A5	pr			wf122/A5: boot/sysprm lifecycle - engine-side boot serialization + per-session teardown reclamation
+f86a00469a	e2f15643d9	A5	pr			wf122/A5 review fixes: teardown forces client-side allocation routing; execution-plan buffer freed on retire
+0ce32dc71f	23525a9232	A5	pr			wf122/A4-A5 audit sweep: late audit + review findings the stages missed
+63c3134c9a	23525a9232	A5	pr			wf122/A4-A5 audit sweep review fix: sort both keyword tables under one once flag
+9a563c11a1	f7fd0096de	A6	pr			wf122/A6: REVOKE bumps the target class chn so other sessions recompile
+d615bd189a	f7fd0096de	A6	pr			wf122/A6: DDL-authorization smoke choreography + password-check unit
+ed6127044b	f7fd0096de	A6	pr			wf122/A6: unguard tp_domain_select client bodies for the merged binary
+413d92bb47	f7fd0096de	A6	pr			wf122/A6: compile set_change_owner's client body into the merged binary
+913a319842	f7fd0096de	A6	pr			wf122/A6: compile set_object.c's owned-set client semantics into the merged binary
+d7fb0515dc	f7fd0096de	A6	pr			wf122/A6: smoke expects the wrapped semantic error for the compile-time rejection
+f98fb699c8	f7fd0096de	A6	pr			wf122/A6 review fixes: assert the client-context invariants at their choke points
+d1a4e00c59	b91a865e15	A7	pr			wf122/A7: terminate the method/SP callback in-process - seam fold + per-session handler
+a90e329513	b91a865e15	A7	pr			wf122/A7: server invariants and value conventions meet same-thread callback reentry
+3cd2313601	b91a865e15	A7	pr			wf122/A7: smoke case 8 - PL/CSQL function runs both callback legs in-process
+e8f2ca7c44	b91a865e15	A7	pr			wf122/A7 review fix: qlist balance check stands down only for sessions with callback state
+88cf5d5e95	f1e491adaa	A7	pr			wf122/A7 review-r2: optimizer level writes land on the session, not the shared sysprm
+5bf656350b	f1e491adaa	A7	pr			wf122/A7 review-r2: dispatch isolates er state and drains deferred handlers
+da0b4e3f1f	f1e491adaa	A7	pr			wf122/A7 review-r2: smoke case 9 - nested PL/CSQL with a caught inner error
+303c3d83d1	07557f4a0c	A8	pr			wf122/A8 pre: first full -Werror release compile since S0 - clear six latent errors
+2c675a5980	07557f4a0c	A8	pr			wf122/A8: crash-isolation policy - parser depth guard, sigaltstack, server ws_abort_transaction
+301791dede	ffd7c80abc	A8	pr			wf122/A8 review: close depth-guard bypasses, run AREA failure callback lock-free
+dc6ec348da	89e87c327e	B1	pr			wf122/B1: adoption endpoint - per-DB UNIX socket, control channel, adopted session thread
+fc681b1bf9	f3758e6747	B1	pr			wf122/B1: broker direct handoff - db_info peek, dbname routing, slot accounting
+c092a112c7	f3758e6747	B1	pr			wf122/B1: broker_direct cold-path diagnostics (BRD_DEBUG_LOG)
+0d80c0ab3a	f3758e6747	B1	pr			wf122/B1: restore blocking mode on the adopted fd
+eb026a16e9	f3758e6747	B1	pr			wf122/B1: smoke_direct gate hardening from the PR2 gate run
+4e786a6a97	94386dc4a0	B1	pr			wf122/B1: fold the CAS speaker into the server - the request loop runs in-process
+576df7748b	94386dc4a0	B1	pr			wf122/B1: link closure for the CAS fold - broker_util.c folded, sql_log2_flush stub
+7b44554798	94386dc4a0	B1	pr			wf122/B1: skip er log-handler registration in-server
+3043ea7115	94386dc4a0	B1	pr			wf122/B1: -Wredundant-decls fix + track-B standard JDBC smoke script
+5f5a01e9fb	94386dc4a0	B1	pr			wf122/B1: centralize connect-status decls in db.h via cas_db_inc.h
+12e9b26230	94386dc4a0	B1	pr			wf122/B1: connect-status decls via a _DB_H_ guard, not a db.h include
+e40710f033	94386dc4a0	B1	pr			wf122/B1: register adoption channel threads with the thread manager
+aad49a5d96	dda84e8b35	B1	pr			wf122/B1: adopted connections always get a fresh server session (B1-D12)
+5aeb5c377c	0c1aced0b8	B1	pr			wf122/B1 review: drop the registry entry before closing the adopted fd
+2184adc76a	1813305043	B1	pr			wf122/B1 review-r2: concurrency/fd-lifecycle hardening from the Codex diff review
+b7a88b2161	fecdf31fbd	B2	pr			wf122/B2: adopted sessions record CAS identity; JDBC surface battery
+02269370de	fecdf31fbd	B2	pr			wf122/B2: folded execute hands the cursor a first-page copy (CS parity)
+ad5bf7f253	fecdf31fbd	B2	pr			wf122/B2: query_timeout smoke asserts CAS parity, not early preemption
+0df053eb0c	fecdf31fbd	B2	pr			wf122/B2: xa smoke uses explicit datasource properties
+cf2afd1564	3f96ac7802	B2	pr			wf122/B2: server-resident CAS log producers (SQL/slow/access/DDL, per-session slots)
+b8a2a55aab	3f96ac7802	B2	pr			wf122/B2: ddl_audit_log params load in the server too
+758e527564	9e64a775ae	B2	pr			wf122/B2: remaining CAS conf knobs as cas_* server parameters
+2a464f36ca	7a50a00f58	B2	pr			wf122/B2: ACCESS_CONTROL db:dbuser:ip check at session establishment
+042c36a65e	7a50a00f58	B2	pr			wf122/B2: undef FREE before cas_dispatch.h in server_support.c
+6186312537	bdbc5a75eb	B2	pr			wf122/B2: server-side SSL termination for direct handoff
+eb0dd4c46e	bdbc5a75eb	B2	pr			wf122/B2: register DIRECT_HANDOFF_SSL_DB in the broker keyword whitelist
+a9874a26fb	aac410553a	B2	pr			wf122/B2: SHOW SESSION STATUS — per-session CAS statistics server view
+407657ddce	aac410553a	B2	pr			wf122/B2: explicit terminators after the snapshot strncpys
+5bbfa4db7e	aac410553a	B2	pr			wf122/B2: adopted identity records as_info->database_user too
+cc18e3e442	3b7fe272de	B2	pr			wf122/B2 review: Codex diff-review findings 2+3
+c7b7e25c35	b039a68b55	B3	pr			wf122/B3: synthesize the broker client type at session establishment
+196a726384	1704282823	B3	pr			wf122/B3: strict single-pass admission + transaction-boundary reset
+a0ed2510c9	2893037776	B3	pr			wf122/B3: retire the client-half db_Disable_modifications in the fold
+100ce6da2f	e1226b586c	B3	pr			wf122/B3 review: Codex diff-review findings 1-3
+7644733f84	cbdcf2ac4b	B4	pr			wf122/B4: retire the standalone CAS — direct handoff is the only UNIX path
+04b73f6a0d	9aea93ff93	B4	pr			wf122/B4: split broker_changer — front keeps ACCESS_MODE, CAS params are server prms
+516d7d6be7	e860dc8c8a	B4	pr			wf122/B4: front metrics in shm + broker status direct view + token multimap
+dc0876dff7	b26ad17213	B4	pr			wf122/B4: end the server session when an adopted connection retires
+3fbd775652	b26ad17213	B4	pr			wf122/B4: db_Connect_status outside a bracket is the server constant again
+bb690ac042	b26ad17213	B4	pr			wf122/B4: session-scope the MOP-capable domain cache lists
+fb2001ec5e	b26ad17213	B4	pr			wf122/B4: build the SHOW-statement metadata under a process-lifetime context
+f6374a89b9	7fb4254142	B4	pr			wf122/B4 review: Codex diff-review findings F1-F4, F6, F7
+675d3a8744	4781b7c3c0	B5	pr			wf122/B5 PR1: CAS_FC_CSQL_REQUEST — server-rendered csql execution
+0341d02120	32d8ce7ba7	B5	pr			wf122/B5 PR2: adoption DIRECT_CONNECT — broker-independent local csql entry
+debffbe66c	4a134daea5	B5	pr			wf122/B5 PR3: the thin csql — CS flavor rides the wire (D5R/D6R)
+35e6858aab	a19a09d53d	B5	pr			wf122/B5 PR4: utility-channel client-type allowlist — csql/driver types refused
+139f33f2d7	60f2fa00a5	B5	pr			wf122/B5 review: Codex diff-review findings — 8 fixed, 2 recorded
+53b4b51d58	da11f44034	B5	pr			wf122/B5 review-r2: gate ;checkpoint/;killtran through the admin-csql check
+cebc79cf53	4a8adf6065	B5	pr			wf122/B5 postmerge review: ship ;time/;echo toggles on the wire + one error epilogue in fn_csql_request
+7a1e38f574	80bb826d15	A5	manual	ALT:B2	wf159 sysprm: server-authoritative sysprm (A5) misses client-only session params; B2 conf-sysprm is the alternative owner	wf159: load + read client-only session parameters in the server process
+4468544f7d	80bb826d15	A5	manual	ALT:B2	wf159 same as above	wf159: broaden the server conf load to every client parameter (CAS parity)
+6e1739b9fa	236ea38777	B2	blame		blame B2:6 dev:0.5 B1:0.5	wf160: restore STRIPPED_COLUMN_NAME parity in the folded CAS speaker
+cb4ced02bf	a7463128b3	B2	blame		blame B2:3	wf160: codex review — drop the shared-stub write, cover the OFF/runtime path
+68e713c23c	6f583b3d2c	DEV-FIXED	manual		wf164 upstream deadlock (MERGE parallel sort under topop); develop fixed by CBRD-27492 (xasl_generation.c MERGE parallelism=0); runtime backstop optional	wf164: serial fallback for parallel sort dispatched under an open system operation
+7614bc00d6	6f583b3d2c	DEV-FIXED	manual		wf164 compile-time half; develop has the same fix (CBRD-27492)	wf164: disable parallel execution for MERGE subplans at plan generation
+5ebc30e91e	6f583b3d2c	DEV-FIXED	manual		wf164 hash-join backstop; develop excludes MERGE hjoin (CBRD-26311)	wf164: extend the open-sysop serial fallback to parallel hash join dispatch
+e632d28c97	92985070b5	A7	blame		blame A7:2.5 A4:0.5 A6:0.5 S0:0.5	wf165: smoke case 10 — session variable through EXECUTE ... USING crosses the fold
+042495732d	92985070b5	A4	manual		wf165 bracket = session ownership makes no-copy session var legal	wf165: translate the no-copy session-variable SA guard to the activation-bracket gate
+cbe9fc5c79	e03f2f8e55	S0	manual		wf167 residual !SERVER_MODE branch S0 compile-in missed (#167 resolution)	wf167: fold the OBJECT host-var coercion cases of tp_value_cast_internal
+5e2883487e	6883849624	A7	blame		blame A7:3.5 dev:1 A4:0.5 A6:0.5 S0:0.5	wf168: ship er_errid() across the in-process method callback boundary
+4b53eb90ef	fa3ae215a2	A7	manual		wf170 PL in-process call_info ownership	wf170: runtime ownership flag for execute_info::call_info
+12a2e6a507	f27e76d798	B1	manual		wf171 driver_session retire slot refund	wf171: refund the css client slot when a driver session retires
+2d53f68f83	faf03e8669	S0	manual	ALT:A6,B4,A7	wf173 bracket gates MOP-capable value handling (residual S0 branches)	wf173: session-ownership (bracket), not the hat, gates MOP-capable value handling
+4385547dc5	faf03e8669	S0	manual		wf173 smoke case	wf173: smoke case 12 — ODKU on a UNIQUE OBJECT column crosses the fold
+a54d1995cb	faf03e8669	S0	manual		wf173 smoke fixup	fixup! wf173: smoke case 12 — ODKU on a UNIQUE OBJECT column crosses the fold
+acdac21c06	565d51efd4	S0	manual		wf174 residual client OBJECT comparator	wf174: fold the client OBJECT-domain comparator into tp_domain_match_internal
+1cdf18e6a8	565d51efd4	S0	manual		wf174 smoke harness	wf174: smoke case 13 harness fix — self-referencing classes need DONT_REUSE_OID under the test-mode default
+2725071f5f	565d51efd4	S0	manual		wf174 residual tp_domain_check_class	wf174: fold tp_domain_check_class — deleted-class downgrade for bracket sessions
+7e59906e45	7b60bf4364	A6	manual		wf171 A6's au_revoke_class touch on DROP path	wf171: the drop-path revoke must run before the disk structures are freed
+e200d13ebc	f149539c99	DEV-BUG	manual		upstream under-allocation still present in develop f846c3634 (jsp_cl.cpp:2042); report/fix upstream separately	fix(sp): pt_to_method_arglist under-allocates its int array 4x
+5635c93b9f	89fb4a74d3	A7	manual		method dispatch floor	fix(method): bound the client half's er_stack_clearall at the dispatch floor
+677c63bbc3	6d5ed37a3c	A3	manual		online index loader btid at the folded RPC boundary	fix(fold): give the online index loader a copy of the constraint btid
+20769e6c19	ab927227be	A5	manual		session parameter writes (sysprm authority)	fix(fold): session parameter writes must land on the session
+696423c6b4	9958164dee	S0	manual	ALT:A2	xasl_to_stream debug check thread slot under in-process compile	fix(fold): xts_debug_check must use the real thread's unpack slot
+1f2724d558	cc21070f1e	A7	manual		nested dispatch commit vs suspended executor page fixes	fix(fold): spare the suspended executor's page fixes at in-dispatch commit
+a5a5c9d69a	37d604a284	A5	manual		SET SYSTEM PARAMETERS scope in bracket	fix(fold): SET SYSTEM PARAMETERS follows the client scope rules in a bracket
+576a927b85	ed284a2e39	A7	manual		pl_call retval at the in-process boundary	fix(fold): initialize pl_call's return value before the error path clears it
+b3dd604194	228e700157	A7	manual	ALT:A3	OBJECT→OID at method boundary (결함 9)	fix(fold): normalize OBJECT values crossing into server state to OIDs
+868acaba97	228e700157	A7	manual		TYPE_SP result edge (결함 9)	fix(fold): normalize the TYPE_SP result edge — the third seam of 결함 9
+217d938b8c	53e2a8c920	A5	manual		session-effective prm in plan-cache key	fix(fold): session-effective values in the plan-cache key + server-hat SET scope
+2bdd1c4255	5ba67a0d02	A5	manual		session-effective escape validator	fix(fold): escape-char cross-validator reads session-effective values
+093a5b3b25	8cbd6ae756	A8	manual	ALT:A5,A7	mixed: depth limit (A8), bracket intl validation (A5), SP subquery-cache exclusion (A7)	fix(fold): parser depth limit, bracket intl validation, SP subquery-cache exclusion
+9c1ef7cd33	80491597d6	A7	manual		px worker error vs PL-session interrupt	fix(px): retract the PL-session interrupt once the worker error is collected
+4dbe63d155	de3c6c94e7	CI	manual		style/license/memory_wrapper/flex compat: applied per file in the stage that owns each file	wip: CI hygiene (style patch + license + memory_wrapper + flex compat)
+06dd812d2f	de3c6c94e7	CI	manual		keyword.c indent	fixup: keyword.c indent guard
+9e4dbaaf19	de3c6c94e7	CI	manual		unit harness include order	fix(unit): undef broker FREE(PTR) before storage headers in test_main.cpp
+7268e99dc7	de3c6c94e7	CI	manual		memory_wrapper guard	fix(memcheck): guard memory_wrapper.hpp for the one plain-C TU
+f1697f916a	de3c6c94e7	CI	manual		memory_wrapper nothrow-new	fix(memcheck): route fold nothrow-new through the wrapper idiom
+8fac228874	de3c6c94e7	CI	manual		memory_wrapper parser files	fix(memcheck): remaining new-macro conflicts in the fold parser files
+c6f1bd140a	de3c6c94e7	B1	manual	ALT:B2	PR 7837 review round 1 hardening of cas_* speaker	fix(review): PR 7837 review round 1 — six hardening fixes
+8342f1d1fc	eedf508b24	CI	manual		memory_wrapper cas_function.c	fix(memcheck): cas_function.c joins the changed set — add the wrapper include
+803e79237d	578dffe46c	B5	manual	ALT:B3	remote thin csql standby pair (HA)	fix(review+ha): report follow-ups and the remote-thin-csql standby pair
+c6f7afb812	58793cdd00	A4	blame		blame A4:10 dev:2	fix(ha): the D5 area-init guards break in-process client re-boot — make them SERVER_MODE-only
+e6e5d9af55	7117c8a663	B5	blame		blame B5:2.5 B1:0.5	fix(ha): thin csql session commands gated on the never-set connect status
+d4c9c4f88f	7117c8a663	B5	manual	ALT:B3	server-rendered ;database HA state	fix(ha): server-rendered ;database prints NOT CONNECTED / [na] instead of the HA state
+cd6ab1b085	cd6ab1b085	B1	manual		driver entry retirement LRU	fix(connection): clear private LRU state before retiring driver entries
+d8cbe2ddc5	dbf0b6409a	A4	blame		blame A4:24 dev:5	fix(object): pair shared area guards with process teardown
+33143f67c4	33143f67c4	A3	manual		local execution cache timestamp at folded RPC	fix(query): supply cache timestamp storage for local execution
+9f83297534	9f83297534	B1	manual	ALT:B4	CDC login classified as utility connection	fix(cdc): identify log API login as a utility connection
+972161fa29	972161fa29	B2	manual	ALT:B1,B4	broker-scoped session logs + dynamic controls	Restore broker-scoped session log identities and dynamic controls
+e51ba31efd	e51ba31efd	B1	blame		blame B1:2	Initialize broker control replies before transport validation
+0223a455ba	0223a455ba	B2	blame		blame B2:15 B1:7 B3:3	Identify driver protocols in session diagnostics and update log smoke expectations
+6bfb10891e	6bfb10891e	B1	blame		blame B1:12.5 B4:2.5	Use compact broker control socket names for long broker names
+2cb1f8865b	2cb1f8865b	B2	blame		blame dev:2 B2:2	fix(broker): log execute_array bind values from the parsed argument offset in the slow log
+0e920494d6	0e920494d6	B2	manual		smoke for 2cb1f8865 (B2)	test(smoke): match the CAS slow-log type name for the execute_array bind check
+312f7cfcb5	312f7cfcb5	CI	manual		style	style: apply CI code-style formatting to the broker log-control and smoke changes
+aadbb775b8	aadbb775b8	B5	manual		client-half stdout into server render	fix(csql): route client-half stdout messages into the server-rendered request output
+9e30d0fdef	9e30d0fdef	B5	manual		trigger PRINT into rendered stdout	fix(trigger): print EXECUTE PRINT actions and trace lines to the session's rendered stdout
+bde5b70165	bde5b70165	B5	blame		blame dev:1 B5:1	fix(csql): read current session values for parameter inspection
+54126c1870	54126c1870	B5	blame		blame dev:2 B5:2	fix(csql): apply legacy lock timeout changes to the transaction
+d1cf63b062	d1cf63b062	B5	blame		blame B5:15.5 B1:1.5	fix(csql): seed statement blocking from client configuration
+2f2fda0b07	2f2fda0b07	B2	manual		query replacement in adopted sessions (CAS feature parity)	fix(broker): activate query replacement in adopted server sessions
+452fc17227	452fc17227	B2	manual		log producer diagnostics on folded paths	fix(logging): restore diagnostics on folded query execution paths
+de53931490	de53931490	B4	blame		blame B4:1	fix(broker): frame connection errors after the driver handshake
+7acc3a28e9	7acc3a28e9	B1	blame		blame B1:2	fix(session): preserve transaction state after cursor and handle closes
+f52c372bc5	f52c372bc5	B1	blame		blame B1:42 dev:4 B2:2	fix(broker): propagate runtime settings to existing server sessions
+a9a9ac1b41	a9a9ac1b41	B1	blame		blame B1:13.5 B4:0.5	fix(broker): retain the folded session timeout default until explicitly changed
+ae5e519f7f	ae5e519f7f	B1	blame		blame B1:14 dev:3 B2:2	fix(logging): preserve broker-specific error log destinations
+8691230c75	8691230c75	B1	blame		blame B1:1	fix(logging): handle unnamed primary error log destinations
+85dddee918	85dddee918	B1	blame		blame B1:2	fix(logging): retry a failed session log sink when settings are reapplied
+bff0840db4	bff0840db4	B1	blame		blame B1:7	fix(broker): keep live query timeout values in seconds
+02b9bb4b02	02b9bb4b02	CI	manual		memory_wrapper + format (B2 files)	fix(broker): include allocation wrapper and apply CI formatting
+f58f092ad1	f58f092ad1	B2	manual	ALT:B5	b2-stats histogram + driver request accounting	fix(csql): restore session histogram and driver request accounting
+63583780b7	63583780b7	B1	blame	NEW	blame B1:12 B2:1 dev:1 new=unit_tests/server_compile/measure_histogram.py	fix(csql): preserve inactive histogram responses and csstat output
+fdb63e5516	fdb63e5516	B5	manual		csql histogram error clear	fix(csql): clear previous errors before histogram commands
+9180ecac07	9180ecac07	B2	manual		broker macros + smoke limits	fix(build): separate broker macros and seed effective smoke limits
+dff755000a	dff755000a	B5	manual		csql completion/isolation diagnostics	fix(csql): restore interactive completion and isolation diagnostics
+f2e9e67304	f2e9e67304	B5	blame		blame B5:15 dev:5	fix(csql): preserve command history and disconnected-session diagnostics
+b2494df003	b2494df003	B5	manual		error log replay	fix(csql): restore client error logs from server error records
+e745911fb3	e745911fb3	B5	blame		blame B5:15 B1:3 B2:1	fix(csql): preserve stdout diagnostics with redirected query output
+a7ae6872b0	a7ae6872b0	B2	blame		blame B2:1	test(csql): apply the prepared-statement cap to the SSL smoke broker
+666a90a31e	666a90a31e	B5	manual		replayed error records	fix(csql): keep replayed error records out of console output
+c4e7099459	c4e7099459	B5	blame		blame B5:1	fix(csql): preserve triggers during connection-time parameter setup
+ee35491055	ee35491055	B5	blame		blame B5:8.5 B2:1 B1:0.5	fix(csql): restore interactive paging for rendered results
+9145c29ae8	9145c29ae8	B5	blame		blame B5:3 B2:1	test(csql): keep the integrated broker smoke settings without duplicates
+f718413d42	eed808d834	S0	blame		blame S0:8 B5:2	fix(csql): initialize session locale defaults and preserve config errors
+30937a958b	eed808d834	B5	blame		blame B5:5.5 B1:0.5	fix(csql): preserve client locale settings and interactive diagnostics
+8198e8a1c9	702d62c6a0	B2	manual		driver version (jdbc surface)	fix(session): preserve and expose the connected driver version
+838aeb556b	702d62c6a0	B2	blame		blame B2:5 dev:4 B1:2	fix(connection): terminate adopted driver sessions on administrative kill
+8b62c25de9	702d62c6a0	A8	manual		crash/abort diagnostics	fix(server): exclude itself from diagnostic client aborts
+6ba92b9f1f	702d62c6a0	A3	manual	ALT:B5	KILL / killtran through folded RPC	fix(kill): execute KILL statements and csql killtran inside the folded server
+ac33bd273b	702d62c6a0	B1	blame		blame B1:14	fix(broker): keep changer validation answers on the session-change path
+a4c08776d0	702d62c6a0	B1	manual		in-process logins in SHOW ACCESS STATUS	fix(session): record in-process logins for SHOW ACCESS STATUS
+dcb86d9876	702d62c6a0	A3	manual	ALT:B5	KILL victim error isolation	fix(kill): clear the victim's shutdown error from the killer's session
+d5e000daee	702d62c6a0	A8	manual		crash dump by first aborting thread	fix(server): let the first aborting thread finish the crash dump
+0f410d1328	702d62c6a0	B4	manual		connection-error compat (workspace#227 family)	fix(connection): pass the server name when reporting a master connect error
+f7aa3eb9d0	702d62c6a0	A8	manual		bounded wait of later aborting threads	fix(server): bound the wait of later aborting threads to 30 seconds
+d533969e4d	d533969e4d	B4	blame		blame B4:24.5 B5:5 B1:4.5 dev:3	fix(cas-merge): CS/CCI connection-error compatibility (workspace#227)
+8581400956	8581400956	A5	manual		per-session client compiler configuration	fix(fold): isolate client compiler configuration per session
+67c6fe88c5	67c6fe88c5	A5	manual		non-finite client compiler settings	fix(fold): reject non-finite client compiler settings
+99bf777afa	99bf777afa	A5	manual	ALT:B4	shared client init vs session boot	fix(fold): separate shared client initialization from session boot
+8eff88291c	8eff88291c	B1	manual	LATE	AUTO session detach/resume (post-stage feature: KEEP_CONNECTION=AUTO parity)	wip(fold): add AUTO session detach and authenticated resume candidate
+dedb016f13	dedb016f13	B1	manual	LATE	AUTO executor reuse	wip(fold): reuse AUTO executors with retained-state and cleanup guards
+c8c80f8ab9	c8c80f8ab9	B1	manual	LATE	AUTO resume include	fix(fold): include server session-key interface for AUTO resume
+9cd7bca784	9cd7bca784	A2	manual		flex buffers per compiler thread	fix(fold): release Flex scanner buffers on compiler thread exit
+a6e936fe26	a6e936fe26	B1	manual	LATE	AUTO arbitration across databases	fix(fold): arbitrate AUTO requests and borrow idle slots across databases
+ae4a8e6081	ae4a8e6081	B1	manual	LATE	AUTO yield hand-back	fix(fold): hand back a consumed AUTO yield demand when the idle exchange loses
+4f186f9bd4	4f186f9bd4	A8	manual		client invariant failures as session errors (#128 D2)	fix(fold): report client-side catalog/compile invariant failures as session errors
+aac17a5f08	aac17a5f08	B2	manual		b2-ssl SSL_CTX sharing	fix(fold): share the server SSL_CTX across driver connections and stop leaking it on failure
+d19123e34f	d19123e34f	B1	blame		blame B1:10.5 B4:0.5	fix(fold): answer broker ST/QC control requests off the receiver thread
+5eb79924da	5eb79924da	S0	blame	NEW	blame S0:1 new=unit_tests/server_compile/session_static_baseline.txt,unit_tests/server_compile/session_static_gate.py	test(fold): run the session-static regression gate with test_server_compile
+b4072bbe75	b4072bbe75	A7	blame		blame A7:1	fix(fold): keep the qlist leak check unless callback resources are actually retained
+c2bd93c229	c2bd93c229	B1	blame		blame B1:1	fix(broker): drop parked SESSION_ENDs of a database whose channel died
+740dc02edd	740dc02edd	B1	manual		broker conf path length (adoption socket/log names)	fix(broker): widen CONF_LOG_FILE_LEN to 256 for long install paths
+d6f184c8d3	d6f184c8d3	B5	blame		blame B5:1	fix(fold): make an unarmed csql_exit in cub_server fail the statement visibly
+c72b798534	c72b798534	B2	manual	ALT:B1	SQL log stdio buffer per thread	fix(fold): allocate the SQL log stdio buffer per thread on first use instead of TLS
+04a1d4d6e9	04a1d4d6e9	B1	manual		CAS statics TLS test	test(fold): assert the audited CAS statics are session-thread-local
+87ddc35f7b	87ddc35f7b	A7	manual		native C methods refused in cub_server	fix(fold): refuse user-defined native C methods in cub_server before dynamic linking
+25f048de33	25f048de33	B1	manual	ALT:B2	request-body cap + handoff wait params	feat(fold): expose the driver request-body cap and the handoff wait as parameters
+917ab79758	917ab79758	B1	blame		blame B1:3 B2:1	fix(fold): bound the pre-authentication connect phase by the broker SESSION_TIMEOUT
+13f9270b58	13f9270b58	A7	blame		blame A7:7 dev:2	fix(fold): ship the native-method refusal id to the client and update the smoke scenario
+ea73c6ad35	ea73c6ad35	B1	blame-review	DEVMAJ	blame dev:15 B1:1	fix(fold): no CAS logging before the session slot exists; bound the cleartext db_info peek by SESSION_TIMEOUT
+c49af22e82	c49af22e82	B1	manual	ALT:B4	broker slot admission order	fix(fold): admit and release broker slots in wire order; drain on shutdown_wait_time_in_secs
+828830b74d	828830b74d	CI	manual		style	style: format the develop-merge touched files with the CI codestyle tools
+1b8d26eb46	1b8d26eb46	S0	manual	DEVMERGE	develop-added jsp_is_sp_parallel_eligible needs SERVER_MODE reading	Read the PARALLEL_ENABLE directive under SERVER_MODE in jsp_is_sp_parallel_eligible ()
+6117767430	6117767430	CI	manual		style	style: format six fold-only files with the CI codestyle tools
+407688cfa0	407688cfa0	CI	manual		memory_wrapper	Include memory_wrapper.hpp last in cas_xa.c and histogram_cl.cpp
+d8903061c7	d8903061c7	S0	manual	DEVMERGE	develop deleted a module the fold included	[CBRD-27430] Remove stale include of deleted deduplicate module
+82d2d11cec	82d2d11cec	B5	manual		detailed expression traces in folded csql	[CBRD-27430] Preserve detailed expression traces in folded csql sessions
+ab8e51e6ae	ab8e51e6ae	A7	manual	ALT:B2	query list handoff balance + preset XA	[CBRD-27430] Balance folded query list handoff and enable preset XA
+25055ec10c	25055ec10c	A5	manual		session cost overrides in plan dumps	[CBRD-27430] Detect session cost overrides in plan dumps
+c17f66d7ef	c17f66d7ef	CI	manual		memory_wrapper	[CBRD-27430] Include memory_wrapper.hpp last in authenticate_context.cpp
+c5cda0993a	c5cda0993a	B1	blame		blame B1:11.5 dev:2 B2:0.5	[CBRD-27430] Let cubrid broker reset reach folded sessions and keep their sessions
+4cb7d89352	4cb7d89352	B1	manual		dbval_to_net_buf set reference in the folded speaker	[CBRD-27430] Drop the set reference when dbval_to_net_buf frees a fetched set
+75fd112b86	75fd112b86	B5	blame-review	DEVMAJ	blame dev:8 B5:7 B1:1	[CBRD-27430] thin csql: resolve \u \d \h prompt escapes over the wire
+be0e48c66e	be0e48c66e	A7	manual		outer XASL across nested PL SQL	[CBRD-27430] Keep the outer query's unpacked XASL across in-process nested PL SQL
+688fcc19a1	688fcc19a1	B5	blame		blame B5:8.5 dev:2 B1:0.5	[CBRD-27430] thin csql: check a multibyte prompt against the database codeset
+788c32ff44	788c32ff44	A3	manual		deadlock victim rollback at the in-process boundary	[CBRD-27430] Roll back a deadlock victim at the in-process server boundary
+d573718bdb	d573718bdb	A7	manual		lock_suspend vs suspended outer executor page fixes	[CBRD-27430] lock_suspend: do not count the suspended outer executor's page fixes
+f9a2d3e67c	f9a2d3e67c	A3	manual		RC snapshot invalidation at the in-process boundary	[CBRD-27430] Invalidate a read-committed snapshot at the in-process server boundary
+0abadcd0c7	0abadcd0c7	B5	blame-review	AMB	blame B5:4 B1:2	[CBRD-27430] Send the thin csql cancel only while a request waits for its reply
+31d67a66bc	31d67a66bc	B5	blame		blame B5:1	[CBRD-27430] Keep thin csql results buffered like the fat client's stdout
+46e7523c9d	46e7523c9d	B5	blame		blame B5:1	[CBRD-27430] Do not flush csql_Output_fp when a thin csql reply switches channels
+09c310f47f	09c310f47f	DEV-BUG	manual	ALT:B1	cursor_allocate_oid_buffer non-positive count (client code now in server)	[CBRD-27430] Keep a non-positive OID entry count out of malloc in cursor_allocate_oid_buffer
+655aafbffa	655aafbffa	B1	blame		blame B1:6.5 B2:0.5	[CBRD-27430] Drop a broker client idle inside a transaction after SESSION_TIMEOUT
+7751e1be43	7751e1be43	B5	blame		blame B5:3	[CBRD-27430] thin csql: treat db@<this host's name or address> as a local connection
+6c6c5759bd	6c6c5759bd	B5	blame		blame B5:5 B1:2	[CBRD-27430] Interrupt a thin csql statement whose client hangs up
+dc6a0c3184	dc6a0c3184	A7	blame		blame A7:2	[CBRD-27430] Do not count a rights-switch callback against the SP nesting limit
+7fa5ec52b9	7fa5ec52b9	B5	blame		blame B5:9	[CBRD-27430] thin csql: drop error-log records past a budget instead of failing the statement
+c4512d0377	c4512d0377	B5	manual		thin csql conf forward	[CBRD-27430] thin csql: forward stored_procedure_dump_icode from the client conf
+ba741f5b78	ba741f5b78	B1	blame		blame B1:1	[CBRD-27430] killtran: let the interrupted statement report -4 to the driver
+a4ca4e0d53	a4ca4e0d53	B5	blame		blame B5:17	[CBRD-27430] thin csql: report a lost connection as the fat client did
+3e00361a15	3e00361a15	B5	blame		blame B5:2	[CBRD-27430] ;get shows the session value of check_peer_alive
+1190afaedc	1190afaedc	B5	blame		blame B5:3 B1:1	[CBRD-27430] thin csql: report a failed session command once
+a0a1457e46	a0a1457e46	B5	blame		blame B5:2	[CBRD-27430] thin csql: fail db@host when the host refuses cub_master
+5cfeb35402	5cfeb35402	B5	blame		blame B5:20	[CBRD-27430] thin csql: stream a long render in partial frames
+48d8a2de51	48d8a2de51	B5	blame		blame B5:3	[CBRD-27430] thin csql: send the input file's absolute path
+c05c1a40e5	c05c1a40e5	B5	blame		blame B5:1.5 dev:0.5	[CBRD-27430] thin csql: take a bare database's host from databases.txt
+350eee31f3	350eee31f3	B5	manual		xasl_debug_dump into folded csql output	[CBRD-27430] xasl_debug_dump: print into the folded csql's output
+d2fca4603b	d2fca4603b	B1	manual		per-session NET_BUF_SIZE	[CBRD-27430] Give each adopted session its broker's NET_BUF_SIZE
+a528fc069a	a528fc069a	B2	manual		SQL log dir recreate	[CBRD-27430] Recreate a removed SQL log directory when a session opens its log
+84e85eb6a7	84e85eb6a7	B1	blame		blame B1:18	[CBRD-27430] Answer the driver's status probe from the session's slot
+121b3416e1	121b3416e1	CI	manual		codestyle B5 files	[CBRD-27430] codestyle: format cas_csql.cpp and csql_wire.c
+29c34cbd0d	29c34cbd0d	B2	manual		SQL log connect lines	[CBRD-27430] SQL log: the connect lines a CAS wrote
+749670c519	749670c519	B1	blame		blame B1:7.5 dev:1.5 B2:1	[CBRD-27430] SQL log: the query_cancel line for a driver cancel
+bc2827a65a	bc2827a65a	B2	manual		access log	[CBRD-27430] Access log: the broker's ACCESS_LOG_DIR file and ACCESS_LOG setting
+c39908f269	c39908f269	B2	blame		blame B2:11	[CBRD-27430] SQL log: a failed connect also goes to the slow log
+97e3635c19	97e3635c19	B2	manual		SSL failure in SQL log	[CBRD-27430] Write a missing SSL certificate or key to the session's SQL log
+f68f08da81	f68f08da81	B2	manual		SQL log close order	[CBRD-27430] Close the session's SQL log before the CON_CLOSE reply
+28f298baa2	28f298baa2	B1	manual		perfmon module of folded session threads	[CBRD-27430] Count a folded session's page work in the WORKER module
+c6d7f73b49	c6d7f73b49	B1	manual	LATE	AUTO resume access log	[CBRD-27430] Access log: no second NEW line for an AUTO resume
+7a8090a7ce	7a8090a7ce	B5	blame		blame B5:8 dev:2.5 A7:1 B1:0.5	[CBRD-27430] thin csql: replay the fat client's stdout flushes of plan dumps
+f7d18aae12	f7d18aae12	B5	blame		blame B5:1	[CBRD-27430] thin csql: keep db@host on the broker when CUBRID_CSQL_BROKER_PORT is set
+2b6c57ca5f	2b6c57ca5f	B5	blame		blame B5:4	[CBRD-27430] thin csql: a connection the server closed while idle is the server-down abort
+abbc970e81	abbc970e81	B5	blame		blame B5:2	[CBRD-27430] thin csql: report a session command's server-down abort twice, keep csql on ;killtran
+e34605eda9	e34605eda9	B5	manual	ALT:A3	KILL own transaction report	[CBRD-27430] KILL of the session's own transaction reports the server-down abort
+a26cd250d9	a26cd250d9	CI	manual		memory_wrapper	[CBRD-27430] cas_net_buf.c: include memory_wrapper.hpp last
+452f6fff9e	452f6fff9e	B5	manual	ALT:A3	KILL report only for csql session	[CBRD-27430] KILL: only a csql session reports killing its own transaction
+cdb9da11ec	cdb9da11ec	B1	blame		blame B1:10.5 B4:2 B2:1.5	[CBRD-27430] direct handoff: ack an SSL client only after the server holds its fd

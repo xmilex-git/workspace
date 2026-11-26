@@ -1,0 +1,111 @@
+7a1e38f574	A5	ALT:B2	wf159 sysprm: server-authoritative sysprm (A5) misses client-only session params; B2 conf-sysprm is the alternative owner
+4468544f7d	A5	ALT:B2	wf159 same as above
+68e713c23c	DEV-FIXED		wf164 upstream deadlock (MERGE parallel sort under topop); develop fixed by CBRD-27492 (xasl_generation.c MERGE parallelism=0); runtime backstop optional
+7614bc00d6	DEV-FIXED		wf164 compile-time half; develop has the same fix (CBRD-27492)
+5ebc30e91e	DEV-FIXED		wf164 hash-join backstop; develop excludes MERGE hjoin (CBRD-26311)
+042495732d	A4		wf165 bracket = session ownership makes no-copy session var legal
+cbe9fc5c79	S0		wf167 residual !SERVER_MODE branch S0 compile-in missed (#167 resolution)
+4b53eb90ef	A7		wf170 PL in-process call_info ownership
+12a2e6a507	B1		wf171 driver_session retire slot refund
+2d53f68f83	S0	ALT:A6,B4,A7	wf173 bracket gates MOP-capable value handling (residual S0 branches)
+4385547dc5	S0		wf173 smoke case
+a54d1995cb	S0		wf173 smoke fixup
+acdac21c06	S0		wf174 residual client OBJECT comparator
+1cdf18e6a8	S0		wf174 smoke harness
+2725071f5f	S0		wf174 residual tp_domain_check_class
+7e59906e45	A6		wf171 A6's au_revoke_class touch on DROP path
+e200d13ebc	DEV-BUG		upstream under-allocation still present in develop f846c3634 (jsp_cl.cpp:2042); report/fix upstream separately
+5635c93b9f	A7		method dispatch floor
+677c63bbc3	A3		online index loader btid at the folded RPC boundary
+20769e6c19	A5		session parameter writes (sysprm authority)
+696423c6b4	S0	ALT:A2	xasl_to_stream debug check thread slot under in-process compile
+1f2724d55e	A7		nested dispatch commit vs suspended executor page fixes
+a5a5c9d69a	A5		SET SYSTEM PARAMETERS scope in bracket
+576a927b85	A7		pl_call retval at the in-process boundary
+b3dd604194	A7	ALT:A3	OBJECT→OID at method boundary (결함 9)
+868acaba97	A7		TYPE_SP result edge (결함 9)
+217d938b8c	A5		session-effective prm in plan-cache key
+2bdd1c4255	A5		session-effective escape validator
+093a5b3b25	A8	ALT:A5,A7	mixed: depth limit (A8), bracket intl validation (A5), SP subquery-cache exclusion (A7)
+9c1ef7cd33	A7		px worker error vs PL-session interrupt
+4dbe63d155	CI		style/license/memory_wrapper/flex compat: applied per file in the stage that owns each file
+06dd812d2f	CI		keyword.c indent
+9e4dbaaf19	CI		unit harness include order
+7268e99dc7	CI		memory_wrapper guard
+f1697f916a	CI		memory_wrapper nothrow-new
+8fac228874	CI		memory_wrapper parser files
+c6f1bd140a	B1	ALT:B2	PR 7837 review round 1 hardening of cas_* speaker
+8342f1d1fc	CI		memory_wrapper cas_function.c
+803e79237d	B5	ALT:B3	remote thin csql standby pair (HA)
+d4c9c4f88f	B5	ALT:B3	server-rendered ;database HA state
+cd6ab1b085	B1		driver entry retirement LRU
+33143f67c4	A3		local execution cache timestamp at folded RPC
+9f83297534	B1	ALT:B4	CDC login classified as utility connection
+972161fa29	B2	ALT:B1,B4	broker-scoped session logs + dynamic controls
+0e920494d6	B2		smoke for 2cb1f8865 (B2)
+312f7cfcb5	CI		style
+aadbb775b8	B5		client-half stdout into server render
+9e30d0fdef	B5		trigger PRINT into rendered stdout
+2f2fda0b07	B2		query replacement in adopted sessions (CAS feature parity)
+452fc17227	B2		log producer diagnostics on folded paths
+f58f092ad1	B2	ALT:B5	b2-stats histogram + driver request accounting
+fdb63e5516	B5		csql histogram error clear
+9180ecac07	B2		broker macros + smoke limits
+dff755000a	B5		csql completion/isolation diagnostics
+b2494df003	B5		error log replay
+666a90a31e	B5		replayed error records
+8198e8a1c9	B2		driver version (jdbc surface)
+8b62c25de9	A8		crash/abort diagnostics
+6ba92b9f1f	A3	ALT:B5	KILL / killtran through folded RPC
+a4c08776d0	B1		in-process logins in SHOW ACCESS STATUS
+dcb86d9876	A3	ALT:B5	KILL victim error isolation
+d5e000daee	A8		crash dump by first aborting thread
+0f410d1328	B4		connection-error compat (workspace#227 family)
+f7aa3eb9d0	A8		bounded wait of later aborting threads
+8581400956	A5		per-session client compiler configuration
+67c6fe88c5	A5		non-finite client compiler settings
+99bf777afa	A5	ALT:B4	shared client init vs session boot
+8eff88291c	B1	LATE	AUTO session detach/resume (post-stage feature: KEEP_CONNECTION=AUTO parity)
+dedb016f13	B1	LATE	AUTO executor reuse
+c8c80f8ab9	B1	LATE	AUTO resume include
+a6e936fe26	B1	LATE	AUTO arbitration across databases
+ae4a8e6081	B1	LATE	AUTO yield hand-back
+c6d7f73b49	B1	LATE	AUTO resume access log
+9cd7bca784	A2		flex buffers per compiler thread
+4f186f9bd4	A8		client invariant failures as session errors (#128 D2)
+aac17a5f08	B2		b2-ssl SSL_CTX sharing
+740dc02edd	B1		broker conf path length (adoption socket/log names)
+c72b798534	B2	ALT:B1	SQL log stdio buffer per thread
+87ddc35f7b	A7		native C methods refused in cub_server
+1b8d26eb46	S0	DEVMERGE	develop-added jsp_is_sp_parallel_eligible needs SERVER_MODE reading
+407688cfa0	CI		memory_wrapper
+d8903061c7	S0	DEVMERGE	develop deleted a module the fold included
+82d2d11cec	B5		detailed expression traces in folded csql
+ab8e51e6ae	A7	ALT:B2	query list handoff balance + preset XA
+25055ec10c	A5		session cost overrides in plan dumps
+c17f66d7ef	CI		memory_wrapper
+4cb7d89352	B1		dbval_to_net_buf set reference in the folded speaker
+be0e48c66e	A7		outer XASL across nested PL SQL
+788c32ff44	A3		deadlock victim rollback at the in-process boundary
+d573718bdb	A7		lock_suspend vs suspended outer executor page fixes
+f9a2d3e67c	A3		RC snapshot invalidation at the in-process boundary
+09c310f47f	DEV-BUG	ALT:B1	cursor_allocate_oid_buffer non-positive count (client code now in server)
+c4512d0377	B5		thin csql conf forward
+350eee31f3	B5		xasl_debug_dump into folded csql output
+d2fca4603b	B1		per-session NET_BUF_SIZE
+a528fc069a	B2		SQL log dir recreate
+121b3416e1	CI		codestyle B5 files
+29c34cbd0d	B2		SQL log connect lines
+bc2827a65a	B2		access log
+97e3635c19	B2		SSL failure in SQL log
+f68f08da81	B2		SQL log close order
+28f298baa2	B1		perfmon module of folded session threads
+e34605eda9	B5	ALT:A3	KILL own transaction report
+a26cd250d9	CI		memory_wrapper
+452f6fff9e	B5	ALT:A3	KILL report only for csql session
+828830b74d	CI		style
+6117767430	CI		style
+02b9bb4b02	CI		memory_wrapper + format (B2 files)
+c49af22e82	B1	ALT:B4	broker slot admission order
+04a1d4d6e9	B1		CAS statics TLS test
+25f048de33	B1	ALT:B2	request-body cap + handoff wait params
