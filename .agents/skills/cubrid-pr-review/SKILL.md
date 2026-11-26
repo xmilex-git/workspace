@@ -163,7 +163,7 @@ Run these in parallel. Downloads and scratch files go under `.git_ignored_dir/sc
 7. **Read any CLAUDE.md / AGENTS.md** in directories containing changed files. Use Glob to walk ancestor directories of each changed file looking for these context files.
 8. **Read `voice-guide.md`** (sibling file) for the CUBRID human-reviewer tone applied when rendering post-ready comments in Step 6. If `voice-guide.md` is missing, render comments in the report's Plain Language style instead and note the fallback once.
 9. **Develop drift.** Early in every review, run `git log --oneline <merge-base>..origin/develop -- <changed dirs>`; when a commit there touches the same subsystem, run the PR's TC dirs on the latest develop CI tarball as well, and a NOK caused by a TC branch older than the engine's develop base gets no comment. (P1)
-10. **TC-only PR.** A TC-only PR is reviewed on gha-ci evidence from a draft CI-only engine PR (one `--allow-empty` commit on develop pushed to the fork, `tc/pr-<M>` filled after the bot's init commit lands, `/run sql` or `/run shell`), never on a local run alone; re-fetch the TC PR head right before posting and close the engine PR afterwards. (P2)
+10. **TC-only PR.** A TC-only PR is reviewed on local containerized CTP (`just ctp` against a develop CI tarball, optdebug and release as needed) without opening a draft CI-only engine PR or triggering gha-ci; re-fetch the TC PR head right before posting. (P2)
 
 ### Step 3: Review
 

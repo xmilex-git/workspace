@@ -17,12 +17,13 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-10-13, PR 7834): the user on skew NOKs: "어차피 자기 버전에 맞는 tc 커밋따라갈거니까 리뷰달지말고".
 - Source: memory:review-check-develop-drift, memory:unspecified-order-change-needs-spec-note
 
-### P2 — a TC-only PR is reviewed on CI evidence
-- Rule: A TC-only PR is reviewed on gha-ci evidence from a draft CI-only engine PR (one `--allow-empty` commit on develop pushed to the fork, `tc/pr-<M>` filled after the bot's init commit lands, `/run sql` or `/run shell`), never on a local run alone; re-fetch the TC PR head right before posting and close the engine PR afterwards.
+### P2 — a TC-only PR is reviewed on local containerized CTP, never a draft CI engine PR
+- Rule: A TC-only PR is reviewed on local containerized CTP (`just ctp` against a develop CI tarball, optdebug and release as needed) without opening a draft CI-only engine PR or triggering gha-ci; re-fetch the TC PR head right before posting.
 - Applies at: Step 2
 - Case (2026-10-06, cubrid-testcases#3642 / private-ex#4312): I proposed skipping CI because a local optdebug run already showed the result; the user: "Q3 작업 생략하지말고 하고, CI가 optdebug로 도니까, 이게 크래시가 나면 안되거든? Q3 작업을 증거로 리뷰 하자." A case that crashes cub_server on CI's optdebug build is a problem for the TC PR even when the crash is a known engine defect (CBRD-27557).
 - Case (2026-10-14, #8163): pushing `tc/pr-<M>` during the bot's ~73 s clone made its `--force-with-lease` fail ("TC Branch Sync Failed") and no private-ex draft PR appeared. Wait for the bot's init commit first. Closing the engine PR makes the bot close its TC PRs and delete both `tc/pr-<M>` branches.
 - Case (#4431): the author's develop merge resolved the planned Blocking item during the hours-long CI wait; the item was dropped only because the head was re-fetched before posting.
+- Case (2026-11-26, private-ex#5139 / closed #8769): supersedes the draft-PR workflow above; after opening draft CI-only engine PR #8769 per the old rule, the user instructed: "이거 다시는 하지말고 연 pr닫아." Containerized `just ctp` against the downloaded develop CI tarball (`optdebug` and `release`) provides CI-parity optdebug coverage without opening upstream draft PRs or triggering gha-ci.
 - Source: memory:tc-only-pr-review-ci-evidence
 
 ### P26 — release-line TC PRs have no optdebug build
