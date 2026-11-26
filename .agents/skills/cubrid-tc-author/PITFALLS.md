@@ -56,6 +56,18 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Case (2026-10-26, #8274): the private-ex job's `git clone` ran past the 10-min job limit ("TC Branch Sync Failed"); `gh run rerun --failed` then failed with "No commits between develop and tc/pr-<N>" until the TC commits were pushed first.
 - Source: memory:tc-pr-branch-is-bot-created-upstream
 
+## Readers and probes (Steps 2-3)
+
+### P8 — a reader's suspected defect is run before it is listed
+- Rule: A §4 reader row that names a suspected defect of the fix itself (wrong rows, an assert, an internal error) is run on the pre and fix builds before the coverage list is written; one that reproduces is an engine regression, fixed and gated on the engine branch first and then pinned by a case with its twin.
+- Applies at: Step 2 — judge (§4 merge)
+- Case (2026-11-27, CBRD-28426 / engine PR #8782): the optimizer reader marked five rows [RISK] from reading alone; three reproduced on the fix build (client abort in `pt_ordbynum_to_key_limit_multiple_ranges`, 3 of 5 rows under multi range optimization, client abort `where_pred == NULL` for an ON function term handed to a covering nested-loop inner). The whole sql suite had passed on that build, and an external review's same finding had been closed as "not reproduced" after 9 shapes that all took an index join. Fixed as b85b284047, pinned by sql Cases 5 and 6.
+
+### P9 — a two-session scenario comes from a probe on the pre build
+- Rule: A two-session shell scenario is drafted from a probe on the pre build, not from the issue text: the repro's page geometry (`SHOW INDEX CAPACITY` leaf count) is measured on that build and checked by the case, and the `cubrid tranlist` text the case waits for is read from a live run (it shows about the first 30 characters of a statement, and for a stored function the nested statement in the letter case of the function body).
+- Applies at: Step 3 — write the case (shell)
+- Case (2026-11-27, CBRD-28426): the issue's repro 5 (60 keys added to the left leaf) gave 3 leaves on develop 435b0b7, so the writer never needed the leaf the reader held and the pre build passed; the 300-key repro (2 leaves) failed on pre as intended. The first CTP run waited 60 s twice for `SLEEP (8)` while tranlist printed `select sleep (8)   from db_root`, and scenarios 3 and 4 were NOK on the fix build.
+
 ## CI (After the PR)
 
 ### P7 — a shell-only TC fix reruns, it does not rerun the suite

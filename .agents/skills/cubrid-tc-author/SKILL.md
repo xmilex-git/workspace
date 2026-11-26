@@ -62,6 +62,7 @@ before writing the coverage list (user, 2026-10-08 — a standing explicit reque
 from the issue's scenarios.
 
 - A re-execution, prologue or cached-program defect is probed through `csql -C` (a CS client) and written as a CTP **shell** case, because a CTP sql case runs through JDBC and `csql -S` does not pack values, so both can pass on a server that returns the previous execution's value. (P1)
+- A §4 reader row that names a suspected defect of the fix itself (wrong rows, an assert, an internal error) is run on the pre and fix builds before the coverage list is written; one that reproduces is an engine regression, fixed and gated on the engine branch first and then pinned by a case with its twin. (P8)
 - When the fix commit is from 2026-06/07 and a check needs a parallel temp or list scan, probe the fix build first with a throwaway shell probe copied into the TC worktree (then removed) — a check that passes only on latest develop cannot separate pre from fix. (P2)
 
 Done when `<rundir>/judge.md` states one verdict with its rule number, and a coverage list whose
@@ -78,6 +79,7 @@ every row has a case number or an exclusion reason. Verdict `out of scope` → g
   [references/shell-rules.md](references/shell-rules.md) for where we differ and our judging methods;
   walk `writing-rules.md` and the shell-rules checklist against every `.sh` file before saving.
 - Placement is decided by the **issue type** (judge.md §2 table), never by version.
+- A two-session shell scenario is drafted from a probe on the pre build, not from the issue text: the repro's page geometry (`SHOW INDEX CAPACITY` leaf count) is measured on that build and checked by the case, and the `cubrid tranlist` text the case waits for is read from a live run (it shows about the first 30 characters of a statement, and for a stored function the nested statement in the letter case of the function body). (P9)
 - A check on a traced `fetch:` count compares it with `SHOW EXEC STATISTICS ALL` `data_page_fetches` of a second, trace-off execution of the same plan (`set @collect_exec_stats = 1`; within 0.8..1.25; one csql run cannot give both, because SHOW TRACE / SHOW EXEC STATISTICS restart the watch), and hash-join parallelism is read from the line after `PROBE (`, not from the `HASHJOIN (` line. (P4)
 - Before saving, walk the seven pitfall rules against every sql file and write `<rundir>/pitfalls.md`
   (one row per rule per file: `n/a`, `clear` with the answer token or probe as evidence, or `hit →
