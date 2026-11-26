@@ -451,6 +451,11 @@ line under "Folded" at the end.
 - Applies at: TRACE.md
 - Case (2026-11-24, PR #8663 `SpillFoldTrace`): `reject-link-before-split` swapped the `SplitLeft` line with the first `Link` line and kept their `seq` values; `trace2tla` put them back in order, and the reject cfg ended `violation TraceNotDone` (the real run accepted, 2955 states) instead of a pass. With `seq` renumbered after the swap it refused the run at depth 1608.
 
+### P86 — a recorded run is not named after an action
+- Rule: A recorded run's name on the `tools/tla/trace2tla` command line (`<Name>=<log>`) is never the name of an operator of the spec: the data module defines each run as an operator `<Name>`, and a run called after an action makes TLC refuse the cfg's `TraceLog <- <Name>` substitution.
+- Applies at: TRACE.md
+- Case (2026-11-26, CBRD-27430-B4 `DomainCacheTrace`): the run of a kept session that expires was recorded as `expire`, so the data module got an operator `Expire` beside the model's action `Expire(s)`; `witness-trace-expire` ended with "The configuration file substitutes for TraceLog with Expire of different number of arguments" (rc 151) before reading an event. Renamed `kept-expire` (`KeptExpire`), the cfg accepted the run (50 states).
+
 ## Folded
 
 - P30 (`-` binds tighter than `+`) and P40 (a quantifier swallows later conjuncts) → P35.
