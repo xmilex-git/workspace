@@ -60,3 +60,9 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Standard conf
 - Case (2026-11-07, SA reload of the shared DB): two SA loads ran at once on perf-node0 (the shared `tpch_sf10` and the run's `tpch_e0`); the memory cgroup killed the `cub_admin` of the shared load at lineitem row 35.4M (anon-rss 8.4 GB, `FINISH rc=254`) and left the shared DB half loaded. The same load alone on perf-node1 finished. The node0 DB was deleted and reloaded alone.
 - Source: this session
+
+### P10 — `deletedb` leaves the old archive logs
+- Rule: `deletedb` leaves the old archive logs (`tpch_sf10_lgar*`) in the DB directory, so they are removed by literal `rm` before the `rmdir` (P10).
+- Applies at: Shared SF10 DB
+- Case (2026-11-27, reload for develop 9dd488a1b): develop `9dd488a1b` refused the 11-07 DB ("Database is incompatible"); `cubrid deletedb tpch_sf10` returned 0 but left `tpch_sf10_lgar037`..`040` (2 GiB) on both nodes, so the `rmdir` failed and `load-sf10.sh` stopped at `test ! -e`. The four files were removed by literal `rm` and the load restarted.
+- Source: this session
