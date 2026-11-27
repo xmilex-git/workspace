@@ -181,6 +181,12 @@ path.
   header, and before changing aggregation order grep the suite for these aggregates (5 existing
   answers changed).
 
+- CBRD-28426 (2026-11-27, caught by the pre run): a case meant to show that every worker of a parallel
+  scan ran a select list subquery selected 20 rows that all lie in the first fifth of the heap
+  (`b = 999 and a <= 20000`) → one worker output them all, the subquery ran once, and pre gave the fix's
+  answer → the rows a per-worker effect needs are spread over the whole table (`b = 999`, one row in
+  every 1000), and the output is made short another way (`distinct`).
+
 ## Rule 3 — Stay far from every threshold, estimate and placement
 
 Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Plans, hints, and data size" (cross a *threshold* with a margin); the margins below are ours.
