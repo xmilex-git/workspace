@@ -109,6 +109,13 @@ using 10, 100, 50, 200;`).
   case drafted in SA is read again in the first CTP result before its label is trusted; `parallel(0)`
   with a comment when the serial plan is the one the case is about.
 
+- CBRD-28426 (2026-11-27, caught by reading the generated answer): a case claiming "this shape stays
+  serial" got a twin meant to show the parallel plan (`... using index i(+) order by 1`) → the twin took
+  `skip order by: true` and ran serial too, so the absent workers line proved nothing; the first draft of
+  the tested query (ORDER BY over a serial in a select list subquery) also gave the pre build's answer →
+  the twin is the nearest shape the fix keeps parallel (the same subquery as an operand), and both
+  `parallel workers` lines are read in the answer before the label is written.
+
 ## Rule 2 — The data must change the output when the path is wrong
 
 Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Evidence in the answer file" (data that takes the *bug path*, columns that tell rows apart).
