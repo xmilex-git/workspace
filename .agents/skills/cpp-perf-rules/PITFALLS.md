@@ -18,6 +18,7 @@ A new rule gets a MEAS/PAR ID in the rule file and a `P<n>` here in the same com
 - Rule: A perf regression is attributed by a profile (per-file breakdown: VTune, perf, strace) and a counter-experiment that turns the suspected element off; new code is judged against a control with its path disabled; a median without a CoV ≤ 15 % is not trusted; valgrind, VTune and stress tools attach only during the measured query, never during load or fixture setup.
 - Applies at: MEASUREMENT.md MEAS-10
 - Case (SSOT §2 실수 8): a regression cause was named from assumption; the profile and the on/off experiment pointed elsewhere.
+- Case (2026-11-29, PR 8808): the gap left against the pre-change build (11c +22.4M Ir, 27c +15.6M) was reported as "batched outer handling, `eb_raw_kid`, malloc/free, memoize" from a per-function diff of two builds 50 commits apart. Split by caller and by build: every extra `malloc` came from memoize (`vector::reserve`, `put_nullptr`, `put`), so memoize was 49–62 % of the gap; `eb_raw_kid` cost 26,116,553 Ir on the pre build and on the regression build alike and 29,269,099 only after a develop sync, so it was another PR's; the outer loop named first was 0.3–0.4 % of the query; and 7,541 index objects read twice (a key larger than one OID buffer, collected for the batch and dropped) showed as `readkeys: 1` against `2` in a trace already on disk. A function in a diff is named a cause only after its callers and the build between the two ends were read.
 - Source: CUBRID_SSOT.md §2 실수 8
 
 ### P3 — gate margins from measured variance
