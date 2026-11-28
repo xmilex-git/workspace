@@ -49,3 +49,8 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Run, on a CI NOK
 - Case (2026-11-15, #8509, CMS cases of CBRD-27601): a develop sync of all three repos was proposed; the user: "tc쪽에 해당건들 revert하는 커밋 넣어서 테스트 run rerun으로 통과시키고 머지전에 해당 커밋빼고 머지하면됨."
 - Source: memory:ci-cross-pr-tc-nok-temp-revert
+
+### P8 — the cases a sync brings are read against the PR's behavior changes
+- Rule: Before `/run all` or `/run rerun` follows a sync, the cases the sync brought onto `tc/pr-<N>` (`git diff --stat <old tip>..<new tip> -- sql medium shell`) are grepped for the constructs the PR's behavior changes name (the 동작 변화 list of its body: a stored function in a parallel index scan, a plan line, an error code); a case from TC develop that relies on the changed behavior is revised on `tc/pr-<N>`, proven on the develop build and the PR head, and pushed with the sync, and the PR body names it beside the other changed TCs.
+- Applies at: Run, after a sync
+- Case (2026-11-28, #8782): the sync of 11-27 brought `cbrd_28430` (private-ex #5210, merged that day), whose parallel index scans all carry `max(f_pe(b))`, a PARALLEL_ENABLE stored function that keeps the heap lookup in key order. The PR opens the index scan of a block that calls a stored function without workers (its Implementation 5), so run 46009935436 failed that one shell case at its positive control (`px_workers=none`) while develop `f638ca0958` and four other PRs passed it. The intent check of the OVERLAP had read only the engine files both sides changed. Fixed on `tc/pr-8782` (`50e23b0d1`: `cost_heap_fetch_per_oid=1` in place of the function), proven on the build before CBRD-28430 (7 checks NOK), develop and the PR head (11/11), then `/run rerun`.

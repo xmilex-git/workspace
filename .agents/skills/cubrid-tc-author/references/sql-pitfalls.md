@@ -116,6 +116,14 @@ using 10, 100, 50, 200;`).
   the twin is the nearest shape the fix keeps parallel (the same subquery as an operand), and both
   `parallel workers` lines are read in the answer before the label is written.
 
+- CBRD-28430 (2026-11-28, caught by gha-ci on PR 8782): a shell case kept the heap lookup of its parallel
+  index scans in key order with a PARALLEL_ENABLE stored function in the select list (a call bars the
+  bitmap heap scan) → since CBRD-28426 the index scan of a block that calls a stored function runs no
+  workers, so the positive control read `px_workers=none` → `cost_heap_fetch_per_oid=1` (a client
+  parameter: conf or `set system parameters`) leaves a bitmap heap scan no gain at any size, and the scan
+  stays parallel with the lookup in key order on develop and on the PR; the check that wants the bitmap
+  sets the default 5 in its own session.
+
 ## Rule 2 — The data must change the output when the path is wrong
 
 Rulebook: the rulebook's `sql/rules/test-perspectives.md` "Evidence in the answer file" (data that takes the *bug path*, columns that tell rows apart).

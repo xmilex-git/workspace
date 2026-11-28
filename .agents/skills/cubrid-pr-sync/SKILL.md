@@ -21,6 +21,8 @@ A PR whose `/run all` or `/run rerun` passed is left as it is and gets no develo
 
 After a sync that moved only the TC branches (engine head unchanged), post `/run rerun <failed run id>`, not `/run all`: the rerun runs only the failed cases and reads the latest `tc/pr-<N>` branches; a changed engine head needs `/run all`. (P6)
 
+Before `/run all` or `/run rerun` follows a sync, the cases the sync brought onto `tc/pr-<N>` (`git diff --stat <old tip>..<new tip> -- sql medium shell`) are grepped for the constructs the PR's behavior changes name (the 동작 변화 list of its body: a stored function in a parallel index scan, a plan line, an error code); a case from TC develop that relies on the changed behavior is revised on `tc/pr-<N>`, proven on the develop build and the PR head, and pushed with the sync, and the PR body names it beside the other changed TCs. (P8)
+
 When a PR's CI fails only on cases another PR's TC put on TC develop before its engine PR merged, push a commit titled "[TEMP, drop before merge]" to `tc/pr-<N>` that removes those cases, post `/run rerun <run id>`, record the commit sha in the PR's state, and drop it from the TC branch before the TC PR is merged — never a three-repo develop sync for this. (P7)
 
 When the user supplies a PR number or `https://github.com/CUBRID/cubrid/pull/<number>`, run immediately without asking for repository paths or confirmation:
