@@ -168,6 +168,11 @@ line under "Folded" at the end.
 - Applies at: SKILL.md step 4
 - Case (2026-11-17, CBRD-27430 B2, five modules in one directory): `StatsKill.apalache-indinv` stopped at `slotVars == <<sa, sb>>` and `ConfigPush` at `okVars == <<okv, okq>>` and `UNCHANGED <<dq, seq>>` (rc=120, "Found 2 matching operator signatures"); a three-element or mixed-type tuple passed. The same run showed `tools/tla/apalache-split` reading the first `IndInv` of any module in the directory; it now reads the cfg's own module first.
 
+### P87 — a call split in two leaves a loop that only counts
+- Rule: Two things the code does inside one call are one action when the first puts back a guard the second takes away: split, the action that undoes them fires in between, the two-step loop moves only a ghost counter and the state space has no end; a TLC depth several times the old model's is read as that loop before the run is waited on.
+- Applies at: SKILL.md step 4
+- Case (2026-11-28, PR #8808 `NlRowpathEntry`): the entry of a join scan ends a run of rows by its state and, in the same call, the batch-deciding entry leaves the run (`plain = false`). Modeled as two steps, `RpBegin` (enabled while `plain`) fired between them, and begin / end repeated with only the ghost counter `rpRunEnds` growing: at `N0 = 5` TLC passed 7 million distinct states at depth 684 after ten minutes and was stopped (the model before the change: depth 60). With the end and the exit as one step the same cfg ended at 1,192,527 distinct states, depth 60, in 114 s.
+
 ### P72 — pass a name, not an expression, to a multi-reference parameter
 - Rule: An operator whose body reads a parameter more than once takes a name, never a compound expression: the call site binds the expression in a LET and passes the name, because TLC's `-coverage` and Apalache's InlinePass copy the argument per reference, which multiplies through nested calls.
 - Applies at: SKILL.md step 4
@@ -344,6 +349,11 @@ line under "Folded" at the end.
 - Rule: A claim about work the change saves or must not redo (each key evaluated once, no window for a scan without a heap lookup) is a ghost counter or flag in the model with a mutant that redoes the work: claims over results, order, errors and counters hold when the code does the same work twice, so TLC cannot reject a cost regression they leave out.
 - Applies at: SKILL.md step 1
 - Case (2026-11-12, CBRD-28031 D10/D11): after P81 the user asked why TLA had not caught the re-evaluation; the model had no claim on how often a key is evaluated. `KeyReadAhead` gained `evals` (C12 `EvalOnce`), `rej` (C13 `NoRejectedEntry`) and `cov`/`windowed` (C14 `NoWindowWithoutLookup`); `mutant-no-stop-mark`, the code before the fix, now fails C12 in 17,249 states, and the worker trace counts every evaluation (`WKey` with the keys it read) so the trace spec checks them too.
+
+### P88 — an event's level comes from a stored value, not from a walk
+- Rule: An event's place in a structure (a level, an index) is logged from a value stored when the object was set up, never walked from live pointers at the event: at teardown the objects the walk passes are already freed.
+- Applies at: TRACE.md
+- Case (2026-11-28, PR #8808 `NlRowpathEntryTrace`): the instrumentation computed a scan's level by walking `nl_batch->outer` up the chain. At the end of an execution the batches are freed from the first scan down, so every `BatchFree` was logged `lvl=1`; the trace spec kept level 2 armed and refused the three-scan run at the next execution's `Arm` (event 688 of 1,309) and the other at event 245 of 635. With the level stored in the batch when it is armed the same runs were accepted. (The same runs logged `state=-4`: `tools/tla/trace2tla` now writes `EXTENDS Integers` into a data module that holds a negative number.)
 
 ## Step 10 — report
 

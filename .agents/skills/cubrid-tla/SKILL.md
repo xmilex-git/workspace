@@ -126,6 +126,7 @@ Spec traps — each a wrong verdict TLC or Apalache reports silently, or a parse
 - Every CONSTANTS and VARIABLES declaration carries its first name on the keyword's line, or `tools/tla/apalache-types` leaves the block untyped. (P47)
 - A tuple of two expressions of one type (`<<sa, sb>>`, `UNCHANGED <<dq, seq>>`) carries a `\* @type: <<T, T>>;` line above its definition or is written as two conjuncts: Apalache cannot tell the pair from a two-element sequence and stops with "Annotation required". (P84)
 - An operator whose body reads a parameter more than once takes a name, never a compound expression: the call site binds the expression in a LET and passes the name, because TLC's `-coverage` and Apalache's InlinePass copy the argument per reference, which multiplies through nested calls. (P72)
+- Two things the code does inside one call are one action when the first puts back a guard the second takes away: split, the action that undoes them fires in between, the two-step loop moves only a ghost counter and the state space has no end; a TLC depth several times the old model's is read as that loop before the run is waited on. (P87)
 
 ### 5. Check, then hunt
 
