@@ -374,3 +374,6 @@ Cases:
 - CBRD-27299: a header saying "server-message on" silently skipped the first `drop table`; the result
   had one block fewer than the statements (`ConsoleBO.isPropOn/isPropOff`).
 - #3642: a comment named an engine function that does not exist.
+- CBRD-28032 #8808 (2026-11-28): a header line ending in `;` printed two `Error:-493` and swallowed the
+  first `drop table`; the same case, committed without an `.answer`, was listed as (2/5) and skipped while
+  the run reported 4 of 5 passed.

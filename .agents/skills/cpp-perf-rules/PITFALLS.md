@@ -65,11 +65,12 @@ A new rule gets a MEAS/PAR ID in the rule file and a `P<n>` here in the same com
 - Source: memory:parallel-stats-thread-local-then-merge
 
 ### P10 — a perf finding carries its number
-- Rule: Before writing an efficiency finding, read the function to its end (allocation, shrink, free), take the actual size or count from a running process (gdb `p`, perf attribution) or an existing measurement, and put the number in the finding; items disproved by measurement stay listed under "측정 후 빼거나 작다고 판정한 것" so the next reader does not re-raise them.
+- Rule: Before writing an efficiency finding, read the function to its end (allocation, shrink, free), take the actual size or count from a running process (gdb `p`, perf attribution) or an existing measurement, and put the number in the finding; a call's cost is a saving only after the run without that call was measured, since the path it stands for may cost the same; items disproved by measurement stay listed under "측정 후 빼거나 작다고 판정한 것" so the next reader does not re-raise them.
 - Applies at: SKILL.md usage protocol 13
 - Case (2026-10-04, PR 8022 review, self-caught): `domain_key_pairs_make` grepped for `free|return` read as 2·n²·72 B left allocated; its last lines `realloc` the pool down — gdb showed 141 KB resident, 0.8 ms build. It would have been the report's top efficiency item.
 - Case (2026-10-21, PR 8196 item 3): objdump of `eb_raw_kid` showed per-row reloads and a jump table (A59/A61 shapes); perf annotate gave 1.5–3.8 % of the function's samples on the loads and 0–1 % on the jump (< 1 % of the query), so the finding was dropped; the real cost was an out-of-line NUMERIC decode via PLT.
 - Case (2026-10-30, CBRD-27819 #568): `instructions:u` per row showed `n = d` +2.8 % and `bind n = ?` +6.7 % against develop in two builds sharing one refactor; `perf record` put the extra in `mr_data_readval_numeric` (5.24 % -> 8.27 %), and its disassembly had a `rep stos` (178 -> 216 lines) because a per-size `switch` of constant-length `memset`/`memcpy` had become one variable-length pair. Restoring constant lengths per case removed the `rep`.
+- Case (2026-11-28, PR 8808 review): callgrind gave memoize `get ()` 379.5M of 1,277.5M Ir on a join whose outer values are mostly NULL, and it was reported as "30% spent on a lookup a null value does not need"; with `memoize_memory_limit=0` the same join cost 2,265 against 2,263 instructions an outer row, because the lookup stood for an index scan start of equal cost. The user had already ordered the "fix"; the real change was a new shortcut ahead of both (-29.5%), whose first form returned 1 of 288 null rows of a LEFT OUTER JOIN.
 - Source: memory:measure-before-claiming-perf-waste
 
 ### P11 — a split-out loop helper in libcubrid stays out of line
