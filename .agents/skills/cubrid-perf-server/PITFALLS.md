@@ -66,3 +66,15 @@ A new rule only when no rule fits — then add the sentence to SKILL.md in the s
 - Applies at: Shared SF10 DB
 - Case (2026-11-27, reload for develop 9dd488a1b): develop `9dd488a1b` refused the 11-07 DB ("Database is incompatible"); `cubrid deletedb tpch_sf10` returned 0 but left `tpch_sf10_lgar037`..`040` (2 GiB) on both nodes, so the `rmdir` failed and `load-sf10.sh` stopped at `test ! -e`. The four files were removed by literal `rm` and the load restarted.
 - Source: this session
+
+### P11 — two loads in CS mode are two different heaps
+- Rule: Two DBs that stand for one (a disk format change between A and B) take their heaps from a one-thread `loaddb -S` and are compared by `;info stats` of every table before anything is measured: a CS-mode load always has two or more workers (`loaddb_worker_count`) and its page counts differ from load to load (P11).
+- Applies at: Measuring
+- Case (2026-11-28, JOB 113 queries, cbed1d5 vs 435b0b7 vs PR 8808): the disk compatibility level changed between the two builds (11.5 to 11.51), so each side had its own DB, both loaded with `loaddb -C`. cast_info came out at 149,498 and 149,502 heap pages, 57 of the 113 plans differed between the two DBs (0 between the two builds that shared one), and the ratios of 24a, 27c, 21c, 33c followed the plans, not the builds. Reloaded with the heap by `loaddb -S` (two loads side by side, `data_buffer_size=5G` each for the load) and the keys and indexes by `loaddb -C -i ... --no-logging-index`: 0 of 580 `;info stats` lines differ, and the 113 plans are the same on three builds.
+- Source: user correction 2026-11-28 ("그게 플랜보다는 no logging index나 힙 차이일걸")
+
+### P12 — a warm pass on a buffer smaller than the data still reads the disk
+- Rule: A warm number is reported only when the query's trace shows `ioread: 0` on every node; data larger than the 12G buffer is measured with `data_buffer_size=13G`, which the 16 GiB container holds (P12).
+- Applies at: Measuring
+- Case (2026-11-28, JOB on perf-node0): the JOB data is 12.3G and the standard buffer 12G. After a discarded execution and three timed ones, the trace of 14 of the 113 queries still read pages (8c 100,273, 12c 162,483, 19d 21,054); 12a took 0.33 s where QA's 15G run takes 0.23 s. With 13G and a server restart per query every trace showed `ioread: 0`, 12a took 0.22 s, and 12c moved from +5.1% to -4.5% against the old build.
+- Source: user question 2026-11-28 ("warm으로 잰거맞아??")

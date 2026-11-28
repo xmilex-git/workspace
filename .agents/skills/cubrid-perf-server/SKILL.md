@@ -101,6 +101,8 @@ DB loaded in a run uses the same script's steps, so both sides of a comparison s
 - A and B run on the same node in the same reservation, interleaved (A B A B …), never A on one node and B on
   the other: the NUMA nodes differ and the disk is shared.
 - A and B read the same DB files; a build that cannot open the shared SF10 DB is compared only against builds run on a DB loaded in the same run, never against the shared DB (P8).
+- Two DBs that stand for one (a disk format change between A and B) take their heaps from a one-thread `loaddb -S` and are compared by `;info stats` of every table before anything is measured: a CS-mode load always has two or more workers (`loaddb_worker_count`) and its page counts differ from load to load (P11).
+- A warm number is reported only when the query's trace shows `ioread: 0` on every node; data larger than the 12G buffer is measured with `data_buffer_size=13G`, which the 16 GiB container holds (P12).
 - Profiling: `perf_event_paranoid` is -1 in the containers and release installs carry debug_info, so `perf record -p <cub_server pid>` resolves engine symbols without sudo; `SET TRACE ON` + `SHOW TRACE` beside it separates a plan change (fetch counts differ) from buffer residency (same fetches, different ioread).
 - `perf record` on a node runs with `--no-buildid-cache`, and `perf report` reads the data inside the run dir before release (P6).
 - The report names the node, run-id, both fingerprints, the conf if not standard, every repetition with
